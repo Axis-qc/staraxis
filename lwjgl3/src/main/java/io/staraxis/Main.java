@@ -22,6 +22,7 @@ import com.badlogic.gdx.scenes.scene2d.ui.TextField;
 import com.staraxis.game.client.GameClient;
 import com.staraxis.game.client.config.SettingsManager;
 import com.staraxis.game.client.ui.MainMenuScreen;
+import com.staraxis.game.client.ui.components.SkinUtils;
 import com.staraxis.game.client.ui.manager.LibGdxEventBus;
 import com.staraxis.game.client.ui.manager.UIManager;
 import com.staraxis.game.core.api.EventBus;
@@ -134,21 +135,32 @@ public class Main extends Game {
     private void createDefaultSkin() {
         skin = new Skin();
 
+        // 定义霓虹配色
+        Color neonCyan = new Color(0.0f, 1.0f, 1.0f, 1.0f);
+        Color neonMagenta = new Color(1.0f, 0.0f, 1.0f, 1.0f);
+        Color transparentDark = new Color(0.02f, 0.02f, 0.05f, 0.8f);
+        Color borderGray = new Color(0.5f, 0.5f, 0.5f, 1.0f);
+
         // 1. 字体 (使用本地化服务提供的 FreeType 字体)
         BitmapFont defaultFont = localizationService.getFont();
         skin.add("default", defaultFont);
 
-        // 2. 纹理
-        Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
-        pixmap.setColor(Color.WHITE);
-        pixmap.fill();
-        skin.add("white", new Texture(pixmap));
+        // 2. 基础程序化 Drawable
+        Pixmap whitePixmap = createWhitePixmap();
+        Texture whiteTexture = new Texture(whitePixmap);
+        skin.add("white", whiteTexture);
+        whitePixmap.dispose();
 
-        // 3. 按钮样式
+        // 注册 NinePatch，Skin 会自动将其作为 Drawable 处理 (T005-T007 修复)
+        skin.add("frame", SkinUtils.createNinePatch(1, borderGray, transparentDark));
+        skin.add("frame-focus", SkinUtils.createNinePatch(2, neonCyan, transparentDark));
+        skin.add("frame-highlight", SkinUtils.createNinePatch(2, neonMagenta, transparentDark));
+
+        // 3. 按钮样式 (AnimatedButton 已有逻辑，这里更新默认 TextButton)
         TextButton.TextButtonStyle buttonStyle = new TextButton.TextButtonStyle();
-        buttonStyle.up = skin.newDrawable("white", Color.DARK_GRAY);
-        buttonStyle.down = skin.newDrawable("white", Color.LIGHT_GRAY);
-        buttonStyle.over = skin.newDrawable("white", Color.GRAY);
+        buttonStyle.up = skin.getDrawable("frame");
+        buttonStyle.down = skin.getDrawable("frame-focus");
+        buttonStyle.over = skin.newDrawable("frame", Color.LIGHT_GRAY);
         buttonStyle.font = skin.getFont("default");
         skin.add("default", buttonStyle);
 
@@ -159,7 +171,7 @@ public class Main extends Game {
 
         // 5. 复选框样式 (CheckBox Style)
         CheckBox.CheckBoxStyle checkBoxStyle = new CheckBox.CheckBoxStyle();
-        checkBoxStyle.checkboxOn = skin.newDrawable("white", Color.CYAN);
+        checkBoxStyle.checkboxOn = skin.newDrawable("white", neonCyan);
         checkBoxStyle.checkboxOff = skin.newDrawable("white", Color.GRAY);
         checkBoxStyle.font = skin.getFont("default");
         skin.add("default", checkBoxStyle);
@@ -167,9 +179,9 @@ public class Main extends Game {
         // 6. 列表样式 (List Style - Needed by SelectBox)
         List.ListStyle listStyle = new List.ListStyle();
         listStyle.font = skin.getFont("default");
-        listStyle.selection = skin.newDrawable("white", Color.SKY);
-        listStyle.fontColorSelected = Color.BLACK;
-        listStyle.fontColorUnselected = Color.WHITE;
+        listStyle.selection = skin.newDrawable("white", neonMagenta);
+        listStyle.fontColorSelected = Color.WHITE;
+        listStyle.fontColorUnselected = Color.LIGHT_GRAY;
         skin.add("default", listStyle);
 
         // 7. 滚动面板样式 (ScrollPane Style - Needed by SelectBox)
@@ -182,25 +194,33 @@ public class Main extends Game {
         selectBoxStyle.fontColor = Color.WHITE;
         selectBoxStyle.listStyle = listStyle;
         selectBoxStyle.scrollStyle = scrollPaneStyle;
-        selectBoxStyle.background = skin.newDrawable("white", Color.DARK_GRAY);
+        selectBoxStyle.background = skin.getDrawable("frame");
         skin.add("default", selectBoxStyle);
 
         // 9. 滑动条样式 (Slider Style)
         Slider.SliderStyle sliderStyle = new Slider.SliderStyle();
-        sliderStyle.background = skin.newDrawable("white", Color.GRAY);
-        sliderStyle.knob = skin.newDrawable("white", Color.LIGHT_GRAY);
+        sliderStyle.background = skin.getDrawable("frame");
+        sliderStyle.knob = skin.newDrawable("white", neonCyan);
+        sliderStyle.knob.setMinWidth(10);
+        sliderStyle.knob.setMinHeight(20);
         skin.add("default-horizontal", sliderStyle);
 
         // 10. 输入框样式 (TextField Style)
         TextField.TextFieldStyle textFieldStyle = new TextField.TextFieldStyle();
         textFieldStyle.font = skin.getFont("default");
         textFieldStyle.fontColor = Color.WHITE;
-        textFieldStyle.background = skin.newDrawable("white", Color.DARK_GRAY);
+        textFieldStyle.background = skin.getDrawable("frame");
+        textFieldStyle.focusedBackground = skin.getDrawable("frame-focus");
         textFieldStyle.cursor = skin.newDrawable("white", Color.WHITE);
-        textFieldStyle.selection = skin.newDrawable("white", Color.SKY);
+        textFieldStyle.selection = skin.newDrawable("white", new Color(0.0f, 0.5f, 1.0f, 0.5f));
         skin.add("default", textFieldStyle);
+    }
 
-        pixmap.dispose();
+    private Pixmap createWhitePixmap() {
+        Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+        pixmap.setColor(Color.WHITE);
+        pixmap.fill();
+        return pixmap;
     }
 
     public GameServer getServer() {

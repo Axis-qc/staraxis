@@ -104,6 +104,10 @@ public class WorldScreen extends ScreenAdapter {
         Gdx.gl.glClearColor(0.02f, 0.02f, 0.05f, 1f); // 深空背景色
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
+        // 自动管理输入拦截 (T014, T015)
+        // 如果 UI 舞台上有控件获得了键盘焦点（如 TextField），则拦截镜头控制
+        cameraController.setIntercepted(uiStage.getKeyboardFocus() != null);
+
         // 更新逻辑
         cameraController.update(delta);
         worldCamera.update();
@@ -111,7 +115,11 @@ public class WorldScreen extends ScreenAdapter {
         // 处理拾取逻辑 (T021)
         hoveredCoord = hexPicker.screenToHex(Gdx.input.getX(), Gdx.input.getY(), worldCamera);
         if (hoveredCoord != null) {
-            debugLabel.setText("Hovered: " + hoveredCoord.toString() + " | Zoom: " + String.format("%.2f", worldCamera.zoom));
+            debugLabel.setText(String.format("%s: %s | %s: %.2f",
+                    game.getLocalizationService().get("world_hovered_coord", "Hovered"),
+                    hoveredCoord.toString(),
+                    game.getLocalizationService().get("world_zoom_level", "Zoom"),
+                    worldCamera.zoom));
         }
         fpsLabel.setText("FPS: " + Gdx.graphics.getFramesPerSecond());
 

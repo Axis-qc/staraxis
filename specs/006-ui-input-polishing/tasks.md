@@ -24,9 +24,9 @@
 
 **Purpose**: Ensure all visible strings are externalized and supported in both languages.
 
-- [ ] T001 [US1] Define new localization keys for world generation states in `core/src/main/resources/i18n/messages.properties` (e.g., `config_generating`, `status_error`)
-- [ ] T002 [US1] [P] Translate new localization keys in `core/src/main/resources/i18n/messages_en.properties`
-- [ ] T003 [US1] Audit `NewGameConfigScreen.java` and `WorldScreen.java` for hard-coded strings and replace with `i18n.get()`
+- [x] T001 [US1] Define new localization keys for world generation states in `core/src/main/resources/i18n/messages.properties` (e.g., `config_generating`, `status_error`)
+- [x] T002 [US1] [P] Translate new localization keys in `core/src/main/resources/i18n/messages_en.properties`
+- [x] T003 [US1] Audit `NewGameConfigScreen.java` and `WorldScreen.java` for hard-coded strings and replace with `i18n.get()`
 
 ---
 
@@ -34,11 +34,11 @@
 
 **Purpose**: Implement the futuristic HUD style using procedural NinePatches.
 
-- [ ] T004 [US1] Implement `ProceduralNinePatch` utility in `lwjgl3/src/main/java/com/staraxis/game/client/ui/components/SkinUtils.java` (create NinePatch from 1x1 white texture with border)
-- [ ] T005 [US1] Update `Main.createDefaultSkin()` to use `ProceduralNinePatch` for `Slider` background and knob
-- [ ] T006 [US1] [P] Update `Main.createDefaultSkin()` to use `ProceduralNinePatch` for `TextField` background and focus border
-- [ ] T007 [US1] [P] Update `Main.createDefaultSkin()` to use `ProceduralNinePatch` for `SelectBox` and its `List` background
-- [ ] T008 [US1] Implement Neon Glow effect (using color tinting) for focused states in `Main.java`
+- [x] T004 [US1] Implement `ProceduralNinePatch` utility in `lwjgl3/src/main/java/com/staraxis/game/client/ui/components/SkinUtils.java` (create NinePatch from 1x1 white texture with border)
+- [x] T005 [US1] Update `Main.createDefaultSkin()` to use `ProceduralNinePatch` for `Slider` background and knob
+- [x] T006 [US1] [P] Update `Main.createDefaultSkin()` to use `ProceduralNinePatch` for `TextField` background and focus border
+- [x] T007 [US1] [P] Update `Main.createDefaultSkin()` to use `ProceduralNinePatch` for `SelectBox` and its `List` background
+- [x] T008 [US1] Implement Neon Glow effect (using color tinting) for focused states in `Main.java`
 
 ---
 
@@ -46,11 +46,11 @@
 
 **Purpose**: Implement smooth camera movement and mouse-centered zoom.
 
-- [ ] T009 [US2] Add physics-based state (velocity, acceleration, friction) to `lwjgl3/src/main/java/com/staraxis/game/client/ui/view/CameraController.java`
-- [ ] T010 [US2] Implement WASD input handling with acceleration in `CameraController.update()`
-- [ ] T011 [US2] Implement velocity decay (friction) in `CameraController.update()` to achieve inertia
-- [ ] T012 [US2] Refactor `CameraController.scrolled()` to implement mouse-pointer centered zoom logic
-- [ ] T013 [US2] Add zoom smoothing (interpolating towards target zoom) in `CameraController.java`
+- [x] T009 [US2] Add physics-based state (velocity, acceleration, friction) to `lwjgl3/src/main/java/com/staraxis/game/client/ui/view/CameraController.java`
+- [x] T010 [US2] Implement WASD input handling with acceleration in `CameraController.update()`
+- [x] T011 [US2] Implement velocity decay (friction) in `CameraController.update()` to achieve inertia
+- [x] T012 [US2] Refactor `CameraController.scrolled()` to implement mouse-pointer centered zoom logic
+- [x] T013 [US2] Add zoom smoothing (interpolating towards target zoom) in `CameraController.java`
 
 ---
 
@@ -58,9 +58,9 @@
 
 **Purpose**: Prevent input conflicts between UI and camera.
 
-- [ ] T014 [US2] Implement `InputInterceptor` logic in `CameraController.java` to check if an `Actor` has keyboard focus
-- [ ] T015 [US2] Wire `Stage.setKeyboardFocus()` events to toggle `isIntercepted` state in `CameraController`
-- [ ] T016 [US2] Verify `InputMultiplexer` order in `WorldScreen.java` (UI stage must have priority over CameraController)
+- [x] T014 [US2] Implement `InputInterceptor` logic in `CameraController.java` to check if an `Actor` has keyboard focus
+- [x] T015 [US2] Wire `Stage.setKeyboardFocus()` events to toggle `isIntercepted` state in `CameraController`
+- [x] T016 [US2] Verify `InputMultiplexer` order in `WorldScreen.java` (UI stage must have priority over CameraController)
 
 ---
 
@@ -68,10 +68,10 @@
 
 **Purpose**: Final verification against spec and constitution.
 
-- [ ] T017 [P] Add unit test for `CameraController` velocity logic (simulated delta time) in `shared/src/test/java/com/staraxis/game/shared/world/InputInertiaTest.java`
-- [ ] T018 Verify SC-001: Run app and switch languages, ensure no missing keys
-- [ ] T019 Verify SC-002: Run app and move camera, ensure smooth sliding feel
-- [ ] T020 Verify SC-003: Visually inspect all themed controls for state feedback (hover/focus)
+- [x] T017 [P] Add unit test for `CameraController` velocity logic (simulated delta time) in `lwjgl3/src/test/java/com/staraxis/game/client/ui/view/InputInertiaTest.java`
+- [x] T018 Verify SC-001: Run app and switch languages, ensure no missing keys
+- [x] T019 Verify SC-002: Run app and move camera, ensure smooth sliding feel
+- [x] T020 Verify SC-003: Visually inspect all themed controls for state feedback (hover/focus)
 
 ---
 

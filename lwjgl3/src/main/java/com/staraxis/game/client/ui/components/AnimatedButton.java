@@ -14,9 +14,9 @@ import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
  */
 public class AnimatedButton extends TextButton {
 
-    private float hoverScale = 1.1f;
-    private float animationDuration = 0.15f;
-    private boolean isHovered = false;
+    private float hoverScale = 1.05f;
+    private float animationDuration = 0.1f;
+    private static final Color NEON_CYAN = new Color(0.0f, 1.0f, 1.0f, 1.0f);
 
     public AnimatedButton(String text, Skin skin) {
         super(text, skin);
@@ -36,11 +36,10 @@ public class AnimatedButton extends TextButton {
             @Override
             public void enter(InputEvent event, float x, float y, int pointer, Actor fromActor) {
                 if (pointer == -1) { // 仅限鼠标悬停
-                    isHovered = true;
                     clearActions();
                     addAction(Actions.parallel(
-                            Actions.scaleTo(hoverScale, hoverScale, animationDuration, Interpolation.pow2Out),
-                            Actions.color(Color.CYAN, animationDuration, Interpolation.pow2Out)
+                            Actions.scaleTo(hoverScale, hoverScale, animationDuration, Interpolation.sineOut),
+                            Actions.color(NEON_CYAN, animationDuration, Interpolation.sineOut)
                     ));
                 }
                 super.enter(event, x, y, pointer, fromActor);
@@ -49,11 +48,10 @@ public class AnimatedButton extends TextButton {
             @Override
             public void exit(InputEvent event, float x, float y, int pointer, Actor toActor) {
                 if (pointer == -1) {
-                    isHovered = false;
                     clearActions();
                     addAction(Actions.parallel(
-                            Actions.scaleTo(1.0f, 1.0f, animationDuration, Interpolation.pow2In),
-                            Actions.color(Color.WHITE, animationDuration, Interpolation.pow2In)
+                            Actions.scaleTo(1.0f, 1.0f, animationDuration, Interpolation.sineIn),
+                            Actions.color(Color.WHITE, animationDuration, Interpolation.sineIn)
                     ));
                 }
                 super.exit(event, x, y, pointer, toActor);

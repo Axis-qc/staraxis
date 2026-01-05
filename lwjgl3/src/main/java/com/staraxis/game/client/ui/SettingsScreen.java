@@ -65,10 +65,7 @@ public class SettingsScreen extends ScreenAdapter implements LanguageChangeListe
         stage.addActor(table);
 
         // 1. 分辨率选择 (Resolution SelectBox)
-        lblRes = new Label(i18n.get("settings_resolution") + ":", game.getSkin());
-        if (lblRes.getText().equals("settings_resolution:")) {
-            lblRes.setText("Resolution:"); // Fallback if key missing
-        }
+        lblRes = new Label(i18n.get("settings_resolution", "Resolution") + ":", game.getSkin());
         final SelectBox<String> selRes = new SelectBox<>(game.getSkin());
 
         // 动态获取分辨率并去重排序
@@ -167,12 +164,12 @@ public class SettingsScreen extends ScreenAdapter implements LanguageChangeListe
 
     @Override
     public void onLanguageChanged() {
-        lblRes.setText(i18n.get("settings_resolution") + ":");
-        lblFps.setText(i18n.get("settings_fps") + ":");
-        lblLang.setText(i18n.get("settings_language") + ":");
-        cbFullscreen.setText(" " + i18n.get("settings_fullscreen"));
-        btnApply.setText(i18n.get("settings_apply"));
-        btnBack.setText(i18n.get("settings_back"));
+        lblRes.setText(i18n.get("settings_resolution", "Resolution") + ":");
+        lblFps.setText(i18n.get("settings_fps", "FPS Limit") + ":");
+        lblLang.setText(i18n.get("settings_language", "Language") + ":");
+        cbFullscreen.setText(" " + i18n.get("settings_fullscreen", "Fullscreen"));
+        btnApply.setText(i18n.get("settings_apply", "Apply"));
+        btnBack.setText(i18n.get("settings_back", "Back"));
     }
 
     @Override
