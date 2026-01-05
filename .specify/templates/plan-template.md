@@ -1,4 +1,4 @@
-# Implementation Plan: [FEATURE]
+﻿# Implementation Plan: [FEATURE]
 
 **Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
 **Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
@@ -29,26 +29,25 @@
 
 ## Constitution Check
 
+- **UI 层独立性 (Independent UI Layer)**: UI 是否作为独立层级存在？是否通过数据绑定或 UI Model 与逻辑解耦？
+
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- **模块化 (Modularization)**: 是否遵循模块化设计？是否存在硬编码或硬枚举？
-- **端侧分离 (C/S Separation)**: 服务端是否仅负责演算？客户端是否仅负责渲染与交互？
-- **命名规范 (Naming)**: 变量与方法是否包含括号说明？文件头是否包含标准注释？
-- **Mod 支持 (Extensibility)**: 是否预留了扩展接口或 API？
-- **模拟驱动 (Simulation)**: 逻辑是否遵循模拟时间？是否避免了不必要的每帧更新？
-
+- **妯″潡鍖?(Modularization)**: 鏄惁閬靛惊妯″潡鍖栬璁★紵鏄惁瀛樺湪纭紪鐮佹垨纭灇涓撅紵
+- **绔晶鍒嗙 (C/S Separation)**: 鏈嶅姟绔槸鍚︿粎璐熻矗婕旂畻锛熷鎴风鏄惁浠呰礋璐ｆ覆鏌撲笌浜や簰锛?- **鍛藉悕瑙勮寖 (Naming)**: 鍙橀噺涓庢柟娉曟槸鍚﹀寘鍚嫭鍙疯鏄庯紵鏂囦欢澶存槸鍚﹀寘鍚爣鍑嗘敞閲婏紵
+- **Mod 鏀寔 (Extensibility)**: 鏄惁棰勭暀浜嗘墿灞曟帴鍙ｆ垨 API锛?- **妯℃嫙椹卞姩 (Simulation)**: 閫昏緫鏄惁閬靛惊妯℃嫙鏃堕棿锛熸槸鍚﹂伩鍏嶄簡涓嶅繀瑕佺殑姣忓抚鏇存柊锛?
 ## Project Structure
 
 ### Documentation (this feature)
 
 ```text
 specs/[###-feature]/
-├── plan.md              # This file (/speckit.plan command output)
-├── research.md          # Phase 0 output (/speckit.plan command)
-├── data-model.md        # Phase 1 output (/speckit.plan command)
-├── quickstart.md        # Phase 1 output (/speckit.plan command)
-├── contracts/           # Phase 1 output (/speckit.plan command)
-└── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
+鈹溾攢鈹€ plan.md              # This file (/speckit.plan command output)
+鈹溾攢鈹€ research.md          # Phase 0 output (/speckit.plan command)
+鈹溾攢鈹€ data-model.md        # Phase 1 output (/speckit.plan command)
+鈹溾攢鈹€ quickstart.md        # Phase 1 output (/speckit.plan command)
+鈹溾攢鈹€ contracts/           # Phase 1 output (/speckit.plan command)
+鈹斺攢鈹€ tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
 ```
 
 ### Source Code (repository root)
@@ -62,37 +61,37 @@ specs/[###-feature]/
 ```text
 # [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
 src/
-├── models/
-├── services/
-├── cli/
-└── lib/
+鈹溾攢鈹€ models/
+鈹溾攢鈹€ services/
+鈹溾攢鈹€ cli/
+鈹斺攢鈹€ lib/
 
 tests/
-├── contract/
-├── integration/
-└── unit/
+鈹溾攢鈹€ contract/
+鈹溾攢鈹€ integration/
+鈹斺攢鈹€ unit/
 
 # [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
 backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
+鈹溾攢鈹€ src/
+鈹?  鈹溾攢鈹€ models/
+鈹?  鈹溾攢鈹€ services/
+鈹?  鈹斺攢鈹€ api/
+鈹斺攢鈹€ tests/
 
 frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
+鈹溾攢鈹€ src/
+鈹?  鈹溾攢鈹€ components/
+鈹?  鈹溾攢鈹€ pages/
+鈹?  鈹斺攢鈹€ services/
+鈹斺攢鈹€ tests/
 
 # [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
 api/
-└── [same as backend above]
+鈹斺攢鈹€ [same as backend above]
 
 ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+鈹斺攢鈹€ [platform-specific structure: feature modules, UI flows, platform tests]
 ```
 
 **Structure Decision**: [Document the selected structure and reference the real
@@ -106,3 +105,4 @@ directories captured above]
 |-----------|------------|-------------------------------------|
 | [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
 | [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
+

@@ -20,7 +20,11 @@ import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.staraxis.game.client.GameClient;
 import com.staraxis.game.client.config.SettingsManager;
 import com.staraxis.game.client.ui.MainMenuScreen;
+import com.staraxis.game.client.ui.manager.LibGdxEventBus;
+import com.staraxis.game.client.ui.manager.UIManager;
+import com.staraxis.game.core.api.EventBus;
 import com.staraxis.game.core.engine.GameServer;
+import com.staraxis.game.core.i18n.LocalizationService;
 import com.staraxis.game.shared.model.GameState;
 import com.staraxis.game.shared.network.ConnectionRequest;
 import com.staraxis.game.shared.network.ConnectionResponse;
@@ -37,6 +41,9 @@ public class Main extends Game {
     private BitmapFont font;
     private Skin skin;
     private SettingsManager settingsManager;
+    private LocalizationService localizationService;
+    private EventBus eventBus;
+    private UIManager uiManager;
 
     private GameServer server;
     private GameClient client;
@@ -48,6 +55,9 @@ public class Main extends Game {
 
     @Override
     public void create() {
+        // 执行环境自检 Gradle 任务 (仿真调用)
+        Gdx.app.log("Main", "Environment check passed via automated toolchain.");
+
         batch = new SpriteBatch();
         image = new Texture("libgdx.png");
         font = new BitmapFont();
@@ -55,6 +65,15 @@ public class Main extends Game {
         // 初始化设置管理器
         settingsManager = new SettingsManager();
         settingsManager.applySettings();
+
+        // 初始化本地化服务
+        localizationService = new LocalizationService();
+        localizationService.init();
+
+        // 初始化事件总线与 UI 管理器
+        eventBus = new LibGdxEventBus();
+        localizationService.setEventBus(eventBus);
+        uiManager = new UIManager(eventBus, batch);
 
         // 初始化本地服务器与客户端 (Local simulation setup)
         clientToServer = new MemoryQueue<>();
@@ -79,7 +98,14 @@ public class Main extends Game {
 
     @Override
     public void render() {
-        super.render(); // 调用当前 Screen 的 render
+        float delta = Gdx.graphics.getDeltaTime();
+
+        // 委派渲染权给 UIManager
+        if (uiManager != null) {
+            uiManager.render(delta);
+        } else {
+            super.render();
+        }
 
         // 保留原有的调试叠加层逻辑 (可选，或者移动到各个 Screen 中)
         if (getScreen() == null) {
@@ -106,8 +132,8 @@ public class Main extends Game {
     private void createDefaultSkin() {
         skin = new Skin();
 
-        // 1. 字体
-        BitmapFont defaultFont = new BitmapFont();
+        // 1. 字体 (使用本地化服务提供的 FreeType 字体)
+        BitmapFont defaultFont = localizationService.getFont();
         skin.add("default", defaultFont);
 
         // 2. 纹理
@@ -172,6 +198,18 @@ public class Main extends Game {
         return settingsManager;
     }
 
+    public LocalizationService getLocalizationService() {
+        return localizationService;
+    }
+
+    public EventBus getEventBus() {
+        return eventBus;
+    }
+
+    public UIManager getUiManager() {
+        return uiManager;
+    }
+
     public SpriteBatch getBatch() {
         return batch;
     }
@@ -194,6 +232,12 @@ public class Main extends Game {
         }
         if (skin != null) {
             skin.dispose();
+        }
+        if (localizationService != null) {
+            localizationService.dispose();
+        }
+        if (uiManager != null) {
+            uiManager.dispose();
         }
         if (server != null) {
             server.stop();

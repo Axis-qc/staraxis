@@ -1,4 +1,4 @@
-# Feature Specification: [FEATURE NAME]
+﻿# Feature Specification: [FEATURE NAME]
 
 **Feature Branch**: `[###-feature-name]`  
 **Created**: [DATE]  
@@ -84,12 +84,7 @@
 
 ### Functional Requirements
 
-- **FR-001**: 模块化设计 (Modular Design): 系统必须采用模块化架构，严禁硬编码。
-- **FR-002**: 命名与注释 (Naming & Docs): 必须在名称后加括号说明用途，并包含完整的文件头注释。
-- **FR-003**: C/S 分离 (C/S Separation): 必须严格区分服务端逻辑与客户端表现。
-- **FR-004**: 模拟驱动 (Simulation Driven): 核心逻辑必须基于游戏模拟时间。
-- **FR-005**: 扩展性 (Extensibility): 接口设计必须考虑 Mod 支持与未来扩展。
-
+- **FR-001**: 妯″潡鍖栬璁?(Modular Design): 绯荤粺蹇呴』閲囩敤妯″潡鍖栨灦鏋勶紝涓ョ纭紪鐮併€?- **FR-002**: 鍛藉悕涓庢敞閲?(Naming & Docs): 蹇呴』鍦ㄥ悕绉板悗鍔犳嫭鍙疯鏄庣敤閫旓紝骞跺寘鍚畬鏁寸殑鏂囦欢澶存敞閲娿€?- **FR-003**: C/S 鍒嗙 (C/S Separation): 蹇呴』涓ユ牸鍖哄垎鏈嶅姟绔€昏緫涓庡鎴风琛ㄧ幇銆?- **FR-004**: 妯℃嫙椹卞姩 (Simulation Driven): 鏍稿績閫昏緫蹇呴』鍩轰簬娓告垙妯℃嫙鏃堕棿銆?- **FR-005**: 鎵╁睍鎬?(Extensibility): 鎺ュ彛璁捐蹇呴』鑰冭檻 Mod 鏀寔涓庢湭鏉ユ墿灞曘€?
 *Example of marking unclear requirements:*
 
 - **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
@@ -113,3 +108,4 @@
 - **SC-002**: [Measurable metric, e.g., "System handles 1000 concurrent users without degradation"]
 - **SC-003**: [User satisfaction metric, e.g., "90% of users successfully complete primary task on first attempt"]
 - **SC-004**: [Business metric, e.g., "Reduce support tickets related to [X] by 50%"]
+

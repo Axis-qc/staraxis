@@ -7,7 +7,6 @@ import static com.badlogic.gdx.scenes.scene2d.actions.Actions.fadeIn;
 import static com.badlogic.gdx.scenes.scene2d.actions.Actions.fadeOut;
 import static com.badlogic.gdx.scenes.scene2d.actions.Actions.run;
 import static com.badlogic.gdx.scenes.scene2d.actions.Actions.sequence;
-import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 
@@ -30,9 +29,12 @@ public class Toast {
         table.setFillParent(true);
         stage.addActor(table);
 
-        Label label = new Label(text, skin);
+        MarqueeLabel label = new MarqueeLabel(text, skin);
         label.getColor().a = 0f;
-        table.add(label).center();
+
+        // 为提示信息设置一个合理的最大宽度，以触发滚动逻辑
+        float maxWidth = stage.getWidth() * 0.8f;
+        table.add(label).width(maxWidth).center();
 
         // 动画效果：淡入 -> 停留 -> 淡出 -> 移除
         label.addAction(sequence(

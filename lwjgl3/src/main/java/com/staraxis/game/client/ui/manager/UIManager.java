@@ -1,0 +1,64 @@
+package com.staraxis.game.client.ui.manager;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.utils.Disposable;
+import com.staraxis.game.client.ui.view.GameViewport;
+import com.staraxis.game.core.api.EventBus;
+
+/**
+ * UI 管理器 (UI Manager) 负责顶层渲染调度、页面路由以及 UI Model 的生命周期管理。
+ */
+public class UIManager implements Disposable {
+
+    private final EventBus eventBus;
+    private final SpriteBatch batch;
+    private final GameViewport gameViewport;
+    private Stage currentStage;
+
+    public UIManager(EventBus eventBus, SpriteBatch batch) {
+        this.eventBus = eventBus;
+        this.batch = batch;
+        this.gameViewport = new GameViewport();
+    }
+
+    /**
+     * 设置当前的 UI 舞台。
+     */
+    public void setCurrentStage(Stage stage) {
+        this.currentStage = stage;
+    }
+
+    /**
+     * 渲染 UI 层级。
+     *
+     * @param delta 时间增量
+     */
+    public void render(float delta) {
+        // 清屏避免多帧残影叠加
+        Gdx.gl.glClearColor(0, 0, 0, 1f);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+
+        // 1. 渲染游戏世界 (Game World)
+        if (currentStage != null) {
+            gameViewport.render(batch, currentStage.getCamera(), delta);
+        }
+
+        // 2. 渲染 UI 覆盖层 (UI Overlay)
+        if (currentStage != null) {
+            currentStage.act(delta);
+            currentStage.draw();
+        }
+    }
+
+    @Override
+    public void dispose() {
+        // 释放 UI 资源
+    }
+
+    public EventBus getEventBus() {
+        return eventBus;
+    }
+}

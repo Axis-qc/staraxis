@@ -16,6 +16,9 @@ import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
+import com.staraxis.game.client.ui.components.AnimatedButton;
+import com.staraxis.game.core.i18n.LanguageChangeListener;
+import com.staraxis.game.core.i18n.LocalizationService;
 import com.staraxis.game.client.config.SettingsManager;
 import io.staraxis.Main;
 
@@ -27,28 +30,45 @@ import java.util.TreeSet;
  *
  * 允许玩家调整分辨率、全屏模式和帧率限制
  */
-public class SettingsScreen extends ScreenAdapter {
+public class SettingsScreen extends ScreenAdapter implements LanguageChangeListener {
 
     private final Main game;
     private final Stage stage;
     private final SettingsManager settings;
+    private final LocalizationService i18n;
+
+    private Label lblRes;
+    private Label lblFps;
+    private Label lblLang;
+    private CheckBox cbFullscreen;
+    private AnimatedButton btnApply;
+    private AnimatedButton btnBack;
+    private SelectBox<String> selLang;
 
     public SettingsScreen(Main game) {
         this.game = game;
         this.settings = game.getSettingsManager();
+        this.i18n = game.getLocalizationService();
         this.stage = new Stage(new ScreenViewport());
     }
 
     @Override
     public void show() {
         Gdx.input.setInputProcessor(stage);
+        i18n.addListener(this);
+
+        // 注册到 UIManager
+        game.getUiManager().setCurrentStage(stage);
 
         Table table = new Table();
         table.setFillParent(true);
         stage.addActor(table);
 
         // 1. 分辨率选择 (Resolution SelectBox)
-        Label lblRes = new Label("Resolution:", game.getSkin());
+        lblRes = new Label(i18n.get("settings_resolution") + ":", game.getSkin());
+        if (lblRes.getText().equals("settings_resolution:")) {
+            lblRes.setText("Resolution:"); // Fallback if key missing
+        }
         final SelectBox<String> selRes = new SelectBox<>(game.getSkin());
 
         // 动态获取分辨率并去重排序
@@ -78,17 +98,31 @@ public class SettingsScreen extends ScreenAdapter {
         selRes.setSelected(settings.getWidth() + "x" + settings.getHeight());
 
         // 2. 全屏开关 (Fullscreen CheckBox)
-        final CheckBox cbFullscreen = new CheckBox(" Fullscreen", game.getSkin());
+        cbFullscreen = new CheckBox(" " + i18n.get("settings_fullscreen"), game.getSkin());
         cbFullscreen.setChecked(settings.isFullscreen());
 
         // 3. 帧率限制 (FPS SelectBox)
-        Label lblFps = new Label("Target FPS:", game.getSkin());
+        lblFps = new Label(i18n.get("settings_fps") + ":", game.getSkin());
         final SelectBox<Integer> selFps = new SelectBox<>(game.getSkin());
         selFps.setItems(30, 60, 144, 0); // 0 为无限制
         selFps.setSelected(settings.getTargetFPS());
 
-        // 4. 按钮控制
-        TextButton btnApply = new TextButton("Apply", game.getSkin());
+        // 4. 语言选择 (Language SelectBox)
+        lblLang = new Label(i18n.get("settings_language") + ":", game.getSkin());
+        selLang = new SelectBox<>(game.getSkin());
+
+        // 映射显示名称与 Locale 代码
+        final Array<String> languages = new Array<>();
+        languages.add("简体中文");
+        languages.add("English");
+        selLang.setItems(languages);
+
+        // 设置当前选中项
+        String currentLang = Gdx.app.getPreferences("staraxis-settings").getString("language", "zh_CN");
+        selLang.setSelected(currentLang.equals("zh_CN") ? "简体中文" : "English");
+
+        // 5. 按钮控制
+        btnApply = new AnimatedButton(i18n.get("settings_apply"), game.getSkin());
         btnApply.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
@@ -98,11 +132,16 @@ public class SettingsScreen extends ScreenAdapter {
                 boolean fs = cbFullscreen.isChecked();
                 int fps = selFps.getSelected();
 
+                // 保存基础设置
                 settings.saveSettings(w, h, fs, fps);
+
+                // 保存并应用语言设置
+                String selectedLang = selLang.getSelected().equals("简体中文") ? "zh_CN" : "en_US";
+                i18n.setLanguage(selectedLang);
             }
         });
 
-        TextButton btnBack = new TextButton("Back", game.getSkin());
+        btnBack = new AnimatedButton(i18n.get("settings_back"), game.getSkin());
         btnBack.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
@@ -119,17 +158,26 @@ public class SettingsScreen extends ScreenAdapter {
         table.add(lblFps).pad(10);
         table.add(selFps).width(150).row();
 
+        table.add(lblLang).pad(10);
+        table.add(selLang).width(150).row();
+
         table.add(btnApply).width(100).height(40).pad(20);
         table.add(btnBack).width(100).height(40).pad(20);
     }
 
     @Override
-    public void render(float delta) {
-        Gdx.gl.glClearColor(0.1f, 0.1f, 0.15f, 1);
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+    public void onLanguageChanged() {
+        lblRes.setText(i18n.get("settings_resolution") + ":");
+        lblFps.setText(i18n.get("settings_fps") + ":");
+        lblLang.setText(i18n.get("settings_language") + ":");
+        cbFullscreen.setText(" " + i18n.get("settings_fullscreen"));
+        btnApply.setText(i18n.get("settings_apply"));
+        btnBack.setText(i18n.get("settings_back"));
+    }
 
-        stage.act(delta);
-        stage.draw();
+    @Override
+    public void render(float delta) {
+        // 渲染逻辑已委派给 UIManager
     }
 
     @Override
@@ -140,6 +188,7 @@ public class SettingsScreen extends ScreenAdapter {
     @Override
     public void hide() {
         Gdx.input.setInputProcessor(null);
+        i18n.removeListener(this);
     }
 
     @Override

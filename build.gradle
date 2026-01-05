@@ -58,6 +58,8 @@ configure(subprojects) {
   }
 }
 
+apply from: 'scripts/dev-tools.gradle'
+
 subprojects {
   version = "$projectVersion"
   ext.appName = 'staraxis'
