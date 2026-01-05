@@ -5,10 +5,7 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Vector2;
 import com.staraxis.game.shared.world.HexCoord;
-import com.staraxis.game.shared.world.HexTile;
 import com.staraxis.game.shared.world.WorldMap;
-
-import java.util.Collection;
 
 /**
  * 六边形网格渲染器 (Hex Grid Renderer). 负责绘制地图上的所有瓦片及其边框。
@@ -33,31 +30,20 @@ public class HexGridRenderer {
 
         ZoomLevel level = ZoomLevel.fromZoom(zoom);
 
-        // 1. 渲染填充颜色 (瓦片类型)
-        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-        for (HexTile tile : worldMap.getTiles().values()) {
-            if (isInsideViewport(tile.getCoord(), camera)) {
-                drawHexagon(tile.getCoord(), getColorForType(tile.getTypeId()), true);
+        // 1. 仅渲染边框 (根据用户请求：不要填充颜色，仅绘制边框)
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
+        for (HexCoord coord : worldMap.getTiles().keySet()) {
+            if (isInsideViewport(coord, camera)) {
+                // 基础边框颜色，使用较淡的灰色增强在黑色背景下的可见度
+                drawHexagon(coord, new Color(0.4f, 0.4f, 0.4f, 1f), false);
             }
+        }
+
+        // 2. 高亮当前悬停的瓦片
+        if (highlightedCoord != null && worldMap.getTiles().containsKey(highlightedCoord)) {
+            drawHexagon(highlightedCoord, Color.CYAN, false);
         }
         shapeRenderer.end();
-
-        // 2. 渲染边框与高亮 (根据 LOD 决定是否渲染细边框)
-        if (level.isAtLeast(ZoomLevel.NORMAL)) {
-            shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
-            shapeRenderer.setColor(Color.DARK_GRAY);
-            for (HexCoord coord : worldMap.getTiles().keySet()) {
-                if (isInsideViewport(coord, camera)) {
-                    drawHexagon(coord, Color.DARK_GRAY, false);
-                }
-            }
-
-            if (highlightedCoord != null && worldMap.getTiles().containsKey(highlightedCoord)) {
-                shapeRenderer.setColor(Color.CYAN);
-                drawHexagon(highlightedCoord, Color.CYAN, false);
-            }
-            shapeRenderer.end();
-        }
     }
 
     /**
@@ -75,13 +61,13 @@ public class HexGridRenderer {
         }
         return switch (typeId) {
             case "galaxy" ->
-                new Color(0.2f, 0.2f, 0.5f, 1f); // 深蓝色
+                new Color(0.4f, 0.4f, 0.8f, 1f); // 调亮深蓝色
             case "nebula" ->
-                new Color(0.5f, 0.2f, 0.5f, 1f); // 紫色
+                new Color(0.8f, 0.4f, 0.8f, 1f); // 调亮紫色
             case "deep_space" ->
-                new Color(0.05f, 0.05f, 0.1f, 1f); // 极深蓝
+                new Color(0.2f, 0.2f, 0.3f, 1f); // 调亮极深蓝
             default ->
-                Color.BLACK;
+                Color.GRAY;
         };
     }
 
@@ -96,9 +82,11 @@ public class HexGridRenderer {
      * 将立方体坐标转换为屏幕/世界空间坐标（Pointy-top 布局）。
      */
     public Vector2 hexToWorld(HexCoord coord) {
-        float x = hexRadius * (float) (Math.sqrt(3) * coord.getX() + Math.sqrt(3) / 2f * coord.getY());
-        float y = hexRadius * (3f / 2f * coord.getY());
-        return new Vector2(x, -y); // Y轴翻转以匹配常见的 Top-down 习惯
+        // 使用 getX (q) 和 getZ (r) 映射到 2D 坐标。
+        float x = hexRadius * (float) (Math.sqrt(3) * coord.getX() + Math.sqrt(3) / 2f * coord.getZ());
+        float y = hexRadius * (3f / 2f * coord.getZ());
+        // 修正：不再翻转 Y 轴，保持正 R 向上的习惯，解决坐标系偏差问题
+        return new Vector2(x, y);
     }
 
     private void drawHexagon(HexCoord coord, Color color, boolean filled) {

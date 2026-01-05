@@ -101,16 +101,9 @@ public class Main extends Game {
 
     @Override
     public void render() {
-        float delta = Gdx.graphics.getDeltaTime();
+        super.render(); // 必须调用以让当前 Screen 的 render 被执行
 
-        // 委派渲染权给 UIManager
-        if (uiManager != null) {
-            uiManager.render(delta);
-        } else {
-            super.render();
-        }
-
-        // 保留原有的调试叠加层逻辑 (可选，或者移动到各个 Screen 中)
+        // 保留原有的调试叠加层逻辑
         if (getScreen() == null) {
             renderDebugOverlay();
         }

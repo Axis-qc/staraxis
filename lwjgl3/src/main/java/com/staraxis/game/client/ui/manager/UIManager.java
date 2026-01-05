@@ -42,14 +42,18 @@ public class UIManager implements Disposable {
      * 渲染 UI 层级。
      *
      * @param delta 时间增量
+     * @param clearScreen 是否执行清屏操作
      */
-    public void render(float delta) {
-        // 清屏避免多帧残影叠加
-        Gdx.gl.glClearColor(0, 0, 0, 1f);
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+    public void render(float delta, boolean clearScreen) {
+        if (clearScreen) {
+            // 清屏避免多帧残影叠加
+            Gdx.gl.glClearColor(0, 0, 0, 1f);
+            Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        }
 
         // 1. 渲染游戏世界 (Game World)
-        if (currentStage != null) {
+        // 注意：如果 clearScreen 为 false，通常意味着 Screen 已经处理了世界渲染
+        if (currentStage != null && clearScreen) {
             gameViewport.render(batch, currentStage.getCamera(), delta);
         }
 
@@ -58,6 +62,13 @@ public class UIManager implements Disposable {
             currentStage.act(delta);
             currentStage.draw();
         }
+    }
+
+    /**
+     * 兼容旧接口，默认清屏。
+     */
+    public void render(float delta) {
+        render(delta, true);
     }
 
     @Override

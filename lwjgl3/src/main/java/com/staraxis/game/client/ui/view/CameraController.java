@@ -19,8 +19,8 @@ public class CameraController extends InputAdapter {
     // 物理状态 (T009)
     private final Vector2 velocity = new Vector2();
     private final Vector2 acceleration = new Vector2();
-    private float friction = 5.0f; // 摩擦系数
-    private float moveSpeed = 1000f; // 基础移动速度
+    private float friction = 8.0f; // 略微降低摩擦系数，让惯性更自然
+    private float moveSpeed = 1200f; // 提高基础速度，因为现在会受到 zoom 的双重缩放影响 (T041)
 
     // 缩放状态 (T013)
     private float targetZoom;
@@ -120,7 +120,8 @@ public class CameraController extends InputAdapter {
             }
 
             if (!acceleration.isZero()) {
-                acceleration.nor().scl(moveSpeed);
+                // 根据当前缩放比例调整加速度，实现“放大移动慢，缩小移动快”的感知平衡 (T041)
+                acceleration.nor().scl(moveSpeed * camera.zoom);
                 velocity.add(acceleration.x * delta, acceleration.y * delta);
             }
         } else if (isIntercepted) {
@@ -130,7 +131,8 @@ public class CameraController extends InputAdapter {
 
         // 3. 应用惯性物理 (T011) - 即使没有 Gdx.input 也应执行（用于单元测试）
         if (velocity.len() > 0.1f) {
-            camera.position.add(velocity.x * camera.zoom, velocity.y * camera.zoom, 0);
+            // 修正：位移必须乘以 delta 以保证帧率无关性 (T041)
+            camera.position.add(velocity.x * camera.zoom * delta, velocity.y * camera.zoom * delta, 0);
             velocity.scl(1.0f - friction * delta);
         } else {
             velocity.setZero();

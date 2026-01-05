@@ -174,7 +174,8 @@ public class SettingsScreen extends ScreenAdapter implements LanguageChangeListe
 
     @Override
     public void render(float delta) {
-        // 渲染逻辑已委派给 UIManager
+        // 渲染逻辑显式委派给 UIManager
+        game.getUiManager().render(delta);
     }
 
     @Override

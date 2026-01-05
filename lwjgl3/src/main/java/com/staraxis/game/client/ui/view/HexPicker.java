@@ -36,11 +36,9 @@ public class HexPicker {
     public HexCoord worldToHex(float worldX, float worldY) {
         float size = renderer.getHexRadius();
 
-        // 这里的 worldY 需要根据 renderer 中的偏移进行反转 (renderer 中使用了 -y)
-        float yVal = -worldY;
-
-        float q = (float) ((Math.sqrt(3) / 3 * worldX - 1f / 3 * yVal) / size);
-        float r = (float) (2f / 3 * yVal / size);
+        // 移除 Y 轴反转，直接使用世界坐标 Y (与 HexGridRenderer 保持一致)
+        float q = (float) ((Math.sqrt(3) / 3 * worldX - 1f / 3 * worldY) / size);
+        float r = (float) (2f / 3 * worldY / size);
 
         return axialToCube(q, r);
     }

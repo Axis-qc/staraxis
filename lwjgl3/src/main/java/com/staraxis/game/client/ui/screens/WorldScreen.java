@@ -6,17 +6,20 @@ import com.badlogic.gdx.ScreenAdapter;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.scenes.scene2d.Stage;
-import com.badlogic.gdx.utils.viewport.ScreenViewport;
-import com.staraxis.game.client.ui.manager.UIManager;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
+import com.badlogic.gdx.utils.viewport.ScreenViewport;
+import com.staraxis.game.client.ui.manager.UIManager;
 import com.staraxis.game.client.ui.view.CameraController;
 import com.staraxis.game.client.ui.view.HexGridRenderer;
 import com.staraxis.game.client.ui.view.HexPicker;
 import com.staraxis.game.client.ui.view.WorldOverlayRenderer;
 import com.staraxis.game.core.world.DefaultWorldGenerator;
 import com.staraxis.game.core.world.WorldGenerator;
-import com.staraxis.game.shared.world.*;
+import com.staraxis.game.shared.world.HexCoord;
+import com.staraxis.game.shared.world.WorldGenConfig;
+import com.staraxis.game.shared.world.WorldMap;
+
 import io.staraxis.Main;
 
 /**
@@ -46,7 +49,10 @@ public class WorldScreen extends ScreenAdapter {
         // 初始化世界摄像机 (Orthographic)
         this.worldCamera = new OrthographicCamera();
         this.worldCamera.setToOrtho(false, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
-        this.worldCamera.position.set(0, 0, 0);
+        this.worldCamera.position.set(0, 0, 20); // 移动到 Z=20
+        this.worldCamera.lookAt(0, 0, 0); // 看向原点
+        this.worldCamera.near = 0.1f;
+        this.worldCamera.far = 100f;
         this.worldCamera.update();
 
         // 初始化渲染器与拾取器 (T019, T020)
@@ -101,7 +107,7 @@ public class WorldScreen extends ScreenAdapter {
     @Override
     public void render(float delta) {
         // 1. 背景层渲染 (T051)
-        Gdx.gl.glClearColor(0.02f, 0.02f, 0.05f, 1f); // 深空背景色
+        Gdx.gl.glClearColor(0.1f, 0.1f, 0.15f, 1f); // 稍微亮一点的深空背景色，便于调试
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
         // 自动管理输入拦截 (T014, T015)
@@ -132,7 +138,8 @@ public class WorldScreen extends ScreenAdapter {
         overlayRenderer.render(worldMap, worldCamera);
 
         // 4. UI 层渲染 (T053)
-        // 由 UIManager 在此后调用 stage.draw()
+        // 显式调用 UIManager 渲染，且不执行清屏，以保留背景和网格
+        game.getUiManager().render(delta, false);
     }
 
     @Override
