@@ -20,10 +20,9 @@ description: "Task list template for feature implementation"
 
 ## Path Conventions
 
-- **Single project**: `src/`, `tests/` at repository root
-- **Web app**: `backend/src/`, `frontend/src/`
-- **Mobile**: `api/src/`, `ios/src/` or `android/src/`
-- Paths shown below assume single project - adjust based on plan.md structure
+- **StarAxis Core**: `core/src/main/` (服务端逻辑/通用模块)
+- **StarAxis LWJGL3**: `lwjgl3/src/main/` (客户端渲染/交互)
+- **Tests**: `core/src/test/`, `lwjgl3/src/test/`
 
 <!-- 
   ============================================================================

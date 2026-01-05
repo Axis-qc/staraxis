@@ -31,7 +31,11 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+- **模块化 (Modularization)**: 是否遵循模块化设计？是否存在硬编码或硬枚举？
+- **端侧分离 (C/S Separation)**: 服务端是否仅负责演算？客户端是否仅负责渲染与交互？
+- **命名规范 (Naming)**: 变量与方法是否包含括号说明？文件头是否包含标准注释？
+- **Mod 支持 (Extensibility)**: 是否预留了扩展接口或 API？
+- **模拟驱动 (Simulation)**: 逻辑是否遵循模拟时间？是否避免了不必要的每帧更新？
 
 ## Project Structure
 

@@ -84,11 +84,11 @@
 
 ### Functional Requirements
 
-- **FR-001**: System MUST [specific capability, e.g., "allow users to create accounts"]
-- **FR-002**: System MUST [specific capability, e.g., "validate email addresses"]  
-- **FR-003**: Users MUST be able to [key interaction, e.g., "reset their password"]
-- **FR-004**: System MUST [data requirement, e.g., "persist user preferences"]
-- **FR-005**: System MUST [behavior, e.g., "log all security events"]
+- **FR-001**: 模块化设计 (Modular Design): 系统必须采用模块化架构，严禁硬编码。
+- **FR-002**: 命名与注释 (Naming & Docs): 必须在名称后加括号说明用途，并包含完整的文件头注释。
+- **FR-003**: C/S 分离 (C/S Separation): 必须严格区分服务端逻辑与客户端表现。
+- **FR-004**: 模拟驱动 (Simulation Driven): 核心逻辑必须基于游戏模拟时间。
+- **FR-005**: 扩展性 (Extensibility): 接口设计必须考虑 Mod 支持与未来扩展。
 
 *Example of marking unclear requirements:*
 
