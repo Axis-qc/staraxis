@@ -16,7 +16,9 @@ import com.badlogic.gdx.scenes.scene2d.ui.List;
 import com.badlogic.gdx.scenes.scene2d.ui.ScrollPane;
 import com.badlogic.gdx.scenes.scene2d.ui.SelectBox;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
+import com.badlogic.gdx.scenes.scene2d.ui.Slider;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
+import com.badlogic.gdx.scenes.scene2d.ui.TextField;
 import com.staraxis.game.client.GameClient;
 import com.staraxis.game.client.config.SettingsManager;
 import com.staraxis.game.client.ui.MainMenuScreen;
@@ -182,6 +184,21 @@ public class Main extends Game {
         selectBoxStyle.scrollStyle = scrollPaneStyle;
         selectBoxStyle.background = skin.newDrawable("white", Color.DARK_GRAY);
         skin.add("default", selectBoxStyle);
+
+        // 9. 滑动条样式 (Slider Style)
+        Slider.SliderStyle sliderStyle = new Slider.SliderStyle();
+        sliderStyle.background = skin.newDrawable("white", Color.GRAY);
+        sliderStyle.knob = skin.newDrawable("white", Color.LIGHT_GRAY);
+        skin.add("default-horizontal", sliderStyle);
+
+        // 10. 输入框样式 (TextField Style)
+        TextField.TextFieldStyle textFieldStyle = new TextField.TextFieldStyle();
+        textFieldStyle.font = skin.getFont("default");
+        textFieldStyle.fontColor = Color.WHITE;
+        textFieldStyle.background = skin.newDrawable("white", Color.DARK_GRAY);
+        textFieldStyle.cursor = skin.newDrawable("white", Color.WHITE);
+        textFieldStyle.selection = skin.newDrawable("white", Color.SKY);
+        skin.add("default", textFieldStyle);
 
         pixmap.dispose();
     }

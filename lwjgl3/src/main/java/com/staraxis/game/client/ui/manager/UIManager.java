@@ -32,6 +32,13 @@ public class UIManager implements Disposable {
     }
 
     /**
+     * 清除当前舞台（通常在 Screen 隐藏时调用）。
+     */
+    public void clearCurrentStage() {
+        this.currentStage = null;
+    }
+
+    /**
      * 渲染 UI 层级。
      *
      * @param delta 时间增量

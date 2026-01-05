@@ -104,6 +104,20 @@ public class LocalizationService {
     }
 
     /**
+     * 根据键获取翻译文本，支持默认值。
+     */
+    public String get(String key, String defaultValue) {
+        if (bundle == null) {
+            return defaultValue;
+        }
+        try {
+            return bundle.get(key);
+        } catch (Exception e) {
+            return defaultValue;
+        }
+    }
+
+    /**
      * 切换语言并通知所有监听器。
      */
     public void setLanguage(String localeCode) {

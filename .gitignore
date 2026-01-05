@@ -146,6 +146,7 @@ www-test/
 .windsurf/
 游戏大纲.md
 开发助手.md
+.vscode/
 
 ## OS-Specific:
 .DS_Store

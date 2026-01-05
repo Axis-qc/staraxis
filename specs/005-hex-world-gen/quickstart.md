@@ -41,6 +41,21 @@
   - 顶部正交视角（无透视缩放）
   - 支持语义缩放（低缩放抽象、高缩放细节）
 
-### 5) 拾取/高亮
-- 鼠标悬停/点击某个六边形
-- 期望：该格高亮，并能获取到对应网格坐标
+## Performance Validation (SC-001 / SC-002)
+
+### 1) World Generation Speed (SC-001)
+- **Method**: Check application logs after clicking "Start Game".
+- **Metric**: Search for `[WorldGen] Generated world: ... duration=Xms`.
+- **Criteria**: For "Medium" (Radius 10) map, duration should be `< 200ms`.
+
+### 2) Rendering Performance (SC-002)
+- **Method**: Observe the "FPS" counter in the top-left corner of the `WorldScreen`.
+- **Criteria**: Should maintain `60 FPS` (or monitor refresh rate) on standard hardware.
+
+## End-to-End Determinism Verification
+
+1. Launch game, enter "New Game".
+2. Set Seed to `TEST_SEED_2026`, Map Size to `Small`, Habitable Ratio to `0.5`.
+3. Click "Start", note the color/type of the central tiles.
+4. Exit to Main Menu, repeat steps 1-3 with same values.
+5. **Success**: Tile layout and types must be identical.

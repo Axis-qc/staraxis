@@ -2,7 +2,6 @@ package com.staraxis.game.client.ui;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.ScreenAdapter;
-import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
@@ -13,6 +12,7 @@ import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.staraxis.game.client.ui.components.AnimatedButton;
 import com.staraxis.game.client.ui.components.ParallaxBackground;
 import com.staraxis.game.client.ui.components.Toast;
+import com.staraxis.game.client.ui.screens.NewGameConfigScreen;
 import com.staraxis.game.core.i18n.LanguageChangeListener;
 import com.staraxis.game.core.i18n.LocalizationService;
 
@@ -59,12 +59,12 @@ public class MainMenuScreen extends ScreenAdapter implements LanguageChangeListe
         table.setFillParent(true);
         stage.addActor(table);
 
-        // 1. 新游戏 (New Game) - 占位
+        // 1. 新游戏 (New Game)
         btnNewGame = new AnimatedButton(i18n.get("main_menu_new_game"), game.getSkin());
         btnNewGame.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                Toast.show(stage, i18n.get("common_feature_in_development"), game.getSkin());
+                game.setScreen(new NewGameConfigScreen(game));
             }
         });
 

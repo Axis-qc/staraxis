@@ -7,4 +7,11 @@ dependencies {
     api "com.badlogicgames.gdx:gdx-ai:$aiVersion"
     api "com.badlogicgames.gdx:gdx-box2d:$gdxVersion"
     implementation "com.esotericsoftware:kryo:$kryoVersion"
+
+    testImplementation "org.junit.jupiter:junit-jupiter:$junitVersion"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+test {
+    useJUnitPlatform()
 }
