@@ -14,16 +14,21 @@
 ## Running the Project
 
 ### 1. 运行服务端模拟 (Headless Mode)
-目前暂未提供独立的 Server Main 类，但可以通过 `core` 模块的单元测试验证逻辑：
+目前可以通过 `core` 模块的单元测试验证逻辑，或者在命令行运行 Gradle 测试：
 ```bash
 ./gradlew :core:test
 ```
+测试包含：
+- `GameServerTest`: 验证 20Hz 步进和无界面约束。
+- `ConnectionSyncTest`: 验证握手和快照同步。
+- `StressTest`: 验证 100 个实体的模拟性能。
 
 ### 2. 运行客户端 (LWJGL3)
-启动带有图形界面的完整游戏：
+启动带有图形界面的完整游戏，实时观察同步状态：
 ```bash
 ./gradlew :lwjgl3:run
 ```
+界面左上角会显示 Server Tick、Interpolated Tick 和 Sim Time 等调试信息。
 
 ## Key Workflows
 

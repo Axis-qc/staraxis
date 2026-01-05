@@ -2,20 +2,32 @@
 eclipse.project.name = appName + '-core'
 
 dependencies {
-  api "com.badlogicgames.ashley:ashley:$ashleyVersion"
-  api "com.badlogicgames.box2dlights:box2dlights:$box2dlightsVersion"
-  api "com.badlogicgames.gdx:gdx-ai:$aiVersion"
-  api "com.badlogicgames.gdx:gdx-box2d:$gdxVersion"
-  api "com.badlogicgames.gdx:gdx-bullet:$gdxVersion"
-  api "com.badlogicgames.gdx:gdx-freetype:$gdxVersion"
-  api "com.badlogicgames.gdx:gdx:$gdxVersion"
-  api "com.bladecoder.ink:blade-ink:$bladeInkVersion"
-  api "com.github.tommyettinger:regexodus:$regExodusVersion"
-  api "com.kotcrab.vis:vis-ui:$visUiVersion"
-  api "com.rafaskoberg.gdx:typing-label:$typingLabelVersion"
-  api "space.earlygrey:shapedrawer:$shapeDrawerVersion"
-
-  if(enableGraalNative == 'true') {
-    implementation "io.github.berstanio:gdx-svmhelper-annotations:$graalHelperVersion"
-  }
+    api project(':shared')
+    implementation "com.esotericsoftware:kryo:$kryoVersion"
+    testImplementation "org.junit.jupiter:junit-jupiter:$junitVersion"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 }
+
+test {
+    useJUnitPlatform()
+}
+
+tasks.register('checkNoGraphicsDependencies') {
+    group = 'verification'
+    description = 'Enforces zero graphics library (com.badlogic.gdx.graphics) in core module'
+    doLast {
+        def forbiddenImport = 'com.badlogic.gdx.graphics'
+        def coreSourceDir = file('src/main/java')
+        if (coreSourceDir.exists()) {
+            coreSourceDir.eachFileRecurse { file ->
+                if (file.name.endsWith('.java')) {
+                    if (file.text.contains(forbiddenImport)) {
+                        throw new GradleException("Forbidden import found in ${file.path}: ${forbiddenImport}. Core module must be headless.")
+                    }
+                }
+            }
+        }
+    }
+}
+
+check.dependsOn checkNoGraphicsDependencies

@@ -51,11 +51,27 @@
 
 ---
 
+### User Story 4 - 连接管理与初始同步 (Priority: P2)
+
+作为一名玩家，我希望在启动游戏时能快速同步世界状态，并在网络波动导致断线时能获得明确的反馈。
+
+**Why this priority**: 完整的连接生命周期管理是 C/S 架构可用性的基础。
+
+**Independent Test**: 模拟客户端连接、同步数据、断开连接及重连流程，验证状态一致性。
+
+**Acceptance Scenarios**:
+
+1. **Given** 客户端发起连接, **When** 握手成功, **Then** 客户端接收到完整的世界快照 (Snapshot) 并进入逻辑步进同步状态。
+2. **Given** 网络连接中断, **When** 超过心跳阈值（暂定 5s）, **Then** 客户端切换至“离线/重连中”状态，服务端保留玩家实体状态 30s。
+
+---
+
 ### Edge Cases
 
-- **网络延迟/丢包处理**：当服务端数据包延迟到达时，客户端如何进行平滑补偿（插值/预测）？
-- **连接中断**：客户端断开后，服务端是否能维持该实体的状态直到超时或重连？
-- **指令冲突**：多个客户端同时修改同一个服务端实体时，服务端如何判定生效顺序？
+- **网络延迟/丢包处理**：当服务端数据包延迟到达时，客户端采用**线性插值 (Linear Interpolation)** 补偿。对于丢失的逻辑帧包，客户端直接抛弃过时状态，等待最新包。
+- **连接中断与恢复**：客户端断开后，服务端维持该实体状态直至超时（30s）。重连成功后，服务端重新推送当前 Tick 的完整快照。
+- **指令冲突**：若多个指令在同一个 Tick 作用于同一目标，服务端按指令到达序列号 (Sequence Number) 顺序执行，若后续指令因前序指令执行导致失效，则服务端返回指令执行失败通知。
+- **预测校解 (Reconciliation)**：若客户端本地预测位置与服务端权威状态偏差超过 0.1 逻辑单位，客户端必须执行强制位置回退同步。
 
 ## Clarifications
 
@@ -68,11 +84,13 @@
 
 ### Functional Requirements
 
-- **FR-001**: 模块化设计 (Modular Design): 系统必须采用模块化架构，`core` 模块严禁引入 LibGDX 的图形类（如 `SpriteBatch`, `Texture` 等）。
-- **FR-002**: 命名与注释 (Naming & Docs): 所有方法名后必须跟括号中文说明。例：`calculatePosition(计算位置)`。
-- **FR-003**: C/S 分离 (C/S Separation): 服务端逻辑必须通过 Message/Event 机制与客户端通信，禁止直接引用。使用 Kryo 进行高性能二进制序列化，采用状态同步模型。
-- **FR-004**: 模拟驱动 (Simulation Driven): 核心逻辑使用固定步进时间（Fixed Timestep）更新，逻辑更新频率 (Tick Rate) 统一为 20Hz。
+- **FR-001**: 模块化设计 (Modular Design): 系统必须采用模块化架构，`core` 模块严禁引入 LibGDX 的图形类（如 `SpriteBatch`, `Texture` 等）。通过 Gradle `checkStyle` 任务或自定义编译检查强制执行“逻辑层零图形依赖”。
+- **FR-002**: 命名与注释 (Naming & Docs): 所有方法名后必须跟括号中文说明。格式示例：`void fireWeapon(开火)() { ... }` 或 `int currentPop(当前人口);`。
+- **FR-003**: C/S 分离 (C/S Separation): 服务端逻辑必须通过**观察者模式 (Observer Pattern)** 驱动的消息系统与客户端通信。使用 Kryo 进行二进制序列化，采用状态同步模型。
+- **FR-004**: 模拟驱动 (Simulation Driven): 核心逻辑使用固定步进时间（Fixed Timestep）更新，逻辑更新频率 (Tick Rate) 统一为 20Hz。单次 Tick 漂移量允许误差范围为 ±2ms。
 - **FR-005**: 扩展性 (Extensibility): 设计通用的接口层，支持未来通过插件形式注入新的服务端逻辑模块。
+- **FR-006**: 性能预算 (Performance Budget): 服务端单次 Tick 处理（不含 IO）必须在 10ms 内完成，以确保稳定的 20Hz 输出。
+- **FR-007**: 指令校验 (Command Security): 服务端必须校验所有客户端指令的合法性（如移动速度、操作权限、资源消耗），严禁信任客户端发送的数值计算结果。
 
 ### Key Entities *(include if feature involves data)*
 
@@ -85,7 +103,7 @@
 
 ### Measurable Outcomes
 
-- **SC-001**: `core` 模块中 0 个图形库依赖。
-- **SC-002**: 服务端单元测试覆盖率达到 80% 以上（核心逻辑部分）。
-- **SC-003**: 在模拟高延迟环境（100ms+）下，客户端视觉位移偏差通过插值控制在可接受范围内。
-- **SC-004**: 成功实现 LibGDX 项目中 `core` 模块与 `lwjgl3` 模块的单向解耦运行。
+- **SC-001**: `core` 模块中 0 个图形库依赖。通过 `grep` 扫描 `core/src` 确保不含 `com.badlogic.gdx.graphics` 包引用。
+- **SC-002**: 服务端单元测试覆盖率达到 80% 以上（核心逻辑包 `com.staraxis.game.core.*`）。
+- **SC-003**: 在模拟 150ms 延迟环境（RTT）下，客户端通过线性插值使视觉抖动肉眼不可察觉（位移偏差控制在 0.05 逻辑单位内）。
+- **SC-004**: 成功实现 LibGDX 项目中 `core` 模块与 `lwjgl3` 模块的单向解耦运行，且 `core` 可在 Headless 模式下独立启动。

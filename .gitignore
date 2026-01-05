@@ -139,10 +139,13 @@ www-test/
 /ios-moe/nbdist/
 /headless/nbdist/
 /server/nbdist/
-/shared/nbdist/
-
-nbactions.xml
-nb-configuration.xml
+## StarAxis Specific:
+/shared/build/
+/shared/bin/
+.specify/
+.windsurf/
+游戏大纲.md
+开发助手.md
 
 ## OS-Specific:
 .DS_Store
