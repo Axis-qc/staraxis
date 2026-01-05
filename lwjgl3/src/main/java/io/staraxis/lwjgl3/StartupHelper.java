@@ -13,13 +13,7 @@
  * limitations under the License.
  */
 //Note, the above license and copyright applies to this file only.
-
 package io.staraxis.lwjgl3;
-
-import com.badlogic.gdx.Version;
-import com.badlogic.gdx.backends.lwjgl3.Lwjgl3NativesLoader;
-import org.lwjgl.system.macosx.LibC;
-import org.lwjgl.system.macosx.ObjCRuntime;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -29,8 +23,13 @@ import java.util.ArrayList;
 
 import static org.lwjgl.system.JNI.invokePPP;
 import static org.lwjgl.system.JNI.invokePPZ;
+import org.lwjgl.system.macosx.LibC;
+import org.lwjgl.system.macosx.ObjCRuntime;
 import static org.lwjgl.system.macosx.ObjCRuntime.objc_getClass;
 import static org.lwjgl.system.macosx.ObjCRuntime.sel_getUid;
+
+import com.badlogic.gdx.Version;
+import com.badlogic.gdx.backends.lwjgl3.Lwjgl3NativesLoader;
 
 /**
  * Adds some utilities to ensure that the JVM was started with the
@@ -38,7 +37,9 @@ import static org.lwjgl.system.macosx.ObjCRuntime.sel_getUid;
  * to function. Also helps on Windows when users have names with characters from
  * outside the Latin alphabet, a common cause of startup crashes.
  * <br>
- * <a href="https://jvm-gaming.org/t/starting-jvm-on-mac-with-xstartonfirstthread-programmatically/57547">Based on this java-gaming.org post by kappa</a>
+ * <a href="https://jvm-gaming.org/t/starting-jvm-on-mac-with-xstartonfirstthread-programmatically/57547">Based
+ * on this java-gaming.org post by kappa</a>
+ *
  * @author damios
  */
 public class StartupHelper {
@@ -66,12 +67,11 @@ public class StartupHelper {
      * }
      * </code></pre>
      *
-     * @param redirectOutput
-     *            whether the output of the new JVM should be rerouted to the
-     *            old JVM, so it can be accessed in the same place; keeps the
-     *            old JVM running if enabled
+     * @param redirectOutput whether the output of the new JVM should be
+     * rerouted to the old JVM, so it can be accessed in the same place; keeps
+     * the old JVM running if enabled
      * @return whether a new JVM was started and thus no code should be executed
-     *         in this one
+     * in this one
      */
     public static boolean startNewJvmIfRequired(boolean redirectOutput) {
         String osName = System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT);
@@ -84,8 +84,10 @@ public class StartupHelper {
 // We also temporarily change the "user.name" property to one without any chars that would be invalid.
 // We revert our changes immediately after loading LWJGL3 natives.
                 String programData = System.getenv("ProgramData");
-                if(programData == null) programData = "C:\\Temp\\"; // if ProgramData isn't set, try some fallback.
-                String prevTmpDir = System.getProperty("java.io.tmpdir", programData);
+                if (programData == null) {
+                    programData = "C:\\Temp\\"; // if ProgramData isn't set, try some fallback.
+
+                                }String prevTmpDir = System.getProperty("java.io.tmpdir", programData);
                 String prevUser = System.getProperty("user.name", "libGDX_User");
                 System.setProperty("java.io.tmpdir", programData + "/libGDX-temp");
                 System.setProperty("user.name", ("User_" + prevUser.hashCode() + "_GDX" + Version.VERSION).replace('.', '_'));
@@ -103,10 +105,12 @@ public class StartupHelper {
 
         // Checks if we are already on the main thread, such as from running via Construo.
         long objc_msgSend = ObjCRuntime.getLibrary().getFunctionAddress("objc_msgSend");
-        long NSThread      = objc_getClass("NSThread");
+        long NSThread = objc_getClass("NSThread");
         long currentThread = invokePPP(NSThread, sel_getUid("currentThread"), objc_msgSend);
         boolean isMainThread = invokePPZ(currentThread, sel_getUid("isMainThread"), objc_msgSend);
-        if(isMainThread) return false;
+        if (isMainThread) {
+            return false;
+        }
 
         long pid = LibC.getpid();
 
@@ -123,13 +127,10 @@ public class StartupHelper {
             return false;
         }
 
-        // Restart the JVM with -XstartOnFirstThread
         ArrayList<String> jvmArgs = new ArrayList<>();
         String separator = System.getProperty("file.separator", "/");
-        // The following line is used assuming you target Java 8, the minimum for LWJGL3.
-        String javaExecPath = System.getProperty("java.home") + separator + "bin" + separator + "java";
-        // If targeting Java 9 or higher, you could use the following instead of the above line:
-        //String javaExecPath = ProcessHandle.current().info().command().orElseThrow();
+        // The following line is used assuming you target Java 9 or higher, the minimum for this project.
+        String javaExecPath = ProcessHandle.current().info().command().orElseThrow();
 
         if (!(new File(javaExecPath)).exists()) {
             System.err.println(
@@ -196,7 +197,7 @@ public class StartupHelper {
      * </pre>
      *
      * @return whether a new JVM was started and thus no code should be executed
-     *         in this one
+     * in this one
      */
     public static boolean startNewJvmIfRequired() {
         return startNewJvmIfRequired(true);
