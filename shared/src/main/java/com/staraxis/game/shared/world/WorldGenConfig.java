@@ -11,10 +11,16 @@ public class WorldGenConfig implements Serializable {
     private float habitableRatio;
     private String seedText;
     private long seedValue;
+    private float starDensity;
+    private float planetComplexity;
+    private float nebulaRatio;
     private int aiCount; // Placeholder
     private String techLevelPresetId; // Placeholder
 
     public WorldGenConfig() {
+        this.starDensity = 0.6f;
+        this.planetComplexity = 0.5f;
+        this.nebulaRatio = 0.2f;
     }
 
     public String getMapSizePresetId() {
@@ -50,6 +56,33 @@ public class WorldGenConfig implements Serializable {
         this.seedValue = seedValue;
     }
 
+    public float getStarDensity() {
+        return starDensity;
+    }
+
+    public void setStarDensity(float starDensity) {
+        // Clamp to [0, 1]
+        this.starDensity = Math.max(0.0f, Math.min(1.0f, starDensity));
+    }
+
+    public float getPlanetComplexity() {
+        return planetComplexity;
+    }
+
+    public void setPlanetComplexity(float planetComplexity) {
+        // Clamp to [0, 1]
+        this.planetComplexity = Math.max(0.0f, Math.min(1.0f, planetComplexity));
+    }
+
+    public float getNebulaRatio() {
+        return nebulaRatio;
+    }
+
+    public void setNebulaRatio(float nebulaRatio) {
+        // Clamp to [0, 1]
+        this.nebulaRatio = Math.max(0.0f, Math.min(1.0f, nebulaRatio));
+    }
+
     public int getAiCount() {
         return aiCount;
     }
@@ -73,6 +106,9 @@ public class WorldGenConfig implements Serializable {
                 + ", habitableRatio=" + habitableRatio
                 + ", seedText='" + seedText + '\''
                 + ", seedValue=" + seedValue
+                + ", starDensity=" + starDensity
+                + ", planetComplexity=" + planetComplexity
+                + ", nebulaRatio=" + nebulaRatio
                 + ", aiCount=" + aiCount
                 + ", techLevelPresetId='" + techLevelPresetId + '\''
                 + '}';

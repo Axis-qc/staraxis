@@ -14,11 +14,15 @@ import com.staraxis.game.client.ui.view.CameraController;
 import com.staraxis.game.client.ui.view.HexGridRenderer;
 import com.staraxis.game.client.ui.view.HexPicker;
 import com.staraxis.game.client.ui.view.WorldOverlayRenderer;
+import com.staraxis.game.client.ui.view.stellar.StellarMarkerRenderer;
 import com.staraxis.game.core.world.DefaultWorldGenerator;
 import com.staraxis.game.core.world.WorldGenerator;
 import com.staraxis.game.shared.world.HexCoord;
 import com.staraxis.game.shared.world.WorldGenConfig;
 import com.staraxis.game.shared.world.WorldMap;
+import com.staraxis.game.shared.world.stellar.Star;
+import com.staraxis.game.shared.world.stellar.StarSystem;
+import com.staraxis.game.shared.world.stellar.WorldGenStats;
 
 import io.staraxis.Main;
 
@@ -35,6 +39,7 @@ public class WorldScreen extends ScreenAdapter {
     private final HexPicker hexPicker;
     private final CameraController cameraController;
     private final WorldOverlayRenderer overlayRenderer;
+    private final StellarMarkerRenderer stellarMarkerRenderer;
     private final WorldMap worldMap;
     private HexCoord hoveredCoord;
     private Label debugLabel;
@@ -64,6 +69,9 @@ public class WorldScreen extends ScreenAdapter {
 
         // 初始化覆盖层渲染器 (T052)
         this.overlayRenderer = new WorldOverlayRenderer();
+
+        // 初始化恒星标记渲染器 (US3)
+        this.stellarMarkerRenderer = new StellarMarkerRenderer(gridRenderer);
 
         // 创建调试 UI (T022, T050)
         Table table = new Table();
@@ -120,24 +128,55 @@ public class WorldScreen extends ScreenAdapter {
 
         // 处理拾取逻辑 (T021)
         hoveredCoord = hexPicker.screenToHex(Gdx.input.getX(), Gdx.input.getY(), worldCamera);
+        String hoverText = "";
         if (hoveredCoord != null) {
-            debugLabel.setText(String.format("%s: %s | %s: %.2f",
+            String typeText = "";
+            if (worldMap.getTiles().containsKey(hoveredCoord)) {
+                String typeId = worldMap.getTile(hoveredCoord).getTypeId();
+                typeText = " | typeId=" + typeId;
+                StarSystem sys = worldMap.getTile(hoveredCoord).getStarSystem();
+                if (sys != null) {
+                    int stars = sys.getStars().size();
+                    int planets = 0;
+                    for (Star s : sys.getStars()) {
+                        planets += s.getPlanets().size();
+                    }
+                    typeText += " | stars=" + stars + ", planets=" + planets;
+                }
+            }
+
+            hoverText = String.format("%s: %s%s | %s: %.2f",
                     game.getLocalizationService().get("world_hovered_coord", "Hovered"),
                     hoveredCoord.toString(),
+                    typeText,
                     game.getLocalizationService().get("world_zoom_level", "Zoom"),
-                    worldCamera.zoom));
+                    worldCamera.zoom);
         }
+
+        WorldGenStats stats = worldMap.getStats();
+        String statsText = "";
+        if (stats != null) {
+            statsText = "\nstats: sectorCounts=" + stats.getSectorCounts()
+                    + ", starCount=" + stats.getStarCount()
+                    + ", planetCount=" + stats.getPlanetCount();
+        }
+
+        debugLabel.setText(hoverText + statsText);
         fpsLabel.setText("FPS: " + Gdx.graphics.getFramesPerSecond());
 
         // 2. 网格层渲染 (T053)
         gridRenderer.setProjectionMatrix(worldCamera.combined);
         gridRenderer.render(worldMap, hoveredCoord, worldCamera.zoom, worldCamera);
 
-        // 3. 覆盖层渲染 (T052, T053)
+        // 3. 恒星标记渲染 (US3)
+        stellarMarkerRenderer.setProjectionMatrix(worldCamera.combined);
+        stellarMarkerRenderer.render(worldMap, worldCamera.zoom, worldCamera);
+
+        // 4. 覆盖层渲染 (T052, T053)
         overlayRenderer.setProjectionMatrix(worldCamera.combined);
         overlayRenderer.render(worldMap, worldCamera);
 
-        // 4. UI 层渲染 (T053)
+        // 5. UI 层渲染 (T053)
         // 显式调用 UIManager 渲染，且不执行清屏，以保留背景和网格
         game.getUiManager().render(delta, false);
     }
@@ -161,6 +200,7 @@ public class WorldScreen extends ScreenAdapter {
         uiStage.dispose();
         gridRenderer.dispose();
         overlayRenderer.dispose();
+        stellarMarkerRenderer.dispose();
     }
 
     public OrthographicCamera getWorldCamera() {

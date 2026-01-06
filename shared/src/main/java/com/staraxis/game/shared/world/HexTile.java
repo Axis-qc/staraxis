@@ -2,6 +2,8 @@ package com.staraxis.game.shared.world;
 
 import java.io.Serializable;
 
+import com.staraxis.game.shared.world.stellar.StarSystem;
+
 /**
  * 六边形瓦片数据模型 (Hexagonal tile data model).
  */
@@ -10,6 +12,7 @@ public class HexTile implements Serializable {
     private final HexCoord coord;
     private String typeId;
     private boolean hasHabitable;
+    private StarSystem starSystem;
 
     public HexTile(HexCoord coord, String typeId) {
         this.coord = coord;
@@ -37,12 +40,21 @@ public class HexTile implements Serializable {
         this.hasHabitable = hasHabitable;
     }
 
+    public StarSystem getStarSystem() {
+        return starSystem;
+    }
+
+    public void setStarSystem(StarSystem starSystem) {
+        this.starSystem = starSystem;
+    }
+
     @Override
     public String toString() {
         return "HexTile{"
                 + "coord=" + coord
                 + ", typeId='" + typeId + '\''
                 + ", hasHabitable=" + hasHabitable
+                + ", starSystem=" + starSystem
                 + '}';
     }
 }

@@ -5,6 +5,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.staraxis.game.shared.world.stellar.WorldGenStats;
+
 /**
  * 生成后的世界地图容器 (World map container). 包含配置快照、边界半径和所有瓦片。
  */
@@ -13,6 +15,7 @@ public class WorldMap implements Serializable {
     private final WorldGenConfig config;
     private final int boundsRadius;
     private final Map<HexCoord, HexTile> tiles;
+    private WorldGenStats stats;
 
     public WorldMap(WorldGenConfig config, int boundsRadius) {
         this.config = config;
@@ -40,12 +43,21 @@ public class WorldMap implements Serializable {
         return tiles.get(coord);
     }
 
+    public WorldGenStats getStats() {
+        return stats;
+    }
+
+    public void setStats(WorldGenStats stats) {
+        this.stats = stats;
+    }
+
     @Override
     public String toString() {
         return "WorldMap{"
                 + "tilesCount=" + tiles.size()
                 + ", boundsRadius=" + boundsRadius
                 + ", config=" + config
+                + ", stats=" + stats
                 + '}';
     }
 }

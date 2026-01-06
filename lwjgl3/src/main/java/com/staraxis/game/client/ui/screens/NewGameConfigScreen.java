@@ -40,6 +40,12 @@ public class NewGameConfigScreen extends ScreenAdapter {
     private SelectBox<String> mapSizeSelect;
     private Slider habitableSlider;
     private Label habitableValueLabel;
+    private Slider starDensitySlider; // starDensitySlider（恒星密度滑条）
+    private Label starDensityValueLabel; // starDensityValueLabel（恒星密度显示）
+    private Slider planetComplexitySlider; // planetComplexitySlider（行星复杂度滑条）
+    private Label planetComplexityValueLabel; // planetComplexityValueLabel（行星复杂度显示）
+    private Slider nebulaRatioSlider; // nebulaRatioSlider（星云占比滑条）
+    private Label nebulaRatioValueLabel; // nebulaRatioValueLabel（星云占比显示）
     private TextField seedField;
     private TextButton btnStart;
     private TextButton btnBack;
@@ -94,6 +100,54 @@ public class NewGameConfigScreen extends ScreenAdapter {
         sliderTable.add(habitableValueLabel).padLeft(10);
         root.add(sliderTable).padBottom(10).row();
 
+        // 2.1 恒星密度 (T015)
+        root.add(new Label(i18n.get("config_star_density", "Star Density:"), skin)).left().padRight(10);
+        Table starDensityTable = new Table();
+        starDensitySlider = new Slider(0f, 1f, 0.05f, false, skin);
+        starDensitySlider.setValue(0.6f);
+        starDensityValueLabel = new Label("60%", skin);
+        starDensitySlider.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                starDensityValueLabel.setText((int) (starDensitySlider.getValue() * 100) + "%");
+            }
+        });
+        starDensityTable.add(starDensitySlider).width(150);
+        starDensityTable.add(starDensityValueLabel).padLeft(10);
+        root.add(starDensityTable).padBottom(10).row();
+
+        // 2.2 行星复杂度 (T016)
+        root.add(new Label(i18n.get("config_planet_complexity", "Planet Complexity:"), skin)).left().padRight(10);
+        Table planetComplexityTable = new Table();
+        planetComplexitySlider = new Slider(0f, 1f, 0.05f, false, skin);
+        planetComplexitySlider.setValue(0.5f);
+        planetComplexityValueLabel = new Label("50%", skin);
+        planetComplexitySlider.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                planetComplexityValueLabel.setText((int) (planetComplexitySlider.getValue() * 100) + "%");
+            }
+        });
+        planetComplexityTable.add(planetComplexitySlider).width(150);
+        planetComplexityTable.add(planetComplexityValueLabel).padLeft(10);
+        root.add(planetComplexityTable).padBottom(10).row();
+
+        // 2.3 星云占比 (T017)
+        root.add(new Label(i18n.get("config_nebula_ratio", "Nebula Ratio:"), skin)).left().padRight(10);
+        Table nebulaRatioTable = new Table();
+        nebulaRatioSlider = new Slider(0f, 1f, 0.05f, false, skin);
+        nebulaRatioSlider.setValue(0.2f);
+        nebulaRatioValueLabel = new Label("20%", skin);
+        nebulaRatioSlider.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                nebulaRatioValueLabel.setText((int) (nebulaRatioSlider.getValue() * 100) + "%");
+            }
+        });
+        nebulaRatioTable.add(nebulaRatioSlider).width(150);
+        nebulaRatioTable.add(nebulaRatioValueLabel).padLeft(10);
+        root.add(nebulaRatioTable).padBottom(10).row();
+
         // 3. 种子 (T035)
         root.add(new Label(i18n.get("config_seed", "Seed:"), skin)).left().padRight(10);
         seedField = new TextField("", skin);
@@ -144,6 +198,9 @@ public class NewGameConfigScreen extends ScreenAdapter {
 
         final String mapSize = mapSizeSelect.getSelected();
         final float habitable = habitableSlider.getValue();
+        final float starDensity = starDensitySlider.getValue();
+        final float planetComplexity = planetComplexitySlider.getValue();
+        final float nebulaRatio = nebulaRatioSlider.getValue();
         final String seedText = seedField.getText();
 
         // 在后台线程执行生成 (T047)
@@ -152,6 +209,9 @@ public class NewGameConfigScreen extends ScreenAdapter {
                 WorldGenConfig config = new WorldGenConfig();
                 config.setMapSizePresetId(mapSize);
                 config.setHabitableRatio(habitable);
+                config.setStarDensity(starDensity);
+                config.setPlanetComplexity(planetComplexity);
+                config.setNebulaRatio(nebulaRatio);
                 config.setSeedText(seedText);
                 config.setSeedValue(SeedUtil.resolveSeed(seedText));
 
@@ -167,7 +227,7 @@ public class NewGameConfigScreen extends ScreenAdapter {
                 Gdx.app.postRunnable(() -> {
                     btnStart.setDisabled(false);
                     btnBack.setDisabled(false);
-                    loadingLabel.setText("Error: " + e.getMessage());
+                    loadingLabel.setText(i18n.get("config_generation_failed", "Error") + ": " + e.getMessage());
                 });
             }
         }).start();

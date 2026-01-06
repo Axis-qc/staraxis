@@ -8,7 +8,10 @@ import java.util.Random;
 public class SeedUtil {
 
     /**
-     * 将文本种子转换为 long 型。 如果文本为空或 null，则生成随机种子。
+     * 将文本种子转换为 long 型。
+     *
+     * 规则（Rule）： - 当 seedText 为 null/空字符串/仅空白：生成随机 seedValue（不可复现）。 - 当 seedText
+     * 为非空字符串：使用 String.hashCode() 做确定性映射（同字符串 -> 同 seedValue）。
      *
      * @param seedText 种子文本
      * @return 转换后的 long 型种子

@@ -1,9 +1,19 @@
 package com.staraxis.game.core.world;
 
-import com.badlogic.gdx.Gdx;
-import com.staraxis.game.shared.world.*;
-
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
+
+import com.badlogic.gdx.Gdx;
+import com.staraxis.game.core.world.stellar.StellarGenerator;
+import com.staraxis.game.shared.world.HexCoord;
+import com.staraxis.game.shared.world.HexTile;
+import com.staraxis.game.shared.world.WorldGenConfig;
+import com.staraxis.game.shared.world.WorldGenDefinitions;
+import com.staraxis.game.shared.world.WorldMap;
+import com.staraxis.game.shared.world.stellar.Star;
+import com.staraxis.game.shared.world.stellar.StarSystem;
+import com.staraxis.game.shared.world.stellar.WorldGenStats;
 
 /**
  * 默认世界生成器实现 (Default world generator implementation). 保证在相同种子和配置下生成确定的地图。
@@ -16,56 +26,110 @@ public class DefaultWorldGenerator implements WorldGenerator {
         int radius = WorldGenDefinitions.getRadius(config.getMapSizePresetId());
         WorldMap worldMap = new WorldMap(config, radius);
 
-        // 使用配置中的 seedValue 初始化随机数生成器，保证确定性 (T028)
-        Random random = new Random(config.getSeedValue());
+        StellarGenerator stellarGenerator = new StellarGenerator();
+        Map<String, Integer> sectorCounts = new HashMap<>();
+        int tileCount = 0;
+        int galaxyTileCount = 0;
+        int starCount = 0;
+        int planetCount = 0;
+        int starsPerSystemMin = Integer.MAX_VALUE;
+        int starsPerSystemMax = Integer.MIN_VALUE;
 
         // 遍历六边形范围生成瓦片 (T025)
-        int tileCount = 0;
         for (int q = -radius; q <= radius; q++) {
             int r1 = Math.max(-radius, -q - radius);
             int r2 = Math.min(radius, -q + radius);
             for (int r = r1; r <= r2; r++) {
                 HexCoord coord = HexCoord.of(q, -q - r, r);
-                HexTile tile = generateTile(coord, random, config.getHabitableRatio());
+
+                Random tileRandom = createTileRandom(config.getSeedValue(), coord);
+                float roll = tileRandom.nextFloat();
+                String typeId = sampleSectorTypeId(config, roll);
+
+                HexTile tile = new HexTile(coord, typeId);
+                sectorCounts.merge(typeId, 1, Integer::sum);
+
+                if ("galaxy".equals(typeId)) {
+                    galaxyTileCount++;
+
+                    if (tileRandom.nextFloat() < config.getHabitableRatio()) {
+                        tile.setHasHabitable(true);
+                    }
+
+                    StarSystem starSystem = stellarGenerator.generateStarSystem(coord, config, tileRandom);
+                    tile.setStarSystem(starSystem);
+
+                    int starsInSystem = starSystem.getStars().size();
+                    starsPerSystemMin = Math.min(starsPerSystemMin, starsInSystem);
+                    starsPerSystemMax = Math.max(starsPerSystemMax, starsInSystem);
+                    starCount += starsInSystem;
+
+                    for (Star star : starSystem.getStars()) {
+                        planetCount += star.getPlanets().size();
+                    }
+                }
+
                 worldMap.addTile(tile);
                 tileCount++;
             }
         }
 
+        WorldGenStats stats = new WorldGenStats();
+        stats.setTileCount(tileCount);
+        stats.setSectorCounts(sectorCounts);
+        stats.setGalaxyTileCount(galaxyTileCount);
+        stats.setStarCount(starCount);
+        stats.setPlanetCount(planetCount);
+        if (galaxyTileCount > 0) {
+            stats.setStarsPerSystemMinMax("min=" + starsPerSystemMin + ",max=" + starsPerSystemMax);
+        } else {
+            stats.setStarsPerSystemMinMax("min=0,max=0");
+        }
+        worldMap.setStats(stats);
+
         long duration = System.currentTimeMillis() - startTime;
         if (Gdx.app != null) {
-            Gdx.app.log("WorldGen", String.format("Generated world: radius=%d, tiles=%d, duration=%dms, seed=%d",
-                    radius, tileCount, duration, config.getSeedValue()));
+            Gdx.app.log("WorldGen", String.format(
+                    "Generated world: radius=%d, tiles=%d, duration=%dms, seed=%d, sectorCounts=%s, starCount=%d, planetCount=%d",
+                    radius, tileCount, duration, config.getSeedValue(), sectorCounts, starCount, planetCount));
         }
 
         return worldMap;
     }
 
-    /**
-     * 生成单个瓦片并分配类型 (T026, T027)
-     */
-    private HexTile generateTile(HexCoord coord, Random random, float habitableRatio) {
-        // 简单的随机分配策略 (T026)
-        // 0-0.6: galaxy, 0.6-0.8: deep_space, 0.8-1.0: nebula
-        float typeRoll = random.nextFloat();
-        String typeId;
-        if (typeRoll < 0.6f) {
-            typeId = "galaxy";
-        } else if (typeRoll < 0.8f) {
-            typeId = "deep_space";
+    private Random createTileRandom(long seedValue, HexCoord coord) {
+        long mixed = seedValue;
+        mixed ^= ((long) coord.getX() * 73856093L);
+        mixed ^= ((long) coord.getY() * 19349663L);
+        mixed ^= ((long) coord.getZ() * 83492791L);
+        return new Random(mixed);
+    }
+
+    private String sampleSectorTypeId(WorldGenConfig config, float roll) {
+        float g = clamp01(config.getStarDensity());
+        float n = clamp01(config.getNebulaRatio());
+
+        float pGalaxy;
+        float pNebula;
+        if (g + n <= 1.0f) {
+            pGalaxy = g;
+            pNebula = n;
         } else {
-            typeId = "nebula";
+            float sum = g + n;
+            pGalaxy = g / sum;
+            pNebula = n / sum;
         }
 
-        HexTile tile = new HexTile(coord, typeId);
-
-        // 仅在 galaxy 类型的瓦片中根据概率生成宜居星球 (T027)
-        if ("galaxy".equals(typeId)) {
-            if (random.nextFloat() < habitableRatio) {
-                tile.setHasHabitable(true);
-            }
+        if (roll < pGalaxy) {
+            return "galaxy";
         }
+        if (roll < pGalaxy + pNebula) {
+            return "nebula";
+        }
+        return "deep_space";
+    }
 
-        return tile;
+    private float clamp01(float v) {
+        return Math.max(0.0f, Math.min(1.0f, v));
     }
 }

@@ -13,11 +13,15 @@ public class WorldGenDefinitions {
     private static final Map<String, Integer> MAP_PRESETS = new HashMap<>();
     private static final Map<String, String> TILE_TYPES = new HashMap<>();
     private static final Map<String, String> TECH_LEVEL_PRESETS = new HashMap<>();
+    private static final Map<String, String> STAR_TYPES = new HashMap<>();
+    private static final Map<String, String> PLANET_TYPES = new HashMap<>();
 
     static {
         loadMapPresets();
         loadTileTypes();
         loadTechLevelPresets();
+        loadStarTypes();
+        loadPlanetTypes();
     }
 
     private static void loadMapPresets() {
@@ -66,6 +70,36 @@ public class WorldGenDefinitions {
         }
     }
 
+    private static void loadStarTypes() {
+        Properties props = new Properties();
+        try {
+            props.load(WorldGenDefinitions.class.getResourceAsStream("/worldgen/stellar/star-types.properties"));
+            for (String name : props.stringPropertyNames()) {
+                STAR_TYPES.put(name, props.getProperty(name));
+            }
+        } catch (IOException | NullPointerException e) {
+            System.err.println("Failed to load star types: " + e.getMessage());
+            STAR_TYPES.put("yellow_dwarf", "Yellow Dwarf");
+            STAR_TYPES.put("red_dwarf", "Red Dwarf");
+            STAR_TYPES.put("blue_giant", "Blue Giant");
+        }
+    }
+
+    private static void loadPlanetTypes() {
+        Properties props = new Properties();
+        try {
+            props.load(WorldGenDefinitions.class.getResourceAsStream("/worldgen/stellar/planet-types.properties"));
+            for (String name : props.stringPropertyNames()) {
+                PLANET_TYPES.put(name, props.getProperty(name));
+            }
+        } catch (IOException | NullPointerException e) {
+            System.err.println("Failed to load planet types: " + e.getMessage());
+            PLANET_TYPES.put("rocky", "Rocky");
+            PLANET_TYPES.put("gas_giant", "Gas Giant");
+            PLANET_TYPES.put("ice", "Ice");
+        }
+    }
+
     public static Map<String, Integer> getMapPresets() {
         return Map.copyOf(MAP_PRESETS);
     }
@@ -76,6 +110,14 @@ public class WorldGenDefinitions {
 
     public static Map<String, String> getTechLevelPresets() {
         return Map.copyOf(TECH_LEVEL_PRESETS);
+    }
+
+    public static Map<String, String> getStarTypes() {
+        return Map.copyOf(STAR_TYPES);
+    }
+
+    public static Map<String, String> getPlanetTypes() {
+        return Map.copyOf(PLANET_TYPES);
     }
 
     public static int getRadius(String presetId) {
