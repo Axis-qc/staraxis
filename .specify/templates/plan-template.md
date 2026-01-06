@@ -1,4 +1,4 @@
-﻿# Implementation Plan: [FEATURE]
+# Implementation Plan: [FEATURE]
 
 **Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
 **Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
@@ -29,16 +29,9 @@
 
 ## Constitution Check
 
-- **UI 层独立性 (Independent UI Layer)**: UI 是否作为独立层级存在？是否通过数据绑定或 UI Model 与逻辑解耦？
-
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- **模块化与可维护性 (Modularization & Maintainability)**: 是否避免重复代码？是否避免硬编码/硬枚举？是否数据驱动？
-- **架构分层与端侧分离 (Layered Architecture & C/S Separation)**: 逻辑层是否不包含 UI 条件？客户端是否只负责渲染与输入？
-- **规范化命名与注释 (Naming & Documentation)**: 变量/方法/字段命名后是否带职责括号说明？文件头是否包含标准注释块？注释是否为中文？
-- **扩展性与 Mod 支持 (Extensibility & Mod Support)**: 是否预留扩展接口或 API？是否避免阻塞未来 Mod 接入？
-- **游戏模拟驱动 (Simulation-Driven Logic)**: 逻辑是否基于模拟时间而非帧率？是否避免每帧非必要逻辑？
-- **版本控制与合并纪律 (Version Control & Merge Discipline)**: 顶层架构是否入库？是否在完成实现+测试+文档对齐后再 push？是否在质量门禁通过后再合并？
+[Gates determined based on constitution file]
 
 ## Project Structure
 
@@ -46,12 +39,12 @@
 
 ```text
 specs/[###-feature]/
-鈹溾攢鈹€ plan.md              # This file (/speckit.plan command output)
-鈹溾攢鈹€ research.md          # Phase 0 output (/speckit.plan command)
-鈹溾攢鈹€ data-model.md        # Phase 1 output (/speckit.plan command)
-鈹溾攢鈹€ quickstart.md        # Phase 1 output (/speckit.plan command)
-鈹溾攢鈹€ contracts/           # Phase 1 output (/speckit.plan command)
-鈹斺攢鈹€ tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
+├── plan.md              # This file (/speckit.plan command output)
+├── research.md          # Phase 0 output (/speckit.plan command)
+├── data-model.md        # Phase 1 output (/speckit.plan command)
+├── quickstart.md        # Phase 1 output (/speckit.plan command)
+├── contracts/           # Phase 1 output (/speckit.plan command)
+└── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
 ```
 
 ### Source Code (repository root)
@@ -65,37 +58,37 @@ specs/[###-feature]/
 ```text
 # [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
 src/
-鈹溾攢鈹€ models/
-鈹溾攢鈹€ services/
-鈹溾攢鈹€ cli/
-鈹斺攢鈹€ lib/
+├── models/
+├── services/
+├── cli/
+└── lib/
 
 tests/
-鈹溾攢鈹€ contract/
-鈹溾攢鈹€ integration/
-鈹斺攢鈹€ unit/
+├── contract/
+├── integration/
+└── unit/
 
 # [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
 backend/
-鈹溾攢鈹€ src/
-鈹?  鈹溾攢鈹€ models/
-鈹?  鈹溾攢鈹€ services/
-鈹?  鈹斺攢鈹€ api/
-鈹斺攢鈹€ tests/
+├── src/
+│   ├── models/
+│   ├── services/
+│   └── api/
+└── tests/
 
 frontend/
-鈹溾攢鈹€ src/
-鈹?  鈹溾攢鈹€ components/
-鈹?  鈹溾攢鈹€ pages/
-鈹?  鈹斺攢鈹€ services/
-鈹斺攢鈹€ tests/
+├── src/
+│   ├── components/
+│   ├── pages/
+│   └── services/
+└── tests/
 
 # [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
 api/
-鈹斺攢鈹€ [same as backend above]
+└── [same as backend above]
 
 ios/ or android/
-鈹斺攢鈹€ [platform-specific structure: feature modules, UI flows, platform tests]
+└── [platform-specific structure: feature modules, UI flows, platform tests]
 ```
 
 **Structure Decision**: [Document the selected structure and reference the real
@@ -109,4 +102,3 @@ directories captured above]
 |-----------|------------|-------------------------------------|
 | [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
 | [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
-
