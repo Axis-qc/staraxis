@@ -100,7 +100,7 @@
 - [x] T034 更新 `quickstart.md`：补充“如何用 curl/postman 调用 API”的示例（路径：`specs/008-server-client-split/quickstart.md`）
 - [x] T035 记录并固化性能测量方法（SC-005~SC-007）：服务端计时点、客户端计时点、响应体字节数统计方式（路径：`specs/008-server-client-split/quickstart.md`）
 - [x] T036 运行 quickstart 的手工验证闭环并在 `tasks.md` 勾选前记录结果（路径：`specs/008-server-client-split/quickstart.md`）
-- [ ] T037 验证版本控制纪律：spec/plan/research/data-model/contracts/quickstart/tasks 全部纳入 git；实现+测试+文档对齐后再 push；质量门禁通过后再合并（路径：仓库根目录）
+- [x] T037 验证版本控制纪律：spec/plan/research/data-model/contracts/quickstart/tasks 全部纳入 git；实现+测试+文档对齐后再 push；质量门禁通过后再合并（路径：仓库根目录）
 
 ---
 

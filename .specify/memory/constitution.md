@@ -29,6 +29,7 @@ Sync Impact Report:
 - **命名约定**：变量/函数使用 camelCase；类/接口/组件使用 PascalCase；常量使用 UPPER_SNAKE_CASE；文件/文件夹使用 kebab-case；命名需语义清晰，禁止随意缩写。
   - **示例**：变量 `playerId`；函数 `loadSaveGame()`；类 `FleetController`；接口 `ShipRepository`；组件 `MainMenuPanel`；常量 `MAX_SHIP_COUNT`；文件夹 `combat-simulator/`；文件 `fleet-controller.java`。
 - **注释约定**：注释用于解释“为什么这样设计”，而不是代码字面含义；复杂逻辑、业务判断、边界条件必须写注释；禁止无意义注释；统一使用 `TODO` / `FIXME` / `NOTE` / `HACK` 标记。
+注释以中文为主，必要术语可附英文
 
 ### IV. 扩展性与 Mod 支持 (Extensibility & Mod Support)
 架构设计必须预留扩展接口。虽然当前不要求兼容旧版本，但必须在底层设计中考虑 Mod 加载机制和 API 暴露，确保游戏生态的长期生命力。
