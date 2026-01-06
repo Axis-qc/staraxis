@@ -27,7 +27,7 @@
 
 **Purpose**: Prepare package layout and resource stubs for stellar/planet generation.
 
-- [ ] T001 Ensure feature docs are tracked: add `specs/007-stellar-planet-gen/**` to git index (repo root)
+- [X] T001 Ensure feature docs are tracked: add `specs/007-stellar-planet-gen/**` to git index (repo root)
 - [X] T002 Create stellar model package (directories): `shared/src/main/java/com/staraxis/game/shared/world/stellar/`
 - [X] T003 [P] Create stellar generator package (directories): `core/src/main/java/com/staraxis/game/core/world/stellar/`
 - [X] T004 [P] Create client renderer package (directories): `lwjgl3/src/main/java/com/staraxis/game/client/ui/view/stellar/`

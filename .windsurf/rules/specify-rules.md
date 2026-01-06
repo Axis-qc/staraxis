@@ -11,6 +11,7 @@ Auto-generated from all feature plans. Last updated: 2026-01-05
 - N/A（本期配置仅用于启动本局；是否持久化到偏好设置后续再定） (005-hex-world-gen)
 - Java 21 + libGDX 1.14.0 (Scene2D UI, gdx-freetype) (006-ui-input-polishing)
 - N/A (本地化文本存储于 .properties 资源文件) (006-ui-input-polishing)
+- N/A（本期配置用于启动本局；是否持久化到偏好/存档系统后续再定） (007-stellar-planet-gen)
 
 - Java 17 (LibGDX 默认版本) + LibGDX 1.14.0, Kryo (序列化), KryoNet (可选，用于网络通信调研) (001-game-framework-cs)
 
@@ -30,9 +31,9 @@ tests/
 Java 17 (LibGDX 默认版本): Follow standard conventions
 
 ## Recent Changes
+- 007-stellar-planet-gen: Added Java 21 + libGDX 1.14.0（含 Scene2D UI / gdx-freetype）
 - 006-ui-input-polishing: Added Java 21 + libGDX 1.14.0 (Scene2D UI, gdx-freetype)
 - 005-hex-world-gen: Added Java 21 + libGDX 1.14.0（含 Scene2D UI / gdx-freetype）
-- 004-ui-layer-decoupling: Added Java (LibGDX Framework) + `libgdx`, `gdx-freetype`, `Gradle`
 
 
 <!-- MANUAL ADDITIONS START -->

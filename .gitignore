@@ -142,7 +142,6 @@ www-test/
 ## StarAxis Specific:
 /shared/build/
 /shared/bin/
-.specify/
 游戏大纲.md
 开发助手.md
 .vscode/
