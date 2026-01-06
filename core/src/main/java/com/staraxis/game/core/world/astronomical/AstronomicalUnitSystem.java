@@ -7,6 +7,7 @@ import java.util.logging.Logger;
 
 import com.staraxis.game.shared.world.astronomical.SectorSizeDefinition;
 import com.staraxis.game.shared.world.astronomical.UnitConverter;
+import com.staraxis.game.shared.world.astronomical.VisualScaleConfig;
 
 /**
  * 天文单位系统（Astronomical Unit System）。
@@ -22,6 +23,7 @@ public class AstronomicalUnitSystem {
     private static final Logger LOGGER = Logger.getLogger(AstronomicalUnitSystem.class.getName());
     private static final String CONFIG_FILE = "i18n/astronomical-units-config.properties";
     private static final String SECTOR_SIZE_CONFIG_FILE = "i18n/sector-size-config.properties";
+    private static final String VISUAL_SCALE_CONFIG_FILE = "i18n/visual-scale-config.properties";
 
     /**
      * 缩放因子（从配置文件加载）。
@@ -37,6 +39,11 @@ public class AstronomicalUnitSystem {
      * 星区大小定义（从配置文件加载）。
      */
     private SectorSizeDefinition sectorSizeDefinition;
+
+    /**
+     * 可视化缩放配置（从配置文件加载）。
+     */
+    private VisualScaleConfig visualScaleConfig;
 
     // 单位转换器是工具类，不需要实例字段
 
@@ -125,6 +132,9 @@ public class AstronomicalUnitSystem {
         
         // 加载星区大小定义
         loadSectorSizeDefinition();
+        
+        // 加载可视化缩放配置
+        loadVisualScaleConfig();
     }
 
     /**
@@ -199,6 +209,11 @@ public class AstronomicalUnitSystem {
         if (sectorSizeDefinition != null) {
             sectorSizeDefinition.validate();
         }
+
+        // 验证可视化缩放配置
+        if (visualScaleConfig != null) {
+            // VisualScaleConfig 的验证在设置时已完成
+        }
     }
 
     /**
@@ -235,6 +250,76 @@ public class AstronomicalUnitSystem {
      */
     public SectorSizeDefinition getSectorSizeDefinition() {
         return sectorSizeDefinition;
+    }
+
+    /**
+     * 从配置文件加载可视化缩放配置。
+     * 
+     * @throws IOException 如果配置文件读取失败
+     * @throws IllegalArgumentException 如果配置文件格式错误
+     */
+    private void loadVisualScaleConfig() throws IOException {
+        Properties props = new Properties();
+        try (InputStream is = getClass().getClassLoader().getResourceAsStream(VISUAL_SCALE_CONFIG_FILE)) {
+            if (is == null) {
+                LOGGER.warning("可视化缩放配置文件未找到: " + VISUAL_SCALE_CONFIG_FILE + "，使用默认值");
+                this.visualScaleConfig = new VisualScaleConfig();
+                return;
+            }
+            props.load(is);
+        } catch (IOException e) {
+            LOGGER.warning("加载可视化缩放配置文件失败: " + VISUAL_SCALE_CONFIG_FILE + " - " + e.getMessage() + "，使用默认值");
+            this.visualScaleConfig = new VisualScaleConfig();
+            return;
+        }
+
+        // 加载 AU 到像素的转换比例
+        String auToPixelsStr = props.getProperty("visual.scale.au.to.pixels", "0.00079");
+        float auToPixels = Float.parseFloat(auToPixelsStr);
+
+        // 加载自动缩放设置
+        String autoEnabledStr = props.getProperty("visual.scale.auto.enabled", "true");
+        boolean autoScaleEnabled = Boolean.parseBoolean(autoEnabledStr);
+
+        // 加载基础缩放比例
+        String starBaseStr = props.getProperty("visual.scale.star.base", "1.0");
+        float starBaseScale = Float.parseFloat(starBaseStr);
+        
+        String planetBaseStr = props.getProperty("visual.scale.planet.base", "0.5");
+        float planetBaseScale = Float.parseFloat(planetBaseStr);
+        
+        String orbitBaseStr = props.getProperty("visual.scale.orbit.base", "1.0");
+        float orbitBaseScale = Float.parseFloat(orbitBaseStr);
+
+        // 加载手动缩放因子
+        String manualFactorStr = props.getProperty("visual.scale.manual.factor", "1.0");
+        float manualScaleFactor = Float.parseFloat(manualFactorStr);
+
+        // 加载自动缩放范围
+        String autoMinStr = props.getProperty("visual.scale.auto.min.factor", "0.1");
+        float autoMinFactor = Float.parseFloat(autoMinStr);
+        
+        String autoMaxStr = props.getProperty("visual.scale.auto.max.factor", "10.0");
+        float autoMaxFactor = Float.parseFloat(autoMaxStr);
+
+        // 创建可视化缩放配置
+        this.visualScaleConfig = new VisualScaleConfig(
+            auToPixels, autoScaleEnabled, manualScaleFactor,
+            starBaseScale, planetBaseScale, orbitBaseScale,
+            autoMinFactor, autoMaxFactor
+        );
+
+        LOGGER.info("可视化缩放配置加载成功: auToPixels=" + auToPixels + 
+                   ", autoScaleEnabled=" + autoScaleEnabled);
+    }
+
+    /**
+     * 获取可视化缩放配置。
+     * 
+     * @return 可视化缩放配置
+     */
+    public VisualScaleConfig getVisualScaleConfig() {
+        return visualScaleConfig;
     }
 
     @Override

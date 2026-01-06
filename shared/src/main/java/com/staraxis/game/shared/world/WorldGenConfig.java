@@ -23,6 +23,7 @@ public class WorldGenConfig implements Serializable {
     private String techLevelPresetId; // Placeholder
     private GalaxyScaleConfig galaxyScaleConfig; // 星系规模配置（可选）
     private WorldBlockScaleConfig worldBlockScaleConfig; // 世界区块规模配置（可选）
+    private String astronomicalUnitSystemVersion; // 天文单位系统版本（可选，用于标识使用的单位系统版本）
 
     public WorldGenConfig() {
         this.starDensity = 0.6f;
@@ -134,6 +135,24 @@ public class WorldGenConfig implements Serializable {
         this.worldBlockScaleConfig = worldBlockScaleConfig;
     }
 
+    /**
+     * 获取天文单位系统版本。
+     * 
+     * @return 天文单位系统版本
+     */
+    public String getAstronomicalUnitSystemVersion() {
+        return astronomicalUnitSystemVersion;
+    }
+
+    /**
+     * 设置天文单位系统版本。
+     * 
+     * @param version 天文单位系统版本
+     */
+    public void setAstronomicalUnitSystemVersion(String version) {
+        this.astronomicalUnitSystemVersion = version;
+    }
+
     @Override
     public String toString() {
         return "WorldGenConfig{"
@@ -149,6 +168,7 @@ public class WorldGenConfig implements Serializable {
                 + ", techLevelPresetId='" + techLevelPresetId + '\''
                 + ", galaxyScaleConfig=" + galaxyScaleConfig
                 + ", worldBlockScaleConfig=" + worldBlockScaleConfig
+                + ", astronomicalUnitSystemVersion='" + astronomicalUnitSystemVersion + '\''
                 + '}';
     }
 }
