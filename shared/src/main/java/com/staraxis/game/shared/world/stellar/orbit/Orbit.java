@@ -2,6 +2,8 @@ package com.staraxis.game.shared.world.stellar.orbit;
 
 import java.io.Serializable;
 
+import com.staraxis.game.shared.world.astronomical.AstronomicalUnit;
+
 /**
  * 轨道（Orbit）。
  * 
@@ -18,7 +20,8 @@ public class Orbit implements Serializable {
     private Float inclination; // 倾角（弧度）
     
     // 完整的开普勒轨道参数（新增）
-    private Float semiMajorAxis; // 半长轴（单位：游戏单位）
+    private Float semiMajorAxis; // 半长轴（单位：游戏单位，向后兼容）
+    private AstronomicalUnit semiMajorAxisAU; // 半长轴（单位：AU，新单位系统）
     private Float longitudeOfAscendingNode; // 升交点经度（弧度）
     private Float argumentOfPeriapsis; // 近地点幅角（弧度）
     private Float trueAnomaly; // 真近点角（弧度）
@@ -152,9 +155,51 @@ public class Orbit implements Serializable {
     /**
      * 获取有效的半长轴值（优先使用 semiMajorAxis，如果为空则使用 scale 作为后备）。
      * 
-     * @return 半长轴值
+     * @return 半长轴值（Float，向后兼容）
      */
     public float getEffectiveSemiMajorAxis() {
         return semiMajorAxis != null ? semiMajorAxis : scale;
+    }
+
+    /**
+     * 获取半长轴（AU，新单位系统）。
+     * 
+     * @return 半长轴（AstronomicalUnit），如果未设置则返回 null
+     */
+    public AstronomicalUnit getSemiMajorAxisAU() {
+        return semiMajorAxisAU;
+    }
+
+    /**
+     * 设置半长轴（AU，新单位系统）。
+     * 
+     * @param semiMajorAxisAU 半长轴（AU）
+     * @throws IllegalArgumentException 如果半长轴为 null 或 <= 0
+     */
+    public void setSemiMajorAxisAU(AstronomicalUnit semiMajorAxisAU) {
+        if (semiMajorAxisAU == null) {
+            throw new IllegalArgumentException("semiMajorAxisAU（半长轴）不能为空");
+        }
+        if (semiMajorAxisAU.toAU() <= 0.0) {
+            throw new IllegalArgumentException("semiMajorAxisAU（半长轴）必须 > 0，当前值: " + semiMajorAxisAU.toAU() + " AU");
+        }
+        this.semiMajorAxisAU = semiMajorAxisAU;
+        
+        // 同步更新 Float 类型的 semiMajorAxis（向后兼容）
+        this.semiMajorAxis = (float) semiMajorAxisAU.toAU();
+    }
+
+    /**
+     * 获取有效的半长轴（AU，优先使用新单位系统）。
+     * 
+     * @return 半长轴（AstronomicalUnit），如果未设置则根据 Float 值创建
+     */
+    public AstronomicalUnit getEffectiveSemiMajorAxisAU() {
+        if (semiMajorAxisAU != null) {
+            return semiMajorAxisAU;
+        }
+        // 如果新单位系统未设置，根据 Float 值创建（向后兼容）
+        float effectiveValue = getEffectiveSemiMajorAxis();
+        return AstronomicalUnit.fromAU(effectiveValue);
     }
 }

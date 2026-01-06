@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import com.staraxis.game.shared.world.astronomical.AstronomicalUnit;
 import com.staraxis.game.shared.world.stellar.orbit.OrbitCenterRef;
 
 /**
@@ -20,6 +21,7 @@ public class Star implements Serializable {
     private List<Planet> planets; // planets（归属该恒星的行星列表，允许为空）
 
     private OrbitCenterRef orbitCenterRef; // orbitCenterRef（恒星围绕的中心；双星场景可指向共同质心）
+    private AstronomicalUnit radius; // radius（恒星半径，以 AU 为单位；新单位系统）
 
     public Star() {
         this.planets = new ArrayList<>();
@@ -65,5 +67,27 @@ public class Star implements Serializable {
 
     public void setOrbitCenterRef(OrbitCenterRef orbitCenterRef) {
         this.orbitCenterRef = orbitCenterRef;
+    }
+
+    /**
+     * 获取恒星半径（AU，新单位系统）。
+     * 
+     * @return 恒星半径（AstronomicalUnit），如果未设置则返回 null
+     */
+    public AstronomicalUnit getRadius() {
+        return radius;
+    }
+
+    /**
+     * 设置恒星半径（AU，新单位系统）。
+     * 
+     * @param radius 恒星半径（AU）
+     * @throws IllegalArgumentException 如果半径为 null 或 <= 0
+     */
+    public void setRadius(AstronomicalUnit radius) {
+        if (radius != null && radius.toAU() <= 0.0) {
+            throw new IllegalArgumentException("恒星半径必须 > 0，当前值: " + radius.toAU() + " AU");
+        }
+        this.radius = radius;
     }
 }
