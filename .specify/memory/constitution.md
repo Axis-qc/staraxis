@@ -1,14 +1,14 @@
 ﻿<!--
 Sync Impact Report:
-- Version change: 1.1.0 -> 1.2.0
+- Version change: 1.2.0 -> 1.3.0
 - List of modified principles:
-  - 开发工作流 (Development Workflow) -> 命令限制 (Command Restrictions)
+  - 开发工作流 (Development Workflow) -> 版本控制与合并纪律 (Version Control & Merge Discipline)
 - Added sections: None
 - Templates requiring updates:
   -  updated: .specify/memory/constitution.md
-  -  pending: .specify/templates/plan-template.md
-  -  pending: .specify/templates/spec-template.md
-  -  pending: .specify/templates/tasks-template.md
+  -  updated: .specify/templates/plan-template.md
+  -  updated: .specify/templates/spec-template.md
+  -  updated: .specify/templates/tasks-template.md
 - Follow-up TODOs:
   - TODO(RATIFICATION_DATE): 初始确立日期需确认，暂定为 2026-01-05。
 -->
@@ -51,8 +51,14 @@ UI 层必须作为一个独立的层级存在，通过特定的 UI 模型（UI M
 - **命令限制**：严禁在非测试场景以及未指定使用终端下使用终端命令。所有非测试性的环境变更、构建触发或资源处理必须优先通过 Gradle 任务或专门的自动化脚本完成，确保操作的可审计性和幂等性。
 - **职责隔离**：禁止对当前分配任务外的其他模块进行随意变动，确保变更的可追溯性和局部性。
 
+### 版本控制与合并纪律 (Version Control & Merge Discipline)
+- **顶层架构入库**：顶层架构/整体设计文档必须纳入 Git 并随架构变更同步更新（避免只存在于个人笔记或聊天记录）。
+- **上传时机**：默认在当前任务/用户故事全部完成（实现 + 测试 + 文档对齐）后再统一上传（push），避免在未完成阶段频繁推送造成主干噪音。
+- **合并时机**：合并分支必须发生在工作完成之后（任务清单完成、测试通过、必要的手工验证完成）。禁止在未达成质量门禁时合并到主分支。
+- **例外流程**：若确需中途上传用于协作/备份，必须显式标注 WIP（例如 commit message/PR 标题包含 WIP），且不得合并。
+
 ## Governance
 
 本宪章是 StarAxis 项目的最高开发准则，所有代码提交、方案评审及任务拆解均须遵循上述原则。原则的修改需经过文档化记录并更新版本号。
 
-**Version**: 1.2.0 | **Ratified**: 2026-01-05 | **Last Amended**: 2026-01-05
+**Version**: 1.3.0 | **Ratified**: 2026-01-05 | **Last Amended**: 2026-01-06

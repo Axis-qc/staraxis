@@ -33,9 +33,13 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- **妯″潡鍖?(Modularization)**: 鏄惁閬靛惊妯″潡鍖栬璁★紵鏄惁瀛樺湪纭紪鐮佹垨纭灇涓撅紵
-- **绔晶鍒嗙 (C/S Separation)**: 鏈嶅姟绔槸鍚︿粎璐熻矗婕旂畻锛熷鎴风鏄惁浠呰礋璐ｆ覆鏌撲笌浜や簰锛?- **鍛藉悕瑙勮寖 (Naming)**: 鍙橀噺涓庢柟娉曟槸鍚﹀寘鍚嫭鍙疯鏄庯紵鏂囦欢澶存槸鍚﹀寘鍚爣鍑嗘敞閲婏紵
-- **Mod 鏀寔 (Extensibility)**: 鏄惁棰勭暀浜嗘墿灞曟帴鍙ｆ垨 API锛?- **妯℃嫙椹卞姩 (Simulation)**: 閫昏緫鏄惁閬靛惊妯℃嫙鏃堕棿锛熸槸鍚﹂伩鍏嶄簡涓嶅繀瑕佺殑姣忓抚鏇存柊锛?
+- **模块化与可维护性 (Modularization & Maintainability)**: 是否避免重复代码？是否避免硬编码/硬枚举？是否数据驱动？
+- **架构分层与端侧分离 (Layered Architecture & C/S Separation)**: 逻辑层是否不包含 UI 条件？客户端是否只负责渲染与输入？
+- **规范化命名与注释 (Naming & Documentation)**: 变量/方法/字段命名后是否带职责括号说明？文件头是否包含标准注释块？注释是否为中文？
+- **扩展性与 Mod 支持 (Extensibility & Mod Support)**: 是否预留扩展接口或 API？是否避免阻塞未来 Mod 接入？
+- **游戏模拟驱动 (Simulation-Driven Logic)**: 逻辑是否基于模拟时间而非帧率？是否避免每帧非必要逻辑？
+- **版本控制与合并纪律 (Version Control & Merge Discipline)**: 顶层架构是否入库？是否在完成实现+测试+文档对齐后再 push？是否在质量门禁通过后再合并？
+
 ## Project Structure
 
 ### Documentation (this feature)

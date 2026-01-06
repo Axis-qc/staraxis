@@ -20,8 +20,8 @@ description: "Task list template for feature implementation"
 
 ## Path Conventions
 
-- **StarAxis Core**: `core/src/main/` (鏈嶅姟绔€昏緫/閫氱敤妯″潡)
-- **StarAxis LWJGL3**: `lwjgl3/src/main/` (瀹㈡埛绔覆鏌?浜や簰)
+- **StarAxis Core**: `core/src/main/`（逻辑层/通用模块）
+- **StarAxis LWJGL3**: `lwjgl3/src/main/`（客户端渲染/交互）
 - **Tests**: `core/src/test/`, `lwjgl3/src/test/`
 
 <!-- 
@@ -156,6 +156,7 @@ Examples of foundational tasks (adjust based on your project):
 - [ ] TXXX [P] Additional unit tests (if requested) in tests/unit/
 - [ ] TXXX Security hardening
 - [ ] TXXX Run quickstart.md validation
+- [ ] TXXX Verify version control & merge discipline: architecture docs tracked in git; push after completion; merge after quality gates
 
 ---
 
