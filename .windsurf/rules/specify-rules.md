@@ -33,7 +33,6 @@ Java 17 (LibGDX 默认版本): Follow standard conventions
 ## Recent Changes
 - 007-stellar-planet-gen: Added Java 21 + libGDX 1.14.0（含 Scene2D UI / gdx-freetype）
 - 006-ui-input-polishing: Added Java 21 + libGDX 1.14.0 (Scene2D UI, gdx-freetype)
-- 005-hex-world-gen: Added Java 21 + libGDX 1.14.0（含 Scene2D UI / gdx-freetype）
 
 
 <!-- MANUAL ADDITIONS START -->

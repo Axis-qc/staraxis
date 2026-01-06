@@ -1,0 +1,272 @@
+openapi: 3.0.3
+info:
+  title: StarAxis WorldGen API (008)
+  version: "1.0"
+  description: |
+    008 的 MVP 通讯契约：客户端通过 HTTP+JSON 请求服务端进行权威世界生成，并获取 WorldSnapshot。
+
+    版本约定：响应字段 schemaVersion 固定为 worldgen_v1。
+
+servers:
+  - url: http://{host}:{port}
+    description: |
+      客户端连接用的 baseUrl。
+      - 默认 host=127.0.0.1 用于“同机调试”。
+      - 若进行跨机器/局域网联调，客户端应将 host 设置为服务端所在机器的实际 IP。
+      - 服务端监听地址（bindAddress）由实现配置决定，MVP 默认允许监听 0.0.0.0 以支持局域网访问（仅开发/测试用途）。
+    variables:
+      host:
+        default: 127.0.0.1
+      port:
+        default: "8080"
+
+paths:
+  /api/worldgen/start-new-game:
+    post:
+      summary: Start a new game world generation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartNewGameRequest'
+      responses:
+        '200':
+          description: World generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartNewGameResponse'
+        '400':
+          description: Invalid request parameters (e.g., unknown mapSizePresetId or malformed JSON). Note: out-of-range ratios are clamped and returned as 200 with effectiveConfig.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartNewGameResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartNewGameResponse'
+
+components:
+  schemas:
+    StartNewGameRequest:
+      type: object
+      required:
+        - seedText
+        - mapSizePresetId
+        - habitableRatio
+        - starDensity
+        - planetComplexity
+        - nebulaRatio
+      properties:
+        seedText:
+          type: string
+          description: Seed text (may be empty); final seedValue is server-authoritative
+          maxLength: 256
+        mapSizePresetId:
+          type: string
+        habitableRatio:
+          type: number
+          minimum: 0
+          maximum: 1
+        starDensity:
+          type: number
+          minimum: 0
+          maximum: 1
+        planetComplexity:
+          type: number
+          minimum: 0
+          maximum: 1
+        nebulaRatio:
+          type: number
+          minimum: 0
+          maximum: 1
+
+    StartNewGameResponse:
+      type: object
+      required:
+        - schemaVersion
+      properties:
+        schemaVersion:
+          type: string
+          enum:
+            - worldgen_v1
+          description: Fixed schema version for this MVP
+        effectiveConfig:
+          $ref: '#/components/schemas/StartNewGameEffectiveConfig'
+        world:
+          $ref: '#/components/schemas/WorldSnapshot'
+        error:
+          $ref: '#/components/schemas/ErrorEnvelope'
+
+    StartNewGameEffectiveConfig:
+      type: object
+      required:
+        - mapSizePresetId
+        - seedText
+        - seedValue
+        - habitableRatio
+        - starDensity
+        - planetComplexity
+        - nebulaRatio
+      properties:
+        mapSizePresetId:
+          type: string
+        seedText:
+          type: string
+          maxLength: 256
+        seedValue:
+          type: integer
+          format: int64
+        habitableRatio:
+          type: number
+          minimum: 0
+          maximum: 1
+        starDensity:
+          type: number
+          minimum: 0
+          maximum: 1
+        planetComplexity:
+          type: number
+          minimum: 0
+          maximum: 1
+        nebulaRatio:
+          type: number
+          minimum: 0
+          maximum: 1
+
+    WorldSnapshot:
+      type: object
+      required:
+        - seedValue
+        - boundsRadius
+        - stats
+        - tiles
+      properties:
+        seedValue:
+          type: integer
+          format: int64
+        boundsRadius:
+          type: integer
+        stats:
+          $ref: '#/components/schemas/WorldGenStatsSnapshot'
+        tiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/HexTileSnapshot'
+
+    HexTileSnapshot:
+      type: object
+      required:
+        - coord
+        - typeId
+        - hasHabitable
+      properties:
+        coord:
+          $ref: '#/components/schemas/HexCoordSnapshot'
+        typeId:
+          type: string
+        hasHabitable:
+          type: boolean
+        starSystem:
+          $ref: '#/components/schemas/StarSystemSnapshot'
+
+    HexCoordSnapshot:
+      type: object
+      required:
+        - x
+        - y
+        - z
+      properties:
+        x:
+          type: integer
+        y:
+          type: integer
+        z:
+          type: integer
+
+    StarSystemSnapshot:
+      type: object
+      required:
+        - id
+        - stars
+      properties:
+        id:
+          type: string
+        stars:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items:
+            $ref: '#/components/schemas/StarSnapshot'
+
+    StarSnapshot:
+      type: object
+      required:
+        - id
+        - starTypeId
+        - planets
+      properties:
+        id:
+          type: string
+        starTypeId:
+          type: string
+        planets:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanetSnapshot'
+
+    PlanetSnapshot:
+      type: object
+      required:
+        - id
+        - planetTypeId
+        - orbitIndex
+      properties:
+        id:
+          type: string
+        planetTypeId:
+          type: string
+        orbitIndex:
+          type: integer
+
+    WorldGenStatsSnapshot:
+      type: object
+      required:
+        - tileCount
+        - sectorCounts
+        - galaxyTileCount
+        - starCount
+        - planetCount
+        - starsPerSystemMinMax
+      properties:
+        tileCount:
+          type: integer
+        sectorCounts:
+          type: object
+          additionalProperties:
+            type: integer
+        galaxyTileCount:
+          type: integer
+        starCount:
+          type: integer
+        planetCount:
+          type: integer
+        starsPerSystemMinMax:
+          type: string
+
+    ErrorEnvelope:
+      type: object
+      required:
+        - errorCode
+        - messageKey
+      properties:
+        errorCode:
+          type: string
+        messageKey:
+          type: string
+        details:
+          type: string

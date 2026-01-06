@@ -19,10 +19,15 @@ import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.staraxis.game.client.ui.MainMenuScreen;
 import com.staraxis.game.client.ui.manager.UIManager;
+import com.staraxis.game.client.net.WorldGenApiClient;
 import com.staraxis.game.core.i18n.LocalizationService;
-import com.staraxis.game.shared.world.SeedUtil;
-import com.staraxis.game.shared.world.WorldGenConfig;
+import com.staraxis.game.shared.net.worldgen.ErrorEnvelope;
+import com.staraxis.game.shared.net.worldgen.StartNewGameEffectiveConfig;
+import com.staraxis.game.shared.net.worldgen.StartNewGameRequest;
+import com.staraxis.game.shared.net.worldgen.StartNewGameResponse;
+import com.staraxis.game.shared.net.worldgen.snapshot.WorldSnapshot;
 import com.staraxis.game.shared.world.WorldGenDefinitions;
+import com.staraxis.game.shared.world.WorldSnapshotConverter;
 
 import io.staraxis.Main;
 
@@ -203,20 +208,58 @@ public class NewGameConfigScreen extends ScreenAdapter {
         final float nebulaRatio = nebulaRatioSlider.getValue();
         final String seedText = seedField.getText();
 
-        // 在后台线程执行生成 (T047)
+        // 在后台线程执行请求 (T047)
         new Thread(() -> {
             try {
-                WorldGenConfig config = new WorldGenConfig();
-                config.setMapSizePresetId(mapSize);
-                config.setHabitableRatio(habitable);
-                config.setStarDensity(starDensity);
-                config.setPlanetComplexity(planetComplexity);
-                config.setNebulaRatio(nebulaRatio);
-                config.setSeedText(seedText);
-                config.setSeedValue(SeedUtil.resolveSeed(seedText));
+                long startMs = System.currentTimeMillis();
+                StartNewGameRequest request = new StartNewGameRequest();
+                request.setMapSizePresetId(mapSize);
+                request.setHabitableRatio(habitable);
+                request.setStarDensity(starDensity);
+                request.setPlanetComplexity(planetComplexity);
+                request.setNebulaRatio(nebulaRatio);
+                request.setSeedText(seedText);
 
-                com.staraxis.game.core.world.WorldGenerator generator = new com.staraxis.game.core.world.DefaultWorldGenerator();
-                final com.staraxis.game.shared.world.WorldMap worldMap = generator.generate(config);
+                WorldGenApiClient apiClient = new WorldGenApiClient("http://127.0.0.1:8080");
+                StartNewGameResponse response = apiClient.startNewGame(request);
+
+                if (response.getError() != null) {
+                    ErrorEnvelope err = response.getError();
+                    String msg = i18n.get(err.getMessageKey(), "Error");
+                    Gdx.app.postRunnable(() -> {
+                        btnStart.setDisabled(false);
+                        btnBack.setDisabled(false);
+                        loadingLabel.setText(msg);
+                    });
+                    return;
+                }
+
+                StartNewGameEffectiveConfig effectiveConfig = response.getEffectiveConfig();
+                if (effectiveConfig != null) {
+                    Gdx.app.log("WorldGen", "effectiveConfig: mapSizePresetId=" + effectiveConfig.getMapSizePresetId()
+                            + ", seedText=" + effectiveConfig.getSeedText()
+                            + ", seedValue=" + effectiveConfig.getSeedValue()
+                            + ", habitableRatio=" + effectiveConfig.getHabitableRatio()
+                            + ", starDensity=" + effectiveConfig.getStarDensity()
+                            + ", planetComplexity=" + effectiveConfig.getPlanetComplexity()
+                            + ", nebulaRatio=" + effectiveConfig.getNebulaRatio());
+                }
+
+                WorldSnapshot snapshot = response.getWorld();
+                if (snapshot == null) {
+                    Gdx.app.postRunnable(() -> {
+                        btnStart.setDisabled(false);
+                        btnBack.setDisabled(false);
+                        loadingLabel.setText(i18n.get("worldgen.internal_error", "Error"));
+                    });
+                    return;
+                }
+
+                WorldSnapshotConverter converter = new WorldSnapshotConverter();
+                final com.staraxis.game.shared.world.WorldMap worldMap = converter.toWorldMap(snapshot);
+
+                long durationMs = System.currentTimeMillis() - startMs;
+                Gdx.app.log("WorldGen", "clientDurationMs=" + durationMs);
 
                 // 生成完成后切回 GL 线程更新 UI/Screen
                 Gdx.app.postRunnable(() -> {
@@ -227,7 +270,7 @@ public class NewGameConfigScreen extends ScreenAdapter {
                 Gdx.app.postRunnable(() -> {
                     btnStart.setDisabled(false);
                     btnBack.setDisabled(false);
-                    loadingLabel.setText(i18n.get("config_generation_failed", "Error") + ": " + e.getMessage());
+                    loadingLabel.setText(i18n.get("worldgen.server_unreachable", "Error"));
                 });
             }
         }).start();

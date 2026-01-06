@@ -1,0 +1,29 @@
+plugins {
+  id "application"
+}
+
+[compileJava, compileTestJava]*.options*.encoding = 'UTF-8'
+
+eclipse.project.name = appName + '-server'
+
+application {
+  mainClass = 'com.staraxis.game.server.ServerMain'
+}
+
+tasks.named('run', JavaExec) {
+  jvmArgs '--add-modules', 'jdk.httpserver'
+}
+
+dependencies {
+  implementation project(':core')
+  implementation project(':shared')
+
+  implementation "com.fasterxml.jackson.core:jackson-databind:$jacksonVersion"
+
+  testImplementation "org.junit.jupiter:junit-jupiter:$junitVersion"
+  testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+test {
+  useJUnitPlatform()
+}
