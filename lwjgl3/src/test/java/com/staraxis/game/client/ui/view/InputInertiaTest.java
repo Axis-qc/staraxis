@@ -21,14 +21,13 @@ public class InputInertiaTest {
         velocity.set(100f, 100f);
 
         float delta = 0.1f;
-        float friction = 5.0f;
 
         // 模拟一帧更新 (不触发键盘输入)
         // 期望速度按照 v = v * (1 - friction * delta) 衰减
         controller.update(delta);
 
-        float expectedX = 100f * (1.0f - friction * delta);
-        float expectedY = 100f * (1.0f - friction * delta);
+        float expectedX = 100f * (1.0f - 8.0f * delta);
+        float expectedY = 100f * (1.0f - 8.0f * delta);
 
         assertEquals(expectedX, controller.getVelocity().x, 0.01f);
         assertEquals(expectedY, controller.getVelocity().y, 0.01f);

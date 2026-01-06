@@ -24,6 +24,12 @@ public class StellarMarkerRenderer {
     private static final float PLANET_DETAIL_ZOOM_THRESHOLD = 0.65f; // 行星细节阈值（越小越近）
     private static final float STAR_DETAIL_ZOOM_THRESHOLD = 1.00f; // 恒星细节阈值（越小越近）
 
+    private static final float SYSTEM_DOT_RADIUS = 10.0f;
+    private static final float STAR_ORBIT_RADIUS = 24.0f;
+    private static final float STAR_RADIUS = 12.0f;
+    private static final float PLANET_ORBIT_RADIUS = 32.0f;
+    private static final float PLANET_RADIUS = 6.0f;
+
     private final ShapeRenderer shapeRenderer;
     private final HexGridRenderer gridRenderer;
 
@@ -60,13 +66,13 @@ public class StellarMarkerRenderer {
             if (!starDetailEnabled) {
                 // 远景：只画一个系统点
                 shapeRenderer.setColor(new Color(1f, 0.95f, 0.7f, 1f));
-                shapeRenderer.circle(center.x, center.y, 3.0f * zoom);
+                shapeRenderer.circle(center.x, center.y, SYSTEM_DOT_RADIUS * zoom);
                 continue;
             }
 
             // 近景：画恒星点（最多 3 颗）
-            float starRadius = 4.0f * zoom;
-            float orbitRadius = 8.0f * zoom;
+            float starRadius = STAR_RADIUS * zoom;
+            float orbitRadius = STAR_ORBIT_RADIUS * zoom;
 
             for (int i = 0; i < system.getStars().size(); i++) {
                 float angle = (float) (Math.PI * 2.0 * i / Math.max(1, system.getStars().size()));
@@ -80,8 +86,8 @@ public class StellarMarkerRenderer {
                     // 更近：画行星点（只画数量，不展示类型；避免遮挡网格）
                     Star star = system.getStars().get(i);
                     int maxPlanetsToDraw = Math.min(6, star.getPlanets().size());
-                    float planetOrbit = 10.0f * zoom;
-                    float planetRadius = 2.0f * zoom;
+                    float planetOrbit = PLANET_ORBIT_RADIUS * zoom;
+                    float planetRadius = PLANET_RADIUS * zoom;
 
                     for (int p = 0; p < maxPlanetsToDraw; p++) {
                         Planet planet = star.getPlanets().get(p);

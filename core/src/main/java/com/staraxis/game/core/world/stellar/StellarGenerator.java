@@ -1,16 +1,26 @@
 package com.staraxis.game.core.world.stellar;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+import com.staraxis.game.core.world.stellar.orbit.OrbitConflictDetector;
+import com.staraxis.game.core.world.stellar.orbit.OrbitParamSampler;
+import com.staraxis.game.core.world.stellar.orbit.OrbitValidator;
+import com.staraxis.game.core.world.stellar.surface.PlanetSurfaceMeshGenerator;
 import com.staraxis.game.shared.world.HexCoord;
 import com.staraxis.game.shared.world.WorldGenConfig;
 import com.staraxis.game.shared.world.WorldGenDefinitions;
 import com.staraxis.game.shared.world.stellar.Planet;
 import com.staraxis.game.shared.world.stellar.Star;
 import com.staraxis.game.shared.world.stellar.StarSystem;
+import com.staraxis.game.shared.world.stellar.WorldGenDiagnostics;
+import com.staraxis.game.shared.world.stellar.orbit.Orbit;
+import com.staraxis.game.shared.world.stellar.orbit.OrbitCenterRef;
+import com.staraxis.game.shared.world.stellar.surface.MeshResolutionLevel;
+import com.staraxis.game.shared.world.stellar.surface.PlanetSurfaceMesh;
 
 /**
  * 恒星与行星生成器（StellarGenerator）。
@@ -21,17 +31,123 @@ import com.staraxis.game.shared.world.stellar.StarSystem;
  */
 public class StellarGenerator {
 
+    private static final int MAX_REPAIR_ATTEMPTS = 3;
+    private static final float MIN_SCALE_SEPARATION = 0.5f;
+    private static final float P_CIRCUMBINARY = 0.30f;
+
     public StarSystem generateStarSystem(HexCoord coord, WorldGenConfig config, Random random) {
         String systemId = "sys_" + coord.getX() + "_" + coord.getY() + "_" + coord.getZ();
         List<Star> stars = generateStars(config, random);
+
+        StarSystem system = new StarSystem(systemId, stars);
+        WorldGenDiagnostics diagnostics = new WorldGenDiagnostics();
+
+        OrbitCenterRef barycenterRef = null;
+        if (stars.size() == 2) {
+            String barycenterId = "bary_0";
+            system.setBarycenterIds(List.of(barycenterId));
+            barycenterRef = new OrbitCenterRef(null, barycenterId);
+            for (Star star : stars) {
+                star.setOrbitCenterRef(new OrbitCenterRef(null, barycenterId));
+            }
+        }
+
+        OrbitParamSampler orbitParamSampler = new OrbitParamSampler();
+        PlanetSurfaceMeshGenerator meshGenerator = new PlanetSurfaceMeshGenerator();
+        MeshResolutionLevel meshResolutionLevel = config != null ? config.getSurfaceMeshResolutionLevel() : MeshResolutionLevel.LOW;
 
         for (int i = 0; i < stars.size(); i++) {
             Star star = stars.get(i);
             List<Planet> planets = generatePlanets(config, random);
             star.setPlanets(planets);
+
+            OrbitCenterRef starCenterRef = new OrbitCenterRef(star.getId(), null);
+            for (Planet planet : planets) {
+                OrbitCenterRef centerRef = starCenterRef;
+                if (barycenterRef != null && random.nextFloat() < P_CIRCUMBINARY) {
+                    centerRef = barycenterRef;
+                }
+                Orbit orbit = orbitParamSampler.samplePlanetOrbit(centerRef, planet.getOrbitIndex() == null ? 0 : planet.getOrbitIndex(), random);
+                try {
+                    OrbitValidator.requireValid(orbit);
+                } catch (RuntimeException ex) {
+                    diagnostics.addMessage("Invalid orbit: " + ex.getMessage());
+                }
+                planet.setOrbit(orbit);
+
+                PlanetSurfaceMesh surfaceMesh = meshGenerator.generate(meshResolutionLevel);
+                planet.setSurfaceMesh(surfaceMesh);
+            }
         }
 
-        return new StarSystem(systemId, stars);
+        int attempts = 0;
+        String conflictReason = findConflictReason(stars);
+        while (conflictReason != null && attempts < MAX_REPAIR_ATTEMPTS) {
+            attempts++;
+            diagnostics.setRepairAttemptCount(attempts);
+            diagnostics.addMessage("Orbit conflict detected, attempt=" + attempts + ": " + conflictReason);
+
+            // Simple repair: resample orbits for all planets that share the conflicting centers.
+            for (Star star : stars) {
+                OrbitCenterRef starCenterRef = new OrbitCenterRef(star.getId(), null);
+                for (Planet planet : star.getPlanets()) {
+                    Orbit current = planet.getOrbit();
+                    if (current == null || current.getCenterRef() == null) {
+                        continue;
+                    }
+                    OrbitCenterRef centerRef = current.getCenterRef();
+                    if (centerRef.getBarycenterId() != null && barycenterRef != null) {
+                        centerRef = barycenterRef;
+                    } else if (centerRef.getStarId() != null) {
+                        centerRef = starCenterRef;
+                    }
+                    Orbit orbit = orbitParamSampler.samplePlanetOrbit(centerRef, planet.getOrbitIndex() == null ? 0 : planet.getOrbitIndex(), random);
+                    planet.setOrbit(orbit);
+                }
+            }
+
+            conflictReason = findConflictReason(stars);
+        }
+
+        if (conflictReason != null) {
+            diagnostics.addMessage("Orbit conflict unresolved after " + MAX_REPAIR_ATTEMPTS + " attempts: " + conflictReason);
+        }
+
+        if (diagnostics.getRepairAttemptCount() > 0 || !diagnostics.getMessages().isEmpty() || !diagnostics.getDetails().isEmpty()) {
+            system.setDiagnostics(diagnostics);
+        }
+
+        return system;
+    }
+
+    private String findConflictReason(List<Star> stars) {
+        Map<String, List<Orbit>> byCenter = new HashMap<>();
+        for (Star star : stars) {
+            for (Planet planet : star.getPlanets()) {
+                Orbit orbit = planet.getOrbit();
+                if (orbit == null || orbit.getCenterRef() == null) {
+                    continue;
+                }
+                OrbitCenterRef c = orbit.getCenterRef();
+                String key;
+                if (c.getStarId() != null) {
+                    key = "star:" + c.getStarId();
+                } else if (c.getBarycenterId() != null) {
+                    key = "bary:" + c.getBarycenterId();
+                } else {
+                    continue;
+                }
+                byCenter.computeIfAbsent(key, k -> new ArrayList<>()).add(orbit);
+            }
+        }
+
+        for (Map.Entry<String, List<Orbit>> e : byCenter.entrySet()) {
+            String reason = OrbitConflictDetector.findFirstConflictReason(e.getValue(), MIN_SCALE_SEPARATION);
+            if (reason != null) {
+                return e.getKey() + ":" + reason;
+            }
+        }
+        return null;
     }
 
     public List<Star> generateStars(WorldGenConfig config, Random random) {

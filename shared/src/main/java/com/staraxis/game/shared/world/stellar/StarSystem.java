@@ -16,13 +16,19 @@ public class StarSystem implements Serializable {
     private String id; // id（系统唯一标识）
     private List<Star> stars; // stars（恒星列表，长度必须在 [1,3]）
 
+    private List<String> barycenterIds; // barycenterIds（共同质心/子系统节点标识列表，允许为空）
+
+    private WorldGenDiagnostics diagnostics; // diagnostics（生成诊断信息；可为空）
+
     public StarSystem() {
         this.stars = new ArrayList<>();
+        this.barycenterIds = new ArrayList<>();
     }
 
     public StarSystem(String id, List<Star> stars) {
         this.id = id;
         setStars(stars);
+        this.barycenterIds = new ArrayList<>();
     }
 
     public String getId() {
@@ -45,5 +51,25 @@ public class StarSystem implements Serializable {
             throw new IllegalArgumentException("stars（恒星列表）长度必须在 [1,3]");
         }
         this.stars = new ArrayList<>(stars);
+    }
+
+    public List<String> getBarycenterIds() {
+        return Collections.unmodifiableList(barycenterIds);
+    }
+
+    public void setBarycenterIds(List<String> barycenterIds) {
+        if (barycenterIds == null) {
+            this.barycenterIds = new ArrayList<>();
+            return;
+        }
+        this.barycenterIds = new ArrayList<>(barycenterIds);
+    }
+
+    public WorldGenDiagnostics getDiagnostics() {
+        return diagnostics;
+    }
+
+    public void setDiagnostics(WorldGenDiagnostics diagnostics) {
+        this.diagnostics = diagnostics;
     }
 }

@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import com.staraxis.game.shared.world.stellar.orbit.OrbitCenterRef;
+
 /**
  * 恒星（Star）。
  *
@@ -16,6 +18,8 @@ public class Star implements Serializable {
     private String id; // id（在所属 StarSystem 内唯一标识）
     private String starTypeId; // starTypeId（恒星类型标识，数据驱动）
     private List<Planet> planets; // planets（归属该恒星的行星列表，允许为空）
+
+    private OrbitCenterRef orbitCenterRef; // orbitCenterRef（恒星围绕的中心；双星场景可指向共同质心）
 
     public Star() {
         this.planets = new ArrayList<>();
@@ -53,5 +57,13 @@ public class Star implements Serializable {
             return;
         }
         this.planets = new ArrayList<>(planets);
+    }
+
+    public OrbitCenterRef getOrbitCenterRef() {
+        return orbitCenterRef;
+    }
+
+    public void setOrbitCenterRef(OrbitCenterRef orbitCenterRef) {
+        this.orbitCenterRef = orbitCenterRef;
     }
 }

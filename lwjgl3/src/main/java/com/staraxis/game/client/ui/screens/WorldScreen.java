@@ -1,6 +1,8 @@
 package com.staraxis.game.client.ui.screens;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
+import com.badlogic.gdx.InputAdapter;
 import com.badlogic.gdx.InputMultiplexer;
 import com.badlogic.gdx.ScreenAdapter;
 import com.badlogic.gdx.graphics.GL20;
@@ -15,6 +17,7 @@ import com.staraxis.game.client.ui.view.HexGridRenderer;
 import com.staraxis.game.client.ui.view.HexPicker;
 import com.staraxis.game.client.ui.view.WorldOverlayRenderer;
 import com.staraxis.game.client.ui.view.stellar.StellarMarkerRenderer;
+import com.staraxis.game.core.world.stellar.orbit.OrbitPathService;
 import com.staraxis.game.core.world.DefaultWorldGenerator;
 import com.staraxis.game.core.world.WorldGenerator;
 import com.staraxis.game.shared.world.HexCoord;
@@ -23,6 +26,14 @@ import com.staraxis.game.shared.world.WorldMap;
 import com.staraxis.game.shared.world.stellar.Star;
 import com.staraxis.game.shared.world.stellar.StarSystem;
 import com.staraxis.game.shared.world.stellar.WorldGenStats;
+import com.staraxis.game.shared.world.stellar.orbit.OrbitPath;
+import com.staraxis.game.shared.world.stellar.orbit.OrbitPrecisionLevel;
+
+import io.staraxis.lwjgl3.debug.OrbitDebugRenderer;
+import io.staraxis.lwjgl3.debug.OrbitDebugRenderer.OrbitPathRenderItem;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import io.staraxis.Main;
 
@@ -40,10 +51,14 @@ public class WorldScreen extends ScreenAdapter {
     private final CameraController cameraController;
     private final WorldOverlayRenderer overlayRenderer;
     private final StellarMarkerRenderer stellarMarkerRenderer;
+    private final OrbitDebugRenderer orbitDebugRenderer;
+    private final OrbitPathService orbitPathService;
     private final WorldMap worldMap;
     private HexCoord hoveredCoord;
     private Label debugLabel;
     private Label fpsLabel;
+    private boolean orbitDebugEnabled;
+    private float orbitDebugScale;
 
     public WorldScreen(Main game, WorldMap worldMap) {
         this.game = game;
@@ -72,6 +87,11 @@ public class WorldScreen extends ScreenAdapter {
 
         // 初始化恒星标记渲染器 (US3)
         this.stellarMarkerRenderer = new StellarMarkerRenderer(gridRenderer);
+
+        this.orbitDebugRenderer = new OrbitDebugRenderer();
+        this.orbitPathService = new OrbitPathService();
+        this.orbitDebugEnabled = Boolean.parseBoolean(System.getProperty("staraxis.orbitDebugEnabled", "false"));
+        this.orbitDebugScale = parseFloatOrDefault(System.getProperty("staraxis.orbitDebugScale", "40.0"), 40.0f);
 
         // 创建调试 UI (T022, T050)
         Table table = new Table();
@@ -105,6 +125,16 @@ public class WorldScreen extends ScreenAdapter {
     public void show() {
         // 使用 InputMultiplexer 同时处理 UI 舞台和摄像机控制 (T044)
         InputMultiplexer multiplexer = new InputMultiplexer();
+        multiplexer.addProcessor(new InputAdapter() {
+            @Override
+            public boolean keyDown(int keycode) {
+                if (keycode == Input.Keys.F6) {
+                    orbitDebugEnabled = !orbitDebugEnabled;
+                    return true;
+                }
+                return false;
+            }
+        });
         multiplexer.addProcessor(uiStage);
         multiplexer.addProcessor(cameraController);
         Gdx.input.setInputProcessor(multiplexer);
@@ -172,6 +202,29 @@ public class WorldScreen extends ScreenAdapter {
         stellarMarkerRenderer.setProjectionMatrix(worldCamera.combined);
         stellarMarkerRenderer.render(worldMap, worldCamera.zoom, worldCamera);
 
+        if (orbitDebugEnabled) {
+            List<OrbitPathRenderItem> items = new ArrayList<>();
+            for (HexCoord coord : worldMap.getTiles().keySet()) {
+                if (!worldMap.getTiles().containsKey(coord)) {
+                    continue;
+                }
+                StarSystem system = worldMap.getTile(coord).getStarSystem();
+                if (system == null) {
+                    continue;
+                }
+                com.badlogic.gdx.math.Vector2 center = gridRenderer.hexToWorld(coord);
+                if (!worldCamera.frustum.boundsInFrustum(center.x, center.y, 0, gridRenderer.getHexRadius(), gridRenderer.getHexRadius(), 0)) {
+                    continue;
+                }
+                List<OrbitPath> paths = orbitPathService.generateOrbitPaths(system, OrbitPrecisionLevel.MEDIUM);
+                for (OrbitPath path : paths) {
+                    items.add(new OrbitPathRenderItem(center.x, center.y, path));
+                }
+            }
+            orbitDebugRenderer.setProjectionMatrix(worldCamera.combined);
+            orbitDebugRenderer.render(items, orbitDebugScale * worldCamera.zoom);
+        }
+
         // 4. 覆盖层渲染 (T052, T053)
         overlayRenderer.setProjectionMatrix(worldCamera.combined);
         overlayRenderer.render(worldMap, worldCamera);
@@ -201,9 +254,21 @@ public class WorldScreen extends ScreenAdapter {
         gridRenderer.dispose();
         overlayRenderer.dispose();
         stellarMarkerRenderer.dispose();
+        orbitDebugRenderer.dispose();
     }
 
     public OrthographicCamera getWorldCamera() {
         return worldCamera;
+    }
+
+    private static float parseFloatOrDefault(String raw, float defaultValue) {
+        if (raw == null || raw.isBlank()) {
+            return defaultValue;
+        }
+        try {
+            return Float.parseFloat(raw);
+        } catch (RuntimeException ex) {
+            return defaultValue;
+        }
     }
 }

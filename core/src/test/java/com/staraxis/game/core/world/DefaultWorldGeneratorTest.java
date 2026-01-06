@@ -1,6 +1,7 @@
 package com.staraxis.game.core.world;
 
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -16,6 +17,8 @@ import com.staraxis.game.shared.world.stellar.Planet;
 import com.staraxis.game.shared.world.stellar.Star;
 import com.staraxis.game.shared.world.stellar.StarSystem;
 import com.staraxis.game.shared.world.stellar.WorldGenStats;
+import com.staraxis.game.shared.world.stellar.orbit.Orbit;
+import com.staraxis.game.shared.world.stellar.orbit.OrbitCenterRef;
 
 public class DefaultWorldGeneratorTest {
 
@@ -75,9 +78,19 @@ public class DefaultWorldGeneratorTest {
                     Set<Integer> seenOrbitIndex = new HashSet<>();
                     for (int p = 0; p < a.getPlanets().size(); p++) {
                         Planet pa = a.getPlanets().get(p);
+                        Planet pb = b.getPlanets().get(p);
                         assertNotNull(pa.getOrbitIndex(), "orbitIndex should be present");
                         assertTrue(pa.getOrbitIndex() >= 0, "orbitIndex should be >= 0");
                         assertTrue(seenOrbitIndex.add(pa.getOrbitIndex()), "orbitIndex should not duplicate");
+
+                        assertNotNull(pb.getOrbitIndex(), "orbitIndex should be present");
+                        assertEquals(pa.getOrbitIndex(), pb.getOrbitIndex(), "orbitIndex should match");
+
+                        Orbit oa = pa.getOrbit();
+                        Orbit ob = pb.getOrbit();
+                        assertNotNull(oa, "orbit should be present");
+                        assertNotNull(ob, "orbit should be present");
+                        assertEquals(orbitDigest(oa), orbitDigest(ob), "orbit digest should match");
                     }
                 }
             }
@@ -123,5 +136,16 @@ public class DefaultWorldGeneratorTest {
                     || !s1.getSectorCounts().equals(s2.getSectorCounts());
         }
         assertTrue(foundDifference, "Different seeds should yield different maps");
+    }
+
+    private static String orbitDigest(Orbit orbit) {
+        OrbitCenterRef centerRef = orbit.getCenterRef();
+        String centerKey;
+        if (centerRef.getStarId() != null) {
+            centerKey = "star:" + centerRef.getStarId();
+        } else {
+            centerKey = "bary:" + centerRef.getBarycenterId();
+        }
+        return String.format(Locale.ROOT, "%s|e=%.4f|phase=%.4f|scale=%.4f", centerKey, orbit.getEccentricity(), orbit.getPhase(), orbit.getScale());
     }
 }

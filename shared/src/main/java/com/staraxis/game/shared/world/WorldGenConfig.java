@@ -2,6 +2,8 @@ package com.staraxis.game.shared.world;
 
 import java.io.Serializable;
 
+import com.staraxis.game.shared.world.stellar.surface.MeshResolutionLevel;
+
 /**
  * 世界生成配置 (World generation configuration).
  */
@@ -14,6 +16,7 @@ public class WorldGenConfig implements Serializable {
     private float starDensity;
     private float planetComplexity;
     private float nebulaRatio;
+    private MeshResolutionLevel surfaceMeshResolutionLevel;
     private int aiCount; // Placeholder
     private String techLevelPresetId; // Placeholder
 
@@ -21,6 +24,7 @@ public class WorldGenConfig implements Serializable {
         this.starDensity = 0.6f;
         this.planetComplexity = 0.5f;
         this.nebulaRatio = 0.2f;
+        this.surfaceMeshResolutionLevel = MeshResolutionLevel.LOW;
     }
 
     public String getMapSizePresetId() {
@@ -83,6 +87,17 @@ public class WorldGenConfig implements Serializable {
         this.nebulaRatio = Math.max(0.0f, Math.min(1.0f, nebulaRatio));
     }
 
+    public MeshResolutionLevel getSurfaceMeshResolutionLevel() {
+        return surfaceMeshResolutionLevel;
+    }
+
+    public void setSurfaceMeshResolutionLevel(MeshResolutionLevel surfaceMeshResolutionLevel) {
+        if (surfaceMeshResolutionLevel == null) {
+            throw new IllegalArgumentException("surfaceMeshResolutionLevel 不能为空");
+        }
+        this.surfaceMeshResolutionLevel = surfaceMeshResolutionLevel;
+    }
+
     public int getAiCount() {
         return aiCount;
     }
@@ -109,6 +124,7 @@ public class WorldGenConfig implements Serializable {
                 + ", starDensity=" + starDensity
                 + ", planetComplexity=" + planetComplexity
                 + ", nebulaRatio=" + nebulaRatio
+                + ", surfaceMeshResolutionLevel=" + surfaceMeshResolutionLevel
                 + ", aiCount=" + aiCount
                 + ", techLevelPresetId='" + techLevelPresetId + '\''
                 + '}';

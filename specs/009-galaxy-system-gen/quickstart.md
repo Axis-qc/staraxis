@@ -15,6 +15,14 @@
 
 - `:core:test`（包含 `DefaultWorldGeneratorTest`）
 
+### 最小验证命令（实现阶段使用）
+
+- `:core:test`
+- `:core:checkNoGraphicsDependencies`
+- `:shared:test`
+- `:server:test`
+- `:lwjgl3:compileJava`
+
 ### 2) 新增/扩展测试建议（实现阶段）
 
 - **多恒星层级测试**: 断言双星情况下存在“共同质心/子系统节点”且行星归属可判定
@@ -22,6 +30,8 @@
 - **精度档位测试**: 低/中/高采样点数不同，但形状一致；同档位确定性一致
 - **轨道冲突测试**: 构造冲突输入时触发修复与最多 3 次重试，失败返回诊断信息
 - **球面网格拓扑测试**: 五边形数量恒为 12；邻接双向一致；单元类型仅 Hex/Pent
+- **球面网格分辨率测试**: 低/中/高分辨率 tileCount 递增，且同分辨率输出确定性一致
+- **LWJGL3 调试轨道显示**: 运行 `:lwjgl3:run` 后按 F6 开关轨道显示
 
 ## 代码导航（当前基线）
 
@@ -29,3 +39,5 @@
 - 恒星/行星生成：`core/src/main/java/com/staraxis/game/core/world/stellar/StellarGenerator.java`
 - 共享数据模型：`shared/src/main/java/com/staraxis/game/shared/world/stellar/*`
 - 既有测试：`core/src/test/java/com/staraxis/game/core/world/DefaultWorldGeneratorTest.java`
+- 轨道路径测试：`core/src/test/java/com/staraxis/game/core/world/orbit/OrbitPathSamplerTest.java`, `core/src/test/java/com/staraxis/game/core/world/orbit/OrbitPathPrecisionTest.java`
+- 球面网格测试：`core/src/test/java/com/staraxis/game/core/world/surface/PlanetSurfaceMeshTopologyTest.java`, `core/src/test/java/com/staraxis/game/core/world/surface/PlanetSurfaceMeshResolutionTest.java`

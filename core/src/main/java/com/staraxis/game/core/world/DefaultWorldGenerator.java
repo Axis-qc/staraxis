@@ -13,6 +13,7 @@ import com.staraxis.game.shared.world.WorldGenDefinitions;
 import com.staraxis.game.shared.world.WorldMap;
 import com.staraxis.game.shared.world.stellar.Star;
 import com.staraxis.game.shared.world.stellar.StarSystem;
+import com.staraxis.game.shared.world.stellar.WorldGenDiagnostics;
 import com.staraxis.game.shared.world.stellar.WorldGenStats;
 
 /**
@@ -60,6 +61,16 @@ public class DefaultWorldGenerator implements WorldGenerator {
 
                     StarSystem starSystem = stellarGenerator.generateStarSystem(coord, config, tileRandom);
                     tile.setStarSystem(starSystem);
+
+                    WorldGenDiagnostics diagnostics = starSystem.getDiagnostics();
+                    if (diagnostics != null) {
+                        boolean hasDiagnostics = diagnostics.getRepairAttemptCount() > 0
+                                || !diagnostics.getMessages().isEmpty()
+                                || !diagnostics.getDetails().isEmpty();
+                        LOGGER.info(String.format(
+                                "StarSystem diagnostics: systemId=%s, repairAttempts=%d, messageCount=%d, detailCount=%d, hasDiagnostics=%b",
+                                starSystem.getId(), diagnostics.getRepairAttemptCount(), diagnostics.getMessages().size(), diagnostics.getDetails().size(), hasDiagnostics));
+                    }
 
                     int starsInSystem = starSystem.getStars().size();
                     starsPerSystemMin = Math.min(starsPerSystemMin, starsInSystem);
