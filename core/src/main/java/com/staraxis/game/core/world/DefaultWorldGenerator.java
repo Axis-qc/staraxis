@@ -3,8 +3,8 @@ package com.staraxis.game.core.world;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
+import java.util.logging.Logger;
 
-import com.badlogic.gdx.Gdx;
 import com.staraxis.game.core.world.stellar.StellarGenerator;
 import com.staraxis.game.shared.world.HexCoord;
 import com.staraxis.game.shared.world.HexTile;
@@ -19,6 +19,8 @@ import com.staraxis.game.shared.world.stellar.WorldGenStats;
  * 默认世界生成器实现 (Default world generator implementation). 保证在相同种子和配置下生成确定的地图。
  */
 public class DefaultWorldGenerator implements WorldGenerator {
+
+    private static final Logger LOGGER = Logger.getLogger(DefaultWorldGenerator.class.getName());
 
     @Override
     public WorldMap generate(WorldGenConfig config) {
@@ -88,11 +90,9 @@ public class DefaultWorldGenerator implements WorldGenerator {
         worldMap.setStats(stats);
 
         long duration = System.currentTimeMillis() - startTime;
-        if (Gdx.app != null) {
-            Gdx.app.log("WorldGen", String.format(
-                    "Generated world: radius=%d, tiles=%d, duration=%dms, seed=%d, sectorCounts=%s, starCount=%d, planetCount=%d",
-                    radius, tileCount, duration, config.getSeedValue(), sectorCounts, starCount, planetCount));
-        }
+        LOGGER.info(String.format(
+                "Generated world: radius=%d, tiles=%d, duration=%dms, seed=%d, sectorCounts=%s, starCount=%d, planetCount=%d",
+                radius, tileCount, duration, config.getSeedValue(), sectorCounts, starCount, planetCount));
 
         return worldMap;
     }
