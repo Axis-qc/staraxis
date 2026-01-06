@@ -2,6 +2,8 @@ package com.staraxis.game.shared.world;
 
 import java.io.Serializable;
 
+import com.staraxis.game.shared.world.scale.GalaxyScaleConfig;
+import com.staraxis.game.shared.world.scale.WorldBlockScaleConfig;
 import com.staraxis.game.shared.world.stellar.surface.MeshResolutionLevel;
 
 /**
@@ -19,6 +21,8 @@ public class WorldGenConfig implements Serializable {
     private MeshResolutionLevel surfaceMeshResolutionLevel;
     private int aiCount; // Placeholder
     private String techLevelPresetId; // Placeholder
+    private GalaxyScaleConfig galaxyScaleConfig; // 星系规模配置（可选）
+    private WorldBlockScaleConfig worldBlockScaleConfig; // 世界区块规模配置（可选）
 
     public WorldGenConfig() {
         this.starDensity = 0.6f;
@@ -114,6 +118,22 @@ public class WorldGenConfig implements Serializable {
         this.techLevelPresetId = techLevelPresetId;
     }
 
+    public GalaxyScaleConfig getGalaxyScaleConfig() {
+        return galaxyScaleConfig;
+    }
+
+    public void setGalaxyScaleConfig(GalaxyScaleConfig galaxyScaleConfig) {
+        this.galaxyScaleConfig = galaxyScaleConfig;
+    }
+
+    public WorldBlockScaleConfig getWorldBlockScaleConfig() {
+        return worldBlockScaleConfig;
+    }
+
+    public void setWorldBlockScaleConfig(WorldBlockScaleConfig worldBlockScaleConfig) {
+        this.worldBlockScaleConfig = worldBlockScaleConfig;
+    }
+
     @Override
     public String toString() {
         return "WorldGenConfig{"
@@ -127,6 +147,8 @@ public class WorldGenConfig implements Serializable {
                 + ", surfaceMeshResolutionLevel=" + surfaceMeshResolutionLevel
                 + ", aiCount=" + aiCount
                 + ", techLevelPresetId='" + techLevelPresetId + '\''
+                + ", galaxyScaleConfig=" + galaxyScaleConfig
+                + ", worldBlockScaleConfig=" + worldBlockScaleConfig
                 + '}';
     }
 }

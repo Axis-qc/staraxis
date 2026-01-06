@@ -24,7 +24,19 @@ public class OrbitParamSampler {
 
         float e = random.nextFloat() * 0.35f;
         float phase = random.nextFloat() * (float) (Math.PI * 2.0);
-
-        return new Orbit(centerRef, e, phase, scale, null);
+        
+        // 创建轨道并设置新的开普勒参数
+        Orbit orbit = new Orbit(centerRef, e, phase, scale, null);
+        
+        // 设置半长轴（使用 scale 作为半长轴）
+        orbit.setSemiMajorAxis(scale);
+        
+        // 设置其他开普勒参数（可选，使用随机值）
+        orbit.setInclination(random.nextFloat() * 0.1f - 0.05f); // 小倾角
+        orbit.setLongitudeOfAscendingNode(random.nextFloat() * (float) (Math.PI * 2.0));
+        orbit.setArgumentOfPeriapsis(random.nextFloat() * (float) (Math.PI * 2.0));
+        orbit.setTrueAnomaly(phase); // 使用相位作为初始真近点角
+        
+        return orbit;
     }
 }

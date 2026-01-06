@@ -8,6 +8,7 @@ import java.util.Random;
 
 import com.staraxis.game.core.world.stellar.orbit.OrbitConflictDetector;
 import com.staraxis.game.core.world.stellar.orbit.OrbitParamSampler;
+import com.staraxis.game.core.world.stellar.orbit.OrbitStabilityChecker;
 import com.staraxis.game.core.world.stellar.orbit.OrbitValidator;
 import com.staraxis.game.core.world.stellar.surface.PlanetSurfaceMeshGenerator;
 import com.staraxis.game.shared.world.HexCoord;
@@ -53,6 +54,7 @@ public class StellarGenerator {
         }
 
         OrbitParamSampler orbitParamSampler = new OrbitParamSampler();
+        OrbitStabilityChecker stabilityChecker = new OrbitStabilityChecker();
         PlanetSurfaceMeshGenerator meshGenerator = new PlanetSurfaceMeshGenerator();
         MeshResolutionLevel meshResolutionLevel = config != null ? config.getSurfaceMeshResolutionLevel() : MeshResolutionLevel.LOW;
 
@@ -70,6 +72,16 @@ public class StellarGenerator {
                 Orbit orbit = orbitParamSampler.samplePlanetOrbit(centerRef, planet.getOrbitIndex() == null ? 0 : planet.getOrbitIndex(), random);
                 try {
                     OrbitValidator.requireValid(orbit);
+                    
+                    // 检查轨道稳定性（使用恒星质量作为中心质量，简化处理）
+                    float starMass = 1.0f; // 默认质量，可以后续从 Star 类型获取
+                    var stabilityResult = stabilityChecker.checkStability(orbit, starMass, 
+                            star.getPlanets().stream().map(Planet::getOrbit).filter(o -> o != orbit).toList(), 
+                            0.1f); // 碰撞半径
+                    
+                    if (!stabilityResult.isStable()) {
+                        diagnostics.addMessage("Unstable orbit detected: " + String.join(", ", stabilityResult.getMessages()));
+                    }
                 } catch (RuntimeException ex) {
                     diagnostics.addMessage("Invalid orbit: " + ex.getMessage());
                 }
