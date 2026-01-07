@@ -27,6 +27,9 @@
 - `cleanIdea`: 删除 IntelliJ IDEA 项目数据
 - `cleanEclipse`: 删除 Eclipse 项目数据
 
+.\gradlew.bat :server:run 启动服务端
+.\gradlew.bat :lwjgl3:run 启动客户端
+
 ### 常用 Gradle 参数
 
 - `--continue`: 遇到错误时继续执行任务
