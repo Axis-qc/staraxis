@@ -1,0 +1,95 @@
+openapi: 3.1.0
+info:
+  title: StarAxis Universe API
+  version: 0.1.0
+  description: |
+    服务器端暴露只读宇宙数据，供客户端与 Mod 工具调用。
+servers:
+  - url: https://api.staraxis.local/v1
+paths:
+  /galaxy:
+    get:
+      summary: 获取银河概要信息
+      operationId: getGalaxy
+      responses:
+        '200':
+          description: Galaxy summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Galaxy'
+  /sectors/{sectorId}:
+    get:
+      summary: 获取指定星区详情
+      parameters:
+        - in: path
+          name: sectorId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Sector data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sector'
+  /star-systems/{systemId}:
+    get:
+      summary: 获取恒星系详情
+      parameters:
+        - in: path
+          name: systemId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: StarSystem data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StarSystem'
+components:
+  schemas:
+    Galaxy:
+      type: object
+      properties:
+        id:
+          type: string
+        radiusLy:
+          type: number
+        sectorGridSizeLy:
+          type: number
+        starSystemCount:
+          type: integer
+    Sector:
+      type: object
+      properties:
+        id:
+          type: string
+        axialQ:
+          type: integer
+        axialR:
+          type: integer
+        starSystemIds:
+          type: array
+          items:
+            type: string
+    StarSystem:
+      type: object
+      properties:
+        id:
+          type: string
+        sectorId:
+          type: string
+        posLy:
+          type: array
+          items:
+            type: number
+        starType:
+          type: string
+        planetIds:
+          type: array
+          items:
+            type: string

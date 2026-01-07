@@ -1,106 +1,67 @@
-# Implementation Plan: 无缝宇宙生成（4X 大战略）
+# Implementation Plan: 012 真实比例宇宙生成（Real-Scale Universe Generation）
 
-**Branch**: `012-realistic-universe-gen` | **Date**: 2026-01-07 | **Spec**: [spec.md](./spec.md)
+**Branch**: `012-realistic-universe-gen` | **Date**: 2026-01-07 | **Spec**: [/specs/012-realistic-universe-gen/spec.md](spec.md)
 **Input**: Feature specification from `/specs/012-realistic-universe-gen/spec.md`
 
 ## Summary
 
-本功能将实现在服务器端一次性（或分块惰性）生成银河地图：
-1. 先按 `preset-systems.json` 配置生成所有 **预设恒星系**（固定或随机星区坐标）。
-2. 再根据 `starDensity` 参数为剩余 `galaxy` 类型星区生成随机 **恒星系**。
-3. 客户端通过网络同步只读数据并以 LOD 渲染，无缝缩放至行星表面。
+在《010 Galaxy World Scaling》与《011 Astronomical Units》两项前置规格的基础上，本功能将在**服务器端**按真实天文学尺度程序化生成从银河到行星的完整层级宇宙数据，并在**客户端渲染层**强制执行 **1 px = 1 km** 的比例。核心技术要点：
 
-技术路线：复用现有 `GalaxyScaleConfig` 与 `StarSystem` 数据结构，在 `core` 模块新增 `GalaxyGenerator` 服务和 `PresetSystemLoader`，并在 `server` 模块暴露生成 API。采用种子控制确保可复现；通过数据驱动支持 Mod 扩展。
+1. **分段坐标系 (Segmented Space)** + **浮动原点 (Floating Origin)** 组合，解决高精度与渲染抖动。
+2. 基于种子 (Seed) 的确定性随机生成器，支持可重复宇宙。
+3. 星区以六边形网格分区 (edge 3–30 ly 可配置)；恒星系内部行星轨道遵循开普勒第三定律。
+4. 纯数据驱动：生成参数与结果通过二进制 *.unv* 文件存储，暴露 JSON-like API 供工具链与 Mod 使用。
 
 ## Technical Context
 
-**Language/Version**: Java 17 (Kotlin 1.9 仅限客户端 UI)
-**Primary Dependencies**: libGDX 1.12、Jackson 2.x、JUnit 5、Gradle Kotlin DSL
-**Storage**: 内存数据结构（生成后可序列化为二进制/JSON 存档）
-**Testing**: JUnit 5 + Testcontainers（如需文件存储）
-**Target Platform**: Windows / Linux 桌面；未来 WebAssembly (GWT) 只读
-**Project Type**: 多模块 Gradle (core/shared/server/lwjgl3)
-**Performance Goals**: 生成 1000 星区银河 ≤ 5 s；缩放过程 > 45 FPS (中端硬件)
-**Constraints**: 运行期内存占用 ≤ 2 GB；无第三方闭源库；遵守 LGPL (libGDX)
-**Scale/Scope**: 单局存档包含 ≥ 100 k 星区；线程并行度 ≤ CPU 核心数
+**Language/Version**: C# 10 (兼容 Unity 2022 LTS)，服务器工具链同样使用 .NET 7
+**Primary Dependencies**: Unity 2022 LTS、DOTS (ECS + Burst)、Unity.Mathematics、MessagePack-CSharp（数据序列化）
+**Storage**: 分片二进制文件 `.unv` (可流式加载) + ScriptableObject 配置
+**Testing**: Unity Test Framework (NUnit 3)
+**Target Platform**: Windows 10+/macOS 13+/Linux（桌面）；后续可扩展 WebGL（非目标）
+**Project Type**: Single (mono-repo，游戏客户端 + Editor 工具 + 服务端逻辑 位于同一 Unity Project 内的独立 Assembly Definition）
+**Performance Goals**:
+- 渲染：最低配置 60 FPS (1080p)
+- 生成：新建存档 ≤10 s 内完成全银河数据落盘 (N≤50 k Star Systems)
+**Constraints**:
+- 1 px = 1 km 不得被打破（只允许逻辑缩放视口）
+- 坐标计算误差 <1 km（~1 px）
+- 运行期内内存占用 ≤4 GB（含纹理）
+**Scale/Scope**:
+- 星系数 1–10（可配置）
+- 星区 ~104 – 106 个
+- 恒星系 ≤5×105 个
 
 ## Constitution Check
 
-| 宪章原则 | 覆盖情况 |
-|----------|----------|
-| 模块化与可维护性 | ✅ 生成逻辑封装在 `core.world.generation`，无硬编码常量，数据驱动 |
-| 分层架构 & C/S 分离 | ✅ 生成逻辑仅服务器端调用；客户端只渲染 |
-| 规范命名与注释 | ✅ 遵守 camelCase / PascalCase；中文注释解释 WHY |
-| 扩展性 & Mod 支持 | ✅ 预设系统、概率参数均配置文件化，可热加载 |
-| 模拟驱动逻辑 | ✅ 生成阶段独立于帧循环；运行时只读 |
-| UI 层独立性 | ✅ 不在此功能涉及 |
+| Principle | Assessment |
+|-----------|-----------|
+| 模块化与可维护性 | 生成器将作为独立 *UniverseGenerator* Assembly，参数通过 ScriptableObject 注入；符合原则。 |
+| 分层架构 & C/S 分离 | 生成逻辑与渲染逻辑分立；渲染层不读取生成算法，只消费只读数据；符合。 |
+| 规范化命名与注释 | C# PasalCase/camelCase  + 全中文文档；符合。 |
+| 扩展性与 Mod 支持 | 生成参数、数据格式公开；符合。 |
+| 模拟驱动逻辑 | 生成阶段离线，不影响帧率；运行期坐标转换在 Update 中 O(𝑁)≈O(星体可见)；符合。 |
+| UI 层独立性 | 不涉及 UI 代码；符合。 |
 
-> *Gate Passed*: 无违反项，进入 Phase 0。
+**Gate Result**: ✅ 全部通过。若后续设计变更违反宪章，需在 *Complexity Tracking* 中说明理由。
 
 ## Project Structure
 
-### Documentation (this feature)
-
 ```text
-specs/012-realistic-universe-gen/
-├── plan.md              # 本文件
-├── research.md          # Phase 0 输出
-├── data-model.md        # Phase 1 输出
-├── quickstart.md        # Phase 1 输出
-├── contracts/           # Phase 1 输出
-└── tasks.md             #由 /speckit.tasks 生成
-```
-
-### Source Code (repository root)
-
-```text
-core/src/main/java/com/staraxis/game/core/world/generation/
-├── GalaxyGenerator.java           # 总控入口
-├── PresetSystemLoader.java        # 解析 preset-systems.json
-├── RandomStarSystemFactory.java   # 随机生成算法
-└── sampling/
-    ├── StarSampler.java
-    ├── PlanetSampler.java
-    └── OrbitSampler.java
-
-server/src/main/java/com/staraxis/game/server/api/
-└── GalaxyGenerationService.java   # 服务端 API，供 CLI/HTTP 调用
+src/
+├── universe-generator/          # Assembly: 生成算法、数据模型、序列化
+├── universe-runtime/            # Assembly: 运行期坐标变换、LOD、查询接口
+├── editor/                      # Unity Editor 工具（菜单、可视化调试）
+└── rendering/                   # 专用于渲染层（材质、着色器、系统）
 
 tests/
 ├── unit/
-│   └── generation/
-│       ├── GalaxyGeneratorTest.java
-│       └── PresetSystemLoaderTest.java
-└── integration/
-    └── GalaxyGenerationPerformanceTest.java
+├── integration/
+└── contract/
 ```
 
-**Structure Decision**: 基于现有多模块 Gradle 项目，在 `core` 模块新增 generation 包；在 `server` 暴露 API；测试均放置于 `tests` 目录下，保持单仓。
+**Structure Decision**: 采用单工程多 AssemblyDefinition 模式，保持 Unity 项目内部模块化；避免多仓库复杂度。
 
 ## Complexity Tracking
 
-无需额外复杂度，未引入新项目或框架。
-
----
-
-# Phase 0: Research
-
-所有关键决策已明确，无 NEEDS CLARIFICATION。研究任务集中于算法验证与数据来源：
-
-| 决策 | 理由 | 备选方案 |
-|-------|------|-----------|
-| 预设系统 JSON 格式 | 简单直观，易于 Mod 编辑 | YAML (多行字符处理麻烦) |
-| 行星轨道采样算法采用 log 分布 | 贴合现实行星间距 | 等距或线性分布 |
-| 并行生成使用 ForkJoinPool | Java 原生，无外部依赖 | Akka / RxJava (过重) |
-
-详见 [research.md](./research.md)。
-
----
-
-# Phase 1: Design & Contracts
-
-已在 `data-model.md`、`contracts/galaxy-generation-api.md`、`quickstart.md` 输出设计细节。完成后将再次进行宪章检查。
-
----
-
-*后续*: 通过 `/speckit.tasks` 生成任务清单并进入实现阶段。
+*目前无需豁免。*
