@@ -4,6 +4,19 @@
 
 ---
 
+## 6. ID 生成策略
+所有实体 ID（`Galaxy.id`, `StarSystem.id` 等）均采用 64-bit `ulong` 类型，由 `(galaxySeed << 32) | entityIndex` 确定性生成，确保在同一宇宙内绝对唯一。
+
+## 7. Mod 扩展性
+为支持 Mod 添加自定义数据，所有核心实体（StarSystem, Planet, Moon）将包含一个 `Dictionary<string, object> modData` 字段，用于存储非官方数据。该字段在序列化时一并处理。
+
+## 8. 持久化与版本管理
+- **格式**: 宇宙数据持久化为 `.unv` 文件，采用 MessagePack 二进制序列化。
+- **版本**: 文件头部将包含一个 `uint16` 版本号。`UniverseRuntime` 在加载时会检查版本，若不匹配则尝试数据迁移或警告不兼容。
+
+## 9. 数值精度说明
+- **风险**: 在 `data-model.md` 中使用 `double` 类型是为了保证计算精度。在序列化及跨平台（特别是 WebGL AOT）时，需注意潜在的精度损失。实现时应在测试环节（见 `spec.md` FR-5）对浮点数比较设置合理容差。
+
 ## 1. 实体概览
 | 实体 | 说明 | 主要字段 |
 |------|------|---------|

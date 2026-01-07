@@ -4,6 +4,7 @@ info:
   version: 0.1.0
   description: |
     服务器端暴露只读宇宙数据，供客户端与 Mod 工具调用。
+    本契约设计时考虑了未来扩展性，允许在不破坏向后兼容性的前提下增加新的天体类型（如彗星、小行星带）。
 servers:
   - url: https://api.staraxis.local/v1
 paths:
