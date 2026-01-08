@@ -14,16 +14,16 @@ description: "Task list for 012 真实比例宇宙生成 – 包含多核性能�
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 创建 `shared`、`client`、`server` 子模块目录结构（按照 plan.md）
-- [ ] T002 在根 `build.gradle` 添加 Kryo、LuaJ、JMH 依赖
-- [ ] T003 [P] 初始化 JMH Gradle 插件并生成示例基准类 `shared/src/jmh/java/BenchmarkStub.java`
-- [ ] T004 [P] 添加 `universegen` 包占位类 `GalaxyGenerator.java`、`SectorGenerator.java` 等空实现
+- [X] T001 创建 `shared`、`client`、`server` 子模块目录结构（按照 plan.md）
+- [X] T002 在根 `build.gradle` 添加 Kryo、LuaJ、JMH 依赖
+- [X] T003 [P] 初始化 JMH Gradle 插件并生成示例基准类 `shared/src/jmh/java/BenchmarkStub.java`
+- [X] T004 [P] 添加 `universegen` 包占位类 `GalaxyGenerator.java`、`SectorGenerator.java` 等空实现
 
 ---
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-- [ ] T005 实现 `CoordinateSystem` (分层坐标) 于 `shared/src/main/java/com/staraxis/universegen/CoordinateSystem.java`
+- [X] T005 实现 `CoordinateSystem` (分层坐标) 于 `shared/src/main/java/com/staraxis/universegen/CoordinateSystem.java`
 - [X] T006 创建 `UniverseGenConfig.java` 并解析 JSON + Lua 脚本（LuaJ）
 - [X] T007 [P] 实现 `RandomUtil.java` 使用 `SplittableRandom` 并提供种子派生方法
 - [X] T008 [P] 实现 `KryoSerializer.java` 支持 Galaxy ↔︎ 文件 序列化
@@ -62,10 +62,10 @@ description: "Task list for 012 真实比例宇宙生成 – 包含多核性能�
 
 ### Implementation
 
-- [ ] T018 [P] [US2] 在 client 实现 `SectorCameraController` 支持平滑动画
-- [ ] T019 [US2] 在 shared 添加 `SectorLocatorService` 提供 Sector → 坐标查询
-- [ ] T020 [US2] client 渲染星区内恒星分布 `SectorRenderer`
-- [ ] T021 [US2] 最大跳转耗时计时 & 优化（<1s）
+- [X] T018 [P] [US2] 在 client 实现 `SectorCameraController` 支持平滑动画
+- [X] T019 [US2] 在 shared 添加 `SectorLocatorService` 提供 Sector → 坐标查询
+- [X] T020 [US2] client 渲染星区内恒星分布 `SectorRenderer`
+- [X] T021 [US2] 最大跳转耗时计时 & 优化（<1s）
 
 ---
 
@@ -77,9 +77,9 @@ description: "Task list for 012 真实比例宇宙生成 – 包含多核性能�
 
 ### Implementation
 
-- [ ] T022 [P] [US3] 实现 `StarSystemGenerator` 轨道计算 (开普勒第三定律)
-- [ ] T023 [US3] 在 client 实现 `StarSystemRenderer` (行星、卫星轨道)
-- [ ] T024 [US3] 校验轨道半径误差 <2% 单元测试
+- [X] T022 [P] [US3] 实现 `StarSystemGenerator` 轨道计算 (开普勒第三定律)
+- [X] T023 [US3] 在 client 实现 `StarSystemRenderer` (行星、卫星轨道)
+- [X] T024 [US3] 校验轨道半径误差 <2% 单元测试
 
 ---
 
@@ -91,8 +91,8 @@ description: "Task list for 012 真实比例宇宙生成 – 包含多核性能�
 
 ### Implementation
 
-- [ ] T025 [P] [US4] 在 client 添加 `CoordinateAxisOverlay.java`
-- [ ] T026 [US4] 实现 `DebugInputProcessor` 监听 F3 并切换可见性
+- [X] T025 [P] [US4] 在 client 添加 `CoordinateAxisOverlay.java`
+- [X] T026 [US4] 实现 `DebugInputProcessor` 监听 F3 并切换可见性
 
 ---
 
@@ -104,17 +104,17 @@ description: "Task list for 012 真实比例宇宙生成 – 包含多核性能�
 
 ### Implementation
 
-- [ ] T027 [P] [US5] 在 shared 添加参数校验 `ConfigValidator`
-- [ ] T028 [US5] 单元测试 `ExtremeParamsTest` 覆盖负半径、零密度等
+- [X] T027 [P] [US5] 在 shared 添加参数校验 `ConfigValidator`
+- [X] T028 [US5] 单元测试 `ExtremeParamsTest` 覆盖负半径、零密度等
 
 ---
 
 ## Phase 7.5: 复现性、六边形边界 & 重叠检测补强
 
-- [ ] T034 [P] 实现 `OverlapDetector.java` 在生成后验证天体距离，写入报告
-- [ ] T035 编写 `NoOverlapTest` 单元测试，随机采样 1000 对天体（ThreadLocalRandom），若发现 ≥1 起重叠则失败
-- [ ] T036 追加 `RepeatabilityTest`：相同种子生成两次，二进制 diff 输出为空
-- [ ] T038 [P] 实现 `SectorBoundaryTest` 计算六边形边长标准差，断言 <5%
+- [X] T034 [P] 实现 `OverlapDetector.java` 在生成后验证天体距离，写入报告
+- [X] T035 编写 `NoOverlapTest` 单元测试，随机采样 1000 对天体（ThreadLocalRandom），若发现 ≥1 起重叠则失败
+- [X] T036 追加 `RepeatabilityTest`：相同种子生成两次，二进制 diff 输出为空
+- [X] T038 [P] 实现 `SectorBoundaryTest` 计算六边形边长标准差，断言 <5%
 - [ ] T037 更新 CI 脚本，在生成步骤后执行 T036
 
 ---

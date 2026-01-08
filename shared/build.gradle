@@ -4,6 +4,11 @@ plugins {
 }
 
 dependencies {
+    // Universe generator dependencies
+    implementation "com.fasterxml.jackson.core:jackson-databind:2.13.4"
+    implementation "org.luaj:luaj-jse:3.0.1"
+    implementation "org.slf4j:slf4j-api:1.7.36"
+
     // 共享模块目前仅依赖基础 Java 库
     api "com.badlogicgames.gdx:gdx:$gdxVersion"
     api "com.badlogicgames.ashley:ashley:$ashleyVersion"
