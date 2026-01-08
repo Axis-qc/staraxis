@@ -1,16 +1,15 @@
 <!--
 Sync Impact Report:
-- Version change: 1.2.0 -> 1.3.0
-- List of modified principles:
-  - 开发工作流 (Development Workflow) -> 版本控制与合并纪律 (Version Control & Merge Discipline)
-- Added sections: None
+- Version change: 1.3.0 -> 1.4.0
+- List of modified principles: （无）
+- Added sections:
+  - VII. 多核性能优化 (Multi-Core Performance Optimization)
+- Removed sections: None
 - Templates requiring updates:
-  -  updated: .specify/memory/constitution.md
-  -  updated: .specify/templates/plan-template.md
-  -  updated: .specify/templates/spec-template.md
-  -  updated: .specify/templates/tasks-template.md
-- Follow-up TODOs:
-  - TODO(RATIFICATION_DATE): 初始确立日期需确认，暂定为 2026-01-05。
+  - ✅ .specify/templates/plan-template.md （无改动需求）
+  - ✅ .specify/templates/spec-template.md （无改动需求）
+  - ✅ .specify/templates/tasks-template.md （无改动需求）
+- Follow-up TODOs: None
 -->
 # StarAxis Constitution
 
@@ -39,6 +38,13 @@ Sync Impact Report:
 
 ### VI. UI 层独立性 (Independent UI Layer)
 UI 层必须作为一个独立的层级存在，通过特定的 UI 模型（UI Model）或数据绑定与游戏逻辑解耦。UI 逻辑不应包含任何游戏规则的计算，仅负责响应数据变化并更新视图组件。所有 UI 组件必须具备高度可重用性，且支持本地化文本系统。
+
+### VII. 多核性能优化 (Multi-Core Performance Optimization)
+- **并行优先**：所有性能关键的系统必须优先考虑多线程/多任务并行实现，显式利用 CPU 多核能力。
+- **无锁或低锁**：在高并发路径中应采用无锁或极低锁粒度的算法与数据结构，避免全局锁成为瓶颈。
+- **任务调度**：引擎层必须提供统一的 Job System 或任务队列，将可并行的工作拆分为细粒度任务，由调度器在不同核心上动态分配。
+- **线程安全**：所有跨线程共享的数据结构必须通过不可变数据、消息传递或锁分段策略保证线程安全；严禁出现竞态条件。
+- **性能度量**：新增或修改的并行代码必须附带基准测试，证明相较单线程实现存在显著性能提升或在相同性能下降低能耗。
 
 ## 技术标准与约定 (Technical Standards & Conventions)
 
@@ -72,4 +78,4 @@ UI 层必须作为一个独立的层级存在，通过特定的 UI 模型（UI M
 
 本宪章是 StarAxis 项目的最高开发准则，所有代码提交、方案评审及任务拆解均须遵循上述原则。原则的修改需经过文档化记录并更新版本号。
 
-**Version**: 1.3.0 | **Ratified**: 2026-01-05 | **Last Amended**: 2026-01-06
+**Version**: 1.4.0 | **Ratified**: 2026-01-05 | **Last Amended**: 2026-01-08

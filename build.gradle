@@ -7,6 +7,10 @@ buildscript {
     maven { url = 'https://central.sonatype.com/repository/maven-snapshots/' }
   }
   dependencies {
+    implementation "org.luaj:luaj-jse:$luajVersion"
+    implementation "com.esotericsoftware:kryo:$kryoVersion"
+    jmh "org.openjdk.jmh:jmh-core:1.37"
+
 
 
   }

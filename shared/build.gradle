@@ -1,4 +1,7 @@
-apply plugin: 'java-library'
+plugins {
+    id 'java-library'
+    id 'me.champeau.jmh' version '0.7.2'
+}
 
 dependencies {
     // 共享模块目前仅依赖基础 Java 库

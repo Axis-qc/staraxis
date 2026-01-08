@@ -1,67 +1,91 @@
 # Implementation Plan: 012 真实比例宇宙生成（Real-Scale Universe Generation）
 
-**Branch**: `012-realistic-universe-gen` | **Date**: 2026-01-07 | **Spec**: [/specs/012-realistic-universe-gen/spec.md](spec.md)
+**Branch**: `012-realistic-universe-gen` | **Date**: 2026-01-08 | **Spec**: [/specs/012-realistic-universe-gen/spec.md](spec.md)
 **Input**: Feature specification from `/specs/012-realistic-universe-gen/spec.md`
 
 ## Summary
 
-在《010 Galaxy World Scaling》与《011 Astronomical Units》两项前置规格的基础上，本功能将在**服务器端**按真实天文学尺度程序化生成从银河到行星的完整层级宇宙数据，并在**客户端渲染层**强制执行 **1 px = 1 km** 的比例。核心技术要点：
-
-1. **分段坐标系 (Segmented Space)** + **浮动原点 (Floating Origin)** 组合，解决高精度与渲染抖动。
-2. 基于种子 (Seed) 的确定性随机生成器，支持可重复宇宙。
-3. 星区以六边形网格分区 (edge 3–30 ly 可配置)；恒星系内部行星轨道遵循开普勒第三定律。
-4. 纯数据驱动：生成参数与结果通过二进制 *.unv* 文件存储，暴露 JSON-like API 供工具链与 Mod 使用。
+本功能在客户端和服务器端生成并渲染符合真实天文学尺度的银河 → 星区 → 恒星系 → 行星/卫星数据，并保证在最大缩放时 1px = 1km。核心工作包括：
+1. 依照「分层坐标 `{sectorId, localX,Y,Z}` + km 单位」的数据模型实现世界坐标体系。
+2. 根据开局配置（星区总量、六边形半径、恒星系 : 深空比例、随机种子）生成银河数据。
+3. 提供可复现的生成器 API（输入种子 → 输出世界数据结构）。
+4. 渲染层实现离散阶段 LOD 与阶段内线性缩放，确保视觉连续。
+5. 暴露配置与调试接口（F3 坐标轴、参数注入）。
 
 ## Technical Context
 
-**Language/Version**: C# 10 (兼容 Unity 2022 LTS)，服务器工具链同样使用 .NET 7
-**Primary Dependencies**: Unity 2022 LTS、DOTS (ECS + Burst)、Unity.Mathematics、MessagePack-CSharp（数据序列化）
-**Storage**: 分片二进制文件 `.unv` (可流式加载) + ScriptableObject 配置
-**Testing**: Unity Test Framework (NUnit 3)
-**Target Platform**: Windows 10+/macOS 13+/Linux（桌面）；后续可扩展 WebGL（非目标）
-**Project Type**: Single (mono-repo，游戏客户端 + Editor 工具 + 服务端逻辑 位于同一 Unity Project 内的独立 Assembly Definition）
-**Performance Goals**:
-- 渲染：最低配置 60 FPS (1080p)
-- 生成：新建存档 ≤10 s 内完成全银河数据落盘 (N≤50 k Star Systems)
-**Constraints**:
-- 1 px = 1 km 不得被打破（只允许逻辑缩放视口）
-- 坐标计算误差 <1 km（~1 px）
-- 运行期内内存占用 ≤4 GB（含纹理）
-**Scale/Scope**:
-- 星系数 1–10（可配置）
-- 星区 ~104 – 106 个
-- 恒星系 ≤5×105 个
+**Language/Version**: Java 17（LibGDX 1.12.x）
+**Primary Dependencies**: LibGDX Core & Renderer、Jackson / Kryo（序列化）、JUnit 5、Gradle 8
+**Storage**: 本地存档 JSON/二进制；服务器端可选嵌入式 DB 或文件；当前阶段采用文件
+**Testing**: JUnit 5 + AssertJ；性能基准使用 JMH 1.37（Gradle jmh 插件）
+**Target Platform**: Desktop (Windows/macOS/Linux) + Headless Server JVM
+**Project Type**: 单仓库多模块（core/shared/server/client），本功能主要落在 `shared`（生成逻辑）与 `client`（渲染桥接）
+**Performance Goals**: 生成 10⁵ 个恒星系 ≤ 5 s（i7-12700 单线程）；客户端渲染 60 FPS@1080p
+**Constraints**: 浮点误差 <1 km；内存占用 <256 MB（仅世界数据）；加载首帧 ≤ 3 s
+**Scale/Scope**: 默认 5×10⁴–2×10⁵ 恒星系；星区 ~10³；行星/卫星 ~10⁶ 对象级别
 
 ## Constitution Check
 
-| Principle | Assessment |
-|-----------|-----------|
-| 模块化与可维护性 | 生成器将作为独立 *UniverseGenerator* Assembly，参数通过 ScriptableObject 注入；符合原则。 |
-| 分层架构 & C/S 分离 | 生成逻辑与渲染逻辑分立；渲染层不读取生成算法，只消费只读数据；符合。 |
-| 规范化命名与注释 | C# PasalCase/camelCase  + 全中文文档；符合。 |
-| 扩展性与 Mod 支持 | 生成参数、数据格式公开；符合。 |
-| 模拟驱动逻辑 | 生成阶段离线，不影响帧率；运行期坐标转换在 Update 中 O(𝑁)≈O(星体可见)；符合。 |
-| UI 层独立性 | 不涉及 UI 代码；符合。 |
+| 宪章原则 | 评估 | 备注 |
+|----------|------|------|
+| 模块化与可维护性 | ✅ | 世界生成逻辑封装在 `shared.universegen` 模块 |
+| 分层架构 & C/S 分离 | ✅ | 生成逻辑无 UI 依赖；渲染仅在 `client` 使用只读接口 |
+| 命名与注释 | ✅ | 按英文标识符+中文注释执行 |
+| Mod 支持 | ⚠️ | 生成器配置接口需开放脚本化（NEEDS CLARIFICATION 脚本格式） |
+| Simulation-Driven | ✅ | 生成为离线步骤，不影响帧循环 |
+| UI 层独立 | ✅ | UI 未涉及 |
 
-**Gate Result**: ✅ 全部通过。若后续设计变更违反宪章，需在 *Complexity Tracking* 中说明理由。
+GATE 通过，但需澄清脚本化扩展格式（JSON/Lua/其他）。
 
 ## Project Structure
 
-```text
-src/
-├── universe-generator/          # Assembly: 生成算法、数据模型、序列化
-├── universe-runtime/            # Assembly: 运行期坐标变换、LOD、查询接口
-├── editor/                      # Unity Editor 工具（菜单、可视化调试）
-└── rendering/                   # 专用于渲染层（材质、着色器、系统）
+### Documentation (this feature)
 
-tests/
-├── unit/
-├── integration/
-└── contract/
+```text
+specs/012-realistic-universe-gen/
+├── plan.md          # 本文件
+├── research.md      # Phase 0 输出
+├── data-model.md    # Phase 1 输出
+├── quickstart.md    # Phase 1 输出
+├── contracts/       # Phase 1 输出
+└── tasks.md         # Phase 2 (/speckit.tasks)
 ```
 
-**Structure Decision**: 采用单工程多 AssemblyDefinition 模式，保持 Unity 项目内部模块化；避免多仓库复杂度。
+### Source Code (repository root)
+
+```text
+shared/
+└── src/
+    ├── main/java/com/staraxis/universegen/
+    │   ├── GalaxyGenerator.java
+    │   ├── SectorGenerator.java
+    │   ├── StarSystemGenerator.java
+    │   ├── PlanetGenerator.java
+    │   ├── CoordinateSystem.java  # 分层坐标实现
+    │   └── config/
+    │       └── UniverseGenConfig.java
+    └── test/java/...  # 单元/性能测试
+
+client/
+└── src/
+    └── main/java/com/staraxis/render/universe/
+        ├── UniverseRenderer.java
+        ├── LODManager.java
+        ├── CoordinateAxisOverlay.java  # F3 调试轴
+        └── ...
+
+server/
+└── src/
+    └── main/java/com/staraxis/sim/universe/
+        └── UniverseRepository.java  # 读取生成结果并提供查询
+```
+
+**Structure Decision**: 保持现有 multi-module（shared/client/server），仅新增 `universegen` 包；渲染桥接在 client；服务器读取只读数据。
 
 ## Complexity Tracking
 
-*目前无需豁免。*
+| Violation | Why Needed | Simpler Alternative Rejected Because |
+|-----------|------------|-------------------------------------|
+| Lua/脚本扩展 (潜在) | 满足 Mod 作者扩展生成逻辑 | 仅 JSON 配置无法表达动态逻辑（例如按星系标签条件生长） |
+
+> 其余部分待 Phase 0 研究后补充。
