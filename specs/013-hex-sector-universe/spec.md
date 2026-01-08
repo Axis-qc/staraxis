@@ -1,115 +1,73 @@
-# Feature Specification: [FEATURE NAME]
+# Spec: 013 - 真实宇宙生成与六边形网格集成
 
-**Feature Branch**: `[###-feature-name]`  
-**Created**: [DATE]  
-**Status**: Draft  
-**Input**: User description: "$ARGUMENTS"
+**版本**: 1.0
+**状态**: 初稿
 
-## User Scenarios & Testing *(mandatory)*
+## 1. 功能描述
 
-<!--
-  IMPORTANT: User stories should be PRIORITIZED as user journeys ordered by importance.
-  Each user story/journey must be INDEPENDENTLY TESTABLE - meaning if you implement just ONE of them,
-  you should still have a viable MVP (Minimum Viable Product) that delivers value.
-  
-  Assign priorities (P1, P2, P3, etc.) to each story, where P1 is the most critical.
-  Think of each story as a standalone slice of functionality that can be:
-  - Developed independently
-  - Tested independently
-  - Deployed independently
-  - Demonstrated to users independently
--->
+将新的 `universegen`（真实宇宙生成）模块接入六边形星区（Sector）网格体系，以“覆盖迭代”的方式替换当前占位符式的世界生成逻辑（无需向后兼容旧版世界/快照协议）。大地图（星图）继续使用六边形网格作为基础结构，每个六边形代表一个星区（Sector）。当一个星区被确定为“星系星区（galaxy）”时，将在该星区内生成一个“恒星系（star_system）”，其内部可为单/双/三恒星系统。
 
-### User Story 1 - [Brief Title] (Priority: P1)
+## Clarifications
 
-[Describe this user journey in plain language]
+### Session 2026-01-08
 
-**Why this priority**: [Explain the value and why it has this priority level]
+- Q: 每个六边形星区内“恒星系数量”规则是什么？ → A: 每个星区最多 1 个恒星系；恒星系内可为单/双/三恒星。
+- Q: 哪些六边形星区会“包含恒星系”？ → A: 使用开局设置的“恒星系/深空/星云比例”决定各星区类型分配。
+- Q: 开局比例三项是否允许相加不等于 1？ → A: 三项比例总和上限为 1；UI 调节一项时会自动降低其他项以维持总和不超过 1。
+- Q: 当三项比例总和 < 1 时，剩余概率归到哪一类？ → A: 剩余全部补给“深空”。
+- Q: 真实比例恒星系生成的触发粒度是什么？ → A: 开局一次性生成全图（所有星区类型 + 恒星系数据）。
+- Q: 是否需要向后兼容旧版世界/快照协议？ → A: 不需要；直接按新版需求覆盖迭代。
+- Q: 开局配置是否需要提供真正的“三滑条比例”（恒星系/星云/深空）？ → A: 是；使用三滑条联动，确保总和上限为 1，且剩余（若<1）补给深空。
+- Q: StartNewGameResponse 的 world 字段处理方式？ → A: 直接破坏性替换 `world` 字段为新版世界快照类型。
+- Q: 术语统一规则？ → A: `galaxy` 表示“星系星区（星系）”，`star_system` 表示“恒星系（星系内部的系统）”。
 
-**Independent Test**: [Describe how this can be tested independently - e.g., "Can be fully tested by [specific action] and delivers [specific value]"]
+## 2. 用户场景与测试
 
-**Acceptance Scenarios**:
+### 场景 1: 玩家创建并进入一个新生成的宇宙
 
-1. **Given** [initial state], **When** [action], **Then** [expected outcome]
-2. **Given** [initial state], **When** [action], **Then** [expected outcome]
+- **前提**: 玩家位于“新游戏配置”界面。
+- **步骤**:
+  1. 玩家调整世界生成参数（如地图尺寸、恒星系/深空/星云比例、行星复杂度等）。
+  2. 玩家点击“开始游戏”按钮。
+  3. 系统在后台调用新的世界生成逻辑，创建新版世界数据与“世界快照”（允许破坏性变更，不要求沿用旧版 `WorldMap`/`WorldSnapshot` 结构）。
+  4. 加载完成后，游戏切换到 `WorldScreen`，展示新生成的宇宙星图。
+- **验收标准**:
+  - `AC-1.1`: 游戏成功加载并显示 `WorldScreen`，没有发生崩溃或错误。
+  - `AC-1.2`: 屏幕上渲染的是一个六边形网格地图。
+  - `AC-1.3`: 网格上星系星区（`galaxy`）的数量与玩家在配置界面选择的“恒星系比例”参数有明显的正相关性。
+  - `AC-1.4`: 点击或悬停在一个 `galaxy` 星区上时，UI 能显示该星区内恒星系（`star_system`）的基本信息（如恒星数量、行星数量），这些数据来源于 `universegen` 模块。
+  - `AC-1.5`: 生成的世界数据可以被无误地序列化为“世界快照”并由客户端正确解析与渲染（快照结构允许随本特性升级而变更）。
 
----
+## 3. 功能需求
 
-### User Story 2 - [Brief Title] (Priority: P2)
+- `FR-1`: **集成新的生成器**: `StartNewGameUseCase` 服务必须被重构，用新的“真实宇宙生成器”替换当前的 `DefaultWorldGenerator` 作为其核心生成逻辑。
+- `FR-2`: **六边形作为星区容器**: 系统必须将六边形网格作为顶层空间划分结构。每个六边形瓦片在逻辑上代表一个星区（Sector），并且每个星区最多包含 1 个星系（`galaxy`）。每个 `galaxy` 星区内最多包含 1 个恒星系（`star_system`），且该恒星系内部允许出现单恒星、双恒星或三恒星系统。
+- `FR-3`: **星区内容生成**: 对于每个六边形星区，生成器必须依据开局配置中“恒星系/深空/星云”三类比例（并结合该星区的随机种子/确定性规则），决定该星区的内容类型（例如：`galaxy`、`nebula`、`deep_space`）。当三项比例总和小于 1 时，剩余比例必须自动补给 `deep_space`。
+- `FR-4`: **调用真实比例生成**: 如果一个星区被确定为 `galaxy`，系统必须调用 `universegen` 模块来生成该星区内的恒星系（`star_system`）详细数据（恒星类型、数量、行星、轨道等）。
+- `FR-5`: **数据模型映射**: `universegen` 模块生成的数据必须被正确地映射到新版的世界快照（`UniverseSnapshot`）结构中，供客户端使用。
+- `FR-6`: **参数化生成**: “新游戏配置”界面必须提供“恒星系/星云/深空”三滑条比例设置，并确保三项比例总和不超过 1（用户调节一项时自动降低其他项以维持约束）。当三项比例总和小于 1 时，剩余比例必须补给 `deep_space`。这些比例与其他相关参数（如行星复杂度等）必须作为输入传递给新的生成器，并切实地影响生成结果。
+- `FR-7`: **覆盖迭代（无需向后兼容）**: 本特性允许按新版需求直接修改或替换现有世界生成、传输快照与客户端解析/渲染相关的数据结构与协议；不要求与旧版 `WorldMap` / `WorldSnapshot` / 既有序列化逻辑保持兼容。
+- `FR-8`: **一次性生成**: 整个世界数据（包括所有星区的类型和内部的恒星系详细数据）必须在“开始游戏”时一次性完全生成，以确保世界状态的确定性和可复现性，并简化客户端的数据同步逻辑。
 
-[Describe this user journey in plain language]
+## 4. 成功标准
 
-**Why this priority**: [Explain the value and why it has this priority level]
+- `SC-1`: **采用率**: 100% 通过“新游戏”流程创建的世界都使用新的真实宇宙生成逻辑。
+- `SC-2`: **参数有效性**: 在新游戏配置中调整“恒星系比例”滑条从 10% 到 90%，生成的星图中星系星区（`galaxy`）数量应有至少 5 倍的增长，以验证参数与生成结果的强关联性。
+- `SC-3`: **性能**: 对于“中等”大小的地图，从点击“开始游戏”到 `WorldScreen` 开始渲染，整个世界生成过程（服务器端）的耗时不应超过 15 秒。
+- `SC-4`: **稳定性**: 通过手工进游戏验证的方式，在多组不同随机种子下能够稳定生成并进入世界（不要求提供自动化压力测试脚本）。
 
-**Independent Test**: [Describe how this can be tested independently]
+## 5. 关键实体与数据
 
-**Acceptance Scenarios**:
+- **`UniverseModel` (运行时)**: 新的顶层世界模型，用于在客户端运行时维持六边形星区网格和状态。
+- **`UniverseSnapshot` (传输)**: 新的世界快照协议，用于在服务端生成并通过网络传输，包含所有星区与恒星系数据。
+- **`Sector` / `SectorSnapshot`**: 代表一个六边形星区，包含坐标、类型（如 `galaxy`, `nebula`, `deep_space`）和一个可选的恒星系对象。
+- **`StarSystem` / `StarSystemSnapshot`**: 代表星系星区（`galaxy`）内部的恒星系（`star_system`），包含由 `universegen` 生成的恒星与行星数据。
+- **`UniverseGenConfig` (from `universegen` module)**: 新生成器的配置对象，需要从开局配置进行映射。
+- **`Galaxy` (from `universegen` module)**: `universegen` 模块生成的核心数据结构之一（用于生成 `galaxy` 星区的内容，并映射到快照；与 `star_system` 概念区分）。
 
-1. **Given** [initial state], **When** [action], **Then** [expected outcome]
+## 6. 假设
 
----
-
-### User Story 3 - [Brief Title] (Priority: P3)
-
-[Describe this user journey in plain language]
-
-**Why this priority**: [Explain the value and why it has this priority level]
-
-**Independent Test**: [Describe how this can be tested independently]
-
-**Acceptance Scenarios**:
-
-1. **Given** [initial state], **When** [action], **Then** [expected outcome]
-
----
-
-[Add more user stories as needed, each with an assigned priority]
-
-### Edge Cases
-
-<!--
-  ACTION REQUIRED: The content in this section represents placeholders.
-  Fill them out with the right edge cases.
--->
-
-- What happens when [boundary condition]?
-- How does system handle [error scenario]?
-
-## Requirements *(mandatory)*
-
-<!--
-  ACTION REQUIRED: The content in this section represents placeholders.
-  Fill them out with the right functional requirements.
--->
-
-### Functional Requirements
-
-- **FR-001**: System MUST [specific capability, e.g., "allow users to create accounts"]
-- **FR-002**: System MUST [specific capability, e.g., "validate email addresses"]  
-- **FR-003**: Users MUST be able to [key interaction, e.g., "reset their password"]
-- **FR-004**: System MUST [data requirement, e.g., "persist user preferences"]
-- **FR-005**: System MUST [behavior, e.g., "log all security events"]
-
-*Example of marking unclear requirements:*
-
-- **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
-- **FR-007**: System MUST retain user data for [NEEDS CLARIFICATION: retention period not specified]
-
-### Key Entities *(include if feature involves data)*
-
-- **[Entity 1]**: [What it represents, key attributes without implementation]
-- **[Entity 2]**: [What it represents, relationships to other entities]
-
-## Success Criteria *(mandatory)*
-
-<!--
-  ACTION REQUIRED: Define measurable success criteria.
-  These must be technology-agnostic and measurable.
--->
-
-### Measurable Outcomes
-
-- **SC-001**: [Measurable metric, e.g., "Users can complete account creation in under 2 minutes"]
-- **SC-002**: [Measurable metric, e.g., "System handles 1000 concurrent users without degradation"]
-- **SC-003**: [User satisfaction metric, e.g., "90% of users successfully complete primary task on first attempt"]
-- **SC-004**: [Business metric, e.g., "Reduce support tickets related to [X] by 50%"]
+- `A-1`: `universegen` 模块已经具备生成单个、独立的、包含完整信息的恒星系（`star_system`）的能力。
+- `A-2`: 世界快照结构将按新版需求调整；不要求沿用既有 `WorldSnapshot` 字段或保持兼容。
+- `A-3`: “真实比例”主要体现在恒星系内部的天体构成和分布，而非六边形星区之间的距离和尺度。六边形网格本身是一个抽象的星图，不代表真实的空间距离。
+- `A-4`: “无需向后兼容”意味着允许对客户端/服务端之间的世界快照协议与字段进行破坏性变更，但仍需保证“新游戏 → 进入世界”的用户主流程可用。

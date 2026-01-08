@@ -1,15 +1,17 @@
 package com.staraxis.game.shared.net.worldgen;
 
-import com.staraxis.game.shared.net.worldgen.snapshot.WorldSnapshot;
+import com.staraxis.game.shared.net.worldgen.snapshot.UniverseSnapshot;
 
 /**
  * 新游戏世界生成响应（StartNewGameResponse）。
+ * 
+ * 注意：013 特性起，world 字段破坏性替换为 UniverseSnapshot。
  */
 public class StartNewGameResponse {
 
     private String schemaVersion;
     private StartNewGameEffectiveConfig effectiveConfig;
-    private WorldSnapshot world;
+    private UniverseSnapshot world;
     private ErrorEnvelope error;
 
     public StartNewGameResponse() {
@@ -31,11 +33,11 @@ public class StartNewGameResponse {
         this.effectiveConfig = effectiveConfig;
     }
 
-    public WorldSnapshot getWorld() {
+    public UniverseSnapshot getWorld() {
         return world;
     }
 
-    public void setWorld(WorldSnapshot world) {
+    public void setWorld(UniverseSnapshot world) {
         this.world = world;
     }
 

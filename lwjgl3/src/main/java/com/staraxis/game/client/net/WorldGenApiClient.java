@@ -38,13 +38,14 @@ public class WorldGenApiClient {
         StartNewGameResponse parsed = objectMapper.readValue(response.body(), StartNewGameResponse.class);
 
         // 客户端侧版本门禁：不匹配直接视为不可用
-        if (parsed == null || parsed.getSchemaVersion() == null || !SchemaVersions.WORLDGEN_V1.equals(parsed.getSchemaVersion())) {
+        // 客户端侧版本门禁：不匹配直接视为不可用
+        if (parsed == null || parsed.getSchemaVersion() == null || !SchemaVersions.WORLDGEN_V2.equals(parsed.getSchemaVersion())) {
             StartNewGameResponse mismatch = new StartNewGameResponse();
-            mismatch.setSchemaVersion(SchemaVersions.WORLDGEN_V1);
+            mismatch.setSchemaVersion(SchemaVersions.WORLDGEN_V2);
             mismatch.setError(new com.staraxis.game.shared.net.worldgen.ErrorEnvelope(
                     "SCHEMA_MISMATCH",
                     "worldgen.schema_mismatch",
-                    "schemaVersion=" + (parsed != null ? parsed.getSchemaVersion() : "null")));
+                    "Client requires schema v2, but server sent: " + (parsed != null ? parsed.getSchemaVersion() : "null")));
             return mismatch;
         }
 
