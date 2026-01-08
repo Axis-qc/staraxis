@@ -16,20 +16,50 @@ public class CameraController extends InputAdapter {
     private final Vector3 lastMousePos = new Vector3();
     private final Vector3 currMousePos = new Vector3();
 
-    // 物理状态 (T009)
+    // 物理状态（惯性平移）
     private final Vector2 velocity = new Vector2();
     private final Vector2 acceleration = new Vector2();
-    private float friction = 8.0f; // 略微降低摩擦系数，让惯性更自然
-    private float moveSpeed = 1200f; // 提高基础速度，因为现在会受到 zoom 的双重缩放影响 (T041)
+    private float friction = 8.0f;
 
-    // 缩放状态 (T013)
+    /** 基础移动加速度（后续会按 zoom 缩放，并且按“按住时间”线性加速）。 */
+    private float moveSpeed = 1200f;
+
+    /** 移动速度上限（单位：世界单位/s；这里世界单位近似为 km）。 */
+    private float maxMoveSpeed = 200_000_000f; // 提升 100 倍（原 200_000）
+
+    /**
+     * 移动按住加速：倍率在持续移动时线性增长。
+     * 设计目标：换方向时不要“顿停”，只要仍在移动就保持倍率，不重置为 1。
+     */
+    private float moveSpeedMultiplier = 1.0f;
+    private float moveSpeedMinMultiplier = 1.0f;
+    private float moveSpeedMaxMultiplier = 25.0f;
+    private float moveSpeedRampPerSec = 3.0f; // 每秒线性增长量
+    private float moveRampTimeoutSec = 0.25f;
+    private float timeSinceMoveInputSec = 999f;
+
+    // 缩放状态
     private float targetZoom;
     private float zoomSmoothing = 10.0f;
     private float minZoom = 0.1f;
-    private float maxZoom = 2.0f;
-    private float zoomSpeed = 0.1f;
+    private float maxZoom = 1000.0f;
 
-    // 焦点拦截 (T014)
+    /** 基础滚轮缩放步进（作为初始速度）。 */
+    private float baseZoomSpeed = 0.1f;
+
+    /** 连续滚轮加速：在窗口期内持续滚动会指数增长倍率。 */
+    private float zoomSpeedMultiplier = 1.0f;
+    private float zoomSpeedMinMultiplier = 1.0f;
+    private float zoomSpeedMaxMultiplier = 500.0f;
+
+    /** 指数增长速率（每秒），值越大加速越快。 */
+    private float zoomSpeedExpPerSec = 2.5f;
+
+    /** 认为“连续滚动”的时间窗口。 */
+    private float zoomRampTimeoutSec = 0.25f;
+    private float timeSinceLastScrollSec = 999f;
+
+    // 焦点拦截
     private boolean isIntercepted = false;
 
     public CameraController(OrthographicCamera camera) {
@@ -68,71 +98,91 @@ public class CameraController extends InputAdapter {
             return false;
         }
 
-        // 记录缩放前的鼠标世界坐标 (T012)
-        Vector3 mouseBefore = new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0);
-        camera.unproject(mouseBefore);
+        // 连续滚动：若超时则重置倍率
+        if (timeSinceLastScrollSec > zoomRampTimeoutSec) {
+            zoomSpeedMultiplier = zoomSpeedMinMultiplier;
+        }
+        timeSinceLastScrollSec = 0f;
 
-        // 设置目标缩放 (T013)
-        targetZoom += amountY * zoomSpeed;
-        targetZoom = Math.max(minZoom, Math.min(maxZoom, targetZoom));
+        float effectiveZoomSpeed = baseZoomSpeed * zoomSpeedMultiplier;
 
-        // 立即应用一部分缩放以计算位置修正，或者在 update 中平滑处理
-        // 这里为了精确对焦，我们先计算出缩放后的理想位置
-        float zoomRatio = targetZoom / camera.zoom;
+        // 设置目标缩放（线性步进 * 指数倍率）
+        targetZoom += amountY * effectiveZoomSpeed;
+        targetZoom = clamp(targetZoom, minZoom, maxZoom);
 
-        // 我们不在这里直接改 camera.zoom，而是在 update 中平滑过渡
         return true;
     }
 
     public void update(float delta) {
-        // 1. 缩放平滑过渡 (T013)
-        // 只有在非拦截状态且有输入环境时才进行缩放插值（因为需要鼠标位置）
+        // --- 连续缩放加速更新（指数增长）---
+        timeSinceLastScrollSec += delta;
+        if (timeSinceLastScrollSec <= zoomRampTimeoutSec) {
+            zoomSpeedMultiplier = (float) (zoomSpeedMultiplier * Math.exp(zoomSpeedExpPerSec * delta));
+            zoomSpeedMultiplier = clamp(zoomSpeedMultiplier, zoomSpeedMinMultiplier, zoomSpeedMaxMultiplier);
+        } else {
+            zoomSpeedMultiplier = zoomSpeedMinMultiplier;
+        }
+
+        // 1. 缩放平滑过渡（保持鼠标对焦）
         if (!isIntercepted && Gdx.input != null && Math.abs(camera.zoom - targetZoom) > 0.001f) {
-            // 记录缩放前的鼠标世界位置
             Vector3 mouseAtOldZoom = new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0);
             camera.unproject(mouseAtOldZoom);
 
-            // 插值缩放
             camera.zoom += (targetZoom - camera.zoom) * zoomSmoothing * delta;
 
-            // 重新计算世界位置并平移相机以保持鼠标指向点不变 (T012)
             Vector3 mouseAtNewZoom = new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0);
             camera.unproject(mouseAtNewZoom);
 
             camera.position.add(mouseAtOldZoom.x - mouseAtNewZoom.x, mouseAtOldZoom.y - mouseAtNewZoom.y, 0);
         }
 
-        // 2. 处理键盘输入加速度 (T010)
-        // 只有在非拦截状态且有输入环境时才读取按键
+        // 2. 键盘输入（加速度） + 按住时间线性加速
+        timeSinceMoveInputSec += delta;
         if (!isIntercepted && Gdx.input != null) {
             acceleration.setZero();
-            if (Gdx.input.isKeyPressed(Input.Keys.W)) {
+            if (Gdx.input.isKeyPressed(Input.Keys.W))
                 acceleration.y += 1;
-            }
-            if (Gdx.input.isKeyPressed(Input.Keys.S)) {
+            if (Gdx.input.isKeyPressed(Input.Keys.S))
                 acceleration.y -= 1;
-            }
-            if (Gdx.input.isKeyPressed(Input.Keys.A)) {
+            if (Gdx.input.isKeyPressed(Input.Keys.A))
                 acceleration.x -= 1;
-            }
-            if (Gdx.input.isKeyPressed(Input.Keys.D)) {
+            if (Gdx.input.isKeyPressed(Input.Keys.D))
                 acceleration.x += 1;
-            }
 
             if (!acceleration.isZero()) {
-                // 根据当前缩放比例调整加速度，实现“放大移动慢，缩小移动快”的感知平衡 (T041)
-                acceleration.nor().scl(moveSpeed * camera.zoom);
+                // 只要持续有移动输入，就线性累计倍率；即使换方向也不重置，避免“顿停感”
+                if (timeSinceMoveInputSec <= moveRampTimeoutSec) {
+                    moveSpeedMultiplier += moveSpeedRampPerSec * delta;
+                } else {
+                    moveSpeedMultiplier = moveSpeedMinMultiplier;
+                }
+                moveSpeedMultiplier = clamp(moveSpeedMultiplier, moveSpeedMinMultiplier, moveSpeedMaxMultiplier);
+                timeSinceMoveInputSec = 0f;
+
+                Vector2 dir = new Vector2(acceleration).nor();
+
+                float base = moveSpeed * camera.zoom;
+                float boosted = base * moveSpeedMultiplier;
+                float capped = Math.min(maxMoveSpeed, boosted);
+
+                acceleration.set(dir).scl(capped);
                 velocity.add(acceleration.x * delta, acceleration.y * delta);
+            } else {
+                if (timeSinceMoveInputSec > moveRampTimeoutSec) {
+                    moveSpeedMultiplier = moveSpeedMinMultiplier;
+                }
             }
         } else if (isIntercepted) {
-            // 被拦截时强制停止
             velocity.setZero();
+            moveSpeedMultiplier = moveSpeedMinMultiplier;
         }
 
-        // 3. 应用惯性物理 (T011) - 即使没有 Gdx.input 也应执行（用于单元测试）
+        // 3. 惯性位移（按 velocity 真实积分）
         if (velocity.len() > 0.1f) {
-            // 修正：位移必须乘以 delta 以保证帧率无关性 (T041)
-            camera.position.add(velocity.x * camera.zoom * delta, velocity.y * camera.zoom * delta, 0);
+            if (velocity.len() > maxMoveSpeed) {
+                velocity.nor().scl(maxMoveSpeed);
+            }
+            camera.position.add(velocity.x * delta, velocity.y * delta, 0);
             velocity.scl(1.0f - friction * delta);
         } else {
             velocity.setZero();
@@ -154,5 +204,13 @@ public class CameraController extends InputAdapter {
 
     public Vector2 getVelocity() {
         return velocity;
+    }
+
+    public void setMaxMoveSpeed(float maxMoveSpeed) {
+        this.maxMoveSpeed = maxMoveSpeed;
+    }
+
+    private static float clamp(float v, float min, float max) {
+        return Math.max(min, Math.min(max, v));
     }
 }

@@ -1,96 +1,115 @@
-# 012 真实比例宇宙生成（Real-Scale Universe Generation）
+# Feature Specification: [FEATURE NAME]
 
-## Feature Overview
-本功能旨在在大地图层面按照**真实天文学尺度**生成星系（Galaxy）、星区（Sector / Region）、恒星系（Star System）与其内部天体，并在客户端渲染时保证 **1 像素 = 1 千米** 的固定换算比例。通过与前置规格 010《Galaxy World Scaling》与 011《Astronomical Units》配合，实现从银河级到行星级的**连续缩放**与**数据一致性**，为后续 4X 战略玩法提供可信、可探索、可交互的宇宙环境。
+**Feature Branch**: `[###-feature-name]`  
+**Created**: [DATE]  
+**Status**: Draft  
+**Input**: User description: "$ARGUMENTS"
 
-## Goals
-1. 提供一套基于真实比例的宇宙空间数据生成方案（星系 → 星区 → 恒星系 → 行星 → 卫星）。
-2. 在渲染层面确保 1 px = 1 km 的可视化统一尺度。
-3. 允许玩家在不同层级自由缩放，体验从银河宏观视图到行星微观视图的连续过渡。
-4. 封装生成逻辑，暴露最小化且稳定的数据接口供客户端与服务端共用。
+## User Scenarios & Testing *(mandatory)*
 
-## Non-Goals
-- 不涉及 UI / UX 具体实现（如缩放手势、UI 动画）。
-- 不涉及具体渲染优化技术（如 LOD、分片加载）。
-- 不处理多人同步与网络性能问题。
+<!--
+  IMPORTANT: User stories should be PRIORITIZED as user journeys ordered by importance.
+  Each user story/journey must be INDEPENDENTLY TESTABLE - meaning if you implement just ONE of them,
+  you should still have a viable MVP (Minimum Viable Product) that delivers value.
+  
+  Assign priorities (P1, P2, P3, etc.) to each story, where P1 is the most critical.
+  Think of each story as a standalone slice of functionality that can be:
+  - Developed independently
+  - Tested independently
+  - Deployed independently
+  - Demonstrated to users independently
+-->
 
-## Assumptions
-1. 使用《游戏大纲.md》所述六边形星域格（~5–50 光年对角）作为**星区**的默认网格单元。
-2. 恒星间平均距离按 4.2 ly（比邻星距离太阳）至 10 ly 区间建模。
-3. 星系默认参考银河系（直径 ~100,000 ly，厚度 ~1,000 ly），但仅生成“可探索子区域”，而非完整银河像素级网格。【见 Clarification-1】
-4. 服务器端存储使用高精度数值存储格式满足 1 km 精度。
-5. 现有坐标系与单位（AU, ly, km）由 011 规格所定义，并遵循以下层级约定：星系、星区、恒星系间距使用光年 (ly)；恒星系内部（如轨道、天体半径）使用公里 (km)。
+### User Story 1 - [Brief Title] (Priority: P1)
 
-## Actors
-| Actor | 目标 | 关切 |
-|-------|------|------|
-| 玩家 | 探索、导航、制定战略 | 真实感、一致缩放、定位准确 |
-| 关卡设计师 / Mod 作者 | 自定义宇宙或剧本 | 生成参数可调、支持脚本扩展 |
-| 服务器模拟模块 | 进行航行、战斗、经济计算 | 度量单位统一、精度足够 |
+[Describe this user journey in plain language]
 
-## User Scenarios & Testing
-1. **银河层浏览**
-   - 前置：新建存档并生成银河。
-   - 行为：玩家在 90% 缩放比例下全景查看。
-   - 结果：银河直径显示为 ~9.46e17 像素 / 9.46e14 米 对应值，但 UI 通过逻辑缩放压缩到屏幕宽度。（在此层级下，视口可采用逻辑缩放以压缩显示，但不得低于 1px≈1km 的最小精度。）
+**Why this priority**: [Explain the value and why it has this priority level]
 
-2. **星区快速跳转**
-   - 行为：玩家点击星区列表跳转。
-   - 结果：摄像机在 <1 s 内平滑切入星区视图，边界尺寸符合真实比例（~数十光年），星区内恒星分布位置与距离显示正确。   
+**Independent Test**: [Describe how this can be tested independently - e.g., "Can be fully tested by [specific action] and delivers [specific value]"]
 
-3. **恒星系内轨道建造**
-   - 行为：玩家在恒星系内放置一个采矿站（距行星 2×行星半径处）。
-   - 结果：放置点到行星中心的像素距离与真实公里数一致（例如 6,400 km → 6,400 px）。
+**Acceptance Scenarios**:
 
-4. **极端参数生成测试 (Edge Case)**
-   - 前置：通过配置接口提供极端参数（如：行星半径为 1km，轨道半径为 1 AU）。
-   - 行为：运行宇宙生成器。
-   - 结果：系统不崩溃，能够生成符合物理规律（或有明确回退逻辑）的天体，且无重叠或数值溢出。
-
-## Functional Requirements
-| 编号 | 描述 | 验证方式 |
-|------|------|----------|
-| FR-1 | 系统必须在新建存档时生成包含 N 个星系的银河数据结构，每个实体记录真实单位下的三维坐标（km）。| 单元测试读取生成文件，对全部星系间距离进行计算，与保存值使用相对误差公式 `|generated - stored| / stored` 计算，平均误差 <1%。 |
-| FR-2 | 星区（Sector）边界应基于六边形网格，边长在 3–30 ly 可配置。| 生成后对边界顶点距中心距离进行统计，标准差 <5%. |
-| FR-3 | 每个恒星系内行星与卫星的轨道半径、轨道周期按照开普勒第三定律推算，误差 <2%（基于周长换算）。| 对 100 个随机样本（包含至少 10% 的极端轨道偏心率样本）进行理论计算与生成值比较。 |
-| FR-4 | 客户端渲染层应在所有缩放层级保持 1px = 1km 显示原则；若需逻辑缩放，应仅改变视口采样率，不改变世界坐标。| 自动测试在银河视图（Galaxy View）、星区视图（Sector View）和恒星系视图（System View）三层级下测量像素与公里转换保持不变。 |
-| FR-5 | 生成器必须支持种子输入，以保证同一种子下世界可复现（星体位置、大小、数量一致）。| 连续两次使用相同种子生成，对非浮点数据进行二进制 diff，结果为空；对浮点坐标数据设置 1km (1e-13 ly) 的容差进行比较。 |
-| FR-6 | 提供基于数据资产文件（如 ScriptableObject 或 JSON）的配置接口允许设计师调整平均星系密度、星区大小、行星数量区间。| 通过配置 API 调整参数，生成统计数据与期望分布一致。 |
-| FR-7 | 生成逻辑不得产生任何天体（行星、卫星等）间的物理重叠。重叠定义为两个天体中心点距离小于二者半径之和的 99.9%。| 静态分析+运行期间断言，报告 0 起重叠错误。 |
-| FR-8 | 系统必须能处理不合法的生成参数（如负数半径、零密度），并回退至安全默认值或抛出明确错误。| 单元测试覆盖至少 5 种非法参数组合。 |
-
-## Success Criteria
-1. 玩家可在 5 s 内完成从银河视图到任意恒星系核心行星的连续缩放与定位，且距离显示误差 <1%。
-2. 95% 以上的性能测试帧率在最低配置下 ≥60 FPS（对应渲染优化依赖后续实现，但比例不影响）。
-3. 对同一随机种子重复生成 100 次，哈希一致率 100%。
-4. 内部 QA 抽检 50 个星体（随机包含不同类别），在独立测试场景下对其与母星距离进行测量，误差均 <1%。
-5. 社区测试问卷中，75% 以上玩家认为“星体间距离/尺寸比例合理”。
-
-## Out of Scope / Future Work
-- 真实星云、黑洞引力透镜等特殊天体渲染。
-- 多人模式下的跨客户端精度同步。
-- 星舰导航 AI 对真实距离的路径优化。
-
-## Risks & Mitigations
-| 风险 | 影响 | 缓解措施 |
-|------|------|---------|
-| 地图尺寸极大导致数值溢出 | 崩溃或坐标错乱 | 采用分层坐标系方案，通过将世界坐标动态转换为局部相对坐标，以规避渲染层和物理计算中的浮点数精度限制。 |
-| 渲染精度不足出现抖动 | 视觉体验差 | 分级坐标系、本地相对坐标渲染 |
-| 玩家难以理解巨大尺度 | 用户体验 | UI 叠加科学记数法、提供比例尺标注 |
-
-## Dependencies
-- Spec 010《Galaxy World Scaling》
-- Spec 011《Astronomical Units》
-- 现有坐标系定义（《游戏大纲.md》章节 2. 技术标准）
-
-## Clarifications
-### Session 2024-06-22
-- Q: 是否允许逻辑缩放破坏 1 px=1 km 比例来可视化整个银河？ → A: 1 像素 1 km 为最小标准单位，实际根据视角进行缩放（可逻辑压缩但不低于最小精度）。
-
-## Glossary
-- **1 px = 1 km**：渲染层像素与数据库距离换算原则。
-- **星区 Sector**：银河地图上由六边形网格划定的管理单元。
-- **恒星系 Star System**：由一个主恒星及其行星、卫星组成的重力绑定系统。
+1. **Given** [initial state], **When** [action], **Then** [expected outcome]
+2. **Given** [initial state], **When** [action], **Then** [expected outcome]
 
 ---
 
+### User Story 2 - [Brief Title] (Priority: P2)
+
+[Describe this user journey in plain language]
+
+**Why this priority**: [Explain the value and why it has this priority level]
+
+**Independent Test**: [Describe how this can be tested independently]
+
+**Acceptance Scenarios**:
+
+1. **Given** [initial state], **When** [action], **Then** [expected outcome]
+
+---
+
+### User Story 3 - [Brief Title] (Priority: P3)
+
+[Describe this user journey in plain language]
+
+**Why this priority**: [Explain the value and why it has this priority level]
+
+**Independent Test**: [Describe how this can be tested independently]
+
+**Acceptance Scenarios**:
+
+1. **Given** [initial state], **When** [action], **Then** [expected outcome]
+
+---
+
+[Add more user stories as needed, each with an assigned priority]
+
+### Edge Cases
+
+<!--
+  ACTION REQUIRED: The content in this section represents placeholders.
+  Fill them out with the right edge cases.
+-->
+
+- What happens when [boundary condition]?
+- How does system handle [error scenario]?
+
+## Requirements *(mandatory)*
+
+<!--
+  ACTION REQUIRED: The content in this section represents placeholders.
+  Fill them out with the right functional requirements.
+-->
+
+### Functional Requirements
+
+- **FR-001**: System MUST [specific capability, e.g., "allow users to create accounts"]
+- **FR-002**: System MUST [specific capability, e.g., "validate email addresses"]  
+- **FR-003**: Users MUST be able to [key interaction, e.g., "reset their password"]
+- **FR-004**: System MUST [data requirement, e.g., "persist user preferences"]
+- **FR-005**: System MUST [behavior, e.g., "log all security events"]
+
+*Example of marking unclear requirements:*
+
+- **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
+- **FR-007**: System MUST retain user data for [NEEDS CLARIFICATION: retention period not specified]
+
+### Key Entities *(include if feature involves data)*
+
+- **[Entity 1]**: [What it represents, key attributes without implementation]
+- **[Entity 2]**: [What it represents, relationships to other entities]
+
+## Success Criteria *(mandatory)*
+
+<!--
+  ACTION REQUIRED: Define measurable success criteria.
+  These must be technology-agnostic and measurable.
+-->
+
+### Measurable Outcomes
+
+- **SC-001**: [Measurable metric, e.g., "Users can complete account creation in under 2 minutes"]
+- **SC-002**: [Measurable metric, e.g., "System handles 1000 concurrent users without degradation"]
+- **SC-003**: [User satisfaction metric, e.g., "90% of users successfully complete primary task on first attempt"]
+- **SC-004**: [Business metric, e.g., "Reduce support tickets related to [X] by 50%"]

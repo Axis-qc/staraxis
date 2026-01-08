@@ -30,6 +30,7 @@ import com.staraxis.game.shared.world.stellar.surface.PlanetSurfaceMesh;
  * 依赖（Dependencies）：shared 世界模型与定义加载器（WorldGenDefinitions）。 对外接口（Public
  * API）：generateStarSystem/generateStars/generatePlanets。
  */
+@Deprecated(since = "013", forRemoval = true)
 public class StellarGenerator {
 
     private static final int MAX_REPAIR_ATTEMPTS = 3;

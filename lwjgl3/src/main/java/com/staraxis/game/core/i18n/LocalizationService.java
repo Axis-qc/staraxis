@@ -161,11 +161,12 @@ public class LocalizationService {
     }
 
     public void dispose() {
-        if (font != null) {
-            font.dispose();
-        }
+        // NOTE：增量字体（parameter.incremental=true）下，字体纹理由 generator 的内部 Packer 管理。
+        // 释放顺序必须避免重复 dispose 同一 Pixmap/Texture，否则可能触发 "Pixmap already disposed"。
         if (fontGenerator != null) {
             fontGenerator.dispose();
+            fontGenerator = null;
         }
+        font = null;
     }
 }

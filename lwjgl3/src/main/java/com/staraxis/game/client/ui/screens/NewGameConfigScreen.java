@@ -17,22 +17,25 @@ import com.badlogic.gdx.scenes.scene2d.ui.TextField;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
+import com.staraxis.game.client.net.WorldGenApiClient;
 import com.staraxis.game.client.ui.MainMenuScreen;
 import com.staraxis.game.client.ui.manager.UIManager;
-import com.staraxis.game.client.net.WorldGenApiClient;
+import com.staraxis.game.client.world.UniverseModel;
+import com.staraxis.game.client.world.UniverseSnapshotConverter;
 import com.staraxis.game.core.i18n.LocalizationService;
 import com.staraxis.game.shared.net.worldgen.ErrorEnvelope;
 import com.staraxis.game.shared.net.worldgen.StartNewGameEffectiveConfig;
 import com.staraxis.game.shared.net.worldgen.StartNewGameRequest;
 import com.staraxis.game.shared.net.worldgen.StartNewGameResponse;
-import com.staraxis.game.shared.net.worldgen.snapshot.WorldSnapshot;
+import com.staraxis.game.shared.net.worldgen.snapshot.UniverseSnapshot;
 import com.staraxis.game.shared.world.WorldGenDefinitions;
-import com.staraxis.game.shared.world.WorldSnapshotConverter;
 
 import io.staraxis.Main;
 
 /**
- * 新游戏配置屏幕 (New Game Config Screen). 允许玩家配置地图大小、宜居比例、种子等参数。
+ * 新游戏配置屏幕（NewGameConfigScreen）。
+ *
+ * 013：使用三滑条比例（galaxy/nebula/deep_space），总和上限为 1。
  */
 public class NewGameConfigScreen extends ScreenAdapter {
 
@@ -43,19 +46,27 @@ public class NewGameConfigScreen extends ScreenAdapter {
     private final Skin skin;
 
     private SelectBox<String> mapSizeSelect;
-    private Slider habitableSlider;
-    private Label habitableValueLabel;
-    private Slider starDensitySlider; // starDensitySlider（恒星密度滑条）
-    private Label starDensityValueLabel; // starDensityValueLabel（恒星密度显示）
-    private Slider planetComplexitySlider; // planetComplexitySlider（行星复杂度滑条）
-    private Label planetComplexityValueLabel; // planetComplexityValueLabel（行星复杂度显示）
-    private Slider nebulaRatioSlider; // nebulaRatioSlider（星云占比滑条）
-    private Label nebulaRatioValueLabel; // nebulaRatioValueLabel（星云占比显示）
+
+    private Slider galaxyRatioSlider;
+    private Label galaxyRatioValueLabel;
+
+    private Slider nebulaRatioSlider;
+    private Label nebulaRatioValueLabel;
+
+    private Slider deepSpaceRatioSlider;
+    private Label deepSpaceRatioValueLabel;
+
+    private Slider planetComplexitySlider;
+    private Label planetComplexityValueLabel;
+
     private TextField seedField;
     private TextButton btnStart;
     private TextButton btnBack;
 
     private Label loadingLabel;
+
+    // 防止联动递归触发
+    private boolean ratioUpdating;
 
     public NewGameConfigScreen(Main game) {
         this.game = game;
@@ -75,12 +86,11 @@ public class NewGameConfigScreen extends ScreenAdapter {
         root.center();
         stage.addActor(root);
 
-        // 标题
         Label titleLabel = new Label(i18n.get("new_game_config_title", "New Game Setup"), skin);
         titleLabel.setFontScale(1.5f);
         root.add(titleLabel).padBottom(30).colspan(2).row();
 
-        // 1. 地图大小 (T033)
+        // 1) 地图大小
         root.add(new Label(i18n.get("config_map_size", "Map Size:"), skin)).left().padRight(10);
         mapSizeSelect = new SelectBox<>(skin);
         Map<String, Integer> presets = WorldGenDefinitions.getMapPresets();
@@ -89,43 +99,38 @@ public class NewGameConfigScreen extends ScreenAdapter {
         mapSizeSelect.setSelected("medium");
         root.add(mapSizeSelect).width(200).padBottom(10).row();
 
-        // 2. 宜居比例 (T034)
-        root.add(new Label(i18n.get("config_habitable_ratio", "Habitable Ratio:"), skin)).left().padRight(10);
-        Table sliderTable = new Table();
-        habitableSlider = new Slider(0f, 1f, 0.05f, false, skin);
-        habitableSlider.setValue(0.3f);
-        habitableValueLabel = new Label("30%", skin);
-        habitableSlider.addListener(new ChangeListener() {
-            @Override
-            public void changed(ChangeEvent event, Actor actor) {
-                habitableValueLabel.setText((int) (habitableSlider.getValue() * 100) + "%");
-            }
-        });
-        sliderTable.add(habitableSlider).width(150);
-        sliderTable.add(habitableValueLabel).padLeft(10);
-        root.add(sliderTable).padBottom(10).row();
+        // 2) 星区比例：galaxy
+        root.add(new Label(i18n.get("config_galaxy_ratio", "Galaxy Ratio:"), skin)).left().padRight(10);
+        Table galaxyTable = new Table();
+        galaxyRatioSlider = new Slider(0f, 1f, 0.05f, false, skin);
+        galaxyRatioValueLabel = new Label("60%", skin);
+        galaxyTable.add(galaxyRatioSlider).width(150);
+        galaxyTable.add(galaxyRatioValueLabel).padLeft(10);
+        root.add(galaxyTable).padBottom(10).row();
 
-        // 2.1 恒星密度 (T015)
-        root.add(new Label(i18n.get("config_star_density", "Star Density:"), skin)).left().padRight(10);
-        Table starDensityTable = new Table();
-        starDensitySlider = new Slider(0f, 1f, 0.05f, false, skin);
-        starDensitySlider.setValue(0.6f);
-        starDensityValueLabel = new Label("60%", skin);
-        starDensitySlider.addListener(new ChangeListener() {
-            @Override
-            public void changed(ChangeEvent event, Actor actor) {
-                starDensityValueLabel.setText((int) (starDensitySlider.getValue() * 100) + "%");
-            }
-        });
-        starDensityTable.add(starDensitySlider).width(150);
-        starDensityTable.add(starDensityValueLabel).padLeft(10);
-        root.add(starDensityTable).padBottom(10).row();
+        // 3) 星区比例：nebula
+        root.add(new Label(i18n.get("config_nebula_ratio", "Nebula Ratio:"), skin)).left().padRight(10);
+        Table nebulaTable = new Table();
+        nebulaRatioSlider = new Slider(0f, 1f, 0.05f, false, skin);
+        nebulaRatioValueLabel = new Label("20%", skin);
+        nebulaTable.add(nebulaRatioSlider).width(150);
+        nebulaTable.add(nebulaRatioValueLabel).padLeft(10);
+        root.add(nebulaTable).padBottom(10).row();
 
-        // 2.2 行星复杂度 (T016)
+        // 4) 星区比例：deep_space（只读派生）
+        root.add(new Label(i18n.get("config_deep_space_ratio", "Deep Space Ratio:"), skin)).left().padRight(10);
+        Table deepSpaceTable = new Table();
+        deepSpaceRatioSlider = new Slider(0f, 1f, 0.05f, false, skin);
+        deepSpaceRatioSlider.setDisabled(true);
+        deepSpaceRatioValueLabel = new Label("20%", skin);
+        deepSpaceTable.add(deepSpaceRatioSlider).width(150);
+        deepSpaceTable.add(deepSpaceRatioValueLabel).padLeft(10);
+        root.add(deepSpaceTable).padBottom(10).row();
+
+        // 5) 行星复杂度（保留）
         root.add(new Label(i18n.get("config_planet_complexity", "Planet Complexity:"), skin)).left().padRight(10);
-        Table planetComplexityTable = new Table();
+        Table planetTable = new Table();
         planetComplexitySlider = new Slider(0f, 1f, 0.05f, false, skin);
-        planetComplexitySlider.setValue(0.5f);
         planetComplexityValueLabel = new Label("50%", skin);
         planetComplexitySlider.addListener(new ChangeListener() {
             @Override
@@ -133,33 +138,17 @@ public class NewGameConfigScreen extends ScreenAdapter {
                 planetComplexityValueLabel.setText((int) (planetComplexitySlider.getValue() * 100) + "%");
             }
         });
-        planetComplexityTable.add(planetComplexitySlider).width(150);
-        planetComplexityTable.add(planetComplexityValueLabel).padLeft(10);
-        root.add(planetComplexityTable).padBottom(10).row();
+        planetTable.add(planetComplexitySlider).width(150);
+        planetTable.add(planetComplexityValueLabel).padLeft(10);
+        root.add(planetTable).padBottom(10).row();
 
-        // 2.3 星云占比 (T017)
-        root.add(new Label(i18n.get("config_nebula_ratio", "Nebula Ratio:"), skin)).left().padRight(10);
-        Table nebulaRatioTable = new Table();
-        nebulaRatioSlider = new Slider(0f, 1f, 0.05f, false, skin);
-        nebulaRatioSlider.setValue(0.2f);
-        nebulaRatioValueLabel = new Label("20%", skin);
-        nebulaRatioSlider.addListener(new ChangeListener() {
-            @Override
-            public void changed(ChangeEvent event, Actor actor) {
-                nebulaRatioValueLabel.setText((int) (nebulaRatioSlider.getValue() * 100) + "%");
-            }
-        });
-        nebulaRatioTable.add(nebulaRatioSlider).width(150);
-        nebulaRatioTable.add(nebulaRatioValueLabel).padLeft(10);
-        root.add(nebulaRatioTable).padBottom(10).row();
-
-        // 3. 种子 (T035)
+        // 6) 种子
         root.add(new Label(i18n.get("config_seed", "Seed:"), skin)).left().padRight(10);
         seedField = new TextField("", skin);
         seedField.setMessageText(i18n.get("config_seed_placeholder", "Random if empty"));
         root.add(seedField).width(200).padBottom(10).row();
 
-        // 4. AI 数量 (T036 - 禁用)
+        // 7) AI 数量（占位/禁用）
         root.add(new Label(i18n.get("config_ai_count", "AI Players:"), skin)).left().padRight(10);
         SelectBox<Integer> aiSelect = new SelectBox<>(skin);
         aiSelect.setItems(1, 2, 3, 4);
@@ -167,7 +156,40 @@ public class NewGameConfigScreen extends ScreenAdapter {
         root.add(aiSelect).width(200).padBottom(10);
         root.add(new Label(i18n.get("config_dev_placeholder", "(In Dev)"), skin)).padLeft(5).row();
 
-        // 5. 按钮 (T039, T040)
+        // 默认值
+        galaxyRatioSlider.setValue(0.6f);
+        nebulaRatioSlider.setValue(0.2f);
+        planetComplexitySlider.setValue(0.5f);
+        recalcDeepSpaceAndLabels();
+
+        // 联动：只允许调 galaxy / nebula，deep_space 派生
+        galaxyRatioSlider.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                if (ratioUpdating) {
+                    return;
+                }
+                ratioUpdating = true;
+                clampTwoSlidersToOne(galaxyRatioSlider, nebulaRatioSlider);
+                recalcDeepSpaceAndLabels();
+                ratioUpdating = false;
+            }
+        });
+
+        nebulaRatioSlider.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                if (ratioUpdating) {
+                    return;
+                }
+                ratioUpdating = true;
+                clampTwoSlidersToOne(nebulaRatioSlider, galaxyRatioSlider);
+                recalcDeepSpaceAndLabels();
+                ratioUpdating = false;
+            }
+        });
+
+        // 8) 按钮
         Table btnTable = new Table();
         btnStart = new TextButton(i18n.get("config_start", "Start Game"), skin);
         btnStart.addListener(new ClickListener() {
@@ -189,35 +211,59 @@ public class NewGameConfigScreen extends ScreenAdapter {
         btnTable.add(btnBack).width(120).height(40);
         root.add(btnTable).colspan(2).padTop(30).row();
 
-        // 6. 加载状态占位 (T047)
+        // 9) 加载状态
         loadingLabel = new Label("", skin);
         loadingLabel.setColor(com.badlogic.gdx.graphics.Color.YELLOW);
         root.add(loadingLabel).colspan(2).padTop(10);
     }
 
+    /**
+     * 约束：primary + secondary <= 1。
+     * 若 primary 调大导致超限，则自动压缩 secondary。
+     */
+    private void clampTwoSlidersToOne(Slider primary, Slider secondary) {
+        float p = primary.getValue();
+        float s = secondary.getValue();
+        float sum = p + s;
+        if (sum > 1.0f) {
+            secondary.setValue(Math.max(0.0f, 1.0f - p));
+        }
+    }
+
+    private void recalcDeepSpaceAndLabels() {
+        float g = galaxyRatioSlider.getValue();
+        float n = nebulaRatioSlider.getValue();
+        float d = Math.max(0.0f, 1.0f - g - n);
+
+        galaxyRatioValueLabel.setText((int) (g * 100) + "%");
+        nebulaRatioValueLabel.setText((int) (n * 100) + "%");
+
+        deepSpaceRatioSlider.setValue(d);
+        deepSpaceRatioValueLabel.setText((int) (d * 100) + "%");
+    }
+
     private void startGame() {
-        // 显示加载状态并禁用按钮
         btnStart.setDisabled(true);
         btnBack.setDisabled(true);
         loadingLabel.setText(i18n.get("config_generating", "Generating World..."));
 
         final String mapSize = mapSizeSelect.getSelected();
-        final float habitable = habitableSlider.getValue();
-        final float starDensity = starDensitySlider.getValue();
-        final float planetComplexity = planetComplexitySlider.getValue();
+        final float galaxyRatio = galaxyRatioSlider.getValue();
         final float nebulaRatio = nebulaRatioSlider.getValue();
+        final float deepSpaceRatio = Math.max(0.0f, 1.0f - galaxyRatio - nebulaRatio);
+        final float planetComplexity = planetComplexitySlider.getValue();
         final String seedText = seedField.getText();
 
-        // 在后台线程执行请求 (T047)
         new Thread(() -> {
             try {
                 long startMs = System.currentTimeMillis();
+
                 StartNewGameRequest request = new StartNewGameRequest();
                 request.setMapSizePresetId(mapSize);
-                request.setHabitableRatio(habitable);
-                request.setStarDensity(starDensity);
-                request.setPlanetComplexity(planetComplexity);
+                request.setGalaxyRatio(galaxyRatio);
                 request.setNebulaRatio(nebulaRatio);
+                request.setDeepSpaceRatio(deepSpaceRatio);
+                request.setPlanetComplexity(planetComplexity);
                 request.setSeedText(seedText);
 
                 WorldGenApiClient apiClient = new WorldGenApiClient("http://127.0.0.1:8080");
@@ -239,13 +285,13 @@ public class NewGameConfigScreen extends ScreenAdapter {
                     Gdx.app.log("WorldGen", "effectiveConfig: mapSizePresetId=" + effectiveConfig.getMapSizePresetId()
                             + ", seedText=" + effectiveConfig.getSeedText()
                             + ", seedValue=" + effectiveConfig.getSeedValue()
-                            + ", habitableRatio=" + effectiveConfig.getHabitableRatio()
-                            + ", starDensity=" + effectiveConfig.getStarDensity()
-                            + ", planetComplexity=" + effectiveConfig.getPlanetComplexity()
-                            + ", nebulaRatio=" + effectiveConfig.getNebulaRatio());
+                            + ", galaxyRatio=" + effectiveConfig.getGalaxyRatio()
+                            + ", nebulaRatio=" + effectiveConfig.getNebulaRatio()
+                            + ", deepSpaceRatio=" + effectiveConfig.getDeepSpaceRatio()
+                            + ", planetComplexity=" + effectiveConfig.getPlanetComplexity());
                 }
 
-                WorldSnapshot snapshot = response.getWorld();
+                UniverseSnapshot snapshot = response.getWorld();
                 if (snapshot == null) {
                     Gdx.app.postRunnable(() -> {
                         btnStart.setDisabled(false);
@@ -255,16 +301,13 @@ public class NewGameConfigScreen extends ScreenAdapter {
                     return;
                 }
 
-                WorldSnapshotConverter converter = new WorldSnapshotConverter();
-                final com.staraxis.game.shared.world.WorldMap worldMap = converter.toWorldMap(snapshot);
+                UniverseSnapshotConverter converter = new UniverseSnapshotConverter();
+                final UniverseModel universe = converter.toUniverseModel(snapshot);
 
                 long durationMs = System.currentTimeMillis() - startMs;
                 Gdx.app.log("WorldGen", "clientDurationMs=" + durationMs);
 
-                // 生成完成后切回 GL 线程更新 UI/Screen
-                Gdx.app.postRunnable(() -> {
-                    game.setScreen(new WorldScreen(game, worldMap));
-                });
+                Gdx.app.postRunnable(() -> game.setScreen(new UniverseScreen(game, universe)));
             } catch (Exception e) {
                 Gdx.app.error("NewGameConfig", "Failed to generate world", e);
                 Gdx.app.postRunnable(() -> {
@@ -278,7 +321,6 @@ public class NewGameConfigScreen extends ScreenAdapter {
 
     @Override
     public void render(float delta) {
-        // UI 舞台渲染由 UIManager 驱动
         game.getUiManager().render(delta);
     }
 
