@@ -1,0 +1,13 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    api "com.badlogicgames.gdx:gdx:$gdxVersion"
+    implementation "org.luaj:luaj-jse:$luajVersion"
+    testImplementation "org.junit.jupiter:junit-jupiter:$junitVersion"
+}
+
+test {
+    useJUnitPlatform()
+}
