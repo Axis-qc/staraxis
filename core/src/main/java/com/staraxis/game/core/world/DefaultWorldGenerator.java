@@ -26,6 +26,7 @@ import com.staraxis.game.shared.world.stellar.WorldGenStats;
 /**
  * 默认世界生成器实现 (Default world generator implementation). 保证在相同种子和配置下生成确定的地图。
  */
+@Deprecated(since = "013", forRemoval = true)
 public class DefaultWorldGenerator implements WorldGenerator {
 
     private static final Logger LOGGER = Logger.getLogger(DefaultWorldGenerator.class.getName());

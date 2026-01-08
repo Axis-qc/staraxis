@@ -7,8 +7,6 @@ import com.staraxis.game.shared.world.HexTile;
 import com.staraxis.game.shared.world.WorldGenConfig;
 import com.staraxis.game.shared.world.WorldGenDefinitions;
 import com.staraxis.game.shared.world.WorldMap;
-import com.staraxis.game.shared.world.stellar.Star;
-import com.staraxis.game.shared.world.stellar.StarSystem;
 import com.staraxis.universegen.GalaxyGeneratorFacade;
 import com.staraxis.universegen.config.UniverseGenConfig;
 
@@ -18,17 +16,15 @@ import java.util.Random;
 
 /**
  * 新版世界生成器：基于六边形星区网格，并调用 universegen 生成真实宇宙。
- *
- * Phase 6（T020）：并行优先。
- * - 生成每个 HexCoord 对应的 HexTile 可并行执行
- * - 最终写入 WorldMap 在单线程汇总，避免并发写 Map
  */
 public class HexSectorUniverseGenerator implements WorldGenerator {
 
     private final GalaxyGeneratorFacade universeGenerator;
+    private final UniverseGenAdapter adapter;
 
     public HexSectorUniverseGenerator() {
         this.universeGenerator = new GalaxyGeneratorFacade();
+        this.adapter = new UniverseGenAdapter();
     }
 
     @Override
@@ -43,7 +39,6 @@ public class HexSectorUniverseGenerator implements WorldGenerator {
                 config.getNebulaRatio()
         );
 
-        // 1) 收集所有坐标
         List<HexCoord> coords = new ArrayList<>();
         for (int q = -radius; q <= radius; q++) {
             int r1 = Math.max(-radius, -q - radius);
@@ -53,7 +48,6 @@ public class HexSectorUniverseGenerator implements WorldGenerator {
             }
         }
 
-        // 2) 并行生成瓦片
         List<HexTile> tiles = coords
                 .parallelStream()
                 .map(coord -> {
@@ -65,19 +59,15 @@ public class HexSectorUniverseGenerator implements WorldGenerator {
                         UniverseGenConfig universeGenConfig = new UniverseGenConfig();
                         universeGenConfig.setSeed(tileRandom.nextLong());
                         universeGenConfig.setSectorCount(1);
+                        universeGenConfig.setStarToDeepSpaceRatio(1.0); // 确保 universegen 内部生成 galaxy
 
-                        // 目前 universegen 仍是最小实现，这里只做占位挂载，保证链路可用。
                         com.staraxis.universegen.model.Galaxy generatedGalaxy = universeGenerator.generate(universeGenConfig);
-                        if (generatedGalaxy != null) {
-                            StarSystem starSystem = new StarSystem();
-                            starSystem.setId("system-" + coord.getX() + "-" + coord.getY());
-                            List<Star> stars = new ArrayList<>();
-                            Star star = new Star();
-                            star.setId(starSystem.getId() + "-star-0");
-                            star.setStarTypeId("unknown");
-                            stars.add(star);
-                            starSystem.setStars(stars);
-                            tile.setStarSystem(starSystem);
+                        
+                        if (generatedGalaxy != null && generatedGalaxy.sectors() != null && !generatedGalaxy.sectors().isEmpty()) {
+                            com.staraxis.universegen.model.StarSystem generatedSystem = generatedGalaxy.sectors().get(0).starSystem();
+                            if (generatedSystem != null) {
+                                tile.setStarSystem(adapter.toSharedStarSystem(generatedSystem));
+                            }
                         }
                     }
 
@@ -85,7 +75,6 @@ public class HexSectorUniverseGenerator implements WorldGenerator {
                 })
                 .toList();
 
-        // 3) 单线程写入 WorldMap
         for (HexTile tile : tiles) {
             worldMap.addTile(tile);
         }

@@ -6,6 +6,7 @@ import com.staraxis.game.shared.net.worldgen.SchemaVersions;
 import com.staraxis.game.shared.net.worldgen.StartNewGameEffectiveConfig;
 import com.staraxis.game.shared.net.worldgen.StartNewGameRequest;
 import com.staraxis.game.shared.net.worldgen.StartNewGameResponse;
+import com.staraxis.game.shared.net.worldgen.snapshot.PlanetSnapshot;
 import com.staraxis.game.shared.net.worldgen.snapshot.SectorSnapshot;
 import com.staraxis.game.shared.net.worldgen.snapshot.SectorTypes;
 import com.staraxis.game.shared.net.worldgen.snapshot.StarSnapshot;
@@ -17,6 +18,7 @@ import com.staraxis.game.shared.world.SeedUtil;
 import com.staraxis.game.shared.world.WorldGenConfig;
 import com.staraxis.game.shared.world.WorldGenDefinitions;
 import com.staraxis.game.shared.world.WorldMap;
+import com.staraxis.game.shared.world.stellar.Planet;
 import com.staraxis.game.shared.world.stellar.Star;
 import com.staraxis.game.shared.world.stellar.StarSystem;
 
@@ -78,7 +80,6 @@ public class StartNewGameUseCase {
 
         float planetComplexity = clamp01(request.getPlanetComplexity());
 
-        // 将比例暂存到旧 WorldGenConfig（目前生成器仍复用这些字段）
         WorldGenConfig config = new WorldGenConfig();
         config.setMapSizePresetId(mapSizePresetId);
         config.setSeedText(seedText);
@@ -97,10 +98,8 @@ public class StartNewGameUseCase {
         effectiveConfig.setPlanetComplexity(planetComplexity);
         response.setEffectiveConfig(effectiveConfig);
 
-        // 生成世界（六边形星区 + galaxy 星区挂 StarSystem）
         WorldMap worldMap = worldGenerator.generate(config);
 
-        // 映射到 UniverseSnapshot（sectors + stats + galaxy 星区的 starSystem）
         UniverseSnapshot snapshot = snapshotMapper.createEmpty(seedValue, worldMap.getBoundsRadius());
 
         List<SectorSnapshot> sectors = new ArrayList<>();
@@ -129,12 +128,22 @@ public class StartNewGameUseCase {
                         StarSnapshot starSnapshot = new StarSnapshot();
                         starSnapshot.setId(star.getId());
                         starSnapshot.setStarTypeId(star.getStarTypeId() != null ? star.getStarTypeId() : "unknown");
-                        // planets 暂不填充（最小可用）
+
+                        List<PlanetSnapshot> planets = new ArrayList<>();
+                        for (Planet planet : star.getPlanets()) {
+                            PlanetSnapshot planetSnapshot = new PlanetSnapshot();
+                            planetSnapshot.setId(planet.getId());
+                            planetSnapshot.setPlanetTypeId(planet.getPlanetTypeId() != null ? planet.getPlanetTypeId() : "unknown");
+                            planetSnapshot.setOrbitIndex(planet.getOrbitIndex() != null ? planet.getOrbitIndex() : 0);
+                            planets.add(planetSnapshot);
+                            planetCount++;
+                        }
+                        starSnapshot.setPlanets(planets);
+
                         stars.add(starSnapshot);
+                        starCount++;
                     }
                     starSystemSnapshot.setStars(stars);
-
-                    starCount += stars.size();
                 }
             }
 
