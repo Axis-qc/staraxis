@@ -21,26 +21,20 @@ import io.github.fourlastor.construo.Target
 sourceSets.main.resources.srcDirs += [ rootProject.file('assets').path ]
 application.mainClass = 'io.staraxis.lwjgl3.Lwjgl3Launcher'
 eclipse.project.name = appName + '-lwjgl3'
-java {
-  toolchain {
-    languageVersion = JavaLanguageVersion.of(21)
-  }
-}
+java.sourceCompatibility = 17
+java.targetCompatibility = 17
 if (JavaVersion.current().isJava9Compatible()) {
-        compileJava.options.release.set(21)
+        compileJava.options.release.set(17)
 }
 
 dependencies {
   implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"
   implementation "com.badlogicgames.gdx:gdx-box2d-platform:$gdxVersion:natives-desktop"
   implementation "com.badlogicgames.gdx:gdx-bullet-platform:$gdxVersion:natives-desktop"
-  implementation "com.badlogicgames.gdx:gdx-freetype:$gdxVersion"
   implementation "com.badlogicgames.gdx:gdx-freetype-platform:$gdxVersion:natives-desktop"
   implementation "com.badlogicgames.gdx:gdx-lwjgl3-angle:$gdxVersion"
   implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
   implementation project(':core')
-  implementation project(':shared')
-  implementation "com.fasterxml.jackson.core:jackson-databind:$jacksonVersion"
   implementation("com.badlogicgames.gdx:gdx-tools:$gdxVersion"){exclude group: 'com.badlogicgames.gdx', module: 'gdx-backend-lwjgl'}
 
   if(enableGraalNative == 'true') {
@@ -50,85 +44,16 @@ dependencies {
       implementation "io.github.berstanio:gdx-svmhelper-extension-freetype:$graalHelperVersion"
 
     }
-    testImplementation "org.junit.jupiter:junit-jupiter:$junitVersion"
-    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
-}
-
-test {
-    useJUnitPlatform()
 }
 
 def os = System.properties['os.name'].toLowerCase(Locale.ROOT)
 
-// 存储服务端进程引用
-def serverProcess = null
-
-// 修改 run 任务，在启动客户端前先启动服务端
 run {
   workingDir = rootProject.file('assets').path
 // You can uncomment the next line if your IDE claims a build failure even when the app closed properly.
   //setIgnoreExitValue(true)
 
   if (os.contains('mac')) jvmArgs += "-XstartOnFirstThread"
-  
-  // 在启动客户端前启动服务端
-  doFirst {
-    println '[启动] 正在启动游戏服务端...'
-    
-    // 获取服务端的类路径
-    def serverClasspath = project(':server').sourceSets.main.runtimeClasspath.asPath
-    
-    // 构建 Java 命令（处理 Windows 和 Unix 系统）
-    def javaHome = System.getProperty('java.home')
-    def javaExecName = os.contains('win') ? 'java.exe' : 'java'
-    def javaExec = new File(javaHome, "bin/${javaExecName}").absolutePath
-    
-    def command = [
-      javaExec,
-      '--add-modules', 'jdk.httpserver',
-      '-cp', serverClasspath,
-      'com.staraxis.game.server.ServerMain'
-    ]
-    
-    // 启动服务端进程
-    def processBuilder = new ProcessBuilder(command)
-    processBuilder.directory(rootProject.file('assets'))
-    processBuilder.redirectOutput(ProcessBuilder.Redirect.INHERIT)
-    processBuilder.redirectError(ProcessBuilder.Redirect.INHERIT)
-    serverProcess = processBuilder.start()
-    
-    // 等待服务端启动（简单延迟）
-    Thread.sleep(2000)
-    println '[启动] 游戏服务端已启动'
-    
-    // 添加关闭钩子，确保在 JVM 退出时关闭服务端
-    Runtime.getRuntime().addShutdownHook(new Thread({
-      if (serverProcess != null && serverProcess.isAlive()) {
-        println '[关闭] 正在关闭游戏服务端...'
-        serverProcess.destroy()
-        def terminated = serverProcess.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
-        if (!terminated) {
-          println '[关闭] 强制终止服务端进程'
-          serverProcess.destroyForcibly()
-        }
-        println '[关闭] 游戏服务端已关闭'
-      }
-    }))
-  }
-  
-  // 在客户端关闭时关闭服务端
-  doLast {
-    if (serverProcess != null && serverProcess.isAlive()) {
-      println '[关闭] 正在关闭游戏服务端...'
-      serverProcess.destroy()
-      def terminated = serverProcess.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
-      if (!terminated) {
-        println '[关闭] 强制终止服务端进程'
-        serverProcess.destroyForcibly()
-      }
-      println '[关闭] 游戏服务端已关闭'
-    }
-  }
 }
 
 jar {
@@ -205,12 +130,12 @@ construo {
     targets.configure {
       register("linuxX64", Target.Linux) {
         architecture.set(Target.Architecture.X86_64)
-        jdkUrl.set("https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.5%2B11/OpenJDK21U-jdk_x64_linux_hotspot_21.0.5_11.tar.gz")
+        jdkUrl.set("https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.15%2B6/OpenJDK17U-jdk_x64_linux_hotspot_17.0.15_6.tar.gz")
         // Linux does not currently have a way to set the icon on the executable
       }
       register("macM1", Target.MacOs) {
         architecture.set(Target.Architecture.AARCH64)
-        jdkUrl.set("https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.5%2B11/OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.5_11.tar.gz")
+        jdkUrl.set("https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.15%2B6/OpenJDK17U-jdk_aarch64_mac_hotspot_17.0.15_6.tar.gz")
         // macOS needs an identifier
         identifier.set("io.staraxis." + appName)
         // Optional: icon for macOS, as an ICNS file
@@ -218,7 +143,7 @@ construo {
       }
       register("macX64", Target.MacOs) {
         architecture.set(Target.Architecture.X86_64)
-        jdkUrl.set("https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.5%2B11/OpenJDK21U-jdk_x64_mac_hotspot_21.0.5_11.tar.gz")
+        jdkUrl.set("https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.15%2B6/OpenJDK17U-jdk_x64_mac_hotspot_17.0.15_6.tar.gz")
         // macOS needs an identifier
         identifier.set("io.staraxis." + appName)
         // Optional: icon for macOS, as an ICNS file
@@ -228,7 +153,7 @@ construo {
         architecture.set(Target.Architecture.X86_64)
         // Optional: icon for Windows, as a PNG
         icon.set(project.file("icons/logo.png"))
-        jdkUrl.set("https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.5%2B11/OpenJDK21U-jdk_x64_windows_hotspot_21.0.5_11.zip")
+        jdkUrl.set("https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.15%2B6/OpenJDK17U-jdk_x64_windows_hotspot_17.0.15_6.zip")
         // Uncomment the next line to show a console when the game runs, to print messages.
         //useConsole.set(true)
       }
