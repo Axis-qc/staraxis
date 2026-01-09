@@ -1,14 +1,14 @@
 <!--
 Sync Impact Report:
-- Version change: 1.3.0 -> 1.4.0
-- List of modified principles: （无）
-- Added sections:
-  - VII. 多核性能优化 (Multi-Core Performance Optimization)
+- Version change: 1.4.0 -> 1.5.0
+- List of modified principles:
+  - "修改原则与质量门禁" (Modification Principles and Quality Gates) section updated.
+- Added sections: None
 - Removed sections: None
 - Templates requiring updates:
-  - ✅ .specify/templates/plan-template.md （无改动需求）
-  - ✅ .specify/templates/spec-template.md （无改动需求）
-  - ✅ .specify/templates/tasks-template.md （无改动需求）
+  - ✅ .specify/templates/spec-template.md (Testing section is now recommended, not mandatory)
+  - ✅ .specify/templates/plan-template.md (No changes needed)
+  - ✅ .specify/templates/tasks-template.md (No changes needed)
 - Follow-up TODOs: None
 -->
 # StarAxis Constitution
@@ -71,15 +71,16 @@ UI 层必须作为一个独立的层级存在，通过特定的 UI 模型（UI M
 - **计划先行**：所有修改必须先制定详细的修改计划，严禁在未经允许的情况下进行大范围或跨模块修改。
 - **命令限制**：严禁在非测试场景以及未指定使用终端下使用终端命令。所有非测试性的环境变更、构建触发或资源处理必须优先通过 Gradle 任务或专门的自动化脚本完成，确保操作的可审计性和幂等性。
 - **职责隔离**：禁止对当前分配任务外的其他模块进行随意变动，确保变更的可追溯性和局部性。
+- **质量门禁**：项目的核心质量门禁是确保游戏能够正常编译和启动。**不强制要求编写单元测试**。开发者应优先保证代码的稳定性和可集成性，而非追求测试覆盖率。
 
 ### 版本控制与合并纪律 (Version Control & Merge Discipline)
 - **顶层架构入库**：顶层架构/整体设计文档必须纳入 Git 并随架构变更同步更新（避免只存在于个人笔记或聊天记录）。
-- **上传时机**：默认在当前任务/用户故事全部完成（实现 + 测试 + 文档对齐）后再统一上传（push），避免在未完成阶段频繁推送造成主干噪音。
-- **合并时机**：合并分支必须发生在工作完成之后（任务清单完成、测试通过、必要的手工验证完成）。禁止在未达成质量门禁时合并到主分支。
+- **上传时机**：默认在当前任务/用户故事全部完成（实现 + 文档对齐）后再统一上传（push），避免在未完成阶段频繁推送造成主干噪音。
+- **合并时机**：合并分支必须发生在工作完成之后（任务清单完成、必要的手工验证完成）。禁止在未达成质量门禁时合并到主分支。
 - **例外流程**：若确需中途上传用于协作/备份，必须显式标注 WIP（例如 commit message/PR 标题包含 WIP），且不得合并。
 
 ## Governance
 
 本宪章是 StarAxis 项目的最高开发准则，所有代码提交、方案评审及任务拆解均须遵循上述原则。原则的修改需经过文档化记录并更新版本号。
 
-**Version**: 1.4.0 | **Ratified**: 2026-01-05 | **Last Amended**: 2026-01-08
+**Version**: 1.5.0 | **Ratified**: 2026-01-05 | **Last Amended**: 2026-01-09

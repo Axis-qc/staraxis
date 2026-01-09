@@ -5,12 +5,15 @@
 **Status**: Draft  
 **Input**: User description: "$ARGUMENTS"
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing *(建议填写；不强制编写单元测试)*
 
 <!--
   IMPORTANT: User stories should be PRIORITIZED as user journeys ordered by importance.
-  Each user story/journey must be INDEPENDENTLY TESTABLE - meaning if you implement just ONE of them,
-  you should still have a viable MVP (Minimum Viable Product) that delivers value.
+  每个用户故事/旅程必须可以被“独立验证”——意思是：即使你只实现其中一个，
+  也应该能形成可演示的最小可用版本（MVP）。
+  
+  注意：这里的“验证”默认以**手工验证 / 运行验证 / 编译通过**为主，
+  **不强制要求单元测试/自动化测试**，除非功能规格明确提出需要。
   
   Assign priorities (P1, P2, P3, etc.) to each story, where P1 is the most critical.
   Think of each story as a standalone slice of functionality that can be:
