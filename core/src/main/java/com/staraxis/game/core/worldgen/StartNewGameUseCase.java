@@ -115,7 +115,7 @@ public class StartNewGameUseCase {
             String sectorType = snapshotMapper.normalizeSectorType(tile.getTypeId());
 
             StarSystemSnapshot starSystemSnapshot = null;
-            if (SectorTypes.GALAXY.equals(sectorType)) {
+            if (SectorTypes.STAR_SYSTEM.equals(sectorType)) {
                 galaxyCount++;
 
                 StarSystem sys = tile.getStarSystem();
@@ -147,7 +147,8 @@ public class StartNewGameUseCase {
                 }
             }
 
-            sectors.add(snapshotMapper.sector(coord.getX(), coord.getY(), coord.getZ(), sectorType, starSystemSnapshot));
+            double[] worldPos = tile.getWorldPosition();
+            sectors.add(snapshotMapper.sector(coord.getX(), coord.getY(), coord.getZ(), sectorType, starSystemSnapshot, worldPos[0], worldPos[1]));
             sectorCount++;
         }
 

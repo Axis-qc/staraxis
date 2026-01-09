@@ -2,25 +2,36 @@ package com.staraxis.game.shared.world;
 
 import java.io.Serializable;
 
-import com.staraxis.game.shared.world.astronomical.SectorSizeDefinition;
 import com.staraxis.game.shared.world.stellar.StarSystem;
+
+import java.io.Serializable;
 
 /**
  * 六边形瓦片数据模型 (Hexagonal tile data model).
- * 
- * 注意：星区大小由 SectorSizeDefinition 定义，默认 1 光年 = 63,241 AU。
- * 使用 AstronomicalUnitSystem.getSectorSizeDefinition() 获取星区大小定义。
+ * 代表一个星区，包含其六边形坐标、物理世界坐标和内容。
  */
 public class HexTile implements Serializable {
 
-    private final HexCoord coord;
+    private final HexCoord coord; // 六边形坐标
+    private final double[] worldPosition; // 世界坐标中心点 [x, y] (单位：光年)
     private String typeId;
     private boolean hasHabitable;
     private StarSystem starSystem;
 
-    public HexTile(HexCoord coord, String typeId) {
+    /**
+     * 构造一个新的六边形瓦片。
+     *
+     * @param coord 六边形坐标
+     * @param typeId 星区类型ID
+     * @param converter 坐标转换器，用于计算物理位置
+     */
+    public HexTile(HexCoord coord, String typeId, HexCoordinateConverter converter) {
+        if (coord == null || converter == null) {
+            throw new IllegalArgumentException("坐标和转换器不能为空");
+        }
         this.coord = coord;
         this.typeId = typeId;
+        this.worldPosition = converter.hexToWorld(coord);
         this.hasHabitable = false;
     }
 
@@ -53,36 +64,19 @@ public class HexTile implements Serializable {
     }
 
     /**
-     * 获取星区大小（基于 SectorSizeDefinition）。
-     * 
-     * @param sectorSizeDefinition 星区大小定义
-     * @return 星区大小（AU）
+     * 获取星区的物理世界坐标中心点。
+     *
+     * @return 世界坐标 [x, y] (单位：光年)
      */
-    public com.staraxis.game.shared.world.astronomical.AstronomicalUnit getSectorSize(
-            SectorSizeDefinition sectorSizeDefinition) {
-        if (sectorSizeDefinition == null) {
-            throw new IllegalArgumentException("星区大小定义不能为空");
-        }
-        return sectorSizeDefinition.getSizeInAU();
-    }
-
-    /**
-     * 获取星区大小（光年）。
-     * 
-     * @param sectorSizeDefinition 星区大小定义
-     * @return 星区大小（光年）
-     */
-    public double getSectorSizeInLightYears(SectorSizeDefinition sectorSizeDefinition) {
-        if (sectorSizeDefinition == null) {
-            throw new IllegalArgumentException("星区大小定义不能为空");
-        }
-        return sectorSizeDefinition.getSizeInLightYears();
+    public double[] getWorldPosition() {
+        return worldPosition;
     }
 
     @Override
     public String toString() {
         return "HexTile{"
                 + "coord=" + coord
+                + ", worldPosition=[" + worldPosition[0] + ", " + worldPosition[1] + "]"
                 + ", typeId='" + typeId + '\''
                 + ", hasHabitable=" + hasHabitable
                 + ", starSystem=" + starSystem

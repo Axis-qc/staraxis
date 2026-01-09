@@ -13,6 +13,10 @@ Sync Impact Report:
 -->
 # StarAxis Constitution
 
+游戏整体文件目录结构：目录.md
+术语对齐：术语对齐.md
+游戏设计大纲：游戏大纲.md
+
 ## Core Principles
 
 ### I. 模块化与可维护性 (Modularization & Maintainability)

@@ -60,12 +60,75 @@ test {
 
 def os = System.properties['os.name'].toLowerCase(Locale.ROOT)
 
+// 存储服务端进程引用
+def serverProcess = null
+
+// 修改 run 任务，在启动客户端前先启动服务端
 run {
   workingDir = rootProject.file('assets').path
 // You can uncomment the next line if your IDE claims a build failure even when the app closed properly.
   //setIgnoreExitValue(true)
 
   if (os.contains('mac')) jvmArgs += "-XstartOnFirstThread"
+  
+  // 在启动客户端前启动服务端
+  doFirst {
+    println '[启动] 正在启动游戏服务端...'
+    
+    // 获取服务端的类路径
+    def serverClasspath = project(':server').sourceSets.main.runtimeClasspath.asPath
+    
+    // 构建 Java 命令（处理 Windows 和 Unix 系统）
+    def javaHome = System.getProperty('java.home')
+    def javaExecName = os.contains('win') ? 'java.exe' : 'java'
+    def javaExec = new File(javaHome, "bin/${javaExecName}").absolutePath
+    
+    def command = [
+      javaExec,
+      '--add-modules', 'jdk.httpserver',
+      '-cp', serverClasspath,
+      'com.staraxis.game.server.ServerMain'
+    ]
+    
+    // 启动服务端进程
+    def processBuilder = new ProcessBuilder(command)
+    processBuilder.directory(rootProject.file('assets'))
+    processBuilder.redirectOutput(ProcessBuilder.Redirect.INHERIT)
+    processBuilder.redirectError(ProcessBuilder.Redirect.INHERIT)
+    serverProcess = processBuilder.start()
+    
+    // 等待服务端启动（简单延迟）
+    Thread.sleep(2000)
+    println '[启动] 游戏服务端已启动'
+    
+    // 添加关闭钩子，确保在 JVM 退出时关闭服务端
+    Runtime.getRuntime().addShutdownHook(new Thread({
+      if (serverProcess != null && serverProcess.isAlive()) {
+        println '[关闭] 正在关闭游戏服务端...'
+        serverProcess.destroy()
+        def terminated = serverProcess.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+        if (!terminated) {
+          println '[关闭] 强制终止服务端进程'
+          serverProcess.destroyForcibly()
+        }
+        println '[关闭] 游戏服务端已关闭'
+      }
+    }))
+  }
+  
+  // 在客户端关闭时关闭服务端
+  doLast {
+    if (serverProcess != null && serverProcess.isAlive()) {
+      println '[关闭] 正在关闭游戏服务端...'
+      serverProcess.destroy()
+      def terminated = serverProcess.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+      if (!terminated) {
+        println '[关闭] 强制终止服务端进程'
+        serverProcess.destroyForcibly()
+      }
+      println '[关闭] 游戏服务端已关闭'
+    }
+  }
 }
 
 jar {

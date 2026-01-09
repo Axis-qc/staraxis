@@ -11,9 +11,17 @@ public class HexPicker {
 
     private final HexGridRenderer renderer;
     private final Vector3 tempVec = new Vector3();
-
-    public HexPicker(HexGridRenderer renderer) {
+    private final com.staraxis.game.core.coordinate.CameraWorld camWorld;
+    
+    public HexPicker(HexGridRenderer renderer, com.staraxis.game.core.coordinate.CameraWorld camWorld) {
         this.renderer = renderer;
+        this.camWorld = camWorld;
+    }
+
+    /** 保留旧构造（停止使用） */
+    @Deprecated
+    public HexPicker(HexGridRenderer renderer) {
+        this(renderer, null);
     }
 
     /**
@@ -27,7 +35,19 @@ public class HexPicker {
     public HexCoord screenToHex(int screenX, int screenY, Camera camera) {
         tempVec.set(screenX, screenY, 0);
         camera.unproject(tempVec);
+        if (camWorld != null && camera instanceof com.badlogic.gdx.graphics.OrthographicCamera oc) {
+            double kmPerPixel = oc.zoom;
+            double worldXKm = tempVec.x * kmPerPixel + camWorld.getXKm();
+            double worldYKm = tempVec.y * kmPerPixel + camWorld.getYKm();
+            return worldKmToHex(worldXKm, worldYKm, kmPerPixel);
+        }
         return worldToHex(tempVec.x, tempVec.y);
+    }
+
+    private HexCoord worldKmToHex(double worldXKm, double worldYKm, double kmPerPixel) {
+        double worldXPx = (worldXKm - camWorld.getXKm()) / kmPerPixel;
+        double worldYPx = (worldYKm - camWorld.getYKm()) / kmPerPixel;
+        return worldToHex((float)worldXPx, (float)worldYPx);
     }
 
     /**

@@ -12,10 +12,13 @@ import com.staraxis.universegen.model.Sector;
  *    目前简化：sectorId = q << 32 | (r & 0xffffffff)。
  * 4. 解析时再拆分回 (q,r)。
  */
+import java.util.ArrayList;
+import java.util.List;
+
 public final class SectorLocatorService {
 
     private final double sectorEdgeLy; // sector 六边形边长，光年
-    private final double LY_TO_KM = 9.4607e12; // 光年到公里的常量（简化值）
+    private static final double LY_TO_KM = 9_460_730_472_580.8; // 1ly=9460730472580.8km（标准值，用于真实比例与可验收）
 
     public SectorLocatorService(double sectorEdgeLy) {
         this.sectorEdgeLy = sectorEdgeLy;
@@ -23,6 +26,35 @@ public final class SectorLocatorService {
 
     public CoordinateSystem locateCenter(Sector sector) {
         return locateCenter(sector.id());
+    }
+
+    /**
+     * 按六边形半径 R（圈数）生成轴向坐标 (q,r) 对应的 sectorId 列表。
+     * 
+     * 约定：
+     * - R=0 时仅包含 (0,0)
+     * - 采用 axial 坐标，范围满足 hex distance <= R
+     */
+    public List<Long> generateSectorIdsByRadius(int radiusR) {
+        if (radiusR < 0) {
+            throw new IllegalArgumentException("radiusR 必须 >= 0");
+        }
+        List<Long> ids = new ArrayList<>(1 + 3 * radiusR * (radiusR + 1));
+        for (int q = -radiusR; q <= radiusR; q++) {
+            int rMin = Math.max(-radiusR, -q - radiusR);
+            int rMax = Math.min(radiusR, -q + radiusR);
+            for (int r = rMin; r <= rMax; r++) {
+                ids.add(packAxialToSectorId(q, r));
+            }
+        }
+        return ids;
+    }
+
+    /**
+     * 将 axial 坐标(q,r)打包为 sectorId。
+     */
+    public static long packAxialToSectorId(int q, int r) {
+        return (((long) q) << 32) | (r & 0xffffffffL);
     }
 
     /**
@@ -40,10 +72,13 @@ public final class SectorLocatorService {
      * 公式来自常见六边形网格映射。
      */
     private double[] axialToWorld(long q, long r) {
-        // 单位光年 → 公里再乘边长
-        double sizeKm = sectorEdgeLy * LY_TO_KM;
-        double x = sizeKm * (Math.sqrt(3) * q + Math.sqrt(3)/2 * r);
-        double y = sizeKm * (3.0/2.0 * r);
+        // 这里的 sizeKm 是“六边形边长（edge length）”换算到 km 的长度。
+        // 对于 pointy-top axial 坐标系，相邻中心距 = sqrt(3) * edgeLength。
+        // 该公式用于在后续验收中验证 1ly 真实比例（SC-002）。
+        double edgeLengthKm = sectorEdgeLy * LY_TO_KM;
+
+        double x = edgeLengthKm * (Math.sqrt(3) * q + Math.sqrt(3) / 2.0 * r);
+        double y = edgeLengthKm * (3.0 / 2.0 * r);
         return new double[]{x, y};
     }
 }

@@ -49,7 +49,7 @@ public class WorldGenDefinitions {
             }
         } catch (IOException | NullPointerException e) {
             System.err.println("Failed to load tile types: " + e.getMessage());
-            TILE_TYPES.put("galaxy", "Galaxy");
+            TILE_TYPES.put("star-system", "Star System Sector");
             TILE_TYPES.put("deep_space", "Deep Space");
             TILE_TYPES.put("nebula", "Nebula");
         }

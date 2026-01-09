@@ -10,6 +10,7 @@ import com.staraxis.game.core.world.scale.GalaxyScaleConfigLoader;
 import com.staraxis.game.core.world.scale.WorldBlockScaleConfigLoader;
 import com.staraxis.game.core.world.stellar.StellarGenerator;
 import com.staraxis.game.shared.world.HexCoord;
+import com.staraxis.game.shared.world.HexCoordinateConverter;
 import com.staraxis.game.shared.world.HexTile;
 import com.staraxis.game.shared.world.WorldGenConfig;
 import com.staraxis.game.shared.world.WorldGenDefinitions;
@@ -124,6 +125,9 @@ public class DefaultWorldGenerator implements WorldGenerator {
             }
         }
 
+        // 创建坐标转换器用于计算物理世界坐标
+        HexCoordinateConverter coordinateConverter = new HexCoordinateConverter();
+        
         // 遍历六边形范围生成瓦片 (T025)
         int generatedStarSystemCount = 0;
         for (int q = -radius; q <= radius; q++) {
@@ -136,7 +140,7 @@ public class DefaultWorldGenerator implements WorldGenerator {
                 float roll = tileRandom.nextFloat();
                 String typeId = sampleSectorTypeId(config, roll);
 
-                HexTile tile = new HexTile(coord, typeId);
+                HexTile tile = new HexTile(coord, typeId, coordinateConverter);
                 sectorCounts.merge(typeId, 1, Integer::sum);
 
                 if ("galaxy".equals(typeId)) {

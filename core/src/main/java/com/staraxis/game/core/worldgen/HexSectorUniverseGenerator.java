@@ -6,25 +6,35 @@ import com.staraxis.game.shared.world.HexCoord;
 import com.staraxis.game.shared.world.HexTile;
 import com.staraxis.game.shared.world.WorldGenConfig;
 import com.staraxis.game.shared.world.WorldGenDefinitions;
+import com.staraxis.game.shared.world.HexCoordinateConverter;
 import com.staraxis.game.shared.world.WorldMap;
-import com.staraxis.universegen.GalaxyGeneratorFacade;
-import com.staraxis.universegen.config.UniverseGenConfig;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 
 /**
- * 新版世界生成器：基于六边形星区网格，并调用 universegen 生成真实宇宙。
+ * 新版世界生成器：基于六边形星区网格，分阶段生成。
+ * 
+ * 生成顺序：
+ * 1. 生成六边形星区（只创建坐标和空的 HexTile）
+ * 2. 星区分配器预设恒星系（固定位置或随机位置）
+ * 3. 在剩余的星区按开局设置比例分配普通类型（只分配星区类型id，不实际生成）
+ * 4. 恒星系统生成器、星云生成器、资源点生成器等根据星区分配id进行实际的生成
+ * 
+ * 使用的接口: WorldGenConfig, WorldMap, HexTile, SectorContentGenerator
+ * 提供的接口: 为 StartNewGameUseCase 提供世界生成功能
  */
 public class HexSectorUniverseGenerator implements WorldGenerator {
 
-    private final GalaxyGeneratorFacade universeGenerator;
-    private final UniverseGenAdapter adapter;
+    private final PresetStarSystemAllocator presetAllocator;
+    private final List<SectorContentGenerator> contentGenerators;
 
     public HexSectorUniverseGenerator() {
-        this.universeGenerator = new GalaxyGeneratorFacade();
-        this.adapter = new UniverseGenAdapter();
+        this.presetAllocator = new PresetStarSystemAllocator();
+        this.contentGenerators = Arrays.asList(
+                new StarSystemContentGenerator(),
+                new NebulaContentGenerator(),
+                new DeepSpaceContentGenerator()
+        );
     }
 
     @Override
@@ -33,50 +43,58 @@ public class HexSectorUniverseGenerator implements WorldGenerator {
 
         int radius = WorldGenDefinitions.getRadius(config.getMapSizePresetId());
         WorldMap worldMap = new WorldMap(config, radius);
-
-        SectorTypeDistributor distributor = new SectorTypeDistributor(
-                config.getStarDensity(), // 临时复用 starDensity 作为 galaxyRatio
-                config.getNebulaRatio()
-        );
-
-        List<HexCoord> coords = new ArrayList<>();
-        for (int q = -radius; q <= radius; q++) {
-            int r1 = Math.max(-radius, -q - radius);
-            int r2 = Math.min(radius, -q + radius);
-            for (int r = r1; r <= r2; r++) {
-                coords.add(HexCoord.of(q, -q - r, r));
-            }
+        
+        // 创建坐标转换器
+        HexCoordinateConverter coordinateConverter = new HexCoordinateConverter();
+        
+        // 阶段1: 生成六边形星区（包含物理世界坐标）
+        Map<HexCoord, HexTile> tiles = generateHexSectors(radius, coordinateConverter);
+        for (HexTile tile : tiles.values()) {
+            worldMap.addTile(tile);
         }
 
-        List<HexTile> tiles = coords
-                .parallelStream()
-                .map(coord -> {
-                    Random tileRandom = createTileRandom(config.getSeedValue(), coord);
-                    String sectorType = distributor.getSectorType(tileRandom);
-                    HexTile tile = new HexTile(coord, sectorType);
+        // 阶段2: 星区分配器预设恒星系（固定位置或随机位置）
+        // 当前实现：随机分配一定数量的预设恒星系（可根据配置调整）
+        int totalTiles = tiles.size();
+        int presetStarSystemCount = (int) (totalTiles * config.getStarDensity());
+        Set<HexCoord> presetStarSystems = presetAllocator.allocatePresetStarSystems(
+                tiles,
+                config.getSeedValue(),
+                Collections.emptyList(), // 固定位置列表（当前为空，可扩展）
+                presetStarSystemCount
+        );
 
-                    if (SectorTypes.GALAXY.equals(sectorType)) {
-                        UniverseGenConfig universeGenConfig = new UniverseGenConfig();
-                        universeGenConfig.setSeed(tileRandom.nextLong());
-                        universeGenConfig.setSectorCount(1);
-                        universeGenConfig.setStarToDeepSpaceRatio(1.0); // 确保 universegen 内部生成 galaxy
+        // 阶段3: 在剩余的星区按开局设置比例分配普通类型（只分配星区类型id，不实际生成）
+        SectorTypeDistributor distributor = new SectorTypeDistributor(
+                config.getStarDensity(),
+                config.getNebulaRatio()
+        );
+        Random rng = new Random(config.getSeedValue());
+        for (Map.Entry<HexCoord, HexTile> entry : tiles.entrySet()) {
+            HexTile tile = entry.getValue();
+            // 跳过已预设的恒星系
+            if (presetStarSystems.contains(entry.getKey())) {
+                continue;
+            }
+            // 为剩余星区分配类型ID
+            String sectorType = distributor.getSectorType(rng);
+            tile.setTypeId(sectorType);
+        }
 
-                        com.staraxis.universegen.model.Galaxy generatedGalaxy = universeGenerator.generate(universeGenConfig);
-                        
-                        if (generatedGalaxy != null && generatedGalaxy.sectors() != null && !generatedGalaxy.sectors().isEmpty()) {
-                            com.staraxis.universegen.model.StarSystem generatedSystem = generatedGalaxy.sectors().get(0).starSystem();
-                            if (generatedSystem != null) {
-                                tile.setStarSystem(adapter.toSharedStarSystem(generatedSystem));
-                            }
-                        }
-                    }
-
-                    return tile;
-                })
-                .toList();
-
-        for (HexTile tile : tiles) {
-            worldMap.addTile(tile);
+        // 阶段4: 恒星系统生成器、星云生成器、资源点生成器等根据星区分配id进行实际的生成
+        for (HexTile tile : tiles.values()) {
+            String sectorType = tile.getTypeId();
+            if (sectorType == null) {
+                continue;
+            }
+            
+            // 找到支持该类型的生成器并生成内容
+            for (SectorContentGenerator generator : contentGenerators) {
+                if (generator.supports(sectorType)) {
+                    generator.generateContent(tile, config, config.getSeedValue());
+                    break;
+                }
+            }
         }
 
         long durationMs = System.currentTimeMillis() - startMs;
@@ -85,11 +103,23 @@ public class HexSectorUniverseGenerator implements WorldGenerator {
         return worldMap;
     }
 
-    private Random createTileRandom(long seedValue, HexCoord coord) {
-        long mixed = seedValue;
-        mixed ^= ((long) coord.getX() * 73856093L);
-        mixed ^= ((long) coord.getY() * 19349663L);
-        mixed ^= ((long) coord.getZ() * 83492791L);
-        return new Random(mixed);
+    /**
+     * 阶段1: 生成六边形星区（只创建坐标和空的 HexTile）。
+     */
+    private Map<HexCoord, HexTile> generateHexSectors(int radius, HexCoordinateConverter converter) {
+        Map<HexCoord, HexTile> tiles = new HashMap<>();
+        
+        for (int q = -radius; q <= radius; q++) {
+            int r1 = Math.max(-radius, -q - radius);
+            int r2 = Math.min(radius, -q + radius);
+            for (int r = r1; r <= r2; r++) {
+                HexCoord coord = HexCoord.of(q, -q - r, r);
+                // 使用转换器创建带有物理世界坐标的 HexTile
+                HexTile tile = new HexTile(coord, SectorTypes.DEEP_SPACE, converter); // 临时默认类型
+                tiles.put(coord, tile);
+            }
+        }
+        
+        return tiles;
     }
 }

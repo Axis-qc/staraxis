@@ -23,11 +23,14 @@ class NoOverlapTest {
 
         // 将行星转换为 Body
         List<OverlapDetector.Body> bodies = new ArrayList<>();
-        for (Planet p : system.planets()) {
+        // StarSystem 本身不直接持有 planets；行星属于每颗 Star。
+        for (var star : system.stars()) {
+            for (Planet p : star.planets()) {
             bodies.add(new OverlapDetector.Body(
                     p.semiMajorAxisKm(), 0, 0, // 近似放在轨道圆上的 x 轴
                     p.radiusKm(),
                     p.name()));
+            }
         }
 
         ThreadLocalRandom rand = ThreadLocalRandom.current();

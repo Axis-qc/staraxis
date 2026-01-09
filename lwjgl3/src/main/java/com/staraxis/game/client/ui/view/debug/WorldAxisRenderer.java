@@ -28,7 +28,7 @@ public final class WorldAxisRenderer {
         return visible;
     }
 
-    public void render(OrthographicCamera camera) {
+    public void render(OrthographicCamera camera, com.staraxis.game.core.coordinate.CameraWorld camWorld) {
         if (!visible) {
             return;
         }

@@ -15,19 +15,20 @@ import com.staraxis.game.client.ui.manager.UIManager;
 import com.staraxis.game.client.ui.view.CameraController;
 import com.staraxis.game.client.ui.view.HexGridRenderer;
 import com.staraxis.game.client.ui.view.HexPicker;
+import com.staraxis.game.core.coordinate.CameraWorld;
 import com.staraxis.game.client.ui.view.WorldOverlayRenderer;
 import com.staraxis.game.client.ui.view.stellar.StellarMarkerRenderer;
 import com.staraxis.game.core.world.stellar.orbit.OrbitPathService;
-import com.staraxis.game.core.world.DefaultWorldGenerator;
-import com.staraxis.game.core.world.WorldGenerator;
+import com.staraxis.game.client.world.UniverseModel;
+import com.staraxis.game.client.world.UniverseModelToWorldMapAdapter;
+import com.staraxis.game.client.ui.view.debug.DebugSystem;
+import com.staraxis.game.client.ui.view.debug.WorldGridRenderer;
+import com.staraxis.universegen.GalaxyGeneratorFacade;
+import com.staraxis.universegen.config.UniverseGenConfig;
 import com.staraxis.game.shared.world.HexCoord;
-import com.staraxis.game.shared.world.WorldGenConfig;
-import com.staraxis.game.shared.world.WorldMap;
-import com.staraxis.game.shared.world.stellar.Star;
-import com.staraxis.game.shared.world.stellar.StarSystem;
-import com.staraxis.game.shared.world.stellar.WorldGenStats;
-import com.staraxis.game.shared.world.stellar.orbit.OrbitPath;
-import com.staraxis.game.shared.world.stellar.orbit.OrbitPrecisionLevel;
+import com.staraxis.game.shared.net.worldgen.snapshot.WorldGenStatsSnapshot;
+import com.staraxis.game.shared.net.worldgen.snapshot.StarSnapshot;
+import com.staraxis.game.shared.net.worldgen.snapshot.StarSystemSnapshot;
 
 import io.staraxis.lwjgl3.debug.OrbitDebugRenderer;
 import io.staraxis.lwjgl3.debug.OrbitDebugRenderer.OrbitPathRenderItem;
@@ -46,6 +47,8 @@ public class WorldScreen extends ScreenAdapter {
     private final Stage uiStage;
     private final OrthographicCamera worldCamera;
     private final UIManager uiManager;
+    private final CameraWorld camWorld = new CameraWorld(0.0, 0.0);
+
     private final HexGridRenderer gridRenderer;
     private final HexPicker hexPicker;
     private final CameraController cameraController;
@@ -53,18 +56,18 @@ public class WorldScreen extends ScreenAdapter {
     private final StellarMarkerRenderer stellarMarkerRenderer;
     private final OrbitDebugRenderer orbitDebugRenderer;
     private final OrbitPathService orbitPathService;
-    private final WorldMap worldMap;
+    private final UniverseModel universeModel;
     private HexCoord hoveredCoord;
     private Label debugLabel;
     private Label fpsLabel;
     private boolean orbitDebugEnabled;
     private float orbitDebugScale;
 
-    public WorldScreen(Main game, WorldMap worldMap) {
+    public WorldScreen(Main game, UniverseModel universeModel) {
         this.game = game;
         this.uiManager = game.getUiManager();
         this.uiStage = new Stage(new ScreenViewport());
-        this.worldMap = worldMap;
+        this.universeModel = universeModel;
 
         // 初始化世界摄像机 (Orthographic)
         this.worldCamera = new OrthographicCamera();
@@ -76,17 +79,21 @@ public class WorldScreen extends ScreenAdapter {
         this.worldCamera.update();
 
         // 初始化渲染器与拾取器 (T019, T020)
-        this.gridRenderer = new HexGridRenderer();
-        this.hexPicker = new HexPicker(gridRenderer);
+        this.gridRenderer = new HexGridRenderer(camWorld);
+        // 设置字体用于显示坐标
+        if (game.getSkin() != null && game.getSkin().getFont("default") != null) {
+            this.gridRenderer.setFont(game.getSkin().getFont("default"));
+        }
+        this.hexPicker = new HexPicker(gridRenderer, camWorld);
 
         // 初始化摄像机控制器 (T041)
-        this.cameraController = new CameraController(worldCamera);
+        this.cameraController = new CameraController(worldCamera, camWorld);
 
         // 初始化覆盖层渲染器 (T052)
         this.overlayRenderer = new WorldOverlayRenderer();
 
         // 初始化恒星标记渲染器 (US3)
-        this.stellarMarkerRenderer = new StellarMarkerRenderer(gridRenderer);
+        this.stellarMarkerRenderer = new StellarMarkerRenderer(camWorld);
 
         this.orbitDebugRenderer = new OrbitDebugRenderer();
         this.orbitPathService = new OrbitPathService();
@@ -108,17 +115,20 @@ public class WorldScreen extends ScreenAdapter {
      * 调试用构造函数，创建一个默认地图。
      */
     public WorldScreen(Main game) {
-        this(game, createDefaultMap());
+        this(game, createDefaultUniverse());
     }
 
-    private static WorldMap createDefaultMap() {
-        WorldGenConfig config = new WorldGenConfig();
-        config.setMapSizePresetId("small");
-        config.setSeedValue(System.currentTimeMillis());
-        config.setHabitableRatio(0.3f);
+    private static UniverseModel createDefaultUniverse() {
+        UniverseGenConfig config = new UniverseGenConfig();
+        config.setGalaxyRadiusR(8); // Default to a reasonable size
+        config.setSeed(System.currentTimeMillis());
+        config.setHexRadiusLy(1.0f);
 
-        WorldGenerator generator = new DefaultWorldGenerator();
-        return generator.generate(config);
+        GalaxyGeneratorFacade generator = new GalaxyGeneratorFacade();
+        com.staraxis.game.shared.net.worldgen.snapshot.UniverseSnapshot snapshot = generator.generate(config);
+
+        UniverseModelToWorldMapAdapter adapter = new UniverseModelToWorldMapAdapter();
+        return adapter.adapt(snapshot);
     }
 
     @Override
@@ -161,15 +171,20 @@ public class WorldScreen extends ScreenAdapter {
         String hoverText = "";
         if (hoveredCoord != null) {
             String typeText = "";
-            if (worldMap.getTiles().containsKey(hoveredCoord)) {
-                String typeId = worldMap.getTile(hoveredCoord).getTypeId();
+            if (universeModel.getSectors().containsKey(hoveredCoord)) {
+                com.staraxis.game.client.world.SectorModel sector = universeModel.getSector(hoveredCoord);
+                String typeId = sector.getSectorType();
                 typeText = " | typeId=" + typeId;
-                StarSystem sys = worldMap.getTile(hoveredCoord).getStarSystem();
+                StarSystemSnapshot sys = sector.getStarSystem();
                 if (sys != null) {
-                    int stars = sys.getStars().size();
+                    int stars = sys.getStars() != null ? sys.getStars().size() : 0;
                     int planets = 0;
-                    for (Star s : sys.getStars()) {
-                        planets += s.getPlanets().size();
+                    if (sys.getStars() != null) {
+                        for (StarSnapshot s : sys.getStars()) {
+                            if (s.getPlanets() != null) {
+                                planets += s.getPlanets().size();
+                            }
+                        }
                     }
                     typeText += " | stars=" + stars + ", planets=" + planets;
                 }
@@ -183,7 +198,7 @@ public class WorldScreen extends ScreenAdapter {
                     worldCamera.zoom);
         }
 
-        WorldGenStats stats = worldMap.getStats();
+        WorldGenStatsSnapshot stats = universeModel.getStats();
         String statsText = "";
         if (stats != null) {
             statsText = "\nstats: sectorCounts=" + stats.getSectorCounts()
@@ -196,38 +211,21 @@ public class WorldScreen extends ScreenAdapter {
 
         // 2. 网格层渲染 (T053)
         gridRenderer.setProjectionMatrix(worldCamera.combined);
-        gridRenderer.render(worldMap, hoveredCoord, worldCamera.zoom, worldCamera);
+        gridRenderer.render(universeModel, hoveredCoord, worldCamera.zoom, worldCamera);
 
         // 3. 恒星标记渲染 (US3)
         stellarMarkerRenderer.setProjectionMatrix(worldCamera.combined);
-        stellarMarkerRenderer.render(worldMap, worldCamera.zoom, worldCamera);
+        stellarMarkerRenderer.render(universeModel, worldCamera.zoom, worldCamera);
 
-        if (orbitDebugEnabled) {
-            List<OrbitPathRenderItem> items = new ArrayList<>();
-            for (HexCoord coord : worldMap.getTiles().keySet()) {
-                if (!worldMap.getTiles().containsKey(coord)) {
-                    continue;
-                }
-                StarSystem system = worldMap.getTile(coord).getStarSystem();
-                if (system == null) {
-                    continue;
-                }
-                com.badlogic.gdx.math.Vector2 center = gridRenderer.hexToWorld(coord);
-                if (!worldCamera.frustum.boundsInFrustum(center.x, center.y, 0, gridRenderer.getHexRadius(), gridRenderer.getHexRadius(), 0)) {
-                    continue;
-                }
-                List<OrbitPath> paths = orbitPathService.generateOrbitPaths(system, OrbitPrecisionLevel.MEDIUM);
-                for (OrbitPath path : paths) {
-                    items.add(new OrbitPathRenderItem(center.x, center.y, path));
-                }
-            }
-            orbitDebugRenderer.setProjectionMatrix(worldCamera.combined);
-            orbitDebugRenderer.render(items, orbitDebugScale * worldCamera.zoom);
-        }
+        // 目前 orbit 调试仍依赖旧的 WorldMap/StarSystem 模型，这里暂不绘制轨道，
+        // 等后续接入完整的快照→领域模型转换后再恢复。
 
         // 4. 覆盖层渲染 (T052, T053)
         overlayRenderer.setProjectionMatrix(worldCamera.combined);
-        overlayRenderer.render(worldMap, worldCamera);
+        overlayRenderer.render(universeModel, worldCamera);
+
+        // UI层：鼠标附近星区中心坐标
+        gridRenderer.renderSectorCenterCoordinatesUi(universeModel, worldCamera);
 
         // 5. UI 层渲染 (T053)
         // 显式调用 UIManager 渲染，且不执行清屏，以保留背景和网格

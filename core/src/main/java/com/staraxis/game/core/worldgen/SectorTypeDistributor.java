@@ -23,7 +23,7 @@ public class SectorTypeDistributor {
     public String getSectorType(Random rng) {
         float roll = rng.nextFloat();
         if (roll < galaxyRatio) {
-            return SectorTypes.GALAXY;
+            return SectorTypes.STAR_SYSTEM;
         }
         if (roll < galaxyRatio + nebulaRatio) {
             return SectorTypes.NEBULA;

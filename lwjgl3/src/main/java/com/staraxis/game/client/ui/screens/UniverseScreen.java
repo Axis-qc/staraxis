@@ -20,11 +20,12 @@ import com.staraxis.game.client.ui.view.debug.DebugToggleInputProcessor;
 import com.staraxis.game.client.ui.view.debug.WorldGridRenderer;
 import com.staraxis.game.client.ui.view.stellar.StellarMarkerRenderer;
 import com.staraxis.game.client.world.UniverseModel;
-import com.staraxis.game.client.world.UniverseModelToWorldMapAdapter;
 import com.staraxis.game.core.coordinate.CoordinateService;
+import com.staraxis.game.core.coordinate.CameraWorld;
 import com.staraxis.game.core.coordinate.WorldCoordinate;
 import com.staraxis.game.shared.world.HexCoord;
-import com.staraxis.game.shared.world.WorldMap;
+import com.staraxis.game.shared.net.worldgen.snapshot.StarSnapshot;
+import com.staraxis.game.shared.net.worldgen.snapshot.StarSystemSnapshot;
 import com.staraxis.game.client.ui.view.debug.WorldAxisRenderer;
 
 import io.staraxis.Main;
@@ -46,7 +47,8 @@ public class UniverseScreen extends ScreenAdapter {
     private final UIManager uiManager;
 
     private final UniverseModel universe;
-    private final UniverseModelToWorldMapAdapter adapter;
+
+    private final CameraWorld camWorld = new CameraWorld(0.0, 0.0);
 
     private final HexGridRenderer gridRenderer;
     private final HexPicker hexPicker;
@@ -55,6 +57,12 @@ public class UniverseScreen extends ScreenAdapter {
     private final StellarMarkerRenderer stellarMarkerRenderer;
 
     private Label debugLabel;
+
+    // 鼠标静止检测
+    private int lastMouseX = -1;
+    private int lastMouseY = -1;
+    private float mouseIdleSec = 0f;
+    private static final float MOUSE_IDLE_THRESHOLD_SEC = 2.0f;
     private HexCoord hovered;
 
     // --- 014: F3 调试渲染（client 表现层状态） ---
@@ -69,7 +77,6 @@ public class UniverseScreen extends ScreenAdapter {
         this.universe = universe;
         this.uiManager = game.getUiManager();
         this.uiStage = new Stage(new ScreenViewport());
-        this.adapter = new UniverseModelToWorldMapAdapter();
 
         this.camera = new OrthographicCamera();
         this.camera.setToOrtho(false, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
@@ -79,11 +86,15 @@ public class UniverseScreen extends ScreenAdapter {
         this.camera.far = 100f;
         this.camera.update();
 
-        this.gridRenderer = new HexGridRenderer();
-        this.hexPicker = new HexPicker(gridRenderer);
-        this.cameraController = new CameraController(camera);
+        this.gridRenderer = new HexGridRenderer(camWorld);
+        // 设置字体用于显示坐标
+        if (game.getSkin() != null && game.getSkin().getFont("default") != null) {
+            this.gridRenderer.setFont(game.getSkin().getFont("default"));
+        }
+        this.hexPicker = new HexPicker(gridRenderer, camWorld);
+        this.cameraController = new CameraController(camera, camWorld);
         this.overlayRenderer = new WorldOverlayRenderer();
-        this.stellarMarkerRenderer = new StellarMarkerRenderer(gridRenderer);
+        this.stellarMarkerRenderer = new StellarMarkerRenderer(camWorld);
 
         // 顶左调试信息（原有 hover 信息）
         Table table = new Table();
@@ -129,18 +140,21 @@ public class UniverseScreen extends ScreenAdapter {
                 camera.position.y,
                 camera.position.z));
 
-        WorldMap worldMap = adapter.toWorldMap(universe);
-
         // 原有 hover 文本
         String hoverText = "";
-        if (hovered != null && worldMap.getTiles().containsKey(hovered)) {
-            String typeId = worldMap.getTile(hovered).getTypeId();
-            int stars = worldMap.getTile(hovered).getStarSystem() != null
-                    ? worldMap.getTile(hovered).getStarSystem().getStars().size()
-                    : 0;
+        if (hovered != null && universe.getSectors().containsKey(hovered)) {
+            var sector = universe.getSector(hovered);
+            String typeId = sector.getSectorType();
+            int stars = 0;
             int planets = 0;
-            if (worldMap.getTile(hovered).getStarSystem() != null) {
-                planets = worldMap.getTile(hovered).getStarSystem().getStars().stream().mapToInt(s -> s.getPlanets().size()).sum();
+            StarSystemSnapshot sys = sector.getStarSystem();
+            if (sys != null && sys.getStars() != null) {
+                stars = sys.getStars().size();
+                for (StarSnapshot s : sys.getStars()) {
+                    if (s.getPlanets() != null) {
+                        planets += s.getPlanets().size();
+                    }
+                }
             }
             hoverText = "hover=" + hovered + " type=" + typeId + " stars=" + stars + " planets=" + planets;
         }
@@ -148,20 +162,37 @@ public class UniverseScreen extends ScreenAdapter {
 
         // 世界渲染
         gridRenderer.setProjectionMatrix(camera.combined);
-        gridRenderer.render(worldMap, hovered, camera.zoom, camera);
+        gridRenderer.render(universe, hovered, camera.zoom, camera);
 
         stellarMarkerRenderer.setProjectionMatrix(camera.combined);
-        stellarMarkerRenderer.render(worldMap, camera.zoom, camera);
+        stellarMarkerRenderer.render(universe, camera.zoom, camera);
 
         overlayRenderer.setProjectionMatrix(camera.combined);
-        overlayRenderer.render(worldMap, camera);
+        overlayRenderer.render(universe, camera);
+
+        // UI层：鼠标附近星区中心坐标
+        gridRenderer.renderSectorCenterCoordinatesUi(universe, camera);
+
+        // 鼠标静止检测 & 世界坐标提示
+        int currX = Gdx.input.getX();
+        int currY = Gdx.input.getY();
+        if (currX != lastMouseX || currY != lastMouseY) {
+            mouseIdleSec = 0f;
+            lastMouseX = currX;
+            lastMouseY = currY;
+        } else {
+            mouseIdleSec += delta;
+            if (mouseIdleSec >= MOUSE_IDLE_THRESHOLD_SEC) {
+                gridRenderer.renderMouseWorldCoordUi(camera);
+            }
+        }
 
         // 014: F3 世界空间调试渲染（不依赖 UIManager）
         if (debugSystem.isEnabled()) {
             var debugState = debugSystem.snapshot(camera.zoom);
 
             debugWorldGridRenderer.setVisible(true);
-            debugWorldGridRenderer.render(camera, debugState.kmPerPixel());
+            debugWorldGridRenderer.render(camera, debugState.kmPerPixel(), universe);
 
             // 坐标轴：2D 视角仅绘制 X/Y
             debugWorldAxisRenderer.setVisible(true);
@@ -194,6 +225,7 @@ public class UniverseScreen extends ScreenAdapter {
         camera.viewportWidth = width;
         camera.viewportHeight = height;
         camera.update();
+        gridRenderer.resizeUiViewport(width, height);
     }
 
     @Override

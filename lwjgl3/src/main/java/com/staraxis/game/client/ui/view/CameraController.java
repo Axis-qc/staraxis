@@ -13,6 +13,8 @@ import com.badlogic.gdx.math.Vector3;
 public class CameraController extends InputAdapter {
 
     private final OrthographicCamera camera;
+    /** 自定义世界中心（km）。若为空则回退旧 camera.position 方案 */
+    private final com.staraxis.game.core.coordinate.CameraWorld worldCenter;
     private final Vector3 lastMousePos = new Vector3();
     private final Vector3 currMousePos = new Vector3();
 
@@ -21,8 +23,8 @@ public class CameraController extends InputAdapter {
     private final Vector2 acceleration = new Vector2();
     private float friction = 8.0f;
 
-    /** 基础移动加速度（后续会按 zoom 缩放，并且按“按住时间”线性加速）。 */
-    private float moveSpeed = 1200f;
+    /** 像素基准移动速度：保持约 10 像素/秒，再乘 zoom 转为 km/s。 */
+    private float moveSpeed = 100f;
 
     /** 移动速度上限（单位：世界单位/s；这里世界单位近似为 km）。 */
     private float maxMoveSpeed = 200_000_000f; // 提升 100 倍（原 200_000）
@@ -41,8 +43,16 @@ public class CameraController extends InputAdapter {
     // 缩放状态
     private float targetZoom;
     private float zoomSmoothing = 10.0f;
-    private float minZoom = 0.1f;
-    private float maxZoom = 1000.0f;
+    /** 最小缩放：更近可以看到恒星/行星细节。 */
+    private float minZoom = 0.01f;
+    /**
+     * 最大缩放：支持光年级别（zoom 直接等于 km/px）。
+     * 例如：
+     * - zoom ~= 1e5 -> 1px ≈ 10^5 km
+     * - zoom ~= 1.5e8 -> 1px ≈ 1 AU
+     */
+    // 最大缩放：支持光年级别；100px ≈ 1 ly
+    private float maxZoom = 94_607_305_000f; // ≈9.46e10 km/px，对应 100px ≈ 1 光年
 
     /** 基础滚轮缩放步进（作为初始速度）。 */
     private float baseZoomSpeed = 0.1f;
@@ -62,9 +72,18 @@ public class CameraController extends InputAdapter {
     // 焦点拦截
     private boolean isIntercepted = false;
 
-    public CameraController(OrthographicCamera camera) {
+    public CameraController(OrthographicCamera camera, com.staraxis.game.core.coordinate.CameraWorld worldCenter) {
         this.camera = camera;
+        this.worldCenter = worldCenter;
         this.targetZoom = camera.zoom;
+
+        // 固定相机像素位置在原点，防漂移。
+        this.camera.position.set(0, 0, 20);
+    }
+
+    /** 兼容旧构造：不传 worldCenter 则沿用旧逻辑（即直接动 camera.position） */
+    public CameraController(OrthographicCamera camera) {
+        this(camera, null);
     }
 
     @Override
@@ -81,11 +100,18 @@ public class CameraController extends InputAdapter {
         if (Gdx.input.isButtonPressed(Input.Buttons.RIGHT)) {
             currMousePos.set(screenX, screenY, 0);
 
-            // 转换为世界空间位移
-            Vector3 lastWorld = camera.unproject(new Vector3(lastMousePos));
-            Vector3 currWorld = camera.unproject(new Vector3(currMousePos));
+            Vector3 lastWorldPx = camera.unproject(new Vector3(lastMousePos));
+            Vector3 currWorldPx = camera.unproject(new Vector3(currMousePos));
+            float dxPx = currWorldPx.x - lastWorldPx.x;
+            float dyPx = currWorldPx.y - lastWorldPx.y;
 
-            camera.position.sub(currWorld.x - lastWorld.x, currWorld.y - lastWorld.y, 0);
+            if (worldCenter != null) {
+                // 像素→km；camera.zoom == kmPerPixel
+                double kmPerPixel = camera.zoom;
+                worldCenter.add(dxPx * kmPerPixel * -1.0, dyPx * kmPerPixel * -1.0);
+            } else {
+                camera.position.sub(dxPx, dyPx, 0);
+            }
             lastMousePos.set(screenX, screenY, 0);
             return true;
         }
@@ -106,8 +132,11 @@ public class CameraController extends InputAdapter {
 
         float effectiveZoomSpeed = baseZoomSpeed * zoomSpeedMultiplier;
 
-        // 设置目标缩放（线性步进 * 指数倍率）
-        targetZoom += amountY * effectiveZoomSpeed;
+        // 在大尺度下采用“按当前 zoom 比例”的步进，保证能较快到达光年/天文单位级别。
+        float scaleFactor = Math.max(1.0f, targetZoom * 0.1f);
+
+        // 设置目标缩放（线性步进 * 指数倍率 * 与当前 zoom 成比例）
+        targetZoom += amountY * effectiveZoomSpeed * scaleFactor;
         targetZoom = clamp(targetZoom, minZoom, maxZoom);
 
         return true;
@@ -129,11 +158,19 @@ public class CameraController extends InputAdapter {
             camera.unproject(mouseAtOldZoom);
 
             camera.zoom += (targetZoom - camera.zoom) * zoomSmoothing * delta;
+            float afterZoom = camera.zoom;
 
             Vector3 mouseAtNewZoom = new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0);
             camera.unproject(mouseAtNewZoom);
 
-            camera.position.add(mouseAtOldZoom.x - mouseAtNewZoom.x, mouseAtOldZoom.y - mouseAtNewZoom.y, 0);
+            float dxPx = mouseAtOldZoom.x - mouseAtNewZoom.x;
+            float dyPx = mouseAtOldZoom.y - mouseAtNewZoom.y;
+            if (worldCenter != null) {
+                double kmPerPixel = afterZoom; // 新比例尺
+                worldCenter.add(dxPx * kmPerPixel, dyPx * kmPerPixel);
+            } else {
+                camera.position.add(dxPx, dyPx, 0);
+            }
         }
 
         // 2. 键盘输入（加速度） + 按住时间线性加速
@@ -182,7 +219,12 @@ public class CameraController extends InputAdapter {
             if (velocity.len() > maxMoveSpeed) {
                 velocity.nor().scl(maxMoveSpeed);
             }
-            camera.position.add(velocity.x * delta, velocity.y * delta, 0);
+            if (worldCenter != null) {
+                double kmPerPixel = camera.zoom;
+                worldCenter.add(velocity.x * delta * kmPerPixel, velocity.y * delta * kmPerPixel);
+            } else {
+                camera.position.add(velocity.x * delta, velocity.y * delta, 0);
+            }
             velocity.scl(1.0f - friction * delta);
         } else {
             velocity.setZero();

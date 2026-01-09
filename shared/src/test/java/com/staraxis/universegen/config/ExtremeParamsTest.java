@@ -6,10 +6,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ExtremeParamsTest {
 
-    private UniverseGenConfig buildCfg(long seed, int sectorCount, float radiusLy, double ratio) {
+    private UniverseGenConfig buildCfg(long seed, int galaxyRadiusR, float radiusLy, double ratio) {
         UniverseGenConfig cfg = new UniverseGenConfig();
         cfg.setSeed(seed);
-        cfg.setSectorCount(sectorCount);
+        cfg.setGalaxyRadiusR(galaxyRadiusR);
         cfg.setHexRadiusLy(radiusLy);
         cfg.setStarToDeepSpaceRatio(ratio);
         return cfg;

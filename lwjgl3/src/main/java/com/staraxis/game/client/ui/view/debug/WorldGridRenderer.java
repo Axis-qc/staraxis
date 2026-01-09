@@ -3,6 +3,9 @@ package com.staraxis.game.client.ui.view.debug;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
+import com.staraxis.game.client.world.SectorModel;
+import com.staraxis.game.client.world.UniverseModel;
+import com.staraxis.game.shared.util.UnitConverter;
 
 /**
  * F3 世界网格渲染（XY 平面），用于验证坐标/比例尺接入渲染。
@@ -30,20 +33,27 @@ public final class WorldGridRenderer {
         return visible;
     }
 
-    public void render(OrthographicCamera camera, double kmPerPixel) {
+    public void render(OrthographicCamera camera, double kmPerPixel, UniverseModel universe) {
         if (!visible) {
             return;
         }
 
-        // 目标：屏幕约 100px 一格
+        // 1. 渲染背景网格
+        renderGrid(camera, kmPerPixel);
+
+        // 2. 渲染星区标记
+        if (universe != null) {
+            renderSectors(camera, universe);
+        }
+    }
+
+    private void renderGrid(OrthographicCamera camera, double kmPerPixel) {
         double targetStepKm = 100.0 * kmPerPixel;
         double stepKm = chooseNiceStep(targetStepKm);
 
-        // 视口可见范围（相机单位本项目近似按 km 直接用在坐标系里；此处用 camera viewport 推估）
         double viewWidthWorld = camera.viewportWidth * camera.zoom;
         double viewHeightWorld = camera.viewportHeight * camera.zoom;
 
-        // 1.2x 余量
         double halfW = viewWidthWorld * 0.5 * 1.2;
         double halfH = viewHeightWorld * 0.5 * 1.2;
 
@@ -64,16 +74,47 @@ public final class WorldGridRenderer {
         shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
         shapeRenderer.setColor(new Color(0.35f, 0.35f, 0.35f, 0.6f));
 
-        // 垂直线（x 固定）
         for (long xi = startXIdx; xi <= endXIdx; xi++) {
             float x = (float) (xi * stepKm);
             shapeRenderer.line(x, (float) minY, x, (float) maxY);
         }
 
-        // 水平线（y 固定）
         for (long yi = startYIdx; yi <= endYIdx; yi++) {
             float y = (float) (yi * stepKm);
             shapeRenderer.line((float) minX, y, (float) maxX, y);
+        }
+
+        shapeRenderer.end();
+    }
+
+    private void renderSectors(OrthographicCamera camera, UniverseModel universe) {
+        shapeRenderer.setProjectionMatrix(camera.combined);
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+
+        for (SectorModel sector : universe.getSectors().values()) {
+            Color color = switch (sector.getSectorType()) {
+                case "star-system" -> Color.YELLOW;
+                case "nebula" -> Color.PURPLE;
+                case "deep_space" -> Color.DARK_GRAY;
+                default -> Color.WHITE;
+            };
+            shapeRenderer.setColor(color);
+
+            // 将光年坐标转换为公里，以匹配渲染单位
+            double worldXKm = UnitConverter.lightYearsToKm(sector.getWorldPositionXLy());
+            double worldYKm = UnitConverter.lightYearsToKm(sector.getWorldPositionYLy());
+
+            // 渲染单位与相机缩放匹配
+            double kmPerPixel = camera.zoom;
+            if (!(kmPerPixel > 0) || Double.isNaN(kmPerPixel) || Double.isInfinite(kmPerPixel)) {
+                kmPerPixel = 1.0;
+            }
+
+            float renderX = (float) (worldXKm / kmPerPixel);
+            float renderY = (float) (worldYKm / kmPerPixel);
+
+            float radius = 2.5f; // 像素半径，固定大小以便观察
+            shapeRenderer.circle(renderX, renderY, radius);
         }
 
         shapeRenderer.end();

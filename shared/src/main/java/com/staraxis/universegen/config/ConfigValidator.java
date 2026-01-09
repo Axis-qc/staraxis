@@ -26,7 +26,8 @@ public final class ConfigValidator {
      */
     public static UniverseGenConfig sanitize(UniverseGenConfig cfg) {
         UniverseGenConfig copy = cloneConfig(cfg);
-        if (copy.getSectorCount() <= 0) copy.setSectorCount(1);
+        // sectorCount 为派生值（由 galaxyRadiusR 计算），此处不直接 setSectorCount。
+        if (copy.getSectorCount() <= 0) copy.setGalaxyRadiusR(0);
         if (copy.getHexRadiusLy() <= 0) copy.setHexRadiusLy(5f);
         double ratio = copy.getStarToDeepSpaceRatio();
         if (ratio <= 0 || ratio > 1) copy.setStarToDeepSpaceRatio(0.5);
@@ -45,7 +46,7 @@ public final class ConfigValidator {
     private static UniverseGenConfig cloneConfig(UniverseGenConfig cfg) {
         UniverseGenConfig c = new UniverseGenConfig();
         c.setSeed(cfg.getSeed());
-        c.setSectorCount(cfg.getSectorCount());
+        c.setGalaxyRadiusR(cfg.getGalaxyRadiusR());
         c.setHexRadiusLy(cfg.getHexRadiusLy());
         c.setStarToDeepSpaceRatio(cfg.getStarToDeepSpaceRatio());
         return c;

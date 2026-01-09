@@ -23,9 +23,15 @@ public class UniverseSnapshotConverter {
                 continue;
             }
             HexCoord coord = HexCoord.of(s.getCoord().getX(), s.getCoord().getY(), s.getCoord().getZ());
-            sectors.put(coord, new SectorModel(coord, s.getSectorType(), s.getStarSystem()));
+            sectors.put(coord, new SectorModel(
+                    coord,
+                    s.getSectorType(),
+                    s.getStarSystem(),
+                    s.getWorldPositionXLy(),
+                    s.getWorldPositionYLy()
+            ));
         }
 
-        return new UniverseModel(snapshot.getSeedValue(), snapshot.getBoundsRadius(), sectors);
+        return new UniverseModel(snapshot.getSeedValue(), snapshot.getBoundsRadius(), sectors, snapshot.getStats());
     }
 }

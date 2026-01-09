@@ -2,6 +2,8 @@ package com.staraxis.game.client.world;
 
 import java.util.Collections;
 import java.util.HashMap;
+import com.staraxis.game.shared.net.worldgen.snapshot.WorldGenStatsSnapshot;
+
 import java.util.Map;
 
 import com.staraxis.game.shared.world.HexCoord;
@@ -18,11 +20,13 @@ public class UniverseModel {
     private final long seedValue;
     private final int boundsRadius;
     private final Map<HexCoord, SectorModel> sectors;
+    private final com.staraxis.game.shared.net.worldgen.snapshot.WorldGenStatsSnapshot stats;
 
-    public UniverseModel(long seedValue, int boundsRadius, Map<HexCoord, SectorModel> sectors) {
+    public UniverseModel(long seedValue, int boundsRadius, Map<HexCoord, SectorModel> sectors, com.staraxis.game.shared.net.worldgen.snapshot.WorldGenStatsSnapshot stats) {
         this.seedValue = seedValue;
         this.boundsRadius = boundsRadius;
         this.sectors = sectors != null ? new HashMap<>(sectors) : new HashMap<>();
+        this.stats = stats;
     }
 
     public long getSeedValue() {
@@ -39,5 +43,9 @@ public class UniverseModel {
 
     public SectorModel getSector(HexCoord coord) {
         return sectors.get(coord);
+    }
+
+    public com.staraxis.game.shared.net.worldgen.snapshot.WorldGenStatsSnapshot getStats() {
+        return stats;
     }
 }

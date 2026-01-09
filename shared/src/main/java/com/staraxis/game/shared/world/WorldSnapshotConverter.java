@@ -49,7 +49,9 @@ public class WorldSnapshotConverter {
             }
 
             HexCoord coord = HexCoord.of(coordSnapshot.getX(), coordSnapshot.getY(), coordSnapshot.getZ());
-            HexTile tile = new HexTile(coord, tileSnapshot.getTypeId());
+            // 创建坐标转换器用于计算物理世界坐标
+            HexCoordinateConverter converter = new HexCoordinateConverter();
+            HexTile tile = new HexTile(coord, tileSnapshot.getTypeId(), converter);
             tile.setHasHabitable(tileSnapshot.isHasHabitable());
 
             StarSystemSnapshot starSystemSnapshot = tileSnapshot.getStarSystem();

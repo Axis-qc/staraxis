@@ -44,7 +44,7 @@ public class UniverseSnapshotMapper {
         snapshot.setSectors(sectors);
     }
 
-    public SectorSnapshot sector(int x, int y, int z, String sectorType, StarSystemSnapshot starSystem) {
+    public SectorSnapshot sector(int x, int y, int z, String sectorType, StarSystemSnapshot starSystem, double worldX, double worldY) {
         SectorSnapshot s = new SectorSnapshot();
         HexCoordSnapshot coord = new HexCoordSnapshot();
         coord.setX(x);
@@ -53,6 +53,7 @@ public class UniverseSnapshotMapper {
         s.setCoord(coord);
         s.setSectorType(sectorType);
         s.setStarSystem(starSystem);
+        s.setWorldPositionLy(worldX, worldY);
         return s;
     }
 
@@ -82,7 +83,7 @@ public class UniverseSnapshotMapper {
             return SectorTypes.DEEP_SPACE;
         }
         return switch (raw) {
-            case SectorTypes.GALAXY -> SectorTypes.GALAXY;
+            case SectorTypes.STAR_SYSTEM -> SectorTypes.STAR_SYSTEM;
             case SectorTypes.NEBULA -> SectorTypes.NEBULA;
             case SectorTypes.DEEP_SPACE -> SectorTypes.DEEP_SPACE;
             default -> SectorTypes.DEEP_SPACE;

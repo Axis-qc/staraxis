@@ -22,7 +22,8 @@ public class GalaxyGenerator {
     public Galaxy generateAndSave(UniverseGenConfig cfg, Path output) throws GenerationException {
         try {
             long start = System.currentTimeMillis();
-            Galaxy galaxy = parallel.generate(cfg);
+            IntermediateGalaxy intermediate = parallel.generate(cfg);
+            Galaxy galaxy = intermediate.galaxy();
             long genCost = System.currentTimeMillis() - start;
             serializer.write(output, galaxy);
             LOG.info("Galaxy generated: sectors={} file={} cost={}ms", cfg.getSectorCount(), output, genCost);
@@ -36,7 +37,7 @@ public class GalaxyGenerator {
     /** 仅生成到内存，不落盘 */
     public Galaxy generate(UniverseGenConfig cfg) throws GenerationException {
         try {
-            return parallel.generate(cfg);
+            return parallel.generate(cfg).galaxy();
         } catch (RuntimeException e) {
             LOG.error("Galaxy generation failed", e);
             throw new GenerationException("Galaxy generation failed", e);

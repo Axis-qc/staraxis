@@ -15,11 +15,16 @@ import java.util.SplittableRandom;
 public class SequentialGalaxyGenerator {
 
     public Galaxy generate(UniverseGenConfig cfg) {
-        List<Sector> sectors = new ArrayList<>(cfg.getSectorCount());
-        SplittableRandom rng = RandomUtil.fromSeed(cfg.getSeed());
-        for (int i = 0; i < cfg.getSectorCount(); i++) {
+        SectorLocatorService locator = new SectorLocatorService(cfg.getHexRadiusLy());
+        List<Long> sectorIds = locator.generateSectorIdsByRadius(cfg.getGalaxyRadiusR());
+
+        List<Sector> sectors = new ArrayList<>(sectorIds.size());
+        for (long sectorId : sectorIds) {
+            int q = (int) (sectorId >> 32);
+            int r = (int) (sectorId & 0xffffffffL);
+            SplittableRandom rng = RandomUtil.deriveFromHexCoord(cfg.getSeed(), q, r);
             SectorGenerator gen = new SectorGenerator();
-            sectors.add(gen.generate(i, cfg, rng));
+            sectors.add(gen.generate(sectorId, q, r, cfg, rng));
         }
         return new Galaxy(cfg.getSeed(), sectors);
     }

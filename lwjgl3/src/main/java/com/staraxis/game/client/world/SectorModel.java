@@ -12,10 +12,15 @@ public class SectorModel {
     private final String sectorType; // galaxy/nebula/deep_space
     private final StarSystemSnapshot starSystem; // sectorType=galaxy 时可选
 
-    public SectorModel(HexCoord coord, String sectorType, StarSystemSnapshot starSystem) {
+    private final double worldPositionXLy;
+    private final double worldPositionYLy;
+
+    public SectorModel(HexCoord coord, String sectorType, StarSystemSnapshot starSystem, double worldPositionXLy, double worldPositionYLy) {
         this.coord = coord;
         this.sectorType = sectorType;
         this.starSystem = starSystem;
+        this.worldPositionXLy = worldPositionXLy;
+        this.worldPositionYLy = worldPositionYLy;
     }
 
     public HexCoord getCoord() {
@@ -28,5 +33,13 @@ public class SectorModel {
 
     public StarSystemSnapshot getStarSystem() {
         return starSystem;
+    }
+
+    public double getWorldPositionXLy() {
+        return worldPositionXLy;
+    }
+
+    public double getWorldPositionYLy() {
+        return worldPositionYLy;
     }
 }
