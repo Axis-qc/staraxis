@@ -29,7 +29,6 @@ cd src; pytest; ruff check .
 ## Recent Changes
 - 015-realistic-galaxy-sector-gen: Added Java（Gradle 多模块：`shared/` + `lwjgl3/`） + LWJGL3（客户端渲染/输入），shared 内使用 Kryo（已有 KryoSerializer），日志 logback
 - 014-coordinate-system-scale: Added Java 21（见根 `build.gradle` 的 toolchain） + libGDX 1.12.1 + LWJGL3 backend（见 `lwjgl3/build.gradle`）
-- 014-coordinate-system-scale: Added [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION] + [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
 
 
 <!-- MANUAL ADDITIONS START -->
