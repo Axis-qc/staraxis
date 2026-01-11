@@ -1,954 +1,1469 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>星球界面（原型）</title>
-  <style>
-    :root{
-      --bg:#0b0f14;
-      --panel:#121a23;
-      --panel2:#0f1620;
-      --stroke:#223247;
-      --stroke2:#2c4461;
-      --text:#e8eef7;
-      --muted:#9fb1c6;
-      --accent:#2dd4ff;
-      --good:#2cff9b;
-      --bad:#ff5c7a;
-      --warn:#ffc34d;
-      --shadow: 0 20px 50px rgba(0,0,0,.55);
-      --radius:14px;
-      --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", Arial;
-    }
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>星球界面（原型）</title>
+    <style>
+        :root {
+            --bg: #0b0f14;
+            --panel: #121a23;
+            --panel2: #0f1620;
+            --stroke: #223247;
+            --stroke2: #2c4461;
+            --text: #e8eef7;
+            --muted: #9fb1c6;
+            --accent: #2dd4ff;
+            --good: #2cff9b;
+            --bad: #ff5c7a;
+            --warn: #ffc34d;
+            --shadow: 0 20px 50px rgba(0, 0, 0, .55);
+            --radius: 14px;
+            --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", Arial;
+        }
 
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0;
-      font-family:var(--font);
-      background: radial-gradient(1200px 700px at 20% 10%, rgba(45,212,255,.14), transparent 60%),
-                  radial-gradient(1000px 700px at 80% 30%, rgba(44,255,155,.10), transparent 65%),
-                  linear-gradient(180deg, #070a0f, var(--bg));
-      color:var(--text);
-      overflow:hidden;
-    }
+        * {
+            box-sizing: border-box
+        }
 
-    /* 用于演示：居中但不占满全屏 */
-    .stage{
-      height:100%;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      padding:28px;
-    }
+        html,
+        body {
+            height: 100%
+        }
 
-    .window{
-      width:min(1180px, calc(100vw - 56px));
-      height:min(740px, calc(100vh - 56px));
-      background: linear-gradient(180deg, rgba(18,26,35,.98), rgba(13,18,25,.98));
-      border:1px solid rgba(34,50,71,.9);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      overflow:hidden;
-      display:flex;
-      flex-direction:column;
-    }
+        body {
+            margin: 0;
+            font-family: var(--font);
+            background: radial-gradient(1200px 700px at 20% 10%, rgba(45, 212, 255, .14), transparent 60%),
+                radial-gradient(1000px 700px at 80% 30%, rgba(44, 255, 155, .10), transparent 65%),
+                linear-gradient(180deg, #070a0f, var(--bg));
+            color: var(--text);
+            overflow: hidden;
+        }
 
-    .titlebar{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      padding:12px 14px;
-      background:linear-gradient(180deg, rgba(20,30,42,.95), rgba(14,20,30,.95));
-      border-bottom:1px solid rgba(34,50,71,.85);
-      gap:12px;
-    }
+        .stage {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 28px;
+        }
 
-    .title-left{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      min-width:0;
-    }
+        .window {
+            width: min(1180px, calc(100vw - 56px));
+            height: min(760px, calc(100vh - 56px));
+            background: linear-gradient(180deg, rgba(18, 26, 35, .98), rgba(13, 18, 25, .98));
+            border: 1px solid rgba(34, 50, 71, .9);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
 
-    .pill{
-      padding:4px 10px;
-      border:1px solid rgba(45,212,255,.35);
-      color:rgba(225,248,255,.95);
-      background:rgba(45,212,255,.08);
-      border-radius:999px;
-      font-size:12px;
-      letter-spacing:.3px;
-      white-space:nowrap;
-    }
+        .titlebar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 14px;
+            background: linear-gradient(180deg, rgba(20, 30, 42, .95), rgba(14, 20, 30, .95));
+            border-bottom: 1px solid rgba(34, 50, 71, .85);
+            gap: 12px;
+        }
 
-    .title{
-      font-weight:700;
-      letter-spacing:.4px;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap;
-    }
+        .title-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
 
-    .subtitle{
-      color:var(--muted);
-      font-size:12px;
-    }
+        .pill {
+            padding: 4px 10px;
+            border: 1px solid rgba(45, 212, 255, .35);
+            color: rgba(225, 248, 255, .95);
+            background: rgba(45, 212, 255, .08);
+            border-radius: 999px;
+            font-size: 12px;
+            letter-spacing: .3px;
+            white-space: nowrap;
+        }
 
-    .title-right{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      color:var(--muted);
-      font-size:12px;
-      white-space:nowrap;
-    }
+        .title {
+            font-weight: 700;
+            letter-spacing: .4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
 
-    .btn{
-      border:1px solid rgba(34,50,71,.9);
-      background:rgba(10,14,20,.6);
-      color:var(--text);
-      padding:8px 10px;
-      border-radius:10px;
-      font-size:12px;
-      cursor:pointer;
-      transition:transform .05s ease, border-color .15s ease, background .15s ease;
-    }
-    .btn:hover{border-color:rgba(45,212,255,.55); background:rgba(45,212,255,.07)}
-    .btn:active{transform:translateY(1px)}
+        .subtitle {
+            color: var(--muted);
+            font-size: 12px;
+        }
 
-    .content{
-      flex:1;
-      display:grid;
-      grid-template-columns: 360px 1fr;
-      gap:0;
-      min-height:0;
-    }
+        .title-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--muted);
+            font-size: 12px;
+            white-space: nowrap;
+        }
 
-    /* 左侧：行星总览与城市列表 */
-    .sidebar{
-      border-right:1px solid rgba(34,50,71,.75);
-      background:linear-gradient(180deg, rgba(15,22,32,.95), rgba(10,14,20,.95));
-      padding:14px;
-      overflow:auto;
-    }
+        .btn {
+            border: 1px solid rgba(34, 50, 71, .9);
+            background: rgba(10, 14, 20, .6);
+            color: var(--text);
+            padding: 8px 10px;
+            border-radius: 10px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: transform .05s ease, border-color .15s ease, background .15s ease;
+        }
 
-    .section{
-      background:rgba(18,26,35,.55);
-      border:1px solid rgba(34,50,71,.6);
-      border-radius:14px;
-      padding:12px;
-      margin-bottom:12px;
-    }
+        .btn:hover {
+            border-color: rgba(45, 212, 255, .55);
+            background: rgba(45, 212, 255, .07)
+        }
 
-    .section h3{
-      margin:0 0 10px;
-      font-size:13px;
-      letter-spacing:.4px;
-      color:rgba(225,248,255,.92);
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-    }
+        .btn:active {
+            transform: translateY(1px)
+        }
 
-    .kv{
-      display:grid;
-      grid-template-columns: 1fr auto;
-      gap:8px 10px;
-      align-items:center;
-      font-size:12px;
-    }
-    .kv .k{color:var(--muted)}
-    .kv .v{font-variant-numeric: tabular-nums;}
+        .content {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 170px 1fr;
+            min-height: 0;
+        }
 
-    .trend{
-      display:flex;
-      align-items:center;
-      gap:8px;
-      font-size:12px;
-      color:var(--muted);
-      margin-top:8px;
-    }
+        /* 左侧 Tab 导航 */
+        .nav {
+            border-right: 1px solid rgba(34, 50, 71, .75);
+            background: linear-gradient(180deg, rgba(15, 22, 32, .95), rgba(10, 14, 20, .95));
+            padding: 12px;
+            overflow: auto;
+        }
 
-    .dot{width:8px;height:8px;border-radius:50%}
-    .dot.good{background:var(--good)}
-    .dot.bad{background:var(--bad)}
+        .nav-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
 
-    .city-list{
-      display:flex;
-      flex-direction:column;
-      gap:10px;
-    }
+        .nav-item {
+            border: 1px solid rgba(34, 50, 71, .75);
+            background: rgba(10, 14, 20, .45);
+            color: var(--muted);
+            border-radius: 12px;
+            padding: 10px 12px;
+            cursor: pointer;
+            user-select: none;
+            transition: border-color .15s ease, background .15s ease;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 13px;
+        }
 
-    .city-card{
-      border:1px solid rgba(34,50,71,.7);
-      background:rgba(10,14,20,.55);
-      border-radius:12px;
-      padding:10px;
-      cursor:pointer;
-      transition: border-color .15s ease, background .15s ease;
-    }
+        .nav-item:hover {
+            border-color: rgba(45, 212, 255, .55);
+            background: rgba(45, 212, 255, .06);
+            color: rgba(225, 248, 255, .92);
+        }
 
-    .city-card:hover{border-color:rgba(45,212,255,.55); background:rgba(45,212,255,.06)}
-    .city-card.active{border-color:rgba(45,212,255,.9); background:rgba(45,212,255,.08)}
+        .nav-item.active {
+            border-color: rgba(45, 212, 255, .85);
+            background: rgba(45, 212, 255, .10);
+            color: rgba(225, 248, 255, .95);
+        }
 
-    .city-top{
-      display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
-      gap:10px;
-    }
-    .city-name{font-weight:700; font-size:13px;}
-    .city-meta{color:var(--muted); font-size:12px; margin-top:2px;}
+        .badge {
+            font-size: 11px;
+            padding: 3px 7px;
+            border-radius: 999px;
+            border: 1px solid rgba(34, 50, 71, .75);
+            color: rgba(225, 248, 255, .88);
+            background: rgba(18, 26, 35, .45);
+            white-space: nowrap;
+        }
 
-    .tag{
-      font-size:11px;
-      padding:3px 7px;
-      border-radius:999px;
-      border:1px solid rgba(34,50,71,.8);
-      color:rgba(225,248,255,.9);
-      background:rgba(18,26,35,.6);
-      white-space:nowrap;
-    }
-    .tag.capital{border-color:rgba(255,195,77,.55); background:rgba(255,195,77,.08); color:#ffe7b3}
+        /* 右侧内容 */
+        .main {
+            padding: 14px;
+            overflow: auto;
+            min-height: 0;
+        }
 
-    .mini-bars{
-      display:grid;
-      grid-template-columns: 1fr 1fr;
-      gap:8px;
-      margin-top:10px;
-    }
+        .top-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
 
-    .mini{
-      border:1px solid rgba(34,50,71,.6);
-      border-radius:10px;
-      padding:8px;
-      background:rgba(18,26,35,.35);
-    }
-    .mini .label{color:var(--muted); font-size:11px;}
-    .mini .value{font-size:12px; margin-top:4px; font-variant-numeric:tabular-nums;}
+        .panel {
+            background: rgba(18, 26, 35, .55);
+            border: 1px solid rgba(34, 50, 71, .6);
+            border-radius: 14px;
+            padding: 12px;
+            min-height: 0;
+        }
 
-    .bar{
-      height:8px;
-      border-radius:999px;
-      background:rgba(34,50,71,.55);
-      overflow:hidden;
-      margin-top:8px;
-    }
-    .bar > div{height:100%; border-radius:999px; background:linear-gradient(90deg, rgba(45,212,255,.85), rgba(44,255,155,.75)); width:50%}
+        .panel h3 {
+            margin: 0 0 10px;
+            font-size: 13px;
+            letter-spacing: .4px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
 
-    /* 右侧：图形与详情 */
-    .main{
-      padding:14px;
-      overflow:auto;
-      min-height:0;
-    }
+        .tag {
+            font-size: 11px;
+            padding: 3px 7px;
+            border-radius: 999px;
+            border: 1px solid rgba(34, 50, 71, .8);
+            color: rgba(225, 248, 255, .9);
+            background: rgba(18, 26, 35, .6);
+            white-space: nowrap;
+        }
 
-    .grid{
-      display:grid;
-      grid-template-columns: 1.2fr 1fr;
-      gap:12px;
-      min-height:0;
-    }
+        .tag.capital {
+            border-color: rgba(255, 195, 77, .55);
+            background: rgba(255, 195, 77, .08);
+            color: #ffe7b3
+        }
 
-    .panel{
-      background:rgba(18,26,35,.55);
-      border:1px solid rgba(34,50,71,.6);
-      border-radius:14px;
-      padding:12px;
-      min-height:0;
-    }
+        .kv {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px 10px;
+            align-items: center;
+            font-size: 12px;
+        }
 
-    .panel h3{
-      margin:0 0 10px;
-      font-size:13px;
-      letter-spacing:.4px;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-    }
+        .kv .k {
+            color: var(--muted)
+        }
 
-    .tabs{
-      display:flex;
-      gap:8px;
-    }
-    .tab{
-      padding:6px 10px;
-      border-radius:999px;
-      border:1px solid rgba(34,50,71,.75);
-      background:rgba(10,14,20,.45);
-      color:var(--muted);
-      font-size:12px;
-      cursor:pointer;
-      user-select:none;
-    }
-    .tab.active{border-color:rgba(45,212,255,.75); background:rgba(45,212,255,.08); color:rgba(225,248,255,.95)}
+        .kv .v {
+            font-variant-numeric: tabular-nums;
+        }
 
-    .chart-wrap{height:180px; border:1px solid rgba(34,50,71,.6); border-radius:12px; background:rgba(10,14,20,.4); overflow:hidden}
-    canvas{display:block; width:100%; height:100%}
+        .num {
+            font-variant-numeric: tabular-nums;
+        }
 
-    .legend{
-      margin-top:10px;
-      display:flex;
-      flex-wrap:wrap;
-      gap:10px;
-      color:var(--muted);
-      font-size:12px;
-    }
-    .leg-item{display:flex; align-items:center; gap:6px;}
-    .swatch{width:10px;height:10px;border-radius:3px}
+        /* 地表视图 */
+        .surface-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 12px;
+            min-height: 0;
+        }
 
-    .resource-table{
-      display:grid;
-      grid-template-columns: 1fr 120px 120px;
-      gap:8px 10px;
-      align-items:center;
-      font-size:12px;
-      margin-top:6px;
-    }
-    .resource-table .head{color:var(--muted)}
+        .region-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
 
-    .num{font-variant-numeric: tabular-nums;}
-    .pos{color:var(--good)}
-    .neg{color:var(--bad)}
+        .region-card {
+            border: 1px solid rgba(34, 50, 71, .7);
+            background: rgba(10, 14, 20, .45);
+            border-radius: 12px;
+            padding: 10px;
+            cursor: pointer;
+            transition: border-color .15s ease, background .15s ease;
+        }
 
-    .buildings{
-      display:flex;
-      flex-direction:column;
-      gap:8px;
-      margin-top:8px;
-    }
+        .region-card:hover {
+            border-color: rgba(45, 212, 255, .55);
+            background: rgba(45, 212, 255, .06)
+        }
 
-    .bld{
-      border:1px solid rgba(34,50,71,.6);
-      background:rgba(10,14,20,.45);
-      border-radius:12px;
-      padding:10px;
-      display:flex;
-      justify-content:space-between;
-      gap:10px;
-      font-size:12px;
-      color:var(--muted);
-    }
-    .bld .name{color:rgba(225,248,255,.92); font-weight:600}
+        .region-card.active {
+            border-color: rgba(45, 212, 255, .85);
+            background: rgba(45, 212, 255, .10)
+        }
 
-    .footer{
-      border-top:1px solid rgba(34,50,71,.75);
-      padding:10px 14px;
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      color:var(--muted);
-      font-size:12px;
-      background:rgba(10,14,20,.35);
-    }
+        .region-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+        }
 
-    .hint{opacity:.9}
+        .region-name {
+            font-weight: 700;
+            font-size: 12px;
+            color: rgba(225, 248, 255, .95)
+        }
 
-    @media (max-width: 980px){
-      .window{height:min(820px, calc(100vh - 56px));}
-      .content{grid-template-columns: 1fr;}
-      .sidebar{border-right:none; border-bottom:1px solid rgba(34,50,71,.75)}
-      .grid{grid-template-columns: 1fr;}
-    }
-  </style>
+        .region-meta {
+            color: var(--muted);
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .region-sub {
+            margin-top: 8px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .chip {
+            border: 1px solid rgba(34, 50, 71, .65);
+            background: rgba(18, 26, 35, .4);
+            color: var(--muted);
+            border-radius: 999px;
+            padding: 3px 8px;
+            font-size: 11px;
+            display: inline-flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .chip strong {
+            color: rgba(225, 248, 255, .92);
+            font-weight: 600;
+        }
+
+        .city-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .city-card {
+            border: 1px solid rgba(34, 50, 71, .7);
+            background: rgba(10, 14, 20, .45);
+            border-radius: 12px;
+            padding: 10px;
+            cursor: pointer;
+            transition: border-color .15s ease, background .15s ease;
+        }
+
+        .city-card:hover {
+            border-color: rgba(45, 212, 255, .55);
+            background: rgba(45, 212, 255, .06)
+        }
+
+        .city-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .city-name {
+            font-weight: 700;
+            font-size: 13px;
+        }
+
+        .city-meta {
+            color: var(--muted);
+            font-size: 12px;
+            margin-top: 2px;
+        }
+
+        /* 市场界面 */
+        .market-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 12px;
+            min-height: 0;
+        }
+
+        .resource-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .res-item {
+            border: 1px solid rgba(34, 50, 71, .7);
+            background: rgba(10, 14, 20, .45);
+            border-radius: 12px;
+            padding: 10px;
+            cursor: default;
+            transition: border-color .15s ease, background .15s ease;
+        }
+
+        .res-item:hover {
+            border-color: rgba(45, 212, 255, .65);
+            background: rgba(45, 212, 255, .06)
+        }
+
+        .res-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .res-name {
+            font-weight: 700;
+            font-size: 12px;
+            color: rgba(225, 248, 255, .95)
+        }
+
+        .res-stats {
+            color: var(--muted);
+            font-size: 12px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .res-stats .num {
+            color: rgba(225, 248, 255, .9)
+        }
+
+        .chart-wrap {
+            height: 220px;
+            border: 1px solid rgba(34, 50, 71, .6);
+            border-radius: 12px;
+            background: rgba(10, 14, 20, .4);
+            overflow: hidden
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%
+        }
+
+        .legend {
+            margin-top: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .leg-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .swatch {
+            width: 10px;
+            height: 10px;
+            border-radius: 3px
+        }
+
+        /* 城市详情弹窗 */
+        .modal-mask {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, .55);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 28px;
+        }
+
+        .modal {
+            width: min(980px, calc(100vw - 56px));
+            height: min(680px, calc(100vh - 56px));
+            background: linear-gradient(180deg, rgba(18, 26, 35, .98), rgba(13, 18, 25, .98));
+            border: 1px solid rgba(34, 50, 71, .9);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal .titlebar {
+            border-bottom: 1px solid rgba(34, 50, 71, .85);
+        }
+
+        .modal-body {
+            padding: 14px;
+            overflow: auto;
+            min-height: 0;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .mini-bars {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .mini {
+            border: 1px solid rgba(34, 50, 71, .6);
+            border-radius: 10px;
+            padding: 8px;
+            background: rgba(18, 26, 35, .35);
+        }
+
+        .mini .label {
+            color: var(--muted);
+            font-size: 11px;
+        }
+
+        .mini .value {
+            font-size: 12px;
+            margin-top: 4px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .bar {
+            height: 8px;
+            border-radius: 999px;
+            background: rgba(34, 50, 71, .55);
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .bar>div {
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, rgba(45, 212, 255, .85), rgba(44, 255, 155, .75));
+            width: 50%
+        }
+
+        .buildings {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .bld {
+            border: 1px solid rgba(34, 50, 71, .6);
+            background: rgba(10, 14, 20, .45);
+            border-radius: 12px;
+            padding: 10px;
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .bld .name {
+            color: rgba(225, 248, 255, .92);
+            font-weight: 600
+        }
+
+        .footer {
+            border-top: 1px solid rgba(34, 50, 71, .75);
+            padding: 10px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--muted);
+            font-size: 12px;
+            background: rgba(10, 14, 20, .35);
+        }
+
+        .hint {
+            opacity: .9
+        }
+
+        @media (max-width: 980px) {
+            .window {
+                height: min(820px, calc(100vh - 56px));
+            }
+
+            .content {
+                grid-template-columns: 1fr;
+            }
+
+            .nav {
+                border-right: none;
+                border-bottom: 1px solid rgba(34, 50, 71, .75)
+            }
+
+            .surface-grid,
+            .market-grid,
+            .modal-body {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 </head>
+
 <body>
-  <div class="stage">
-    <div class="window" role="application" aria-label="星球界面原型">
-      <div class="titlebar">
-        <div class="title-left">
-          <span class="pill">星球界面（独立窗口原型）</span>
-          <div style="min-width:0">
-            <div class="title" id="planetTitle">希望星（Hope）</div>
-            <div class="subtitle" id="planetSubtitle">大陆 3 / 海洋 3 · 首都：创世纪城 · 日结算：simulationDay</div>
-          </div>
-        </div>
-        <div class="title-right">
-          <span id="simDay">第 128 天</span>
-          <button class="btn" id="btnRandom">切换示例数据</button>
-        </div>
-      </div>
-
-      <div class="content">
-        <aside class="sidebar">
-          <div class="section">
-            <h3>
-              <span>行星总览</span>
-              <span class="tag" id="planetAttract">吸引力 1.15</span>
-            </h3>
-            <div class="kv">
-              <div class="k">总人口</div><div class="v num" id="planetPop">78,500</div>
-              <div class="k">可开发空间（示意）</div><div class="v num" id="planetDev">12.0%</div>
-              <div class="k">总开发规模</div><div class="v num" id="planetDevScale">9.6</div>
-              <div class="k">上缴比例</div><div class="v num" id="planetTribute">25%</div>
-            </div>
-            <div class="trend">
-              <span class="dot good" id="popDot"></span>
-              <span id="popTrend">人口趋势：+120/日</span>
-            </div>
-          </div>
-
-          <div class="section">
-            <h3>
-              <span>城市列表</span>
-              <span class="tag">点击查看详情</span>
-            </h3>
-            <div class="city-list" id="cityList"></div>
-          </div>
-
-          <div class="section">
-            <h3>
-              <span>资源净流（今日）</span>
-              <span class="tag">产出 - 消耗</span>
-            </h3>
-            <div class="resource-table" id="netFlowTable">
-              <div class="head">资源</div><div class="head" style="text-align:right">净流</div><div class="head" style="text-align:right">库存</div>
-            </div>
-          </div>
-        </aside>
-
-        <main class="main">
-          <div class="grid">
-            <section class="panel">
-              <h3>
-                <span>趋势曲线</span>
-                <span class="tabs" role="tablist" aria-label="趋势切换">
-                  <span class="tab active" data-chart="population" role="tab">人口</span>
-                  <span class="tab" data-chart="storage" role="tab">库存</span>
-                  <span class="tab" data-chart="production" role="tab">生产</span>
-                </span>
-              </h3>
-
-              <div class="chart-wrap">
-                <canvas id="chart" width="900" height="360"></canvas>
-              </div>
-              <div class="legend" id="legend"></div>
-            </section>
-
-            <section class="panel">
-              <h3>
-                <span id="cityTitle">创世纪城（Genesis）</span>
-                <span class="tag capital" id="cityCapital">首都</span>
-              </h3>
-              <div class="kv">
-                <div class="k">阶段</div><div class="v" id="cityStage">城市</div>
-                <div class="k">规模</div><div class="v num" id="cityScale">8</div>
-                <div class="k">专精</div><div class="v" id="citySpec">行政都市</div>
-                <div class="k">人口</div><div class="v num" id="cityPop">65,000</div>
-              </div>
-
-              <div class="mini-bars">
-                <div class="mini">
-                  <div class="label">岗位填充</div>
-                  <div class="value num" id="jobFillText">29,500 / 30,000（98.3%）</div>
-                  <div class="bar"><div id="jobFillBar"></div></div>
+    <div class="stage">
+        <div class="window" role="application" aria-label="星球界面原型">
+            <div class="titlebar">
+                <div class="title-left">
+                    <span class="pill">星球界面（独立窗口原型）</span>
+                    <div style="min-width:0">
+                        <div class="title" id="planetTitle">希望星（Hope）</div>
+                        <div class="subtitle" id="planetSubtitle">地表 / 市场 / 人口 / 政治</div>
+                    </div>
                 </div>
-                <div class="mini">
-                  <div class="label">住房充足度（示意）</div>
-                  <div class="value num" id="housingText">66,000 / 65,000（101.5%）</div>
-                  <div class="bar"><div id="housingBar"></div></div>
+                <div class="title-right">
+                    <span id="simDay">第 128 天</span>
+                    <button class="btn" id="btnRandom">切换示例数据</button>
                 </div>
-              </div>
+            </div>
 
-              <div style="margin-top:12px; color:var(--muted); font-size:12px;">
-                城市建筑（自动建造）
-              </div>
-              <div class="buildings" id="buildingList"></div>
-            </section>
+            <div class="content">
+                <aside class="nav">
+                    <div class="nav-group" id="navTabs">
+                        <div class="nav-item active" data-tab="overview">
+                            <span>总览</span>
+                            <span class="badge">星球</span>
+                        </div>
+                        <div class="nav-item" data-tab="surface">
+                            <span>地表</span>
+                            <span class="badge">区域</span>
+                        </div>
+                        <div class="nav-item" data-tab="market">
+                            <span>市场</span>
+                            <span class="badge">资源</span>
+                        </div>
+                        <div class="nav-item" data-tab="population">
+                            <span>人口</span>
+                            <span class="badge">曲线</span>
+                        </div>
+                        <div class="nav-item" data-tab="politics">
+                            <span>政治</span>
+                            <span class="badge">概览</span>
+                        </div>
+                    </div>
+                </aside>
 
-            <section class="panel" style="grid-column: 1 / -1;">
-              <h3>
-                <span>说明（用于游戏实际参考）</span>
-                <span class="tag">静态原型 · 可替换为真实数据</span>
-              </h3>
-              <div style="color:var(--muted); font-size:12px; line-height:1.6;">
-                1) 该界面为“独立窗口”概念，不占满屏幕；适合在游戏中作为弹窗/侧窗打开。<br>
-                2) 曲线展示采用 Canvas 轻量绘制：人口曲线、资源库存曲线、生产曲线（产出/消耗/净流）。<br>
-                3) 左侧为行星总览与城市列表；右侧上方为可切换趋势曲线，右侧中部为选中城市详情与建筑列表。<br>
-                4) 字段口径对齐《行星与城市设计.md》：`totalJobs`、`filledJobs`、`jobFillRate`、`resourceSites/buildings` 等。
-              </div>
-            </section>
-          </div>
-        </main>
-      </div>
+                <main class="main">
+                    <div class="top-grid">
+                        <!-- 总览 Tab -->
+                        <section class="panel" id="tab_overview">
+                            <h3>
+                                <span>星球总览</span>
+                                <span class="tag" id="planetType">类型：类地</span>
+                            </h3>
+                            <div class="kv">
+                                <div class="k">文明形态</div>
+                                <div class="v" id="planetCiv">通用</div>
+                                <div class="k">星球吸引力</div>
+                                <div class="v num" id="planetAttract">1.15</div>
+                                <div class="k">城市数量</div>
+                                <div class="v num" id="planetCityCount">3</div>
+                                <div class="k">总人口</div>
+                                <div class="v num" id="planetPop">78,500</div>
+                                <div class="k">可开发空间（示意）</div>
+                                <div class="v num" id="planetDev">12.0%</div>
+                                <div class="k">总开发规模</div>
+                                <div class="v num" id="planetDevScale">9.6</div>
+                                <div class="k">星球财政账户</div>
+                                <div class="v num" id="planetBudget">12,400</div>
+                                <div class="k">大陆 / 海洋</div>
+                                <div class="v" id="planetSurfaceMix">3 / 3</div>
+                            </div>
+                        </section>
 
-      <div class="footer">
-        <div class="hint">提示：点击“人口/库存/生产”切换曲线；点击左侧城市卡片切换城市。</div>
-        <div>文件：<span class="num">开发文档/世界系统/行星与地表/planet_ui.html</span></div>
-      </div>
+                        <!-- 地表 Tab -->
+                        <section class="panel" id="tab_surface" style="display:none;">
+                            <h3>
+                                <span>地表区域</span>
+                                <span class="tag">点击区域查看城市</span>
+                            </h3>
+                            <div class="surface-grid">
+                                <div>
+                                    <div class="region-list" id="regionList"></div>
+                                </div>
+                                <div>
+                                    <div class="panel" style="padding:12px;">
+                                        <h3>
+                                            <span id="regionTitle">区域详情</span>
+                                            <span class="tag" id="regionType">-</span>
+                                        </h3>
+                                        <div class="kv">
+                                            <div class="k">区域占比</div>
+                                            <div class="v num" id="regionPct">-</div>
+                                            <div class="k">可开发空间</div>
+                                            <div class="v num" id="regionDev">-</div>
+                                            <div class="k">次级地貌</div>
+                                            <div class="v" id="regionSub">-</div>
+                                        </div>
+                                        <div style="margin-top:12px; color:var(--muted); font-size:12px;">区域内城市</div>
+                                        <div class="city-list" id="regionCityList"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- 市场 Tab -->
+                        <section class="panel" id="tab_market" style="display:none;">
+                            <h3>
+                                <span>市场 · 资源列表</span>
+                                <span class="tag">悬停显示曲线</span>
+                            </h3>
+                            <div class="market-grid">
+                                <div>
+                                    <div class="resource-list" id="resourceList"></div>
+                                </div>
+                                <div>
+                                    <div class="panel" style="padding:12px;">
+                                        <h3>
+                                            <span id="marketChartTitle">资源曲线</span>
+                                            <span class="tag" id="marketChartMode">库存/产出/消耗/净流</span>
+                                        </h3>
+                                        <div class="chart-wrap">
+                                            <canvas id="marketChart" width="900" height="420"></canvas>
+                                        </div>
+                                        <div class="legend" id="marketLegend"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- 人口 Tab -->
+                        <section class="panel" id="tab_population" style="display:none;">
+                            <h3>
+                                <span>人口</span>
+                                <span class="tag">总人口趋势</span>
+                            </h3>
+                            <div class="chart-wrap" style="height:260px;">
+                                <canvas id="popChart" width="900" height="420"></canvas>
+                            </div>
+                            <div class="legend" id="popLegend"></div>
+                        </section>
+
+                        <!-- 政治 Tab -->
+                        <section class="panel" id="tab_politics" style="display:none;">
+                            <h3>
+                                <span>政治</span>
+                                <span class="tag">占位数据</span>
+                            </h3>
+                            <div class="kv">
+                                <div class="k">首都</div>
+                                <div class="v" id="polCapital">-</div>
+                                <div class="k">上缴比例</div>
+                                <div class="v num" id="polTribute">-</div>
+                                <div class="k">贸易盈余</div>
+                                <div class="v num" id="polTrade">-</div>
+                                <div class="k">治理压力（示意）</div>
+                                <div class="v num" id="polGov">-</div>
+                            </div>
+                        </section>
+
+                    </div>
+                </main>
+            </div>
+
+            <div class="footer">
+                <div class="hint">提示：左侧切换 Tab；地表中点击城市可打开城市详细界面；市场中悬停资源可更新右侧曲线。</div>
+                <div>文件：<span class="num">开发文档/世界系统/行星与地表/planet_ui.html</span></div>
+            </div>
+        </div>
     </div>
-  </div>
 
-  <script>
-    // ===== 示例数据（用于UI参考） =====
-    const ResourceNames = {
-      energy: '能源',
-      minerals: '矿物',
-      food: '食物',
-      consumerGoods: '民用消费品',
-      alloys: '合金'
-    };
+    <!-- 城市详情弹窗 -->
+    <div class="modal-mask" id="cityModalMask">
+        <div class="modal" role="dialog" aria-modal="true">
+            <div class="titlebar">
+                <div class="title-left">
+                    <span class="pill">城市界面</span>
+                    <div style="min-width:0">
+                        <div class="title" id="modalCityTitle">-</div>
+                        <div class="subtitle" id="modalCitySub">-</div>
+                    </div>
+                </div>
+                <div class="title-right">
+                    <button class="btn" id="btnCloseCity">关闭</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <section class="panel">
+                    <h3>
+                        <span>城市概览</span>
+                        <span class="tag" id="modalCityCapital" style="display:none;">首都</span>
+                    </h3>
+                    <div class="kv">
+                        <div class="k">阶段</div>
+                        <div class="v" id="modalCityStage">-</div>
+                        <div class="k">规模</div>
+                        <div class="v num" id="modalCityScale">-</div>
+                        <div class="k">专精</div>
+                        <div class="v" id="modalCitySpec">-</div>
+                        <div class="k">人口</div>
+                        <div class="v num" id="modalCityPop">-</div>
+                    </div>
 
-    function fmt(n){
-      return Number(n).toLocaleString('zh-CN');
-    }
+                    <div class="mini-bars">
+                        <div class="mini">
+                            <div class="label">岗位填充</div>
+                            <div class="value num" id="modalJobFillText">-</div>
+                            <div class="bar">
+                                <div id="modalJobFillBar"></div>
+                            </div>
+                        </div>
+                        <div class="mini">
+                            <div class="label">住房充足度（示意）</div>
+                            <div class="value num" id="modalHousingText">-</div>
+                            <div class="bar">
+                                <div id="modalHousingBar"></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
 
-    function clamp(v, a, b){
-      return Math.max(a, Math.min(b, v));
-    }
+                <section class="panel">
+                    <h3>
+                        <span>城市建筑（自动建造）</span>
+                        <span class="tag">Buildings</span>
+                    </h3>
+                    <div class="buildings" id="modalBuildingList"></div>
+                </section>
 
-    function makeSeries(len, base, drift, noise){
-      const arr = [];
-      let v = base;
-      for(let i=0;i<len;i++){
-        v += drift + (Math.random()*2-1)*noise;
-        arr.push(Math.max(0, v));
-      }
-      return arr;
-    }
+                <section class="panel" style="grid-column: 1 / -1;">
+                    <h3>
+                        <span>城市趋势（示意）</span>
+                        <span class="tag">人口/产出</span>
+                    </h3>
+                    <div class="chart-wrap" style="height:220px;">
+                        <canvas id="cityChart" width="900" height="420"></canvas>
+                    </div>
+                    <div class="legend" id="cityLegend"></div>
+                </section>
+            </div>
+        </div>
+    </div>
 
-    function buildMockPlanet(seedVariant=0){
-      const days = 60;
-      const name = seedVariant % 2 === 0 ? '希望星（Hope）' : '曙光星（Dawn）';
-      const simDay = 128 + seedVariant*7;
+    <script>
+        // ===== 示例数据（用于 UI 参考） =====
+        const ResourceNames = {
+            energy: '能源',
+            minerals: '矿物',
+            food: '食物',
+            consumerGoods: '民用消费品',
+            alloys: '合金'
+        };
 
-      // 行星级曲线：人口
-      const popBase = seedVariant % 2 === 0 ? 72000 : 94000;
-      const popSeries = makeSeries(days, popBase, 110 + seedVariant*5, 55);
-
-      // 行星级：生产/消耗/净流（示意）
-      const prodSeries = makeSeries(days, 3200 + seedVariant*120, 12, 80);
-      const consSeries = makeSeries(days, 3000 + seedVariant*110, 10, 75);
-
-      // 行星级：库存曲线（多资源）
-      const storage = {
-        energy: makeSeries(days, 15000 + seedVariant*400, 35, 120),
-        minerals: makeSeries(days, 7500 + seedVariant*250, 8, 60),
-        food: makeSeries(days, 22000 + seedVariant*500, 18, 90),
-        consumerGoods: makeSeries(days, 8000 + seedVariant*300, 7, 55),
-      };
-
-      const resourcesToday = {
-        energy: { production: 1200 + seedVariant*35, consumption: 1000 + seedVariant*30, storage: Math.round(storage.energy[days-1]) },
-        minerals: { production: 800 + seedVariant*20, consumption: 850 + seedVariant*18, storage: Math.round(storage.minerals[days-1]) },
-        food: { production: 950 + seedVariant*22, consumption: 785 + seedVariant*20, storage: Math.round(storage.food[days-1]) },
-        consumerGoods: { production: 400 + seedVariant*10, consumption: 380 + seedVariant*9, storage: Math.round(storage.consumerGoods[days-1]) },
-      };
-
-      const cities = [
-        {
-          id: 'city-1',
-          name: '创世纪城（Genesis）',
-          isCapital: true,
-          stage: '城市',
-          scale: 8,
-          specialization: '行政都市',
-          population: 65000 + seedVariant*800,
-          jobs: { total: 30000 + seedVariant*200, filled: 29500 + seedVariant*180 },
-          housing: { total: 66000 + seedVariant*300, used: 65000 + seedVariant*800 },
-          buildings: [
-            { name: '行星首府综合体', jobs: 500, note: '治理/财政' },
-            { name: '高级农场', jobs: 2000, note: '食物' },
-            { name: '民用工厂', jobs: 1500, note: '民用品' },
-          ]
-        },
-        {
-          id: 'city-2',
-          name: '先锋城（Vanguard）',
-          isCapital: false,
-          stage: '城镇',
-          scale: 5,
-          specialization: '工业城市',
-          population: 13500 + seedVariant*600,
-          jobs: { total: 7000 + seedVariant*120, filled: 6500 + seedVariant*90 },
-          housing: { total: 14000 + seedVariant*200, used: 13500 + seedVariant*600 },
-          buildings: [
-            { name: '合金精炼厂', jobs: 1000, note: '合金' },
-            { name: '采矿前哨', jobs: 800, note: '矿物' },
-          ]
-        },
-        {
-          id: 'city-3',
-          name: '远望前哨（Farwatch）',
-          isCapital: false,
-          stage: '定居点',
-          scale: 2,
-          specialization: '科研城市',
-          population: 3800 + seedVariant*200,
-          jobs: { total: 1600 + seedVariant*60, filled: 1200 + seedVariant*50 },
-          housing: { total: 4200 + seedVariant*120, used: 3800 + seedVariant*200 },
-          buildings: [
-            { name: '观测站', jobs: 160, note: '科研点' },
-            { name: '基础实验室', jobs: 220, note: '科研点' },
-          ]
-        }
-      ];
-
-      return {
-        name,
-        simDay,
-        continents: 3,
-        oceans: 3,
-        capital: cities.find(c=>c.isCapital)?.name ?? '无',
-        attractiveness: 1.15 + seedVariant*0.03,
-        developable: 0.12 + seedVariant*0.01,
-        devScale: 9.6 + seedVariant*0.4,
-        tribute: 0.25,
-        popTrendPerDay: 120 + seedVariant*8,
-        series: {
-          days,
-          population: popSeries,
-          production: prodSeries,
-          consumption: consSeries,
-          net: prodSeries.map((p,i)=>p-consSeries[i]),
-          storage,
-        },
-        resourcesToday,
-        cities,
-      };
-    }
-
-    // ===== 图表绘制 =====
-    function drawLineChart(canvas, opts){
-      const ctx = canvas.getContext('2d');
-      const dpr = window.devicePixelRatio || 1;
-
-      // 适配 CSS 大小
-      const rect = canvas.getBoundingClientRect();
-      const w = Math.max(10, Math.floor(rect.width * dpr));
-      const h = Math.max(10, Math.floor(rect.height * dpr));
-      if(canvas.width !== w || canvas.height !== h){
-        canvas.width = w;
-        canvas.height = h;
-      }
-
-      ctx.clearRect(0,0,w,h);
-
-      const pad = {l: 44*dpr, r: 14*dpr, t: 16*dpr, b: 28*dpr};
-      const iw = w - pad.l - pad.r;
-      const ih = h - pad.t - pad.b;
-
-      // 背景网格
-      ctx.save();
-      ctx.translate(pad.l, pad.t);
-      ctx.strokeStyle = 'rgba(34,50,71,.55)';
-      ctx.lineWidth = 1*dpr;
-      const gridY = 4;
-      const gridX = 6;
-      for(let i=0;i<=gridY;i++){
-        const y = (ih/gridY)*i;
-        ctx.beginPath();
-        ctx.moveTo(0,y);
-        ctx.lineTo(iw,y);
-        ctx.stroke();
-      }
-      for(let i=0;i<=gridX;i++){
-        const x = (iw/gridX)*i;
-        ctx.beginPath();
-        ctx.moveTo(x,0);
-        ctx.lineTo(x,ih);
-        ctx.stroke();
-      }
-      ctx.restore();
-
-      // 计算范围
-      const all = opts.series.flat();
-      let min = Math.min(...all);
-      let max = Math.max(...all);
-      if(min === max){ max = min + 1; }
-      const padRange = (max-min)*0.08;
-      min -= padRange;
-      max += padRange;
-
-      function xAt(i, n){
-        return pad.l + (i/(n-1))*iw;
-      }
-      function yAt(v){
-        return pad.t + (1 - (v-min)/(max-min))*ih;
-      }
-
-      // 轴标签（简化）
-      ctx.fillStyle = 'rgba(159,177,198,.95)';
-      ctx.font = `${12*dpr}px ${getComputedStyle(document.body).fontFamily}`;
-      ctx.textAlign = 'right';
-      ctx.textBaseline = 'middle';
-      for(let i=0;i<=4;i++){
-        const vv = min + (max-min)*(1 - i/4);
-        const yy = pad.t + (ih/4)*i;
-        ctx.fillText(String(Math.round(vv)), pad.l - 10*dpr, yy);
-      }
-
-      // 画线
-      opts.series.forEach((s, idx)=>{
-        const n = s.length;
-        const color = opts.colors[idx];
-
-        // 填充
-        if(opts.fill){
-          ctx.beginPath();
-          ctx.moveTo(xAt(0,n), yAt(s[0]));
-          for(let i=1;i<n;i++) ctx.lineTo(xAt(i,n), yAt(s[i]));
-          ctx.lineTo(xAt(n-1,n), pad.t + ih);
-          ctx.lineTo(xAt(0,n), pad.t + ih);
-          ctx.closePath();
-          const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t+ih);
-          grad.addColorStop(0, color.replace('rgb','rgba').replace(')',',0.18)'));
-          grad.addColorStop(1, color.replace('rgb','rgba').replace(')',',0.00)'));
-          ctx.fillStyle = grad;
-          ctx.fill();
+        function fmt(n) {
+            return Number(n).toLocaleString('zh-CN');
         }
 
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2*dpr;
-        ctx.beginPath();
-        ctx.moveTo(xAt(0,n), yAt(s[0]));
-        for(let i=1;i<n;i++) ctx.lineTo(xAt(i,n), yAt(s[i]));
-        ctx.stroke();
+        function clamp(v, a, b) {
+            return Math.max(a, Math.min(b, v));
+        }
 
-        // 末端点
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(xAt(n-1,n), yAt(s[n-1]), 3.5*dpr, 0, Math.PI*2);
-        ctx.fill();
-      });
-    }
+        function makeSeries(len, base, drift, noise) {
+            const arr = [];
+            let v = base;
+            for (let i = 0; i < len; i++) {
+                v += drift + (Math.random() * 2 - 1) * noise;
+                arr.push(Math.max(0, v));
+            }
+            return arr;
+        }
 
-    function rgb(r,g,b){ return `rgb(${r},${g},${b})`; }
+        function buildMockPlanet(seedVariant = 0) {
+            const civ = seedVariant % 2 === 0 ? '通用' : '机械';
+            const days = 60;
+            const name = seedVariant % 2 === 0 ? '希望星（Hope）' : '曙光星（Dawn）';
+            const simDay = 128 + seedVariant * 7;
 
-    // ===== UI 渲染 =====
-    let planet = buildMockPlanet(0);
-    let selectedCityId = planet.cities[0].id;
-    let chartMode = 'population';
+            const popBase = seedVariant % 2 === 0 ? 72000 : 94000;
+            const popSeries = makeSeries(days, popBase, 110 + seedVariant * 5, 55);
 
-    const el = (id)=>document.getElementById(id);
+            const storage = {
+                energy: makeSeries(days, 15000 + seedVariant * 400, 35, 120),
+                minerals: makeSeries(days, 7500 + seedVariant * 250, 8, 60),
+                food: makeSeries(days, 22000 + seedVariant * 500, 18, 90),
+                consumerGoods: makeSeries(days, 8000 + seedVariant * 300, 7, 55),
+            };
 
-    function renderPlanetHeader(){
-      el('planetTitle').textContent = planet.name;
-      el('planetSubtitle').textContent = `大陆 ${planet.continents} / 海洋 ${planet.oceans} · 首都：${planet.capital} · 日结算：simulationDay`;
-      el('simDay').textContent = `第 ${planet.simDay} 天`;
+            // 用于“市场”Tab 的曲线（每个资源：产出/消耗/净流）
+            const flow = {};
+            Object.keys(storage).forEach((k, idx) => {
+                const prod = makeSeries(days, 600 + seedVariant * 20 + idx * 120, 2.8, 14);
+                const cons = makeSeries(days, 560 + seedVariant * 20 + idx * 120, 2.6, 12);
+                flow[k] = {
+                    production: prod,
+                    consumption: cons,
+                    net: prod.map((p, i) => p - cons[i]),
+                    storage: storage[k],
+                };
+            });
 
-      el('planetAttract').textContent = `吸引力 ${planet.attractiveness.toFixed(2)}`;
-      el('planetPop').textContent = fmt(Math.round(planet.series.population[planet.series.days-1]));
-      el('planetDev').textContent = `${(planet.developable*100).toFixed(1)}%`;
-      el('planetDevScale').textContent = planet.devScale.toFixed(1);
-      el('planetTribute').textContent = `${Math.round(planet.tribute*100)}%`;
+            const resourcesToday = {
+                energy: { production: flow.energy.production[days - 1], consumption: flow.energy.consumption[days - 1], storage: Math.round(storage.energy[days - 1]) },
+                minerals: { production: flow.minerals.production[days - 1], consumption: flow.minerals.consumption[days - 1], storage: Math.round(storage.minerals[days - 1]) },
+                food: { production: flow.food.production[days - 1], consumption: flow.food.consumption[days - 1], storage: Math.round(storage.food[days - 1]) },
+                consumerGoods: { production: flow.consumerGoods.production[days - 1], consumption: flow.consumerGoods.consumption[days - 1], storage: Math.round(storage.consumerGoods[days - 1]) },
+            };
 
-      const trend = planet.popTrendPerDay;
-      el('popTrend').textContent = `人口趋势：${trend>=0?'+':''}${trend}/日`;
-      const dot = el('popDot');
-      dot.classList.toggle('good', trend>=0);
-      dot.classList.toggle('bad', trend<0);
-    }
+            const cities = [
+                {
+                    id: 'city-1',
+                    name: '创世纪城（Genesis）',
+                    isCapital: true,
+                    stage: '城市',
+                    scale: 8,
+                    specialization: '行政都市',
+                    population: 65000 + seedVariant * 800,
+                    jobs: { total: 30000 + seedVariant * 200, filled: 29500 + seedVariant * 180 },
+                    housing: { total: 66000 + seedVariant * 300, used: 65000 + seedVariant * 800 },
+                    buildings: [
+                        { name: '行星首府综合体', jobs: 500, note: '治理/财政' },
+                        { name: '高级农场', jobs: 2000, note: '食物' },
+                        { name: '民用工厂', jobs: 1500, note: '民用品' },
+                    ],
+                    series: {
+                        population: makeSeries(days, 56000 + seedVariant * 700, 55, 40),
+                        production: makeSeries(days, 1400 + seedVariant * 60, 4.0, 30),
+                    }
+                },
+                {
+                    id: 'city-2',
+                    name: '先锋城（Vanguard）',
+                    isCapital: false,
+                    stage: '城镇',
+                    scale: 5,
+                    specialization: '工业城市',
+                    population: 13500 + seedVariant * 600,
+                    jobs: { total: 7000 + seedVariant * 120, filled: 6500 + seedVariant * 90 },
+                    housing: { total: 14000 + seedVariant * 200, used: 13500 + seedVariant * 600 },
+                    buildings: [
+                        { name: '合金精炼厂', jobs: 1000, note: '合金' },
+                        { name: '采矿前哨', jobs: 800, note: '矿物' },
+                    ],
+                    series: {
+                        population: makeSeries(days, 9800 + seedVariant * 500, 18, 20),
+                        production: makeSeries(days, 820 + seedVariant * 50, 2.3, 18),
+                    }
+                },
+                {
+                    id: 'city-3',
+                    name: '远望前哨（Farwatch）',
+                    isCapital: false,
+                    stage: '定居点',
+                    scale: 2,
+                    specialization: '科研城市',
+                    population: 3800 + seedVariant * 200,
+                    jobs: { total: 1600 + seedVariant * 60, filled: 1200 + seedVariant * 50 },
+                    housing: { total: 4200 + seedVariant * 120, used: 3800 + seedVariant * 200 },
+                    buildings: [
+                        { name: '观测站', jobs: 160, note: '科研点' },
+                        { name: '基础实验室', jobs: 220, note: '科研点' },
+                    ],
+                    series: {
+                        population: makeSeries(days, 2400 + seedVariant * 150, 8, 10),
+                        production: makeSeries(days, 260 + seedVariant * 20, 0.9, 8),
+                    }
+                }
+            ];
 
-    function renderNetFlow(){
-      const table = el('netFlowTable');
-      // 清除旧行（保留表头）
-      table.querySelectorAll('[data-row="1"]').forEach(n=>n.remove());
+            const surfaceRegions = [
+                {
+                    id: 'r1',
+                    name: '希望大陆',
+                    type: '大陆',
+                    surfacePercentage: 32,
+                    developableSpace: 0.055 + seedVariant * 0.005,
+                    subTerrain: [{ name: '山脉', percentageOfRegion: 12 }, { name: '平原', percentageOfRegion: 88 }],
+                    cityIds: ['city-1', 'city-3']
+                },
+                {
+                    id: 'r2',
+                    name: '荣耀大陆',
+                    type: '大陆',
+                    surfacePercentage: 24,
+                    developableSpace: 0.038 + seedVariant * 0.004,
+                    subTerrain: [{ name: '丘陵', percentageOfRegion: 25 }, { name: '平原', percentageOfRegion: 75 }],
+                    cityIds: ['city-2']
+                },
+                {
+                    id: 'r3',
+                    name: '遗忘之地',
+                    type: '大陆',
+                    surfacePercentage: 8,
+                    developableSpace: 0.010 + seedVariant * 0.002,
+                    subTerrain: [{ name: '荒漠', percentageOfRegion: 70 }, { name: '山脉', percentageOfRegion: 30 }],
+                    cityIds: []
+                },
+                {
+                    id: 'r4',
+                    name: '宁静之海',
+                    type: '海洋',
+                    surfacePercentage: 16,
+                    developableSpace: 0.020 + seedVariant * 0.002,
+                    subTerrain: [{ name: '浅海', percentageOfRegion: 10 }, { name: '深海', percentageOfRegion: 90 }],
+                    cityIds: []
+                },
+                {
+                    id: 'r5',
+                    name: '风暴洋',
+                    type: '海洋',
+                    surfacePercentage: 12,
+                    developableSpace: 0.015 + seedVariant * 0.001,
+                    subTerrain: [{ name: '浅海', percentageOfRegion: 22 }, { name: '深海', percentageOfRegion: 78 }],
+                    cityIds: []
+                },
+                {
+                    id: 'r6',
+                    name: '小型内海',
+                    type: '海洋',
+                    surfacePercentage: 8,
+                    developableSpace: 0.012 + seedVariant * 0.001,
+                    subTerrain: [{ name: '浅海', percentageOfRegion: 35 }, { name: '深海', percentageOfRegion: 65 }],
+                    cityIds: []
+                },
+            ];
 
-      const entries = Object.entries(planet.resourcesToday);
-      for(const [key, r] of entries){
-        const net = r.production - r.consumption;
-        const row = document.createElement('div');
-        row.setAttribute('data-row','1');
-        row.style.display='contents';
+            return {
+                name,
+                simDay,
+                civ,
+                continents: 3,
+                oceans: 3,
+                capital: cities.find(c => c.isCapital)?.name ?? '无',
+                attractiveness: 1.15 + seedVariant * 0.03,
+                developable: 0.12 + seedVariant * 0.01,
+                devScale: 9.6 + seedVariant * 0.4,
+                budget: 12400 + seedVariant * 800,
+                tribute: 0.25,
+                tradeSurplus: 320 + seedVariant * 40,
+                govPressure: 0.62 + seedVariant * 0.05,
+                popTrendPerDay: 120 + seedVariant * 8,
+                series: {
+                    days,
+                    population: popSeries,
+                },
+                resourcesToday,
+                resourceSeries: flow,
+                cities,
+                surfaceRegions,
+            };
+        }
 
-        const c1 = document.createElement('div');
-        c1.textContent = ResourceNames[key] ?? key;
-        c1.style.color = 'rgba(225,248,255,.92)';
+        // ===== 图表绘制（复用） =====
+        function drawLineChart(canvas, opts) {
+            const ctx = canvas.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
 
-        const c2 = document.createElement('div');
-        c2.className = `num ${net>=0?'pos':'neg'}`;
-        c2.style.textAlign='right';
-        c2.textContent = `${net>=0?'+':''}${Math.round(net)}`;
+            const rect = canvas.getBoundingClientRect();
+            const w = Math.max(10, Math.floor(rect.width * dpr));
+            const h = Math.max(10, Math.floor(rect.height * dpr));
+            if (canvas.width !== w || canvas.height !== h) {
+                canvas.width = w;
+                canvas.height = h;
+            }
 
-        const c3 = document.createElement('div');
-        c3.className = 'num';
-        c3.style.textAlign='right';
-        c3.textContent = fmt(r.storage);
+            ctx.clearRect(0, 0, w, h);
 
-        table.appendChild(row);
-        table.appendChild(c1);
-        table.appendChild(c2);
-        table.appendChild(c3);
-      }
-    }
+            const pad = { l: 44 * dpr, r: 14 * dpr, t: 16 * dpr, b: 28 * dpr };
+            const iw = w - pad.l - pad.r;
+            const ih = h - pad.t - pad.b;
 
-    function renderCityList(){
-      const list = el('cityList');
-      list.innerHTML='';
+            // 网格
+            ctx.save();
+            ctx.translate(pad.l, pad.t);
+            ctx.strokeStyle = 'rgba(34,50,71,.55)';
+            ctx.lineWidth = 1 * dpr;
+            const gridY = 4;
+            const gridX = 6;
+            for (let i = 0; i <= gridY; i++) {
+                const y = (ih / gridY) * i;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(iw, y);
+                ctx.stroke();
+            }
+            for (let i = 0; i <= gridX; i++) {
+                const x = (iw / gridX) * i;
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, ih);
+                ctx.stroke();
+            }
+            ctx.restore();
 
-      for(const c of planet.cities){
-        const card = document.createElement('div');
-        card.className = 'city-card' + (c.id===selectedCityId ? ' active' : '');
-        card.onclick = ()=>{ selectedCityId = c.id; renderCityList(); renderCityDetail(); };
+            const all = opts.series.flat();
+            let min = Math.min(...all);
+            let max = Math.max(...all);
+            if (min === max) max = min + 1;
+            const padRange = (max - min) * 0.08;
+            min -= padRange;
+            max += padRange;
 
-        const top = document.createElement('div');
-        top.className='city-top';
+            function xAt(i, n) {
+                return pad.l + (i / (n - 1)) * iw;
+            }
 
-        const left = document.createElement('div');
-        const name = document.createElement('div');
-        name.className='city-name';
-        name.textContent = c.name;
-        const meta = document.createElement('div');
-        meta.className='city-meta';
-        meta.textContent = `${c.stage} · 规模 ${c.scale} · ${c.specialization}`;
-        left.appendChild(name);
-        left.appendChild(meta);
+            function yAt(v) {
+                return pad.t + (1 - (v - min) / (max - min)) * ih;
+            }
 
-        const right = document.createElement('div');
-        const tag = document.createElement('span');
-        tag.className = 'tag' + (c.isCapital ? ' capital' : '');
-        tag.textContent = c.isCapital ? '首都' : '城市';
-        right.appendChild(tag);
+            // y 轴标签
+            ctx.fillStyle = 'rgba(159,177,198,.95)';
+            ctx.font = `${12 * dpr}px ${getComputedStyle(document.body).fontFamily}`;
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            for (let i = 0; i <= 4; i++) {
+                const vv = min + (max - min) * (1 - i / 4);
+                const yy = pad.t + (ih / 4) * i;
+                ctx.fillText(String(Math.round(vv)), pad.l - 10 * dpr, yy);
+            }
 
-        top.appendChild(left);
-        top.appendChild(right);
+            opts.series.forEach((s, idx) => {
+                const n = s.length;
+                const color = opts.colors[idx];
 
-        const mini = document.createElement('div');
-        mini.className='mini-bars';
+                if (opts.fill) {
+                    ctx.beginPath();
+                    ctx.moveTo(xAt(0, n), yAt(s[0]));
+                    for (let i = 1; i < n; i++) ctx.lineTo(xAt(i, n), yAt(s[i]));
+                    ctx.lineTo(xAt(n - 1, n), pad.t + ih);
+                    ctx.lineTo(xAt(0, n), pad.t + ih);
+                    ctx.closePath();
+                    const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + ih);
+                    grad.addColorStop(0, color.replace('rgb', 'rgba').replace(')', ',0.18)'));
+                    grad.addColorStop(1, color.replace('rgb', 'rgba').replace(')', ',0.00)'));
+                    ctx.fillStyle = grad;
+                    ctx.fill();
+                }
 
-        const jobFillRate = c.jobs.total > 0 ? c.jobs.filled / c.jobs.total : 0;
-        const box1 = document.createElement('div');
-        box1.className='mini';
-        box1.innerHTML = `<div class="label">岗位</div><div class="value num">${fmt(c.jobs.filled)} / ${fmt(c.jobs.total)}</div><div class="bar"><div style="width:${(jobFillRate*100).toFixed(1)}%"></div></div>`;
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2 * dpr;
+                ctx.beginPath();
+                ctx.moveTo(xAt(0, n), yAt(s[0]));
+                for (let i = 1; i < n; i++) ctx.lineTo(xAt(i, n), yAt(s[i]));
+                ctx.stroke();
 
-        const housingRate = c.housing.total > 0 ? c.housing.used / c.housing.total : 0;
-        const box2 = document.createElement('div');
-        box2.className='mini';
-        box2.innerHTML = `<div class="label">住房</div><div class="value num">${fmt(c.housing.used)} / ${fmt(c.housing.total)}</div><div class="bar"><div style="width:${(clamp(housingRate,0,1)*100).toFixed(1)}%"></div></div>`;
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(xAt(n - 1, n), yAt(s[n - 1]), 3.5 * dpr, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
 
-        mini.appendChild(box1);
-        mini.appendChild(box2);
+        function rgb(r, g, b) {
+            return `rgb(${r},${g},${b})`;
+        }
 
-        card.appendChild(top);
-        card.appendChild(mini);
-        list.appendChild(card);
-      }
-    }
+        function renderLegend(container, items) {
+            container.innerHTML = '';
+            items.forEach(it => {
+                const li = document.createElement('div');
+                li.className = 'leg-item';
+                const sw = document.createElement('span');
+                sw.className = 'swatch';
+                sw.style.background = it.color;
+                const tx = document.createElement('span');
+                tx.textContent = it.label;
+                li.appendChild(sw);
+                li.appendChild(tx);
+                container.appendChild(li);
+            });
+        }
 
-    function renderCityDetail(){
-      const c = planet.cities.find(x=>x.id===selectedCityId) ?? planet.cities[0];
-      el('cityTitle').textContent = c.name;
-      el('cityCapital').style.display = c.isCapital ? 'inline-flex' : 'none';
+        // ===== 状态 =====
+        let planet = buildMockPlanet(0);
+        let activeTab = 'overview';
+        let selectedRegionId = planet.surfaceRegions[0]?.id;
 
-      el('cityStage').textContent = c.stage;
-      el('cityScale').textContent = String(c.scale);
-      el('citySpec').textContent = c.specialization;
-      el('cityPop').textContent = fmt(c.population);
+        const el = (id) => document.getElementById(id);
 
-      const jobFillRate = c.jobs.total > 0 ? c.jobs.filled / c.jobs.total : 0;
-      el('jobFillText').textContent = `${fmt(c.jobs.filled)} / ${fmt(c.jobs.total)}（${(jobFillRate*100).toFixed(1)}%）`;
-      el('jobFillBar').style.width = `${(jobFillRate*100).toFixed(1)}%`;
+        function setActiveTab(tab) {
+            activeTab = tab;
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.getAttribute('data-tab') === tab));
+            el('tab_overview').style.display = tab === 'overview' ? '' : 'none';
+            el('tab_surface').style.display = tab === 'surface' ? '' : 'none';
+            el('tab_market').style.display = tab === 'market' ? '' : 'none';
+            el('tab_population').style.display = tab === 'population' ? '' : 'none';
+            el('tab_politics').style.display = tab === 'politics' ? '' : 'none';
 
-      const housingRate = c.housing.total > 0 ? c.housing.used / c.housing.total : 0;
-      el('housingText').textContent = `${fmt(c.housing.total)} / ${fmt(c.housing.used)}（${(c.housing.total/c.housing.used*100).toFixed(1)}%）`;
-      el('housingBar').style.width = `${(clamp(c.housing.used/c.housing.total,0,1)*100).toFixed(1)}%`;
+            if (tab === 'market') {
+                // 默认绘制一个资源
+                const firstKey = Object.keys(planet.resourceSeries)[0];
+                if (firstKey) renderMarketChart(firstKey);
+            }
+            if (tab === 'population') {
+                renderPopTab();
+            }
+            if (tab === 'politics') {
+                renderPoliticsTab();
+            }
+        }
 
-      const list = el('buildingList');
-      list.innerHTML='';
-      c.buildings.forEach(b=>{
-        const item = document.createElement('div');
-        item.className='bld';
-        item.innerHTML = `<div><div class="name">${b.name}</div><div>${b.note ?? ''}</div></div><div class="num">+${fmt(b.jobs)} 岗位</div>`;
-        list.appendChild(item);
-      });
-    }
+        function renderPlanetSummary() {
+            el('planetTitle').textContent = planet.name;
+            el('planetAttract').textContent = `吸引力 ${planet.attractiveness.toFixed(2)}`;
+            el('planetCiv').textContent = planet.civ;
+            el('planetPop').textContent = fmt(Math.round(planet.series.population[planet.series.days - 1]));
+            el('planetDev').textContent = `${(planet.developable * 100).toFixed(1)}%`;
+            el('planetDevScale').textContent = planet.devScale.toFixed(1);
+            el('planetBudget').textContent = fmt(planet.budget);
 
-    function renderLegend(items){
-      const legend = el('legend');
-      legend.innerHTML='';
-      items.forEach(it=>{
-        const li = document.createElement('div');
-        li.className='leg-item';
-        const sw = document.createElement('span');
-        sw.className='swatch';
-        sw.style.background = it.color;
-        const tx = document.createElement('span');
-        tx.textContent = it.label;
-        li.appendChild(sw);
-        li.appendChild(tx);
-        legend.appendChild(li);
-      });
-    }
+            el('simDay').textContent = `第 ${planet.simDay} 天`;
+            // 副标题现在动态显示当前活动的 Tab
+            const tabNameMap = { overview: '总览', surface: '地表', market: '市场', population: '人口', politics: '政治' };
+            el('planetSubtitle').textContent = `当前：${tabNameMap[activeTab] ?? activeTab}`;
+            // el('planetSubtitle').textContent = `大陆 ${planet.continents} / 海洋 ${planet.oceans} · 首都：${planet.capital}`;
+        }
 
-    function renderChart(){
-      const canvas = el('chart');
+        function renderSurfaceTab() {
+            const list = el('regionList');
+            list.innerHTML = '';
 
-      if(chartMode === 'population'){
-        const s = planet.series.population;
-        drawLineChart(canvas, {
-          series:[s],
-          colors:[rgb(45,212,255)],
-          fill:true,
-        });
-        renderLegend([{label:'总人口', color: rgb(45,212,255)}]);
-      }
+            planet.surfaceRegions.forEach(r => {
+                const card = document.createElement('div');
+                card.className = 'region-card' + (r.id === selectedRegionId ? ' active' : '');
+                card.onclick = () => {
+                    selectedRegionId = r.id;
+                    renderSurfaceTab();
+                };
 
-      if(chartMode === 'storage'){
-        const st = planet.series.storage;
-        const keys = ['energy','minerals','food','consumerGoods'];
-        const colors = [rgb(45,212,255), rgb(255,195,77), rgb(44,255,155), rgb(255,92,122)];
-        drawLineChart(canvas, {
-          series: keys.map(k=>st[k]),
-          colors,
-          fill:false,
-        });
-        renderLegend(keys.map((k,i)=>({label:`库存：${ResourceNames[k]??k}`, color: colors[i]})));
-      }
+                const head = document.createElement('div');
+                head.className = 'region-head';
 
-      if(chartMode === 'production'){
-        const colors = [rgb(44,255,155), rgb(255,92,122), rgb(45,212,255)];
-        drawLineChart(canvas, {
-          series:[planet.series.production, planet.series.consumption, planet.series.net],
-          colors,
-          fill:false,
-        });
-        renderLegend([
-          {label:'总产出（示意）', color: colors[0]},
-          {label:'总消耗（示意）', color: colors[1]},
-          {label:'净流（示意）', color: colors[2]},
-        ]);
-      }
-    }
+                const left = document.createElement('div');
+                left.innerHTML = `<div class="region-name">${r.name}</div><div class="region-meta">${r.type} · ${r.surfacePercentage}%</div>`;
 
-    function bind(){
-      document.querySelectorAll('.tab').forEach(t=>{
-        t.addEventListener('click', ()=>{
-          document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
-          t.classList.add('active');
-          chartMode = t.getAttribute('data-chart');
-          renderChart();
-        });
-      });
+                const right = document.createElement('div');
+                right.innerHTML = `<span class="tag">可开发 ${(r.developableSpace * 100).toFixed(1)}%</span>`;
 
-      el('btnRandom').addEventListener('click', ()=>{
-        // 简单切换两套示例
-        const next = planet.name.includes('希望') ? 1 : 0;
-        planet = buildMockPlanet(next);
-        selectedCityId = planet.cities[0].id;
+                head.appendChild(left);
+                head.appendChild(right);
+
+                const sub = document.createElement('div');
+                sub.className = 'region-sub';
+                const subStr = r.subTerrain.map(t => `${t.name} ${t.percentageOfRegion}%`).join(' / ');
+                sub.innerHTML = `<span class="chip"><strong>地貌</strong>${subStr}</span><span class="chip"><strong>城市</strong>${r.cityIds.length}</span>`;
+
+                card.appendChild(head);
+                card.appendChild(sub);
+                list.appendChild(card);
+            });
+
+            renderRegionDetail();
+        }
+
+        function renderRegionDetail() {
+            const r = planet.surfaceRegions.find(x => x.id === selectedRegionId) ?? planet.surfaceRegions[0];
+            if (!r) return;
+
+            el('regionTitle').textContent = r.name;
+            el('regionType').textContent = r.type;
+            el('regionPct').textContent = `${r.surfacePercentage}%`;
+            el('regionDev').textContent = `${(r.developableSpace * 100).toFixed(1)}%`;
+            el('regionSub').textContent = r.subTerrain.map(t => `${t.name} ${t.percentageOfRegion}%`).join(' / ');
+
+            const cityList = el('regionCityList');
+            cityList.innerHTML = '';
+            const cities = r.cityIds.map(id => planet.cities.find(c => c.id === id)).filter(Boolean);
+
+            if (cities.length === 0) {
+                const empty = document.createElement('div');
+                empty.style.color = 'var(--muted)';
+                empty.style.fontSize = '12px';
+                empty.style.padding = '10px 2px';
+                empty.textContent = '该区域暂无城市';
+                cityList.appendChild(empty);
+                return;
+            }
+
+            cities.forEach(c => {
+                const card = document.createElement('div');
+                card.className = 'city-card';
+                card.onclick = () => openCityModal(c.id);
+
+                const top = document.createElement('div');
+                top.className = 'city-top';
+
+                const left = document.createElement('div');
+                left.innerHTML = `<div class="city-name">${c.name}</div><div class="city-meta">${c.stage} · 规模 ${c.scale} · ${c.specialization}</div>`;
+
+                const right = document.createElement('div');
+                right.innerHTML = c.isCapital ? `<span class="tag capital">首都</span>` : `<span class="tag">城市</span>`;
+
+                top.appendChild(left);
+                top.appendChild(right);
+
+                card.appendChild(top);
+                cityList.appendChild(card);
+            });
+        }
+
+        function renderResourceList() {
+            const container = el('resourceList');
+            container.innerHTML = '';
+
+            for (const [key, r] of Object.entries(planet.resourcesToday)) {
+                const net = r.production - r.consumption;
+                const item = document.createElement('div');
+                item.className = 'res-item';
+
+                const row = document.createElement('div');
+                row.className = 'res-row';
+
+                const name = document.createElement('div');
+                name.className = 'res-name';
+                name.textContent = ResourceNames[key] ?? key;
+
+                const stats = document.createElement('div');
+                stats.className = 'res-stats';
+                stats.innerHTML = `
+          <span>净流: <span class="num" style="color:${net >= 0 ? 'var(--good)' : 'var(--bad)'}">${net >= 0 ? '+' : ''}${Math.round(net)}</span></span>
+          <span>库存: <span class="num">${fmt(r.storage)}</span></span>
+        `;
+
+                row.appendChild(name);
+                row.appendChild(stats);
+                item.appendChild(row);
+                container.appendChild(item);
+
+                item.addEventListener('mouseenter', () => {
+                    renderMarketChart(key);
+                });
+            }
+        }
+
+        function renderMarketChart(resourceKey) {
+            const series = planet.resourceSeries[resourceKey];
+            if (!series) return;
+
+            el('marketChartTitle').textContent = `${ResourceNames[resourceKey] ?? resourceKey} 曲线`;
+
+            const colors = [rgb(45, 212, 255), rgb(44, 255, 155), rgb(255, 92, 122), rgb(255, 195, 77)];
+            drawLineChart(el('marketChart'), {
+                series: [series.storage, series.production, series.consumption, series.net],
+                colors,
+                fill: false,
+            });
+
+            renderLegend(el('marketLegend'), [
+                { label: '库存', color: colors[0] },
+                { label: '产出', color: colors[1] },
+                { label: '消耗', color: colors[2] },
+                { label: '净流', color: colors[3] },
+            ]);
+        }
+
+        function renderPopTab() {
+            drawLineChart(el('popChart'), {
+                series: [planet.series.population],
+                colors: [rgb(45, 212, 255)],
+                fill: true,
+            });
+            renderLegend(el('popLegend'), [{ label: '总人口', color: rgb(45, 212, 255) }]);
+        }
+
+        function renderPoliticsTab() {
+            el('polCapital').textContent = planet.capital;
+            el('polTribute').textContent = `${Math.round(planet.tribute * 100)}%`;
+            el('polTrade').textContent = `${planet.tradeSurplus >= 0 ? '+' : ''}${planet.tradeSurplus}/日`;
+            el('polGov').textContent = planet.govPressure.toFixed(2);
+        }
+
+        // ===== 城市弹窗 =====
+        function openCityModal(cityId) {
+            const c = planet.cities.find(x => x.id === cityId);
+            if (!c) return;
+
+            el('modalCityTitle').textContent = c.name;
+            el('modalCitySub').textContent = `${c.stage} · 规模 ${c.scale} · ${c.specialization}`;
+            el('modalCityCapital').style.display = c.isCapital ? '' : 'none';
+
+            el('modalCityStage').textContent = c.stage;
+            el('modalCityScale').textContent = String(c.scale);
+            el('modalCitySpec').textContent = c.specialization;
+            el('modalCityPop').textContent = fmt(c.population);
+
+            const jobFillRate = c.jobs.total > 0 ? c.jobs.filled / c.jobs.total : 0;
+            el('modalJobFillText').textContent = `${fmt(c.jobs.filled)} / ${fmt(c.jobs.total)}（${(jobFillRate * 100).toFixed(1)}%）`;
+            el('modalJobFillBar').style.width = `${(jobFillRate * 100).toFixed(1)}%`;
+
+            const housingRate = c.housing.total > 0 ? c.housing.used / c.housing.total : 0;
+            el('modalHousingText').textContent = `${fmt(c.housing.used)} / ${fmt(c.housing.total)}（${(housingRate * 100).toFixed(1)}%）`;
+            el('modalHousingBar').style.width = `${(clamp(housingRate, 0, 1) * 100).toFixed(1)}%`;
+
+            const list = el('modalBuildingList');
+            list.innerHTML = '';
+            c.buildings.forEach(b => {
+                const item = document.createElement('div');
+                item.className = 'bld';
+                item.innerHTML = `<div><div class="name">${b.name}</div><div>${b.note ?? ''}</div></div><div class="num">+${fmt(b.jobs)} 岗位</div>`;
+                list.appendChild(item);
+            });
+
+            // 城市趋势（示意）
+            const colors = [rgb(45, 212, 255), rgb(44, 255, 155)];
+            drawLineChart(el('cityChart'), {
+                series: [c.series.population, c.series.production],
+                colors,
+                fill: false,
+            });
+            renderLegend(el('cityLegend'), [
+                { label: '城市人口（示意）', color: colors[0] },
+                { label: '城市产出（示意）', color: colors[1] },
+            ]);
+
+            el('cityModalMask').style.display = 'flex';
+        }
+
+        function closeCityModal() {
+            el('cityModalMask').style.display = 'none';
+        }
+
+        // ===== 绑定 =====
+        function bind() {
+            document.querySelectorAll('.nav-item').forEach(n => {
+                n.addEventListener('click', () => setActiveTab(n.getAttribute('data-tab')));
+            });
+
+            el('btnRandom').addEventListener('click', () => {
+                const next = planet.name.includes('希望') ? 1 : 0;
+                planet = buildMockPlanet(next);
+                selectedRegionId = planet.surfaceRegions[0]?.id;
+                renderAll();
+                setActiveTab(activeTab);
+            });
+
+            el('btnCloseCity').addEventListener('click', closeCityModal);
+            el('cityModalMask').addEventListener('click', (e) => {
+                if (e.target === el('cityModalMask')) closeCityModal();
+            });
+
+            window.addEventListener('resize', () => {
+                // 各 tab 的 canvas 都需要重绘
+                if (activeTab === 'market') {
+                    const k = Object.keys(planet.resourceSeries)[0];
+                    if (k) renderMarketChart(k);
+                }
+                if (activeTab === 'population') {
+                    renderPopTab();
+                }
+            });
+        }
+
+        function renderAll() {
+            renderPlanetSummary();
+            renderSurfaceTab();
+            renderResourceList();
+            if (activeTab === 'market') {
+                const k = Object.keys(planet.resourceSeries)[0];
+                if (k) renderMarketChart(k);
+            }
+            if (activeTab === 'population') renderPopTab();
+            if (activeTab === 'politics') renderPoliticsTab();
+        }
+
+        bind();
         renderAll();
-      });
-
-      // 自适应重绘
-      window.addEventListener('resize', ()=>{
-        renderChart();
-      });
-    }
-
-    function renderAll(){
-      renderPlanetHeader();
-      renderNetFlow();
-      renderCityList();
-      renderCityDetail();
-      renderChart();
-    }
-
-    bind();
-    renderAll();
-  </script>
+        setActiveTab('overview');
+    </script>
 </body>
+
 </html>
