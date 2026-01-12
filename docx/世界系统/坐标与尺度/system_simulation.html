@@ -70,8 +70,9 @@
         const AU_IN_GU = AU_IN_METERS / GAME_UNIT_IN_METERS;
         const LY_IN_GU = LY_IN_METERS / GAME_UNIT_IN_METERS;
 
-        const SECTOR_DIAMETER_LY = 1;
-        const SECTOR_DIAMETER_GU = SECTOR_DIAMETER_LY * LY_IN_GU;
+        // 星区直径口径：每个六边形星区的直径（flat-to-flat）为 200000000
+        const SECTOR_DIAMETER_GU = 200000000;
+        // pointy-top hex：flat-to-flat diameter = 2*size
         const SECTOR_SIZE_GU = SECTOR_DIAMETER_GU / 2;
 
         // --- 缩放与渲染规则 ---
@@ -79,8 +80,8 @@
             return zoom;
         }
 
-        const UI_PLANET_ZOOM_THRESHOLD = 20.0;
-        const UI_STAR_ZOOM_THRESHOLD = 50.0;
+        const UI_PLANET_ZOOM_THRESHOLD = 200.0;
+        const UI_STAR_ZOOM_THRESHOLD = 1000.0;
         const UI_MARKER_RADIUS_PX = 4;
         const UI_PICK_RADIUS_PX = 10;
 
@@ -90,7 +91,7 @@
             y: 0,
             zoom: 1.0,
             minZoom: 0.1,
-            maxZoom: 200000000, // 缩放上限提高10倍
+            maxZoom: 3000000, // 缩放上限提高10倍
         };
 
         const mouse = { x: 0, y: 0 };
