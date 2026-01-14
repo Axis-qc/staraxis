@@ -11,6 +11,7 @@ dependencies {
   api "com.bladecoder.ink:blade-ink:$bladeInkVersion"
   api "com.github.tommyettinger:regexodus:$regExodusVersion"
   api "com.rafaskoberg.gdx:typing-label:$typingLabelVersion"
+  api "com.kotcrab.vis:vis-ui:1.5.7"
   api "net.onedaybeard.artemis:artemis-odb:$artemisOdbVersion"
   api "org.apache.commons:commons-collections4:$commonsCollectionsVersion"
   api "space.earlygrey:shapedrawer:$shapeDrawerVersion"

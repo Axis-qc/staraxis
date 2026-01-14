@@ -1,0 +1,23 @@
+package io.staraxis.lwjgl3;
+
+import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
+import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
+import io.staraxis.UiPreviewApp;
+
+public class UiPreviewLauncher {
+    public static void main(String[] args) {
+        if (StartupHelper.startNewJvmIfRequired())
+            return;
+        new Lwjgl3Application(new UiPreviewApp(), getDefaultConfiguration());
+    }
+
+    private static Lwjgl3ApplicationConfiguration getDefaultConfiguration() {
+        Lwjgl3ApplicationConfiguration configuration = new Lwjgl3ApplicationConfiguration();
+        configuration.setTitle("staraxis-ui-preview");
+        configuration.useVsync(true);
+        configuration.setForegroundFPS(Lwjgl3ApplicationConfiguration.getDisplayMode().refreshRate + 1);
+        configuration.setWindowedMode(960, 540);
+        configuration.setOpenGLEmulation(Lwjgl3ApplicationConfiguration.GLEmulation.ANGLE_GLES20, 0, 0);
+        return configuration;
+    }
+}
