@@ -1,4 +1,4 @@
-package io.staraxis;
+package staraxis;
 
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;

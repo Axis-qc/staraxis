@@ -1,0 +1,26 @@
+[compileJava, compileTestJava]*.options*.encoding = 'UTF-8'
+
+eclipse.project.name = appName + '-client'
+
+dependencies {
+  api project(':core')
+  api project(':shared')
+
+  api "com.badlogicgames.box2dlights:box2dlights:$box2dlightsVersion"
+  api "com.badlogicgames.gdx:gdx-ai:$aiVersion"
+  api "com.badlogicgames.gdx:gdx-box2d:$gdxVersion"
+  api "com.badlogicgames.gdx:gdx-bullet:$gdxVersion"
+  api "com.badlogicgames.gdx:gdx-freetype:$gdxVersion"
+  api "com.badlogicgames.gdx:gdx:$gdxVersion"
+  api "com.bladecoder.ink:blade-ink:$bladeInkVersion"
+  api "com.github.tommyettinger:regexodus:$regExodusVersion"
+  api "com.rafaskoberg.gdx:typing-label:$typingLabelVersion"
+  api "com.kotcrab.vis:vis-ui:1.5.7"
+  api "net.onedaybeard.artemis:artemis-odb:$artemisOdbVersion"
+  api "org.apache.commons:commons-collections4:$commonsCollectionsVersion"
+  api "space.earlygrey:shapedrawer:$shapeDrawerVersion"
+
+  if(enableGraalNative == 'true') {
+    implementation "io.github.berstanio:gdx-svmhelper-annotations:$graalHelperVersion"
+  }
+}

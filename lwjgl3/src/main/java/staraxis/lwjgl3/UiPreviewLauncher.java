@@ -1,8 +1,8 @@
-package io.staraxis.lwjgl3;
+package staraxis.lwjgl3;
 
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
-import io.staraxis.UiPreviewApp;
+import staraxis.UiPreviewApp;
 
 public class UiPreviewLauncher {
     public static void main(String[] args) {
