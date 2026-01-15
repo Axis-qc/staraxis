@@ -7,6 +7,8 @@ Auto-generated from all feature plans. Last updated: 2026-01-08
 - Java 21（见根 `build.gradle` 的 toolchain） + libGDX 1.12.1 + LWJGL3 backend（见 `lwjgl3/build.gradle`） (014-coordinate-system-scale)
 - Java（Gradle 多模块：`shared/` + `lwjgl3/`） + LWJGL3（客户端渲染/输入），shared 内使用 Kryo（已有 KryoSerializer），日志 logback (015-realistic-galaxy-sector-gen)
 - N/A（本特性仅开局生成数据结构；持久化/存档不在本计划范围） (015-realistic-galaxy-sector-gen)
+- Java（版本 *NEEDS CLARIFICATION*：仓库当前使用的 JDK 版本未在 spec 中体现） + *NEEDS CLARIFICATION*（网络库是否已选型：Netty / Java NIO / 其他） (002-loop-comms-skeleton)
+- N/A（本特性不涉及持久化） (002-loop-comms-skeleton)
 
 - [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION] + [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION] (main)
 
@@ -27,6 +29,7 @@ cd src; pytest; ruff check .
 [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]: Follow standard conventions
 
 ## Recent Changes
+- 002-loop-comms-skeleton: Added Java（版本 *NEEDS CLARIFICATION*：仓库当前使用的 JDK 版本未在 spec 中体现） + *NEEDS CLARIFICATION*（网络库是否已选型：Netty / Java NIO / 其他）
 - 015-realistic-galaxy-sector-gen: Added Java（Gradle 多模块：`shared/` + `lwjgl3/`） + LWJGL3（客户端渲染/输入），shared 内使用 Kryo（已有 KryoSerializer），日志 logback
 - 014-coordinate-system-scale: Added Java 21（见根 `build.gradle` 的 toolchain） + libGDX 1.12.1 + LWJGL3 backend（见 `lwjgl3/build.gradle`）
 
