@@ -8,23 +8,33 @@ import staraxis.ClientGame;
 
 import java.io.File;
 
-/** Launches the desktop (LWJGL3) application. */
+/**
+ * LWJGL3 启动器。
+ *
+ * 设计要点：
+ * - 只负责平台侧窗口创建与启动，不承载任何游戏规则逻辑（遵循分层边界）。
+ * - 启动时提前确保日志目录存在，避免 logback 由于目录缺失导致无法创建 game.log/error.log。
+ */
 public class Lwjgl3Launcher {
 
     private static final Logger log = LoggerFactory.getLogger(Lwjgl3Launcher.class);
 
     public static void main(String[] args) {
         ensureLogDir();
-        if (StartupHelper.startNewJvmIfRequired()) return;
+        if (StartupHelper.startNewJvmIfRequired())
+            return;
+
         log.info("Launcher start, log dir ready.");
         createApplication();
     }
 
     private static void ensureLogDir() {
-        // 注意：gradle run 的 workingDir 被设置为 assets/，因此 user.dir 指向 assets。
-        // 这里用 ../gamedata/logs 固定指向项目根目录下的 gamedata/logs。
+        // NOTE: `:lwjgl3:run` 在 build.gradle 中将 workingDir 设为 assets/，因此 user.dir 指向
+        // assets。
+        // 为了把日志稳定落到“项目根目录/gamedata/logs”，这里使用 ../gamedata/logs。
         File dir = new File("../gamedata/logs");
-        if (!dir.exists()) dir.mkdirs();
+        if (!dir.exists())
+            dir.mkdirs();
     }
 
     private static Lwjgl3Application createApplication() {

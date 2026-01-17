@@ -15,8 +15,11 @@ import staraxis.game.SimpleGameRuntime;
 import staraxis.logging.GdxToSlf4jLogger;
 import staraxis.ui.FontProvider;
 import staraxis.ui.Gui;
+import staraxis.ui.console.DevConsole;
 import staraxis.ui.i18n.I18nService;
 import staraxis.ui.screens.MainMenuScreen;
+import staraxis.ui.screens.SettingsScreen;
+import staraxis.ui.settings.SettingsRepository;
 import staraxis.ui.widgets.DevelopingDialog;
 
 public class ClientGame implements ApplicationListener {
@@ -25,18 +28,22 @@ public class ClientGame implements ApplicationListener {
     private Gui gui;
     private GameRuntime gameRuntime;
 
+    private DevConsole devConsole;
+    private InputMultiplexer inputMultiplexer;
+
     private float tickAccumulatorSeconds;
     private static final float TICK_SECONDS = 1f / 25f;
 
     @Override
     public void create() {
-        // Bridge libGDX logging to slf4j/logback
         if (Gdx.app != null) {
             Gdx.app.setApplicationLogger(new GdxToSlf4jLogger());
         }
 
         stage = new Stage(new ScreenViewport());
-        Gdx.input.setInputProcessor(new InputMultiplexer(stage));
+        inputMultiplexer = new InputMultiplexer();
+        inputMultiplexer.addProcessor(stage);
+        Gdx.input.setInputProcessor(inputMultiplexer);
 
         I18nService i18nService = new I18nService();
         i18nService.load("zh");
@@ -44,7 +51,8 @@ public class ClientGame implements ApplicationListener {
         Skin skin = new Skin(Gdx.files.internal("ui/uiskin.json"));
 
         BitmapFont defaultFont = FontProvider.createDefaultFont();
-        BitmapFont ttfFont = FontProvider.tryCreateFontFromTtfOrNull("fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf", 28);
+        BitmapFont ttfFont = FontProvider.tryCreateFontFromTtfOrNull("fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf",
+                28);
         BitmapFont finalFont = (ttfFont != null) ? ttfFont : defaultFont;
 
         skin.add("default-font", finalFont, BitmapFont.class);
@@ -60,11 +68,24 @@ public class ClientGame implements ApplicationListener {
         gui.register(Skin.class, skin);
         gui.initJsonUi();
 
-        MainMenuScreen mainMenuScreen = new MainMenuScreen(gui);
-        DevelopingDialog developingDialog = new DevelopingDialog(skin, i18nService);
+        // Settings
+        SettingsRepository settingsRepository = new SettingsRepository();
+        gui.register(SettingsRepository.class, settingsRepository);
 
+        // Screens
+        MainMenuScreen mainMenuScreen = new MainMenuScreen(gui);
         gui.register(MainMenuScreen.class, mainMenuScreen);
+        SettingsScreen settingsScreen = new SettingsScreen(gui);
+        gui.register(SettingsScreen.class, settingsScreen);
+
+        // Dialogs
+        DevelopingDialog developingDialog = new DevelopingDialog(skin, i18nService);
         gui.register(DevelopingDialog.class, developingDialog);
+
+        // Console
+        devConsole = new DevConsole(gui);
+        gui.register(DevConsole.class, devConsole);
+        inputMultiplexer.addProcessor(devConsole);
 
         gameRuntime = new SimpleGameRuntime();
         gameRuntime.start();
@@ -76,6 +97,9 @@ public class ClientGame implements ApplicationListener {
     public void resize(int width, int height) {
         if (stage != null) {
             stage.getViewport().update(width, height, true);
+        }
+        if (devConsole != null) {
+            devConsole.onResize();
         }
     }
 

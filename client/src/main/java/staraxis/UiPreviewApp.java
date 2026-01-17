@@ -47,6 +47,7 @@ public class UiPreviewApp implements ApplicationListener {
         labelStyle.font = finalFont;
 
         gui.register(Skin.class, skin);
+        gui.initJsonUi();
 
         MainMenuScreen mainMenuScreen = new MainMenuScreen(gui);
         DevelopingDialog developingDialog = new DevelopingDialog(skin, i18nService);

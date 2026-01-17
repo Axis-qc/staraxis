@@ -37,7 +37,8 @@ dependencies {
   implementation project(':client')
   implementation("com.badlogicgames.gdx:gdx-tools:$gdxVersion"){exclude group: 'com.badlogicgames.gdx', module: 'gdx-backend-lwjgl'}
 
-  // logback (logging to gamedata/logs)
+  // logging api + logback (logging to gamedata/logs)
+  implementation 'org.slf4j:slf4j-api:2.0.12'
   implementation 'ch.qos.logback:logback-classic:1.5.6'
 
   if(enableGraalNative == 'true') {

@@ -14,6 +14,9 @@
       "type": "string",
       "enum": [
         "container",
+        "stack",
+        "scroll",
+        "window",
         "label",
         "button",
         "image",

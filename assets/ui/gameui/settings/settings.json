@@ -1,0 +1,190 @@
+{
+    "schemaVersion": 1,
+    "type": "container",
+    "name": "settings_root",
+    "properties": {
+        "fillParent": true,
+        "pad": 24
+    },
+    "children": [
+        {
+            "type": "label",
+            "name": "title",
+            "properties": {
+                "text": "settings.title",
+                "alignment": "center",
+                "cell": {
+                    "padBottom": 18
+                }
+            }
+        },
+        {
+            "type": "scroll",
+            "name": "settings_scroll",
+            "properties": {
+                "cell": {
+                    "expand": true,
+                    "fill": true
+                }
+            },
+            "children": [
+                {
+                    "type": "container",
+                    "name": "settings_content",
+                    "properties": {
+                        "align": "top",
+                        "pad": 12
+                    },
+                    "children": [
+                        {
+                            "type": "label",
+                            "properties": {
+                                "text": "settings.display",
+                                "cell": {
+                                    "colspan": 2,
+                                    "align": "left",
+                                    "padBottom": 8
+                                }
+                            }
+                        },
+                        {
+                            "type": "label",
+                            "properties": {
+                                "text": "settings.resolution",
+                                "cell": {
+                                    "align": "left"
+                                }
+                            }
+                        },
+                        {
+                            "type": "button",
+                            "name": "resolution_button",
+                            "properties": {
+                                "text": "1280x720",
+                                "onClick": "CHANGE_RESOLUTION",
+                                "cell": {
+                                    "width": 240,
+                                    "height": 40
+                                }
+                            }
+                        },
+                        {
+                            "type": "label",
+                            "properties": {
+                                "text": "settings.vsync",
+                                "cell": {
+                                    "align": "left"
+                                }
+                            }
+                        },
+                        {
+                            "type": "button",
+                            "name": "vsync_button",
+                            "properties": {
+                                "text": "On",
+                                "onClick": "TOGGLE_VSYNC",
+                                "cell": {
+                                    "width": 240,
+                                    "height": 40
+                                }
+                            }
+                        },
+                        {
+                            "type": "label",
+                            "properties": {
+                                "text": "settings.fpsLimit",
+                                "cell": {
+                                    "align": "left"
+                                }
+                            }
+                        },
+                        {
+                            "type": "button",
+                            "name": "fps_limit_button",
+                            "properties": {
+                                "text": "Unlimited",
+                                "onClick": "CHANGE_FPS_LIMIT",
+                                "cell": {
+                                    "width": 240,
+                                    "height": 40
+                                }
+                            }
+                        },
+                        {
+                            "type": "label",
+                            "properties": {
+                                "text": "settings.audio",
+                                "cell": {
+                                    "colspan": 2,
+                                    "align": "left",
+                                    "padTop": 16,
+                                    "padBottom": 8
+                                }
+                            }
+                        },
+                        {
+                            "type": "label",
+                            "properties": {
+                                "text": "settings.masterVolume",
+                                "cell": {
+                                    "align": "left"
+                                }
+                            }
+                        },
+                        {
+                            "type": "slider",
+                            "name": "master_volume_slider",
+                            "properties": {
+                                "min": 0,
+                                "max": 1,
+                                "step": 0.01,
+                                "value": 0.8,
+                                "onChange": "SET_MASTER_VOLUME",
+                                "cell": {
+                                    "width": 240
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "container",
+            "name": "bottom_bar",
+            "properties": {
+                "cell": {
+                    "padTop": 16
+                }
+            },
+            "children": [
+                {
+                    "type": "button",
+                    "name": "save_button",
+                    "properties": {
+                        "text": "settings.save",
+                        "onClick": "SAVE_SETTINGS",
+                        "cell": {
+                            "width": 180,
+                            "height": 48,
+                            "pad": 8
+                        }
+                    }
+                },
+                {
+                    "type": "button",
+                    "name": "back_button",
+                    "properties": {
+                        "text": "settings.back",
+                        "onClick": "BACK_TO_MAIN_MENU",
+                        "cell": {
+                            "width": 180,
+                            "height": 48,
+                            "pad": 8
+                        }
+                    }
+                }
+            ]
+        }
+    ]
+}

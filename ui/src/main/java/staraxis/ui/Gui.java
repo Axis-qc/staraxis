@@ -2,15 +2,25 @@ package staraxis.ui;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.scenes.scene2d.Stage;
-import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import staraxis.ui.i18n.I18nService;
 import staraxis.ui.json.UiFactory;
 import staraxis.ui.json.UiParser;
+import staraxis.ui.screens.MainMenuScreen;
+import staraxis.ui.screens.SettingsScreen;
 import staraxis.ui.widgets.DevelopingDialog;
 
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * UI 根容器（UI 层服务定位器）。
+ *
+ * 设计要点：
+ * - 仅保存 UI 层可用的服务实例（Stage、Skin、I18n、UI 解析器/工厂等）。
+ * - 通过 {@link #dispatchAction(String)} 以 actionId 的方式把交互意图上抛，避免 UI
+ * 直接修改权威世界状态。
+ * - 某些服务（例如 JSON UI）需要依赖 Skin 等资源，因此采用显式 init 方法，避免初始化顺序导致 NPE。
+ */
 public class Gui {
 
     private final Stage stage;
@@ -29,6 +39,11 @@ public class Gui {
     }
 
     @SuppressWarnings("unchecked")
+    public <T> T tryGet(Class<T> type) {
+        return (T) componentsByType.get(type);
+    }
+
+    @SuppressWarnings("unchecked")
     public <T> T get(Class<T> type) {
         Object obj = componentsByType.get(type);
         if (obj == null) {
@@ -39,10 +54,10 @@ public class Gui {
     }
 
     public void initJsonUi() {
-        if (get(UiParser.class) == null) {
+        if (tryGet(UiParser.class) == null) {
             register(UiParser.class, new UiParser());
         }
-        if (get(UiFactory.class) == null) {
+        if (tryGet(UiFactory.class) == null) {
             register(UiFactory.class, new UiFactory(this));
         }
     }
@@ -53,29 +68,58 @@ public class Gui {
     }
 
     public void showMainMenu() {
-        staraxis.ui.screens.MainMenuScreen screen = get(staraxis.ui.screens.MainMenuScreen.class);
+        MainMenuScreen screen = get(MainMenuScreen.class);
         if (screen != null) {
             screen.show();
         }
     }
 
-    public void dispatchMainMenuAction(String action) {
-        if ("EXIT_CLICK".equals(action)) {
-            Gdx.app.exit();
-            return;
+    public void showSettingsScreen() {
+        SettingsScreen screen = get(SettingsScreen.class);
+        if (screen != null) {
+            screen.show();
         }
+    }
 
-        if ("SHOW_DEVELOPING_DIALOG".equals(action) || "DEVELOPING".equals(action)) {
-            DevelopingDialog dialog = get(DevelopingDialog.class);
-            if (dialog != null) {
-                dialog.show(stage);
-            }
+    /**
+     * 通用 UI 动作分发。
+     */
+    public void dispatchAction(String action) {
+        if (action == null || action.isBlank())
             return;
-        }
 
-        DevelopingDialog dialog = get(DevelopingDialog.class);
-        if (dialog != null) {
-            dialog.show(stage);
+        switch (action) {
+            case "EXIT_CLICK":
+                Gdx.app.exit();
+                return;
+            case "TOGGLE_LANGUAGE_MENU":
+                // 纯 UI 状态，在 MainMenuScreen 内处理
+                return;
+            case "SET_LANG_ZH":
+                get(I18nService.class).load("zh");
+                showMainMenu();
+                return;
+            case "SET_LANG_EN":
+                get(I18nService.class).load("en");
+                showMainMenu();
+                return;
+            case "OPEN_SETTINGS":
+                showSettingsScreen();
+                return;
+            case "BACK_TO_MAIN_MENU":
+                showMainMenu();
+                return;
+            case "SHOW_DEVELOPING_DIALOG":
+            case "DEVELOPING":
+                DevelopingDialog dialog = get(DevelopingDialog.class);
+                if (dialog != null) {
+                    dialog.show(stage);
+                }
+                return;
+            default:
+                Gdx.app.log("Gui", "Unhandled action: " + action);
+                // 可选：对未处理的 action 也显示“开发中”
+                break;
         }
     }
 }

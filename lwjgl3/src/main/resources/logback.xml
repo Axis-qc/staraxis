@@ -1,23 +1,19 @@
 <configuration>
     <property name="LOG_DIR" value="${user.dir}/../gamedata/logs"/>
 
-    <appender name="GAME" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <!-- NOTE: 启动时覆盖旧日志，避免历史错误堆积影响排查；按需可改回 Rolling 策略。 -->
+
+    <appender name="GAME" class="ch.qos.logback.core.FileAppender">
         <file>${LOG_DIR}/game.log</file>
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>${LOG_DIR}/game.%d{yyyy-MM-dd}.log</fileNamePattern>
-            <maxHistory>7</maxHistory>
-        </rollingPolicy>
+        <append>false</append>
         <encoder>
             <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} | %-5level | %logger{36} | %msg%n</pattern>
         </encoder>
     </appender>
 
-    <appender name="ERROR" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <appender name="ERROR" class="ch.qos.logback.core.FileAppender">
         <file>${LOG_DIR}/error.log</file>
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>${LOG_DIR}/error.%d{yyyy-MM-dd}.log</fileNamePattern>
-            <maxHistory>14</maxHistory>
-        </rollingPolicy>
+        <append>false</append>
         <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
             <level>ERROR</level>
         </filter>
