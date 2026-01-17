@@ -1,0 +1,33 @@
+2026-01-17 17:49:54.577 | INFO  | staraxis.lwjgl3.Lwjgl3Launcher | Launcher start, log dir ready.
+2026-01-17 17:49:55.581 | INFO  | I18nService | Loaded and merged: i18n/strings_zh.properties
+2026-01-17 17:49:55.754 | ERROR | Gui | Component not registered: Skin
+2026-01-17 17:49:55.810 | INFO  | FontProvider | 使用 LibGDX 默认 BitmapFont 作为兜底字体
+2026-01-17 17:49:55.815 | INFO  | FontProvider | 尝试从 TTF 生成字体: fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf, size=28
+2026-01-17 17:49:55.842 | INFO  | FontProvider | TTF 字体生成成功: fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf (characters 已指定)
+2026-01-17 17:50:59.253 | INFO  | staraxis.lwjgl3.Lwjgl3Launcher | Launcher start, log dir ready.
+2026-01-17 17:51:00.260 | INFO  | I18nService | Loaded and merged: i18n/strings_zh.properties
+2026-01-17 17:51:00.433 | ERROR | Gui | Component not registered: Skin
+2026-01-17 17:51:00.498 | INFO  | FontProvider | 使用 LibGDX 默认 BitmapFont 作为兜底字体
+2026-01-17 17:51:00.504 | INFO  | FontProvider | 尝试从 TTF 生成字体: fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf, size=28
+2026-01-17 17:51:00.533 | INFO  | FontProvider | TTF 字体生成成功: fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf (characters 已指定)
+2026-01-17 17:54:12.683 | INFO  | staraxis.lwjgl3.Lwjgl3Launcher | Launcher start, log dir ready.
+2026-01-17 17:54:13.673 | INFO  | I18nService | Loaded and merged: i18n/strings_zh.properties
+2026-01-17 17:54:13.725 | INFO  | FontProvider | 使用 LibGDX 默认 BitmapFont 作为兜底字体
+2026-01-17 17:54:13.735 | INFO  | FontProvider | 尝试从 TTF 生成字体: fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf, size=28
+2026-01-17 17:54:13.764 | INFO  | FontProvider | TTF 字体生成成功: fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf (characters 已指定)
+2026-01-17 17:54:13.766 | ERROR | Gui | Component not registered: UiParser
+2026-01-17 17:54:13.933 | ERROR | Gui | Component not registered: UiFactory
+2026-01-17 17:57:27.473 | INFO  | staraxis.lwjgl3.Lwjgl3Launcher | Launcher start, log dir ready.
+2026-01-17 17:57:28.452 | INFO  | I18nService | Loaded and merged: i18n/strings_zh.properties
+2026-01-17 17:57:28.512 | INFO  | FontProvider | 使用 LibGDX 默认 BitmapFont 作为兜底字体
+2026-01-17 17:57:28.516 | INFO  | FontProvider | 尝试从 TTF 生成字体: fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf, size=28
+2026-01-17 17:57:28.542 | INFO  | FontProvider | TTF 字体生成成功: fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf (characters 已指定)
+2026-01-17 17:57:28.544 | ERROR | Gui | Component not registered: UiParser
+2026-01-17 17:57:28.709 | ERROR | Gui | Component not registered: UiFactory
+2026-01-17 17:59:41.888 | INFO  | staraxis.lwjgl3.Lwjgl3Launcher | Launcher start, log dir ready.
+2026-01-17 17:59:42.883 | INFO  | I18nService | Loaded and merged: i18n/strings_zh.properties
+2026-01-17 17:59:42.945 | INFO  | FontProvider | 使用 LibGDX 默认 BitmapFont 作为兜底字体
+2026-01-17 17:59:42.950 | INFO  | FontProvider | 尝试从 TTF 生成字体: fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf, size=28
+2026-01-17 17:59:42.972 | INFO  | FontProvider | TTF 字体生成成功: fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf (characters 已指定)
+2026-01-17 17:59:42.972 | ERROR | Gui | Component not registered: UiParser
+2026-01-17 17:59:43.142 | ERROR | Gui | Component not registered: UiFactory

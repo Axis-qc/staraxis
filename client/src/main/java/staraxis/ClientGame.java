@@ -12,6 +12,7 @@ import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import staraxis.game.GameRuntime;
 import staraxis.game.SimpleGameRuntime;
+import staraxis.logging.GdxToSlf4jLogger;
 import staraxis.ui.FontProvider;
 import staraxis.ui.Gui;
 import staraxis.ui.i18n.I18nService;
@@ -29,14 +30,16 @@ public class ClientGame implements ApplicationListener {
 
     @Override
     public void create() {
+        // Bridge libGDX logging to slf4j/logback
+        if (Gdx.app != null) {
+            Gdx.app.setApplicationLogger(new GdxToSlf4jLogger());
+        }
+
         stage = new Stage(new ScreenViewport());
         Gdx.input.setInputProcessor(new InputMultiplexer(stage));
 
         I18nService i18nService = new I18nService();
-        i18nService.load("zh"); // 默认中文
-
-        gui = new Gui(stage);
-        gui.register(I18nService.class, i18nService);
+        i18nService.load("zh");
 
         Skin skin = new Skin(Gdx.files.internal("ui/uiskin.json"));
 
@@ -52,7 +55,10 @@ public class ClientGame implements ApplicationListener {
         Label.LabelStyle labelStyle = skin.get(Label.LabelStyle.class);
         labelStyle.font = finalFont;
 
+        gui = new Gui(stage);
+        gui.register(I18nService.class, i18nService);
         gui.register(Skin.class, skin);
+        gui.initJsonUi();
 
         MainMenuScreen mainMenuScreen = new MainMenuScreen(gui);
         DevelopingDialog developingDialog = new DevelopingDialog(skin, i18nService);

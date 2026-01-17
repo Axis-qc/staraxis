@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "type": "container",
+  "name": "main_menu_root",
+  "properties": {
+    "fillParent": true,
+    "pad": 24
+  },
+  "children": [
+    {
+      "type": "label",
+      "name": "title",
+      "properties": {
+        "text": "app.title",
+        "alignment": "center",
+        "cell": {
+          "padBottom": 18
+        }
+      }
+    },
+    {
+      "type": "button",
+      "name": "btn_new_game",
+      "properties": {
+        "text": "mainMenu.newGame",
+        "onClick": "SHOW_DEVELOPING_DIALOG",
+        "cell": {
+          "width": 360,
+          "height": 48,
+          "pad": 8
+        }
+      }
+    },
+    {
+      "type": "button",
+      "name": "btn_load_game",
+      "properties": {
+        "text": "mainMenu.loadGame",
+        "onClick": "SHOW_DEVELOPING_DIALOG",
+        "cell": {
+          "width": 360,
+          "height": 48,
+          "pad": 8
+        }
+      }
+    },
+    {
+      "type": "button",
+      "name": "btn_multiplayer",
+      "properties": {
+        "text": "mainMenu.multiplayer",
+        "onClick": "SHOW_DEVELOPING_DIALOG",
+        "cell": {
+          "width": 360,
+          "height": 48,
+          "pad": 8
+        }
+      }
+    },
+    {
+      "type": "button",
+      "name": "btn_ship_designer",
+      "properties": {
+        "text": "mainMenu.shipDesigner",
+        "onClick": "SHOW_DEVELOPING_DIALOG",
+        "cell": {
+          "width": 360,
+          "height": 48,
+          "pad": 8
+        }
+      }
+    },
+    {
+      "type": "button",
+      "name": "btn_settings",
+      "properties": {
+        "text": "mainMenu.settings",
+        "onClick": "SHOW_DEVELOPING_DIALOG",
+        "cell": {
+          "width": 360,
+          "height": 48,
+          "pad": 8
+        }
+      }
+    },
+    {
+      "type": "button",
+      "name": "btn_exit",
+      "properties": {
+        "text": "mainMenu.exit",
+        "onClick": "EXIT_CLICK",
+        "cell": {
+          "width": 360,
+          "height": 48,
+          "pad": 8
+        }
+      }
+    }
+  ]
+}
