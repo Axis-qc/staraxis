@@ -27,7 +27,7 @@ public class UiPreviewApp implements ApplicationListener {
         Gdx.input.setInputProcessor(new InputMultiplexer(stage));
 
         I18nService i18nService = new I18nService();
-        i18nService.load();
+        i18nService.load("zh"); // 默认中文
 
         gui = new Gui(stage);
         gui.register(I18nService.class, i18nService);

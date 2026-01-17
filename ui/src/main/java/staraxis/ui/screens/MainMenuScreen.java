@@ -1,6 +1,5 @@
 package staraxis.ui.screens;
 
-import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Stage;
@@ -11,21 +10,23 @@ import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.Disposable;
-
 import staraxis.ui.Gui;
+import staraxis.ui.i18n.I18nService;
 
 public class MainMenuScreen implements Disposable {
 
-    private final Stage stage;
     private final Gui gui;
+    private final Stage stage;
     private final Skin skin;
+    private final I18nService i18n;
 
     private Table root;
 
-    public MainMenuScreen(Stage stage, Gui gui, Skin skin) {
-        this.stage = stage;
+    public MainMenuScreen(Gui gui) {
         this.gui = gui;
-        this.skin = skin;
+        this.stage = gui.getStage();
+        this.skin = gui.get(Skin.class);
+        this.i18n = gui.get(I18nService.class);
     }
 
     public void show() {
@@ -38,16 +39,16 @@ public class MainMenuScreen implements Disposable {
         root.setFillParent(true);
         root.pad(24f);
 
-        Label title = new Label("StarAxis", skin);
+        Label title = new Label(i18n.get("app.title"), skin);
         title.setAlignment(Align.center);
         title.setColor(Color.WHITE);
 
-        TextButton newGame = new TextButton("新游戏", skin);
-        TextButton loadGame = new TextButton("加载游戏", skin);
-        TextButton multiplayer = new TextButton("多人游戏（未来规划）", skin);
-        TextButton shipDesigner = new TextButton("舰船设计器", skin);
-        TextButton settings = new TextButton("设置", skin);
-        TextButton exit = new TextButton("退出游戏", skin);
+        TextButton newGame = new TextButton(i18n.get("mainMenu.newGame"), skin);
+        TextButton loadGame = new TextButton(i18n.get("mainMenu.loadGame"), skin);
+        TextButton multiplayer = new TextButton(i18n.get("mainMenu.multiplayer"), skin);
+        TextButton shipDesigner = new TextButton(i18n.get("mainMenu.shipDesigner"), skin);
+        TextButton settings = new TextButton(i18n.get("mainMenu.settings"), skin);
+        TextButton exit = new TextButton(i18n.get("mainMenu.exit"), skin);
 
         ChangeListener developing = new ChangeListener() {
             @Override
