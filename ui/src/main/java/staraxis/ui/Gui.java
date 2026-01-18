@@ -2,6 +2,7 @@ package staraxis.ui;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.utils.Disposable;
 import staraxis.ui.i18n.I18nService;
 import staraxis.ui.json.UiFactory;
 import staraxis.ui.json.UiParser;
@@ -25,6 +26,9 @@ public class Gui {
 
     private final Stage stage;
     private final Map<Class<?>, Object> componentsByType = new HashMap<>();
+
+    /** 当前正在显示的 Screen，用于切换时清理旧界面。 */
+    private Disposable activeScreen;
 
     public Gui(Stage stage) {
         this.stage = stage;
@@ -67,17 +71,36 @@ public class Gui {
         return svc != null ? svc.get(key) : key;
     }
 
+    /* ------------------ Screen 切换辅助 ------------------ */
+
+    private void switchScreen(Disposable screen, Runnable showCallback) {
+        // 清理旧 Screen
+        if (activeScreen != null) {
+            try {
+                activeScreen.dispose();
+            } catch (Exception ignored) {
+            }
+            activeScreen = null;
+        }
+        // 清空舞台残留 Actor，确保彻底移除
+        stage.clear();
+
+        // 显示新 Screen
+        showCallback.run();
+        activeScreen = screen;
+    }
+
     public void showMainMenu() {
         MainMenuScreen screen = get(MainMenuScreen.class);
         if (screen != null) {
-            screen.show();
+            switchScreen(screen, screen::show);
         }
     }
 
     public void showSettingsScreen() {
         SettingsScreen screen = get(SettingsScreen.class);
         if (screen != null) {
-            screen.show();
+            switchScreen(screen, screen::show);
         }
     }
 
@@ -88,12 +111,19 @@ public class Gui {
         if (action == null || action.isBlank())
             return;
 
-        switch (action) {
+        String actionId = action;
+        String actionArg = null;
+        int idx = action.indexOf(':');
+        if (idx > 0) {
+            actionId = action.substring(0, idx);
+            actionArg = action.substring(idx + 1);
+        }
+
+        switch (actionId) {
             case "EXIT_CLICK":
                 Gdx.app.exit();
                 return;
             case "TOGGLE_LANGUAGE_MENU":
-                // 纯 UI 状态，在 MainMenuScreen 内处理
                 return;
             case "SET_LANG_ZH":
                 get(I18nService.class).load("zh");
@@ -109,16 +139,65 @@ public class Gui {
             case "BACK_TO_MAIN_MENU":
                 showMainMenu();
                 return;
+            case "TOGGLE_VSYNC": {
+                SettingsScreen s = get(SettingsScreen.class);
+                if (s != null)
+                    s.toggleVsync();
+                return;
+            }
+            case "TOGGLE_RESOLUTION_LIST": {
+                SettingsScreen s = get(SettingsScreen.class);
+                if (s != null)
+                    s.toggleResolutionList();
+                return;
+            }
+            case "TOGGLE_FPS_LIST": {
+                SettingsScreen s = get(SettingsScreen.class);
+                if (s != null)
+                    s.toggleFpsList();
+                return;
+            }
+            case "SELECT_RESOLUTION": {
+                SettingsScreen s = get(SettingsScreen.class);
+                if (s != null)
+                    s.selectResolution(actionArg);
+                return;
+            }
+            case "SELECT_FPS_LIMIT": {
+                SettingsScreen s = get(SettingsScreen.class);
+                if (s != null)
+                    s.selectFpsLimit(actionArg);
+                return;
+            }
+            case "SET_MASTER_VOLUME": {
+                if (actionArg != null) {
+                    try {
+                        float v = Float.parseFloat(actionArg);
+                        SettingsScreen s = get(SettingsScreen.class);
+                        if (s != null)
+                            s.setMasterVolume(v);
+                    } catch (Exception ignored) {
+                    }
+                }
+                return;
+            }
+            case "SAVE_SETTINGS": {
+                SettingsScreen settingsScreen = get(SettingsScreen.class);
+                if (settingsScreen != null) {
+                    settingsScreen.saveSettings();
+                }
+                return;
+            }
             case "SHOW_DEVELOPING_DIALOG":
-            case "DEVELOPING":
+            case "DEVELOPING": {
                 DevelopingDialog dialog = get(DevelopingDialog.class);
                 if (dialog != null) {
                     dialog.show(stage);
                 }
                 return;
+            }
             default:
                 Gdx.app.log("Gui", "Unhandled action: " + action);
-                // 可选：对未处理的 action 也显示“开发中”
                 break;
         }
     }

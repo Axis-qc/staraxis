@@ -35,6 +35,8 @@ dependencies {
   implementation "com.badlogicgames.gdx:gdx-lwjgl3-angle:$gdxVersion"
   implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
   implementation project(':client')
+  implementation project(':ui')
+  implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.1'
   implementation("com.badlogicgames.gdx:gdx-tools:$gdxVersion"){exclude group: 'com.badlogicgames.gdx', module: 'gdx-backend-lwjgl'}
 
   // logging api + logback (logging to gamedata/logs)

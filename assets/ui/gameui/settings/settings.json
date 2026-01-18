@@ -19,8 +19,8 @@
             }
         },
         {
-            "type": "scroll",
-            "name": "settings_scroll",
+            "type": "stack",
+            "name": "settings_stack",
             "properties": {
                 "cell": {
                     "expand": true,
@@ -29,121 +29,269 @@
             },
             "children": [
                 {
-                    "type": "container",
-                    "name": "settings_content",
+                    "type": "scroll",
+                    "name": "settings_scroll",
                     "properties": {
-                        "align": "top",
-                        "pad": 12
+                        "cell": {
+                            "expand": true,
+                            "fill": true
+                        }
                     },
                     "children": [
                         {
-                            "type": "label",
+                            "type": "container",
+                            "name": "settings_content",
                             "properties": {
-                                "text": "settings.display",
-                                "cell": {
-                                    "colspan": 2,
-                                    "align": "left",
-                                    "padBottom": 8
+                                "align": "top",
+                                "pad": 12
+                            },
+                            "children": [
+                                {
+                                    "type": "label",
+                                    "properties": {
+                                        "text": "settings.display",
+                                        "cell": {
+                                            "colspan": 2,
+                                            "align": "left",
+                                            "padBottom": 8
+                                        }
+                                    }
+                                },
+                                {
+                                    "type": "label",
+                                    "properties": {
+                                        "text": "settings.resolution",
+                                        "cell": {
+                                            "align": "left"
+                                        }
+                                    }
+                                },
+                                {
+                                    "type": "button",
+                                    "name": "resolution_button",
+                                    "properties": {
+                                        "text": "1280x720",
+                                        "onClick": "TOGGLE_RESOLUTION_LIST",
+                                        "cell": {
+                                            "width": 240,
+                                            "height": 40
+                                        }
+                                    }
+                                },
+                                {
+                                    "type": "label",
+                                    "properties": {
+                                        "text": "settings.vsync",
+                                        "cell": {
+                                            "align": "left"
+                                        }
+                                    }
+                                },
+                                {
+                                    "type": "button",
+                                    "name": "vsync_button",
+                                    "properties": {
+                                        "text": "On",
+                                        "onClick": "TOGGLE_VSYNC",
+                                        "cell": {
+                                            "width": 240,
+                                            "height": 40
+                                        }
+                                    }
+                                },
+                                {
+                                    "type": "label",
+                                    "properties": {
+                                        "text": "settings.fpsLimit",
+                                        "cell": {
+                                            "align": "left"
+                                        }
+                                    }
+                                },
+                                {
+                                    "type": "button",
+                                    "name": "fps_limit_button",
+                                    "properties": {
+                                        "text": "Unlimited",
+                                        "onClick": "TOGGLE_FPS_LIST",
+                                        "cell": {
+                                            "width": 240,
+                                            "height": 40
+                                        }
+                                    }
+                                },
+                                {
+                                    "type": "label",
+                                    "properties": {
+                                        "text": "settings.audio",
+                                        "cell": {
+                                            "colspan": 2,
+                                            "align": "left",
+                                            "padTop": 16,
+                                            "padBottom": 8
+                                        }
+                                    }
+                                },
+                                {
+                                    "type": "label",
+                                    "properties": {
+                                        "text": "settings.masterVolume",
+                                        "cell": {
+                                            "align": "left"
+                                        }
+                                    }
+                                },
+                                {
+                                    "type": "slider",
+                                    "name": "master_volume_slider",
+                                    "properties": {
+                                        "min": 0,
+                                        "max": 1,
+                                        "step": 0.01,
+                                        "value": 0.8,
+                                        "onChange": "SET_MASTER_VOLUME",
+                                        "cell": {
+                                            "width": 240
+                                        }
+                                    }
                                 }
-                            }
-                        },
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "position",
+                    "name": "resolution_popup",
+                    "properties": {
+                        "visible": false,
+                        "height": 320
+                    },
+                    "children": [
                         {
-                            "type": "label",
+                            "type": "container",
+                            "name": "resolution_popup_bg",
                             "properties": {
-                                "text": "settings.resolution",
-                                "cell": {
-                                    "align": "left"
+                                "pad": 10
+                            },
+                            "children": [
+                                {
+                                    "type": "scroll",
+                                    "name": "resolution_scroll",
+                                    "properties": {
+                                        "scrollX": false,
+                                        "scrollY": true
+                                    },
+                                    "children": [
+                                        {
+                                            "type": "repeat",
+                                            "name": "resolution_repeat",
+                                            "children": [
+                                                {
+                                                    "type": "container",
+                                                    "name": "resolution_row",
+                                                    "properties": {},
+                                                    "children": [
+                                                        {
+                                                            "type": "button",
+                                                            "name": "resolution_item",
+                                                            "properties": {
+                                                                "text": "${item}",
+                                                                "onClick": "${action}",
+                                                                "cell": {
+                                                                    "grow": true,
+                                                                    "fillX": true,
+                                                                    "height": 36,
+                                                                    "padRight": 24
+                                                                }
+                                                            }
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "type": "image",
+                                                    "name": "resolution_divider",
+                                                    "properties": {
+                                                        "drawable": "split",
+                                                        "cell": {
+                                                            "height": 2,
+                                                            "fillX": true,
+                                                            "padTop": 2
+                                                        }
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    ]
                                 }
-                            }
-                        },
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "position",
+                    "name": "fps_popup",
+                    "properties": {
+                        "visible": false,
+                        "height": 240
+                    },
+                    "children": [
                         {
-                            "type": "button",
-                            "name": "resolution_button",
+                            "type": "container",
+                            "name": "fps_popup_bg",
                             "properties": {
-                                "text": "1280x720",
-                                "onClick": "CHANGE_RESOLUTION",
-                                "cell": {
-                                    "width": 240,
-                                    "height": 40
+                                "pad": 10
+                            },
+                            "children": [
+                                {
+                                    "type": "scroll",
+                                    "name": "fps_scroll",
+                                    "properties": {
+                                        "scrollX": false,
+                                        "scrollY": true
+                                    },
+                                    "children": [
+                                        {
+                                            "type": "repeat",
+                                            "name": "fps_repeat",
+                                            "children": [
+                                                {
+                                                    "type": "container",
+                                                    "name": "fps_row",
+                                                    "properties": {},
+                                                    "children": [
+                                                        {
+                                                            "type": "button",
+                                                            "name": "fps_item",
+                                                            "properties": {
+                                                                "text": "${item}",
+                                                                "onClick": "${action}",
+                                                                "cell": {
+                                                                    "grow": true,
+                                                                    "fillX": true,
+                                                                    "height": 36,
+                                                                    "padRight": 24
+                                                                }
+                                                            }
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "type": "image",
+                                                    "name": "fps_divider",
+                                                    "properties": {
+                                                        "drawable": "split",
+                                                        "cell": {
+                                                            "height": 2,
+                                                            "fillX": true,
+                                                            "padTop": 2
+                                                        }
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    ]
                                 }
-                            }
-                        },
-                        {
-                            "type": "label",
-                            "properties": {
-                                "text": "settings.vsync",
-                                "cell": {
-                                    "align": "left"
-                                }
-                            }
-                        },
-                        {
-                            "type": "button",
-                            "name": "vsync_button",
-                            "properties": {
-                                "text": "On",
-                                "onClick": "TOGGLE_VSYNC",
-                                "cell": {
-                                    "width": 240,
-                                    "height": 40
-                                }
-                            }
-                        },
-                        {
-                            "type": "label",
-                            "properties": {
-                                "text": "settings.fpsLimit",
-                                "cell": {
-                                    "align": "left"
-                                }
-                            }
-                        },
-                        {
-                            "type": "button",
-                            "name": "fps_limit_button",
-                            "properties": {
-                                "text": "Unlimited",
-                                "onClick": "CHANGE_FPS_LIMIT",
-                                "cell": {
-                                    "width": 240,
-                                    "height": 40
-                                }
-                            }
-                        },
-                        {
-                            "type": "label",
-                            "properties": {
-                                "text": "settings.audio",
-                                "cell": {
-                                    "colspan": 2,
-                                    "align": "left",
-                                    "padTop": 16,
-                                    "padBottom": 8
-                                }
-                            }
-                        },
-                        {
-                            "type": "label",
-                            "properties": {
-                                "text": "settings.masterVolume",
-                                "cell": {
-                                    "align": "left"
-                                }
-                            }
-                        },
-                        {
-                            "type": "slider",
-                            "name": "master_volume_slider",
-                            "properties": {
-                                "min": 0,
-                                "max": 1,
-                                "step": 0.01,
-                                "value": 0.8,
-                                "onChange": "SET_MASTER_VOLUME",
-                                "cell": {
-                                    "width": 240
-                                }
-                            }
+                            ]
                         }
                     ]
                 }

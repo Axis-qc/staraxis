@@ -6,25 +6,25 @@
 
 ## P0 - 必做（MVP）
 
-1. **定义设置项范围与生效策略**
+1. **定义设置项范围与生效策略** [Done]
    - 分辨率（是否允许运行时切换/是否需重启）
    - 全屏/窗口（若纳入）
    - VSync
    - FPS 上限
    - 画质预设（可先只保存不生效）
 
-2. **设置数据模型与持久化**
+2. **设置数据模型与持久化** [Done]
    - 文件位置：`gamedata/settings.json`
    - 增加 `schemaVersion`
    - 默认值策略（文件缺失/字段缺失/类型错误时回退）
    - 保存时机（点击保存/即时保存）
 
-3. **Settings UI（声明式 UI JSON）**
+3. **Settings UI（声明式 UI JSON）** [Done]
    - 新增 `assets/ui/gameui/settings/settings.json`
    - 控件：下拉/按钮/开关（可用按钮模拟）
    - 页面按钮：保存、返回
 
-4. **SettingsScreen 与路由**
+4. **SettingsScreen 与路由** [Done]
    - 新增 `SettingsScreen`（UI 层）
    - 主菜单 `设置` 按钮 action 改为 `OPEN_SETTINGS`
    - `Gui.dispatchMainMenuAction` 增加处理：打开设置界面、返回主菜单

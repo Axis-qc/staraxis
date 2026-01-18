@@ -17,12 +17,17 @@
         "stack",
         "scroll",
         "window",
+        "dialog",
+        "verticalGroup",
+        "repeat",
+        "position",
         "label",
         "button",
         "image",
         "slider",
         "progressBar",
-        "textField"
+        "textField",
+        "selectBox"
       ]
     },
     "name": {

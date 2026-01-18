@@ -19,6 +19,7 @@ import staraxis.ui.console.DevConsole;
 import staraxis.ui.i18n.I18nService;
 import staraxis.ui.screens.MainMenuScreen;
 import staraxis.ui.screens.SettingsScreen;
+import staraxis.ui.settings.GameSettings;
 import staraxis.ui.settings.SettingsRepository;
 import staraxis.ui.widgets.DevelopingDialog;
 
@@ -71,6 +72,7 @@ public class ClientGame implements ApplicationListener {
         // Settings
         SettingsRepository settingsRepository = new SettingsRepository();
         gui.register(SettingsRepository.class, settingsRepository);
+        applyRuntimeSettings(settingsRepository.load());
 
         // Screens
         MainMenuScreen mainMenuScreen = new MainMenuScreen(gui);
@@ -91,6 +93,14 @@ public class ClientGame implements ApplicationListener {
         gameRuntime.start();
 
         gui.showMainMenu();
+    }
+
+    public void applyRuntimeSettings(GameSettings settings) {
+        Gdx.graphics.setVSync(settings.vsync);
+        Gdx.app.log("ClientGame", "Applied runtime settings (VSync: " + settings.vsync + ")");
+        // NOTE: FPS limit is applied at startup by Lwjgl3Launcher.
+        // Changing it at runtime requires more complex logic, so we'll keep it as
+        // restart-required for now.
     }
 
     @Override

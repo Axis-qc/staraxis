@@ -1,10 +1,13 @@
 package staraxis.lwjgl3;
 
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import staraxis.ClientGame;
+import staraxis.ui.settings.GameSettings;
 
 import java.io.File;
 
@@ -14,6 +17,7 @@ import java.io.File;
  * 设计要点：
  * - 只负责平台侧窗口创建与启动，不承载任何游戏规则逻辑（遵循分层边界）。
  * - 启动时提前确保日志目录存在，避免 logback 由于目录缺失导致无法创建 game.log/error.log。
+ * - 在创建窗口前，轻量级地读取 settings.json 以应用分辨率、全屏等必须在启动时配置的选项。
  */
 public class Lwjgl3Launcher {
 
@@ -25,7 +29,27 @@ public class Lwjgl3Launcher {
             return;
 
         log.info("Launcher start, log dir ready.");
-        createApplication();
+
+        // NOTE: 在 Gdx.app 创建前，只能用原生 Java IO 读取设置文件。
+        // 这里只做轻量级读取，完整的 SettingsRepository 在 ClientGame.create() 中使用。
+        GameSettings settings = loadSettingsPreGdx();
+
+        createApplication(settings);
+    }
+
+    private static GameSettings loadSettingsPreGdx() {
+        File settingsFile = new File("../gamedata/settings.json");
+        if (!settingsFile.exists()) {
+            log.info("settings.json not found, using default settings for window creation.");
+            return GameSettings.createDefault();
+        }
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            return mapper.readValue(settingsFile, GameSettings.class);
+        } catch (Exception e) {
+            log.error("Failed to parse settings.json before Gdx init, falling back to default.", e);
+            return GameSettings.createDefault();
+        }
     }
 
     private static void ensureLogDir() {
@@ -37,16 +61,34 @@ public class Lwjgl3Launcher {
             dir.mkdirs();
     }
 
-    private static Lwjgl3Application createApplication() {
-        return new Lwjgl3Application(new ClientGame(), getDefaultConfiguration());
+    private static Lwjgl3Application createApplication(GameSettings settings) {
+        return new Lwjgl3Application(new ClientGame(), getDefaultConfiguration(settings));
     }
 
-    private static Lwjgl3ApplicationConfiguration getDefaultConfiguration() {
+    private static Lwjgl3ApplicationConfiguration getDefaultConfiguration(GameSettings settings) {
         Lwjgl3ApplicationConfiguration configuration = new Lwjgl3ApplicationConfiguration();
         configuration.setTitle("staraxis");
-        configuration.useVsync(true);
-        configuration.setForegroundFPS(Lwjgl3ApplicationConfiguration.getDisplayMode().refreshRate + 1);
-        configuration.setWindowedMode(640, 480);
+
+        // 应用设置
+        configuration.useVsync(settings.vsync);
+        if (settings.fpsLimit > 0) {
+            configuration.setForegroundFPS(settings.fpsLimit);
+        }
+
+        try {
+            String[] parts = settings.resolution.split("x");
+            int width = Integer.parseInt(parts[0]);
+            int height = Integer.parseInt(parts[1]);
+            if (settings.fullscreen) {
+                configuration.setFullscreenMode(Lwjgl3ApplicationConfiguration.getDisplayMode());
+            } else {
+                configuration.setWindowedMode(width, height);
+            }
+        } catch (Exception e) {
+            log.error("Invalid resolution format in settings: '{}', falling back to 1280x720.", settings.resolution, e);
+            configuration.setWindowedMode(1280, 720);
+        }
+
         configuration.setWindowIcon("libgdx128.png", "libgdx64.png", "libgdx32.png", "libgdx16.png");
         configuration.setOpenGLEmulation(Lwjgl3ApplicationConfiguration.GLEmulation.ANGLE_GLES20, 0, 0);
         return configuration;
