@@ -1,19 +1,7 @@
-2026-01-18 16:04:05.420 | INFO  | staraxis.lwjgl3.Lwjgl3Launcher | Launcher start, log dir ready.
-2026-01-18 16:04:05.422 | INFO  | staraxis.lwjgl3.Lwjgl3Launcher | settings.json not found, using default settings for window creation.
-2026-01-18 16:04:06.949 | INFO  | I18nService | Loaded and merged: i18n/strings_zh.properties
-2026-01-18 16:04:07.013 | INFO  | FontProvider | 使用 LibGDX 默认 BitmapFont 作为兜底字体
-2026-01-18 16:04:07.018 | INFO  | FontProvider | 尝试从 TTF 生成字体: fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf, size=28
-2026-01-18 16:04:07.052 | INFO  | FontProvider | TTF 字体生成成功: fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf (characters 从 i18n 汇总)
-2026-01-18 16:04:07.270 | INFO  | ClientGame | Applied runtime settings (VSync: true)
-2026-01-18 16:04:13.532 | INFO  | Gui | Action fired: TOGGLE_RESOLUTION_LIST
-2026-01-18 16:04:14.664 | INFO  | Gui | Action fired: TOGGLE_RESOLUTION_LIST
-2026-01-18 16:04:15.516 | INFO  | Gui | Action fired: TOGGLE_FPS_LIST
-2026-01-18 16:04:16.448 | INFO  | Gui | Action fired: TOGGLE_FPS_LIST
-2026-01-18 16:04:16.899 | INFO  | Gui | Action fired: TOGGLE_RESOLUTION_LIST
-2026-01-18 16:04:17.365 | INFO  | Gui | Action fired: TOGGLE_RESOLUTION_LIST
-2026-01-18 16:04:18.000 | INFO  | Gui | Action fired: TOGGLE_FPS_LIST
-2026-01-18 16:04:18.580 | INFO  | Gui | Action fired: TOGGLE_FPS_LIST
-2026-01-18 16:04:18.847 | INFO  | Gui | Action fired: TOGGLE_FPS_LIST
-2026-01-18 16:04:19.282 | INFO  | Gui | Action fired: TOGGLE_FPS_LIST
-2026-01-18 16:04:20.498 | INFO  | Gui | Action fired: TOGGLE_RESOLUTION_LIST
-2026-01-18 16:04:21.581 | INFO  | Gui | Action fired: TOGGLE_RESOLUTION_LIST
+2026-01-18 16:13:57.551 | INFO  | staraxis.lwjgl3.Lwjgl3Launcher | Launcher start, log dir ready.
+2026-01-18 16:13:57.553 | INFO  | staraxis.lwjgl3.Lwjgl3Launcher | settings.json not found, using default settings for window creation.
+2026-01-18 16:13:59.133 | INFO  | I18nService | Loaded and merged: i18n/strings_zh.properties
+2026-01-18 16:13:59.197 | INFO  | FontProvider | 使用 LibGDX 默认 BitmapFont 作为兜底字体
+2026-01-18 16:13:59.202 | INFO  | FontProvider | 尝试从 TTF 生成字体: fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf, size=28
+2026-01-18 16:13:59.234 | INFO  | FontProvider | TTF 字体生成成功: fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf (characters 从 i18n 汇总)
+2026-01-18 16:13:59.465 | INFO  | ClientGame | Applied runtime settings (VSync: true)
