@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Staraxis - Settings Prototype</title>
+  <style>
+    :root {
+      --bg: #0b0f16;
+      --panel: rgba(255, 255, 255, 0.06);
+      --panel-2: rgba(255, 255, 255, 0.08);
+      --border: rgba(255, 255, 255, 0.12);
+      --text: rgba(255, 255, 255, 0.92);
+      --muted: rgba(255, 255, 255, 0.70);
+      --muted2: rgba(255, 255, 255, 0.55);
+      --accent: #63b3ff;
+      --accent2: #a78bfa;
+      --danger: #ff5c7a;
+      --radius: 14px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 600px at 40% 0%, rgba(99, 179, 255, 0.16), transparent 55%),
+        radial-gradient(900px 500px at 80% 20%, rgba(167, 139, 250, 0.14), transparent 55%),
+        var(--bg);
+      color: var(--text);
+    }
+
+    .page {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 28px;
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .title {
+      font-size: 22px;
+      letter-spacing: 0.2px;
+      font-weight: 650;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: var(--muted2);
+      margin-top: 4px;
+    }
+
+    .frame {
+      flex: 1;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.035));
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      min-height: 640px;
+    }
+
+    .sidebar {
+      border-right: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.10);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .sidebar-tabs {
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow: auto;
+      min-height: 0;
+    }
+
+    .sidebar-actions {
+      margin-top: auto;
+      padding: 14px;
+      border-top: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.10);
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .tab {
+      appearance: none;
+      width: 100%;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      text-align: left;
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .tab:hover {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text);
+    }
+
+    .tab[aria-selected="true"] {
+      background: rgba(99, 179, 255, 0.14);
+      border-color: rgba(99, 179, 255, 0.28);
+      color: var(--text);
+    }
+
+    .tab small {
+      color: var(--muted2);
+      font-size: 12px;
+    }
+
+    .content {
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      overflow: auto;
+      min-height: 0;
+    }
+
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--panel);
+      padding: 16px;
+    }
+
+    .panel h2 {
+      margin: 0 0 10px 0;
+      font-size: 16px;
+      font-weight: 650;
+    }
+
+    .panel p {
+      margin: 0 0 14px 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 10px 14px;
+      align-items: center;
+    }
+
+    .label {
+      color: var(--text);
+      font-size: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .label span {
+      color: var(--muted2);
+      font-size: 12px;
+    }
+
+    .control {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-start;
+    }
+
+    select,
+    input[type="range"],
+    input[type="text"],
+    button {
+      font: inherit;
+    }
+
+    select,
+    input[type="text"] {
+      width: 100%;
+      padding: 9px 10px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.18);
+      color: var(--text);
+      outline: none;
+    }
+
+    input[type="range"] {
+      width: 100%;
+    }
+
+    .btn {
+      padding: 9px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .btn.primary {
+      background: rgba(99, 179, 255, 0.18);
+      border-color: rgba(99, 179, 255, 0.30);
+    }
+
+    .btn.ghost {
+      background: transparent;
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.10);
+    }
+
+    .btn.primary:hover {
+      background: rgba(99, 179, 255, 0.24);
+    }
+
+    .footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      padding: 14px;
+      border-top: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.10);
+    }
+
+    .badge {
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    @media (max-width: 900px) {
+      .frame {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        flex-direction: row;
+        overflow: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .tab {
+        min-width: 180px;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="page">
+    <div class="header">
+      <div>
+        <div class="title">设置</div>
+        <div class="subtitle">左右分栏原型：左侧 Tab，右侧标签页内容（可扩展 Mod Tab）</div>
+      </div>
+      <div class="badge" id="activeTabBadge">当前：通用</div>
+    </div>
+
+    <div class="frame">
+      <nav class="sidebar" aria-label="Settings tabs">
+        <div class="sidebar-tabs" id="sidebar">
+          <button class="tab" data-tab="general" aria-selected="true">通用 <small>General</small></button>
+          <button class="tab" data-tab="graphics" aria-selected="false">画面 <small>Graphics</small></button>
+          <button class="tab" data-tab="input" aria-selected="false">输入 <small>Input</small></button>
+          <button class="tab" data-tab="other" aria-selected="false">其他 <small>Other</small></button>
+
+          <div style="height: 8px"></div>
+          <div class="badge" style="align-self:flex-start">Mod Tabs（占位）</div>
+          <button class="tab" data-tab="mod_example" aria-selected="false">示例 Mod <small>mod:example</small></button>
+
+          <div style="height: 220px"></div>
+        </div>
+
+        <div class="sidebar-actions">
+          <button class="btn ghost">返回</button>
+          <button class="btn primary">保存</button>
+        </div>
+      </nav>
+
+      <main class="content">
+        <section class="panel" data-pane="general">
+          <h2>通用</h2>
+          <p>基础设置（语言、音量、UI/字体缩放等）。</p>
+          <div class="grid">
+            <div class="label">语言 <span>Language</span></div>
+            <div class="control">
+              <select>
+                <option>中文</option>
+                <option>English</option>
+              </select>
+            </div>
+
+            <div class="label">主音量 <span>Master Volume</span></div>
+            <div class="control">
+              <input type="range" min="0" max="100" value="80" />
+            </div>
+
+            <div class="label">UI 缩放 <span>UIScale</span></div>
+            <div class="control">
+              <button class="btn">-</button>
+              <input type="text" value="1.0x" />
+              <button class="btn">+</button>
+            </div>
+
+            <div class="label">字体缩放 <span>FontScale</span></div>
+            <div class="control">
+              <button class="btn">-</button>
+              <input type="text" value="1.0x" />
+              <button class="btn">+</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel hidden" data-pane="graphics">
+          <h2>画面</h2>
+          <p>渲染相关设置（分辨率、VSync、FPS、画质等）。</p>
+          <div class="grid">
+            <div class="label">分辨率 <span>Resolution</span></div>
+            <div class="control">
+              <select>
+                <option>1280x720</option>
+                <option>1600x900</option>
+                <option>1920x1080</option>
+              </select>
+            </div>
+
+            <div class="label">垂直同步 <span>VSync</span></div>
+            <div class="control">
+              <button class="btn">开 / 关</button>
+            </div>
+
+            <div class="label">FPS 上限 <span>FPS Limit</span></div>
+            <div class="control">
+              <select>
+                <option>无限制</option>
+                <option>30</option>
+                <option>60</option>
+                <option>120</option>
+              </select>
+            </div>
+
+            <div class="label">画质预设 <span>Quality Preset</span></div>
+            <div class="control">
+              <select>
+                <option>低</option>
+                <option>中</option>
+                <option>高</option>
+                <option>极致</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel hidden" data-pane="input">
+          <h2>输入</h2>
+          <p>键位、鼠标灵敏度等（占位）。</p>
+          <div class="grid">
+            <div class="label">鼠标灵敏度 <span>Mouse Sensitivity</span></div>
+            <div class="control">
+              <input type="range" min="1" max="20" value="10" />
+            </div>
+
+            <div class="label">反转 Y 轴 <span>Invert Y</span></div>
+            <div class="control">
+              <button class="btn">开 / 关</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel hidden" data-pane="other">
+          <h2>其他</h2>
+          <p>杂项、开发选项等（占位）。</p>
+          <div class="grid">
+            <div class="label">开发者控制台 <span>Dev Console</span></div>
+            <div class="control">
+              <button class="btn">开 / 关</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel hidden" data-pane="mod_example">
+          <h2>示例 Mod</h2>
+          <p>这是一个 Mod Tab 的占位原型：未来 Mod 可以注入自己的设置面板。</p>
+          <div class="grid">
+            <div class="label">示例开关 <span>Example Toggle</span></div>
+            <div class="control">
+              <button class="btn">开 / 关</button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+  </div>
+
+  <script>
+    const tabs = Array.from(document.querySelectorAll('.tab'));
+    const panes = Array.from(document.querySelectorAll('[data-pane]'));
+    const badge = document.getElementById('activeTabBadge');
+
+    function setTab(tabId) {
+      tabs.forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === tabId)));
+      panes.forEach(p => p.classList.toggle('hidden', p.dataset.pane !== tabId));
+      const t = tabs.find(x => x.dataset.tab === tabId);
+      if (t) badge.textContent = '当前：' + t.textContent.split('\n')[0].trim();
+    }
+
+    document.getElementById('sidebar').addEventListener('click', (e) => {
+      const btn = e.target.closest('.tab');
+      if (!btn) return;
+      setTab(btn.dataset.tab);
+    });
+  </script>
+</body>
+
+</html>

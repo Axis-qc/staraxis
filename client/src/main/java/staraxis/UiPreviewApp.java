@@ -12,6 +12,7 @@ import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import staraxis.ui.FontProvider;
 import staraxis.ui.Gui;
+import staraxis.ui.UiSkinLoader;
 import staraxis.ui.i18n.I18nService;
 import staraxis.ui.screens.MainMenuScreen;
 import staraxis.ui.widgets.DevelopingDialog;
@@ -27,15 +28,18 @@ public class UiPreviewApp implements ApplicationListener {
         Gdx.input.setInputProcessor(new InputMultiplexer(stage));
 
         I18nService i18nService = new I18nService();
-        i18nService.load("zh"); // 默认中文
+        i18nService.load("zh");
 
-        gui = new Gui(stage);
+        gui = new Gui(stage, s -> {
+        }, s -> {
+        });
         gui.register(I18nService.class, i18nService);
 
-        Skin skin = new Skin(Gdx.files.internal("ui/uiskin.json"));
+        Skin skin = UiSkinLoader.loadDefault("ui/uiskin/uiskin.json");
 
         BitmapFont defaultFont = FontProvider.createDefaultFont();
-        BitmapFont ttfFont = FontProvider.tryCreateFontFromTtfOrNull("fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf", 28);
+        BitmapFont ttfFont = FontProvider.tryCreateFontFromTtfOrNull("fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf",
+                28);
         BitmapFont finalFont = (ttfFont != null) ? ttfFont : defaultFont;
 
         skin.add("default-font", finalFont, BitmapFont.class);

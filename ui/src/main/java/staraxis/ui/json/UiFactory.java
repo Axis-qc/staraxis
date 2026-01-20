@@ -148,11 +148,15 @@ public class UiFactory {
                 table.setBackground(d);
         }
 
-        for (ComponentNode child : node.children) {
+        boolean horizontal = Boolean.TRUE.equals(node.properties.get("horizontal"));
+        for (int i = 0; i < node.children.size(); i++) {
+            ComponentNode child = node.children.get(i);
             Actor childActor = create(child);
             Cell<?> cell = table.add(childActor);
             applyCell(child, cell);
-            table.row();
+            if (!horizontal) {
+                table.row();
+            }
         }
         return table;
     }
@@ -555,6 +559,23 @@ public class UiFactory {
 
     private Actor buildButton(ComponentNode node) {
         TextButton btn = new TextButton(gui.i18n(node.properties.getOrDefault("text", "").toString()), skin);
+
+        Object bg = node.properties.get("background");
+        if (bg != null) {
+            try {
+                Drawable d = resolveDrawable(bg.toString());
+                if (d != null) {
+                    TextButton.TextButtonStyle base = skin.get(TextButton.TextButtonStyle.class);
+                    TextButton.TextButtonStyle s = new TextButton.TextButtonStyle(base);
+                    s.up = d;
+                    s.over = d;
+                    s.down = d;
+                    s.focused = d;
+                    btn.setStyle(s);
+                }
+            } catch (Exception ignored) {
+            }
+        }
 
         Object action = node.properties.get("onClick");
         if (action != null) {

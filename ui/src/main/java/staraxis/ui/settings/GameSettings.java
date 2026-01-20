@@ -18,6 +18,10 @@ public class GameSettings {
     public boolean vsync = true;
     public int fpsLimit = 0; // 0 for unlimited
 
+    // 缩放设置
+    public float uiScale = 1.0f;
+    public float fontScale = 1.0f;
+
     // 画面设置
     public String graphicsQuality = "medium"; // low, medium, high
 

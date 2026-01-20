@@ -6,6 +6,7 @@ import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Group;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Slider;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.utils.Disposable;
@@ -16,6 +17,8 @@ import staraxis.ui.json.UiParser;
 import staraxis.ui.settings.GameSettings;
 import staraxis.ui.settings.SettingsRepository;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -33,19 +36,17 @@ public class SettingsScreen implements Disposable {
     private final Stage stage;
     private Actor root;
 
+    private String activeTab = "general";
+
     private GameSettings currentSettings;
 
-    /**
-     * FPS 预设列表。
-     * 0 表示无限制。
-     */
     private static final Integer[] FPS_PRESETS = { 0, 30, 60, 120, 144, 240 };
-
-    /** 系统支持的分辨率列表（运行时采集并用于 repeat 填充）。 */
     private List<String> resolutionOptions = new ArrayList<>();
-
-    /** 当前选中的 FPS（用于 repeat 高亮判断）。 */
     private String selectedFpsText;
+
+    private static final float SCALE_STEP = 0.1f;
+    private static final float MIN_SCALE = 0.5f;
+    private static final float MAX_SCALE = 2.0f;
 
     public SettingsScreen(Gui gui) {
         this.gui = gui;
@@ -55,7 +56,6 @@ public class SettingsScreen implements Disposable {
     public void show() {
         dispose();
 
-        // 1) 读取设置（权威数据来源仍是 settings.json）
         SettingsRepository repository = gui.get(SettingsRepository.class);
         if (repository == null) {
             Gdx.app.error("SettingsScreen", "SettingsRepository not found.");
@@ -64,10 +64,8 @@ public class SettingsScreen implements Disposable {
         this.currentSettings = repository.load();
         this.selectedFpsText = String.valueOf(currentSettings.fpsLimit);
 
-        // 2) 收集系统支持的分辨率列表
         buildResolutionOptions();
 
-        // 3) 用 JSON 声明式构建设置界面
         UiParser parser = gui.get(UiParser.class);
         UiFactory factory = gui.get(UiFactory.class);
         ComponentNode node = parser.parseInternal(UI_PATH);
@@ -79,14 +77,10 @@ public class SettingsScreen implements Disposable {
         root = factory.create(node);
         stage.addActor(root);
 
-        // 4) 将设置值绑定到界面（按钮文本、slider 值等）
         bindDataToView();
-
-        // 5) 初始化 repeat 列表内容（初始为隐藏，但内容先渲染好）
         renderResolutionRepeat();
         renderFpsRepeat();
-
-        // 6) 触发一次布局，避免首次点击浮窗时尺寸仍为 0
+        openTab(activeTab);
         stage.act(0f);
     }
 
@@ -140,6 +134,9 @@ public class SettingsScreen implements Disposable {
         if (vol != null)
             vol.setValue(currentSettings.masterVolume);
 
+        refreshUiScaleLabel();
+        refreshFontScaleLabel();
+
         Actor resPopup = g.findActor("resolution_popup");
         if (resPopup != null)
             resPopup.setVisible(false);
@@ -148,27 +145,15 @@ public class SettingsScreen implements Disposable {
             fpsPopup.setVisible(false);
     }
 
-    /* ------------------------ 浮窗：展开/收起 + 动态对齐 ------------------------ */
-
-    /**
-     * 将浮窗对齐到按钮右侧，并确保位置在屏幕范围内。
-     *
-     * 注意：首次显示时 popup 可能还没完成 layout，width/height 可能为 0。
-     * 这里通过 stage.act(0) 强制完成一次布局，再读取尺寸。
-     */
     private void alignPopupToButton(Actor popup, Actor button) {
-        if (popup == null || button == null)
-            return;
-        if (popup.getParent() == null)
+        if (popup == null || button == null || popup.getParent() == null)
             return;
 
-        // 强制完成一次布局，确保 popup 的尺寸可用
         stage.act(0f);
 
         float popupW = popup.getWidth();
         float popupH = popup.getHeight();
 
-        // 兜底：若仍为 0，给一个合理的默认值，避免跑屏幕外
         if (popupW <= 0)
             popupW = 240f;
         if (popupH <= 0)
@@ -183,29 +168,63 @@ public class SettingsScreen implements Disposable {
         float targetXStage = buttonStage.x + button.getWidth();
         float targetYStage = buttonStage.y + button.getHeight() - popupH;
 
-        // 屏幕边界限制：避免超出右侧/下侧
         float screenW = Gdx.graphics.getWidth();
         float screenH = Gdx.graphics.getHeight();
 
-        if (targetXStage + popupW > screenW) {
+        if (targetXStage + popupW > screenW)
             targetXStage = screenW - popupW;
-        }
         if (targetXStage < 0)
             targetXStage = 0;
 
         if (targetYStage < 0)
             targetYStage = 0;
-        if (targetYStage + popupH > screenH) {
+        if (targetYStage + popupH > screenH)
             targetYStage = screenH - popupH;
-        }
 
         float x = targetXStage - parentStage.x;
         float y = targetYStage - parentStage.y;
 
         popup.setPosition(x, y);
         popup.toFront();
+        stage.act(0f);
+    }
 
-        // 再触发布局一次，让 ScrollPane/Repeat 根据新位置与尺寸刷新
+    public void openTab(String tabId) {
+        if (tabId == null || tabId.isBlank())
+            tabId = "general";
+        activeTab = tabId;
+
+        if (!(root instanceof Group))
+            return;
+        Group g = (Group) root;
+
+        Actor settingsScroll = g.findActor("settings_scroll");
+        if (settingsScroll != null)
+            settingsScroll.setVisible("general".equals(tabId));
+
+        Actor graphicsScroll = g.findActor("graphics_scroll");
+        if (graphicsScroll != null)
+            graphicsScroll.setVisible("graphics".equals(tabId));
+
+        Actor inputScroll = g.findActor("input_scroll");
+        if (inputScroll != null)
+            inputScroll.setVisible("input".equals(tabId));
+
+        Actor otherScroll = g.findActor("other_scroll");
+        if (otherScroll != null)
+            otherScroll.setVisible("other".equals(tabId));
+
+        Actor modExampleScroll = g.findActor("mod_example_scroll");
+        if (modExampleScroll != null)
+            modExampleScroll.setVisible("mod_example".equals(tabId));
+
+        Actor resPopup = g.findActor("resolution_popup");
+        if (resPopup != null)
+            resPopup.setVisible(false);
+        Actor fpsPopup = g.findActor("fps_popup");
+        if (fpsPopup != null)
+            fpsPopup.setVisible(false);
+
         stage.act(0f);
     }
 
@@ -213,20 +232,17 @@ public class SettingsScreen implements Disposable {
         if (!(root instanceof Group))
             return;
         Group g = (Group) root;
-
         Actor resPopup = g.findActor("resolution_popup");
         Actor fpsPopup = g.findActor("fps_popup");
         Actor resBtn = g.findActor("resolution_button");
 
         if (fpsPopup != null)
             fpsPopup.setVisible(false);
-
         if (resPopup != null) {
             boolean newVisible = !resPopup.isVisible();
             resPopup.setVisible(newVisible);
-            if (newVisible) {
+            if (newVisible)
                 alignPopupToButton(resPopup, resBtn);
-            }
         }
     }
 
@@ -234,38 +250,30 @@ public class SettingsScreen implements Disposable {
         if (!(root instanceof Group))
             return;
         Group g = (Group) root;
-
         Actor resPopup = g.findActor("resolution_popup");
         Actor fpsPopup = g.findActor("fps_popup");
         Actor fpsBtn = g.findActor("fps_limit_button");
 
         if (resPopup != null)
             resPopup.setVisible(false);
-
         if (fpsPopup != null) {
             boolean newVisible = !fpsPopup.isVisible();
             fpsPopup.setVisible(newVisible);
-            if (newVisible) {
+            if (newVisible)
                 alignPopupToButton(fpsPopup, fpsBtn);
-            }
         }
     }
-
-    /* ------------------------ repeat 渲染 ------------------------ */
 
     private void renderResolutionRepeat() {
         if (!(root instanceof Group))
             return;
         Group g = (Group) root;
-
         Actor repeatActor = g.findActor("resolution_repeat");
         if (!(repeatActor instanceof Group))
             return;
-
         UiFactory factory = gui.get(UiFactory.class);
         if (factory == null)
             return;
-
         factory.renderRepeatItems((Group) repeatActor, resolutionOptions, currentSettings.resolution,
                 "SELECT_RESOLUTION");
     }
@@ -274,31 +282,22 @@ public class SettingsScreen implements Disposable {
         if (!(root instanceof Group))
             return;
         Group g = (Group) root;
-
         Actor repeatActor = g.findActor("fps_repeat");
         if (!(repeatActor instanceof Group))
             return;
-
         UiFactory factory = gui.get(UiFactory.class);
         if (factory == null)
             return;
-
         List<String> fpsItems = new ArrayList<>();
-        for (Integer v : FPS_PRESETS) {
+        for (Integer v : FPS_PRESETS)
             fpsItems.add(String.valueOf(v));
-        }
-
         factory.renderRepeatItems((Group) repeatActor, fpsItems, selectedFpsText, "SELECT_FPS_LIMIT");
     }
-
-    /* ------------------------ 选项选择（由 action 驱动） ------------------------ */
 
     public void selectResolution(String resolution) {
         if (resolution == null || resolution.isBlank())
             return;
-
         currentSettings.resolution = resolution;
-
         try {
             String[] p = resolution.split("x");
             int w = Integer.parseInt(p[0]);
@@ -306,7 +305,6 @@ public class SettingsScreen implements Disposable {
             Gdx.graphics.setWindowedMode(w, h);
         } catch (Exception ignored) {
         }
-
         refreshResolutionButton();
         renderResolutionRepeat();
         hidePopups();
@@ -315,7 +313,6 @@ public class SettingsScreen implements Disposable {
     public void selectFpsLimit(String fpsText) {
         if (fpsText == null || fpsText.isBlank())
             return;
-
         try {
             int v = Integer.parseInt(fpsText);
             currentSettings.fpsLimit = v;
@@ -343,8 +340,6 @@ public class SettingsScreen implements Disposable {
             fpsPopup.setVisible(false);
     }
 
-    /* ------------------------ 其它设置项 ------------------------ */
-
     public void toggleVsync() {
         currentSettings.vsync = !currentSettings.vsync;
         Gdx.graphics.setVSync(currentSettings.vsync);
@@ -356,10 +351,62 @@ public class SettingsScreen implements Disposable {
         refreshMasterVolumeSlider();
     }
 
+    public void increaseUiScale() {
+        changeUiScale(SCALE_STEP);
+    }
+
+    public void decreaseUiScale() {
+        changeUiScale(-SCALE_STEP);
+    }
+
+    public void increaseFontScale() {
+        changeFontScale(SCALE_STEP);
+    }
+
+    public void decreaseFontScale() {
+        changeFontScale(-SCALE_STEP);
+    }
+
+    private void changeUiScale(float delta) {
+        float newScale = currentSettings.uiScale + delta;
+        newScale = new BigDecimal(newScale).setScale(1, RoundingMode.HALF_UP).floatValue();
+        if (newScale >= MIN_SCALE && newScale <= MAX_SCALE) {
+            currentSettings.uiScale = newScale;
+            gui.applyUiScale(newScale);
+            refreshUiScaleLabel();
+        }
+    }
+
+    private void changeFontScale(float delta) {
+        float newScale = currentSettings.fontScale + delta;
+        newScale = new BigDecimal(newScale).setScale(1, RoundingMode.HALF_UP).floatValue();
+        if (newScale >= MIN_SCALE && newScale <= MAX_SCALE) {
+            currentSettings.fontScale = newScale;
+            gui.applyFontScale(newScale);
+            refreshFontScaleLabel();
+        }
+    }
+
     public void saveSettings() {
         SettingsRepository r = gui.get(SettingsRepository.class);
         if (r != null)
             r.save(currentSettings);
+    }
+
+    private void refreshUiScaleLabel() {
+        if (root instanceof Group) {
+            Label label = ((Group) root).findActor("ui_scale_label");
+            if (label != null)
+                label.setText(String.format("%.1fx", currentSettings.uiScale));
+        }
+    }
+
+    private void refreshFontScaleLabel() {
+        if (root instanceof Group) {
+            Label label = ((Group) root).findActor("font_scale_label");
+            if (label != null)
+                label.setText(String.format("%.1fx", currentSettings.fontScale));
+        }
     }
 
     private void refreshResolutionButton() {

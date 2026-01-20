@@ -3,6 +3,8 @@ package staraxis.ui;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.utils.Disposable;
+
+import java.util.function.Consumer;
 import staraxis.ui.i18n.I18nService;
 import staraxis.ui.json.UiFactory;
 import staraxis.ui.json.UiParser;
@@ -25,17 +27,33 @@ import java.util.Map;
 public class Gui {
 
     private final Stage stage;
+    private final Consumer<Float> uiScaleApplier;
+    private final Consumer<Float> fontScaleApplier;
     private final Map<Class<?>, Object> componentsByType = new HashMap<>();
 
     /** 当前正在显示的 Screen，用于切换时清理旧界面。 */
     private Disposable activeScreen;
 
-    public Gui(Stage stage) {
+    public Gui(Stage stage, Consumer<Float> uiScaleApplier, Consumer<Float> fontScaleApplier) {
         this.stage = stage;
+        this.uiScaleApplier = uiScaleApplier;
+        this.fontScaleApplier = fontScaleApplier;
     }
 
     public Stage getStage() {
         return stage;
+    }
+
+    public void applyUiScale(float scale) {
+        if (uiScaleApplier != null) {
+            uiScaleApplier.accept(scale);
+        }
+    }
+
+    public void applyFontScale(float scale) {
+        if (fontScaleApplier != null) {
+            fontScaleApplier.accept(scale);
+        }
     }
 
     public <T> void register(Class<T> type, T instance) {
@@ -74,7 +92,6 @@ public class Gui {
     /* ------------------ Screen 切换辅助 ------------------ */
 
     private void switchScreen(Disposable screen, Runnable showCallback) {
-        // 清理旧 Screen
         if (activeScreen != null) {
             try {
                 activeScreen.dispose();
@@ -82,10 +99,8 @@ public class Gui {
             }
             activeScreen = null;
         }
-        // 清空舞台残留 Actor，确保彻底移除
         stage.clear();
 
-        // 显示新 Screen
         showCallback.run();
         activeScreen = screen;
     }
@@ -117,6 +132,10 @@ public class Gui {
         if (idx > 0) {
             actionId = action.substring(0, idx);
             actionArg = action.substring(idx + 1);
+        }
+
+        if ("TOGGLE_RESOLUTION_LIST".equals(actionId) || "TOGGLE_FPS_LIST".equals(actionId)) {
+            Gdx.app.log("Gui", "Action fired: " + actionId);
         }
 
         switch (actionId) {
@@ -163,6 +182,30 @@ public class Gui {
                     s.selectResolution(actionArg);
                 return;
             }
+            case "INCREASE_UI_SCALE": {
+                SettingsScreen s = get(SettingsScreen.class);
+                if (s != null)
+                    s.increaseUiScale();
+                return;
+            }
+            case "DECREASE_UI_SCALE": {
+                SettingsScreen s = get(SettingsScreen.class);
+                if (s != null)
+                    s.decreaseUiScale();
+                return;
+            }
+            case "INCREASE_FONT_SCALE": {
+                SettingsScreen s = get(SettingsScreen.class);
+                if (s != null)
+                    s.increaseFontScale();
+                return;
+            }
+            case "DECREASE_FONT_SCALE": {
+                SettingsScreen s = get(SettingsScreen.class);
+                if (s != null)
+                    s.decreaseFontScale();
+                return;
+            }
             case "SELECT_FPS_LIMIT": {
                 SettingsScreen s = get(SettingsScreen.class);
                 if (s != null)
@@ -179,6 +222,12 @@ public class Gui {
                     } catch (Exception ignored) {
                     }
                 }
+                return;
+            }
+            case "OPEN_SETTINGS_TAB": {
+                SettingsScreen s = get(SettingsScreen.class);
+                if (s != null)
+                    s.openTab(actionArg);
                 return;
             }
             case "SAVE_SETTINGS": {

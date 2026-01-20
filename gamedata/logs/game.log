@@ -1,7 +1,12 @@
-2026-01-18 16:13:57.551 | INFO  | staraxis.lwjgl3.Lwjgl3Launcher | Launcher start, log dir ready.
-2026-01-18 16:13:57.553 | INFO  | staraxis.lwjgl3.Lwjgl3Launcher | settings.json not found, using default settings for window creation.
-2026-01-18 16:13:59.133 | INFO  | I18nService | Loaded and merged: i18n/strings_zh.properties
-2026-01-18 16:13:59.197 | INFO  | FontProvider | 使用 LibGDX 默认 BitmapFont 作为兜底字体
-2026-01-18 16:13:59.202 | INFO  | FontProvider | 尝试从 TTF 生成字体: fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf, size=28
-2026-01-18 16:13:59.234 | INFO  | FontProvider | TTF 字体生成成功: fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf (characters 从 i18n 汇总)
-2026-01-18 16:13:59.465 | INFO  | ClientGame | Applied runtime settings (VSync: true)
+2026-01-19 19:50:34.620 | INFO  | staraxis.lwjgl3.Lwjgl3Launcher | Launcher start, log dir ready.
+2026-01-19 19:50:34.621 | INFO  | staraxis.lwjgl3.Lwjgl3Launcher | settings.json not found, using default settings for window creation.
+2026-01-19 19:50:36.267 | INFO  | I18nService | Loaded and merged: i18n/strings_zh.properties
+2026-01-19 19:50:36.379 | INFO  | FontProvider | 使用 LibGDX 默认 BitmapFont 作为兜底字体
+2026-01-19 19:50:36.385 | INFO  | FontProvider | 尝试从 TTF 生成字体: fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf, size=28
+2026-01-19 19:50:36.418 | INFO  | FontProvider | TTF 字体生成成功: fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf (characters 从 i18n 汇总)
+2026-01-19 19:50:36.649 | INFO  | ClientGame | UI scale applied: 1.0
+2026-01-19 19:50:36.650 | INFO  | ClientGame | Font scale applied: 1.0
+2026-01-19 19:50:36.650 | INFO  | ClientGame | Applied runtime settings (VSync: true, UIScale: 1.0)
+2026-01-19 19:50:38.238 | ERROR | UiFactory | Drawable not found in Skin: Rounded_background
+2026-01-19 19:50:38.239 | ERROR | UiFactory | Drawable not found in Skin: Small_rounded_button
+2026-01-19 19:50:38.239 | ERROR | UiFactory | Drawable not found in Skin: Small_rounded_button
