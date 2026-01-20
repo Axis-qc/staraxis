@@ -155,7 +155,7 @@ public class UiFactory {
             Cell<?> cell = table.add(childActor);
             applyCell(child, cell);
             if (!horizontal) {
-                table.row();
+            table.row();
             }
         }
         return table;

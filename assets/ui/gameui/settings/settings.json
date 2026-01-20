@@ -67,11 +67,11 @@
                                         {
                                             "type": "container",
                                             "name": "tab_bar",
-                                            "properties": {
+                            "properties": {
                                                 "align": "top"
-                                            },
-                                            "children": [
-                                                {
+                            },
+                            "children": [
+                                {
                                                     "type": "button",
                                                     "name": "tab_general",
                                                     "properties": {
@@ -87,65 +87,65 @@
                                                 {
                                                     "type": "button",
                                                     "name": "tab_graphics",
-                                                    "properties": {
+                                    "properties": {
                                                         "text": "settings.tab.graphics",
                                                         "onClick": "OPEN_SETTINGS_TAB:graphics",
-                                                        "cell": {
+                                        "cell": {
                                                             "height": 40,
                                                             "fillX": true,
-                                                            "padBottom": 8
-                                                        }
-                                                    }
-                                                },
-                                                {
+                                            "padBottom": 8
+                                        }
+                                    }
+                                },
+                                {
                                                     "type": "button",
                                                     "name": "tab_input",
-                                                    "properties": {
+                                    "properties": {
                                                         "text": "settings.tab.input",
                                                         "onClick": "OPEN_SETTINGS_TAB:input",
-                                                        "cell": {
+                                        "cell": {
                                                             "height": 40,
                                                             "fillX": true,
                                                             "padBottom": 8
-                                                        }
-                                                    }
-                                                },
-                                                {
-                                                    "type": "button",
+                                        }
+                                    }
+                                },
+                                {
+                                    "type": "button",
                                                     "name": "tab_other",
-                                                    "properties": {
+                                    "properties": {
                                                         "text": "settings.tab.other",
                                                         "onClick": "OPEN_SETTINGS_TAB:other",
-                                                        "cell": {
+                                        "cell": {
                                                             "height": 40,
                                                             "fillX": true,
                                                             "padBottom": 14
-                                                        }
-                                                    }
-                                                },
-                                                {
-                                                    "type": "label",
+                                        }
+                                    }
+                                },
+                                {
+                                    "type": "label",
                                                     "name": "mod_tabs_title",
-                                                    "properties": {
+                                    "properties": {
                                                         "text": "settings.tab.mods",
-                                                        "cell": {
+                                        "cell": {
                                                             "align": "left",
                                                             "padTop": 8,
                                                             "padBottom": 8
-                                                        }
-                                                    }
-                                                },
-                                                {
-                                                    "type": "button",
+                                        }
+                                    }
+                                },
+                                {
+                                    "type": "button",
                                                     "name": "tab_mod_example",
-                                                    "properties": {
+                                    "properties": {
                                                         "text": "settings.tab.modExample",
                                                         "onClick": "OPEN_SETTINGS_TAB:mod_example",
-                                                        "cell": {
+                                        "cell": {
                                                             "height": 40,
                                                             "fillX": true
-                                                        }
-                                                    }
+                                        }
+                                    }
                                                 }
                                             ]
                                         }
@@ -163,19 +163,19 @@
                                         {
                                             "type": "button",
                                             "name": "back_button",
-                                            "properties": {
+                                    "properties": {
                                                 "background": "Small_rounded_button",
                                                 "text": "settings.back",
                                                 "onClick": "BACK_TO_MAIN_MENU",
-                                                "cell": {
+                                        "cell": {
                                                     "height": 48,
                                                     "fillX": true,
                                                     "padBottom": 10
-                                                }
-                                            }
-                                        },
-                                        {
-                                            "type": "button",
+                                        }
+                                    }
+                                },
+                                {
+                                    "type": "button",
                                             "name": "save_button",
                                             "properties": {
                                                 "background": "Small_rounded_button",
@@ -223,146 +223,146 @@
                                             "children": [
                                                 {
                                                     "type": "label",
-                                                    "properties": {
+                                    "properties": {
                                                         "text": "settings.general",
-                                                        "cell": {
+                                        "cell": {
                                                             "colspan": 2,
                                                             "align": "left",
                                                             "padBottom": 8
-                                                        }
-                                                    }
-                                                },
-                                                {
-                                                    "type": "label",
-                                                    "properties": {
-                                                        "text": "settings.uiScale",
-                                                        "cell": {
-                                                            "align": "left",
-                                                            "padTop": 10
-                                                        }
-                                                    }
-                                                },
-                                                {
-                                                    "type": "container",
-                                                    "properties": {
-                                                        "cell": {
-                                                            "align": "left"
-                                                        }
-                                                    },
-                                                    "children": [
-                                                        {
-                                                            "type": "button",
-                                                            "properties": {
-                                                                "text": "<",
-                                                                "onClick": "DECREASE_UI_SCALE"
-                                                            }
-                                                        },
-                                                        {
-                                                            "type": "label",
-                                                            "name": "ui_scale_label",
-                                                            "properties": {
-                                                                "text": "1.0x",
-                                                                "cell": {
-                                                                    "padLeft": 10,
-                                                                    "padRight": 10,
-                                                                    "minWidth": 60
-                                                                }
-                                                            }
-                                                        },
-                                                        {
-                                                            "type": "button",
-                                                            "properties": {
-                                                                "text": ">",
-                                                                "onClick": "INCREASE_UI_SCALE"
-                                                            }
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "type": "label",
-                                                    "properties": {
-                                                        "text": "settings.fontScale",
-                                                        "cell": {
-                                                            "align": "left",
-                                                            "padTop": 10
-                                                        }
-                                                    }
-                                                },
-                                                {
-                                                    "type": "container",
-                                                    "properties": {
-                                                        "cell": {
-                                                            "align": "left"
-                                                        }
-                                                    },
-                                                    "children": [
-                                                        {
-                                                            "type": "button",
-                                                            "properties": {
-                                                                "text": "<",
-                                                                "onClick": "DECREASE_FONT_SCALE"
-                                                            }
-                                                        },
-                                                        {
-                                                            "type": "label",
-                                                            "name": "font_scale_label",
-                                                            "properties": {
-                                                                "text": "1.0x",
-                                                                "cell": {
-                                                                    "padLeft": 10,
-                                                                    "padRight": 10,
-                                                                    "minWidth": 60
-                                                                }
-                                                            }
-                                                        },
-                                                        {
-                                                            "type": "button",
-                                                            "properties": {
-                                                                "text": ">",
-                                                                "onClick": "INCREASE_FONT_SCALE"
-                                                            }
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "type": "label",
-                                                    "properties": {
-                                                        "text": "settings.audio",
-                                                        "cell": {
-                                                            "colspan": 2,
-                                                            "align": "left",
-                                                            "padTop": 16,
-                                                            "padBottom": 8
-                                                        }
-                                                    }
-                                                },
-                                                {
-                                                    "type": "label",
-                                                    "properties": {
-                                                        "text": "settings.masterVolume",
-                                                        "cell": {
-                                                            "align": "left"
-                                                        }
-                                                    }
-                                                },
-                                                {
-                                                    "type": "slider",
-                                                    "name": "master_volume_slider",
-                                                    "properties": {
-                                                        "min": 0,
-                                                        "max": 1,
-                                                        "step": 0.01,
-                                                        "value": 0.8,
-                                                        "onChange": "SET_MASTER_VOLUME",
-                                                        "cell": {
-                                                            "width": 240
-                                                        }
-                                                    }
+                                        }
+                                    }
+                                },
+                                {
+                                    "type": "label",
+                                    "properties": {
+                                        "text": "settings.uiScale",
+                                        "cell": {
+                                            "align": "left",
+                                            "padTop": 10
+                                        }
+                                    }
+                                },
+                                {
+                                    "type": "container",
+                                    "properties": {
+                                        "cell": {
+                                            "align": "left"
+                                        }
+                                    },
+                                    "children": [
+                                        {
+                                            "type": "button",
+                                            "properties": {
+                                                "text": "<",
+                                                "onClick": "DECREASE_UI_SCALE"
+                                            }
+                                        },
+                                        {
+                                            "type": "label",
+                                            "name": "ui_scale_label",
+                                            "properties": {
+                                                "text": "1.0x",
+                                                "cell": {
+                                                    "padLeft": 10,
+                                                    "padRight": 10,
+                                                    "minWidth": 60
                                                 }
-                                            ]
+                                            }
+                                        },
+                                        {
+                                            "type": "button",
+                                            "properties": {
+                                                "text": ">",
+                                                "onClick": "INCREASE_UI_SCALE"
+                                            }
                                         }
                                     ]
                                 },
+                                {
+                                    "type": "label",
+                                    "properties": {
+                                        "text": "settings.fontScale",
+                                        "cell": {
+                                            "align": "left",
+                                            "padTop": 10
+                                        }
+                                    }
+                                },
+                                {
+                                    "type": "container",
+                                    "properties": {
+                                        "cell": {
+                                            "align": "left"
+                                        }
+                                    },
+                                    "children": [
+                                        {
+                                            "type": "button",
+                                            "properties": {
+                                                "text": "<",
+                                                "onClick": "DECREASE_FONT_SCALE"
+                                            }
+                                        },
+                                        {
+                                            "type": "label",
+                                            "name": "font_scale_label",
+                                            "properties": {
+                                                "text": "1.0x",
+                                                "cell": {
+                                                    "padLeft": 10,
+                                                    "padRight": 10,
+                                                    "minWidth": 60
+                                                }
+                                            }
+                                        },
+                                        {
+                                            "type": "button",
+                                            "properties": {
+                                                "text": ">",
+                                                "onClick": "INCREASE_FONT_SCALE"
+                                            }
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "label",
+                                    "properties": {
+                                        "text": "settings.audio",
+                                        "cell": {
+                                            "colspan": 2,
+                                            "align": "left",
+                                            "padTop": 16,
+                                            "padBottom": 8
+                                        }
+                                    }
+                                },
+                                {
+                                    "type": "label",
+                                    "properties": {
+                                        "text": "settings.masterVolume",
+                                        "cell": {
+                                            "align": "left"
+                                        }
+                                    }
+                                },
+                                {
+                                    "type": "slider",
+                                    "name": "master_volume_slider",
+                                    "properties": {
+                                        "min": 0,
+                                        "max": 1,
+                                        "step": 0.01,
+                                        "value": 0.8,
+                                        "onChange": "SET_MASTER_VOLUME",
+                                        "cell": {
+                                            "width": 240
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
                                 {
                                     "type": "scroll",
                                     "name": "graphics_scroll",
@@ -556,143 +556,143 @@
                                         }
                                     ]
                                 },
+                {
+                    "type": "position",
+                    "name": "resolution_popup",
+                    "properties": {
+                        "visible": false,
+                        "height": 320
+                    },
+                    "children": [
+                        {
+                            "type": "container",
+                            "name": "resolution_popup_bg",
+                            "properties": {
+                                "pad": 10
+                            },
+                            "children": [
                                 {
-                                    "type": "position",
-                                    "name": "resolution_popup",
+                                    "type": "scroll",
+                                    "name": "resolution_scroll",
                                     "properties": {
-                                        "visible": false,
-                                        "height": 320
+                                        "scrollX": false,
+                                        "scrollY": true
                                     },
                                     "children": [
                                         {
-                                            "type": "container",
-                                            "name": "resolution_popup_bg",
-                                            "properties": {
-                                                "pad": 10
-                                            },
+                                            "type": "repeat",
+                                            "name": "resolution_repeat",
                                             "children": [
                                                 {
-                                                    "type": "scroll",
-                                                    "name": "resolution_scroll",
-                                                    "properties": {
-                                                        "scrollX": false,
-                                                        "scrollY": true
-                                                    },
+                                                    "type": "container",
+                                                    "name": "resolution_row",
+                                                    "properties": {},
                                                     "children": [
                                                         {
-                                                            "type": "repeat",
-                                                            "name": "resolution_repeat",
-                                                            "children": [
-                                                                {
-                                                                    "type": "container",
-                                                                    "name": "resolution_row",
-                                                                    "properties": {},
-                                                                    "children": [
-                                                                        {
-                                                                            "type": "button",
-                                                                            "name": "resolution_item",
-                                                                            "properties": {
-                                                                                "text": "${item}",
-                                                                                "onClick": "${action}",
-                                                                                "cell": {
-                                                                                    "grow": true,
-                                                                                    "fillX": true,
-                                                                                    "height": 36,
-                                                                                    "padRight": 24
-                                                                                }
-                                                                            }
-                                                                        }
-                                                                    ]
-                                                                },
-                                                                {
-                                                                    "type": "image",
-                                                                    "name": "resolution_divider",
-                                                                    "properties": {
-                                                                        "drawable": "split",
-                                                                        "cell": {
-                                                                            "height": 2,
-                                                                            "fillX": true,
-                                                                            "padTop": 2
-                                                                        }
-                                                                    }
+                                                            "type": "button",
+                                                            "name": "resolution_item",
+                                                            "properties": {
+                                                                "text": "${item}",
+                                                                "onClick": "${action}",
+                                                                "cell": {
+                                                                    "grow": true,
+                                                                    "fillX": true,
+                                                                    "height": 36,
+                                                                    "padRight": 24
                                                                 }
-                                                            ]
+                                                            }
                                                         }
                                                     ]
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                },
-                                {
-                                    "type": "position",
-                                    "name": "fps_popup",
-                                    "properties": {
-                                        "visible": false,
-                                        "height": 240
-                                    },
-                                    "children": [
-                                        {
-                                            "type": "container",
-                                            "name": "fps_popup_bg",
-                                            "properties": {
-                                                "pad": 10
-                                            },
-                                            "children": [
+                                                },
                                                 {
-                                                    "type": "scroll",
-                                                    "name": "fps_scroll",
+                                                    "type": "image",
+                                                    "name": "resolution_divider",
                                                     "properties": {
-                                                        "scrollX": false,
-                                                        "scrollY": true
-                                                    },
-                                                    "children": [
-                                                        {
-                                                            "type": "repeat",
-                                                            "name": "fps_repeat",
-                                                            "children": [
-                                                                {
-                                                                    "type": "container",
-                                                                    "name": "fps_row",
-                                                                    "properties": {},
-                                                                    "children": [
-                                                                        {
-                                                                            "type": "button",
-                                                                            "name": "fps_item",
-                                                                            "properties": {
-                                                                                "text": "${item}",
-                                                                                "onClick": "${action}",
-                                                                                "cell": {
-                                                                                    "grow": true,
-                                                                                    "fillX": true,
-                                                                                    "height": 36,
-                                                                                    "padRight": 24
-                                                                                }
-                                                                            }
-                                                                        }
-                                                                    ]
-                                                                },
-                                                                {
-                                                                    "type": "image",
-                                                                    "name": "fps_divider",
-                                                                    "properties": {
-                                                                        "drawable": "split",
-                                                                        "cell": {
-                                                                            "height": 2,
-                                                                            "fillX": true,
-                                                                            "padTop": 2
-                                                                        }
-                                                                    }
-                                                                }
-                                                            ]
+                                                        "drawable": "split",
+                                                        "cell": {
+                                                            "height": 2,
+                                                            "fillX": true,
+                                                            "padTop": 2
                                                         }
-                                                    ]
+                                                    }
                                                 }
                                             ]
                                         }
                                     ]
                                 }
                             ]
+                        }
+                    ]
+                },
+                {
+                    "type": "position",
+                    "name": "fps_popup",
+                    "properties": {
+                        "visible": false,
+                        "height": 240
+                    },
+                    "children": [
+                        {
+                            "type": "container",
+                            "name": "fps_popup_bg",
+                            "properties": {
+                                "pad": 10
+                            },
+                            "children": [
+                                {
+                                    "type": "scroll",
+                                    "name": "fps_scroll",
+                                    "properties": {
+                                        "scrollX": false,
+                                        "scrollY": true
+                                    },
+                                    "children": [
+                                        {
+                                            "type": "repeat",
+                                            "name": "fps_repeat",
+                                            "children": [
+                                                {
+                                                    "type": "container",
+                                                    "name": "fps_row",
+                                                    "properties": {},
+                                                    "children": [
+                                                        {
+                                                            "type": "button",
+                                                            "name": "fps_item",
+                                                            "properties": {
+                                                                "text": "${item}",
+                                                                "onClick": "${action}",
+                                                                "cell": {
+                                                                    "grow": true,
+                                                                    "fillX": true,
+                                                                    "height": 36,
+                                                                    "padRight": 24
+                                                                }
+                                                            }
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "type": "image",
+                                                    "name": "fps_divider",
+                                                    "properties": {
+                                                        "drawable": "split",
+                                                        "cell": {
+                                                            "height": 2,
+                                                            "fillX": true,
+                                                            "padTop": 2
+                                                        }
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
                         }
                     ]
                 }
