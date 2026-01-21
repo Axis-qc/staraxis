@@ -1,15 +1,15 @@
-2026-01-20 18:10:22.555 | INFO  | staraxis.lwjgl3.Lwjgl3Launcher | Launcher start, log dir ready.
-2026-01-20 18:10:22.556 | INFO  | staraxis.lwjgl3.Lwjgl3Launcher | settings.json not found, using default settings for window creation.
-2026-01-20 18:10:23.122 | INFO  | I18nService | Loaded and merged: i18n/strings_zh.properties
-2026-01-20 18:10:23.179 | INFO  | UiSkinLoader | Registered 9patch: bar_shadow_round_large_square
-2026-01-20 18:10:23.179 | INFO  | UiSkinLoader | Registered 9patch: Directional_Background
-2026-01-20 18:10:23.180 | INFO  | UiSkinLoader | Registered 9patch: Large_rounded_button
-2026-01-20 18:10:23.181 | INFO  | UiSkinLoader | Registered 9patch: Large_rounded_button_1
-2026-01-20 18:10:23.182 | INFO  | UiSkinLoader | Registered 9patch: Rounded_background
-2026-01-20 18:10:23.182 | INFO  | UiSkinLoader | Registered 9patch: Small_rounded_button
-2026-01-20 18:10:23.225 | INFO  | FontProvider | 使用 LibGDX 默认 BitmapFont 作为兜底字体
-2026-01-20 18:10:23.231 | INFO  | FontProvider | 尝试从 TTF 生成字体: fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf, size=28
-2026-01-20 18:10:23.261 | INFO  | FontProvider | TTF 字体生成成功: fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf (characters 从 i18n 汇总)
-2026-01-20 18:10:23.470 | INFO  | ClientGame | UI scale applied: 1.0
-2026-01-20 18:10:23.470 | INFO  | ClientGame | Font scale applied: 1.0
-2026-01-20 18:10:23.470 | INFO  | ClientGame | Applied runtime settings (VSync: true, UIScale: 1.0)
+2026-01-21 16:09:16.217 | INFO  | staraxis.lwjgl3.Lwjgl3Launcher | Launcher start, log dir ready.
+2026-01-21 16:09:16.218 | INFO  | staraxis.lwjgl3.Lwjgl3Launcher | settings.json not found, using default settings for window creation.
+2026-01-21 16:09:17.039 | INFO  | I18nService | Loaded and merged: i18n/strings_zh.properties
+2026-01-21 16:09:17.106 | INFO  | UiSkinLoader | Registered 9patch: bar_shadow_round_large_square
+2026-01-21 16:09:17.107 | INFO  | UiSkinLoader | Registered 9patch: Directional_Background
+2026-01-21 16:09:17.108 | INFO  | UiSkinLoader | Registered 9patch: Large_rounded_button
+2026-01-21 16:09:17.109 | INFO  | UiSkinLoader | Registered 9patch: Large_rounded_button_1
+2026-01-21 16:09:17.109 | INFO  | UiSkinLoader | Registered 9patch: Rounded_background
+2026-01-21 16:09:17.111 | INFO  | UiSkinLoader | Registered 9patch: Small_rounded_button
+2026-01-21 16:09:17.159 | INFO  | FontProvider | 使用 LibGDX 默认 BitmapFont 作为兜底字体
+2026-01-21 16:09:17.164 | INFO  | FontProvider | 尝试从 TTF 生成字体: fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf, size=28
+2026-01-21 16:09:17.199 | INFO  | FontProvider | TTF 字体生成成功: fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf (characters 从 i18n 汇总)
+2026-01-21 16:09:17.432 | INFO  | ClientGame | UI scale applied: 1.0
+2026-01-21 16:09:17.432 | INFO  | ClientGame | Font scale applied: 1.0
+2026-01-21 16:09:17.432 | INFO  | ClientGame | Applied runtime settings (VSync: true, UIScale: 1.0)

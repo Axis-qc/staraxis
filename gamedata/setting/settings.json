@@ -1,0 +1,13 @@
+{
+  "schemaVersion" : 1,
+  "resolution" : "1280x720",
+  "fullscreen" : false,
+  "vsync" : true,
+  "fpsLimit" : 60,
+  "uiScale" : 1.0,
+  "fontScale" : 1.0,
+  "graphicsQuality" : "medium",
+  "masterVolume" : 0.8,
+  "musicVolume" : 1.0,
+  "sfxVolume" : 1.0
+}

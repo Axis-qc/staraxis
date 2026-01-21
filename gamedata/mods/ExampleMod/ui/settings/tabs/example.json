@@ -1,0 +1,13 @@
+{
+    "schemaVersion": 1,
+    "type": "button",
+    "name": "example_mod_tab",
+    "properties": {
+        "text": "exampleMod.settings.tab",
+        "cell": {
+            "height": 42,
+            "fillX": true,
+            "padBottom": 8
+        }
+    }
+}

@@ -8,6 +8,7 @@ import com.badlogic.gdx.scenes.scene2d.Group;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Slider;
+import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.utils.Disposable;
 import staraxis.ui.Gui;
@@ -21,7 +22,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -32,9 +35,25 @@ public class SettingsScreen implements Disposable {
 
     private static final String UI_PATH = "ui/gameui/settings/settings.json";
 
+    private static final String MOD_SETTINGS_UI_DIR = "gamedata/mods";
+
     private final Gui gui;
     private final Stage stage;
     private Actor root;
+
+    private static class TabBinding {
+        final String tabId;
+        final String buttonActorName;
+        final String pageActorName;
+
+        TabBinding(String tabId, String buttonActorName, String pageActorName) {
+            this.tabId = tabId;
+            this.buttonActorName = buttonActorName;
+            this.pageActorName = pageActorName;
+        }
+    }
+
+    private final Map<String, TabBinding> tabBindings = new HashMap<>();
 
     private String activeTab = "general";
 
@@ -76,6 +95,9 @@ public class SettingsScreen implements Disposable {
 
         root = factory.create(node);
         stage.addActor(root);
+
+        registerBuiltInTabs();
+        loadAndRegisterModTabs();
 
         bindDataToView();
         renderResolutionRepeat();
@@ -190,42 +212,188 @@ public class SettingsScreen implements Disposable {
     }
 
     public void openTab(String tabId) {
-        if (tabId == null || tabId.isBlank())
+        if (tabId == null || tabId.isBlank()) {
             tabId = "general";
-        activeTab = tabId;
+        }
 
-        if (!(root instanceof Group))
+        if (tabBindings.containsKey(tabId)) {
+            activeTab = tabId;
+        } else {
+            activeTab = "general";
+        }
+
+        if (!(root instanceof Group)) {
             return;
+        }
         Group g = (Group) root;
 
-        Actor settingsScroll = g.findActor("settings_scroll");
-        if (settingsScroll != null)
-            settingsScroll.setVisible("general".equals(tabId));
-
-        Actor graphicsScroll = g.findActor("graphics_scroll");
-        if (graphicsScroll != null)
-            graphicsScroll.setVisible("graphics".equals(tabId));
-
-        Actor inputScroll = g.findActor("input_scroll");
-        if (inputScroll != null)
-            inputScroll.setVisible("input".equals(tabId));
-
-        Actor otherScroll = g.findActor("other_scroll");
-        if (otherScroll != null)
-            otherScroll.setVisible("other".equals(tabId));
-
-        Actor modExampleScroll = g.findActor("mod_example_scroll");
-        if (modExampleScroll != null)
-            modExampleScroll.setVisible("mod_example".equals(tabId));
+        for (TabBinding binding : tabBindings.values()) {
+            Actor page = g.findActor(binding.pageActorName);
+            if (page != null) {
+                page.setVisible(binding.tabId.equals(activeTab));
+            }
+        }
 
         Actor resPopup = g.findActor("resolution_popup");
-        if (resPopup != null)
+        if (resPopup != null) {
             resPopup.setVisible(false);
+        }
         Actor fpsPopup = g.findActor("fps_popup");
-        if (fpsPopup != null)
+        if (fpsPopup != null) {
             fpsPopup.setVisible(false);
+        }
 
+        applyTabHighlight(g);
         stage.act(0f);
+    }
+
+    private void applyTabHighlight(Group rootGroup) {
+        if (rootGroup == null) {
+            return;
+        }
+
+        // NOTE: 文字要求统一为白色：tab 高亮只通过 alpha 表现（更亮/更暗）。
+        com.badlogic.gdx.graphics.Color white = com.badlogic.gdx.graphics.Color.valueOf("FFFFFFFF");
+
+        for (TabBinding binding : tabBindings.values()) {
+            Actor a = rootGroup.findActor(binding.buttonActorName);
+            if (!(a instanceof TextButton)) {
+                continue;
+            }
+
+            TextButton b = (TextButton) a;
+
+            b.setColor(white);
+            if (binding.tabId.equals(activeTab)) {
+                b.getColor().a = 1.0f;
+            } else {
+                b.getColor().a = 0.72f;
+            }
+        }
+    }
+
+    private void registerBuiltInTabs() {
+        tabBindings.clear();
+        registerTabBinding("general", "tab_general", "settings_scroll");
+        registerTabBinding("graphics", "tab_graphics", "graphics_scroll");
+        registerTabBinding("input", "tab_input", "input_scroll");
+        registerTabBinding("other", "tab_other", "other_scroll");
+
+        // NOTE: ExampleMod 示例 Tab 不在本体内提供；这里仅注册本体内建的 Tab。
+    }
+
+    private void registerTabBinding(String tabId, String buttonActorName, String pageActorName) {
+        if (tabId == null || tabId.isBlank()) {
+            return;
+        }
+        if (buttonActorName == null || buttonActorName.isBlank()) {
+            return;
+        }
+        if (pageActorName == null || pageActorName.isBlank()) {
+            return;
+        }
+        tabBindings.put(tabId, new TabBinding(tabId, buttonActorName, pageActorName));
+    }
+
+    private void loadAndRegisterModTabs() {
+        if (!(root instanceof Group)) {
+            return;
+        }
+
+        Group g = (Group) root;
+        Actor tabBarActor = g.findActor("tab_bar");
+        Actor stackActor = g.findActor("settings_stack");
+
+        if (!(tabBarActor instanceof Table)) {
+            return;
+        }
+        if (!(stackActor instanceof Group)) {
+            return;
+        }
+
+        Table tabBar = (Table) tabBarActor;
+        Group settingsStack = (Group) stackActor;
+
+        com.badlogic.gdx.files.FileHandle modsDir = Gdx.files.local(MOD_SETTINGS_UI_DIR);
+        if (!modsDir.exists() || !modsDir.isDirectory()) {
+            return;
+        }
+
+        com.badlogic.gdx.files.FileHandle[] modDirs = modsDir.list();
+        java.util.Arrays.sort(modDirs, java.util.Comparator.comparing(com.badlogic.gdx.files.FileHandle::name));
+
+        UiParser parser = gui.get(UiParser.class);
+        UiFactory factory = gui.get(UiFactory.class);
+        if (parser == null || factory == null) {
+            return;
+        }
+
+        for (com.badlogic.gdx.files.FileHandle modDir : modDirs) {
+            if (!modDir.isDirectory()) {
+                continue;
+            }
+
+            com.badlogic.gdx.files.FileHandle settingsDir = modDir.child("ui/settings");
+            if (!settingsDir.exists() || !settingsDir.isDirectory()) {
+                continue;
+            }
+
+            com.badlogic.gdx.files.FileHandle tabsDir = settingsDir.child("tabs");
+            if (!tabsDir.exists() || !tabsDir.isDirectory()) {
+                continue;
+            }
+
+            com.badlogic.gdx.files.FileHandle[] tabFiles = tabsDir.list("json");
+            java.util.Arrays.sort(tabFiles, java.util.Comparator.comparing(com.badlogic.gdx.files.FileHandle::name));
+
+            for (com.badlogic.gdx.files.FileHandle tabFile : tabFiles) {
+                try {
+                    String tabId = tabFile.nameWithoutExtension();
+                    if (tabId == null || tabId.isBlank()) {
+                        continue;
+                    }
+
+                    String json = tabFile.readString("UTF-8");
+                    ComponentNode tabNode = parser.parseString(tabFile.path(), json);
+                    if (tabNode == null) {
+                        continue;
+                    }
+
+                    String buttonActorName = "tab_mod_" + modDir.name() + "_" + tabId;
+                    tabNode.name = buttonActorName;
+                    tabNode.properties.put("onClick", "OPEN_SETTINGS_TAB:" + buttonActorName);
+
+                    Actor tabButton = factory.create(tabNode);
+
+                    String pageActorName = "page_mod_" + modDir.name() + "_" + tabId;
+                    com.badlogic.gdx.files.FileHandle pageFile = settingsDir.child("pages/" + tabId + ".json");
+                    if (!pageFile.exists()) {
+                        continue;
+                    }
+
+                    ComponentNode pageRoot = parser.parseString(pageFile.path(), pageFile.readString("UTF-8"));
+                    if (pageRoot == null) {
+                        continue;
+                    }
+
+                    if (pageRoot.name == null || pageRoot.name.isBlank()) {
+                        pageRoot.name = pageActorName;
+                    } else {
+                        pageActorName = pageRoot.name;
+                    }
+
+                    Actor pageActor = factory.create(pageRoot);
+                    pageActor.setVisible(false);
+
+                    tabBar.add(tabButton).height(42).growX().fillX().padBottom(8).row();
+                    settingsStack.addActor(pageActor);
+
+                    registerTabBinding(buttonActorName, buttonActorName, pageActorName);
+                } catch (Exception e) {
+                    Gdx.app.error("SettingsScreen", "Failed to load mod settings tab from " + tabFile.path(), e);
+                }
+            }
+        }
     }
 
     public void toggleResolutionList() {

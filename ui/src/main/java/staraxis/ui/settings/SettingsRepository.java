@@ -5,7 +5,7 @@ import com.badlogic.gdx.files.FileHandle;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * 负责游戏设置的持久化（读/写 gamedata/settings.json）。
+ * 负责游戏设置的持久化（读/写 gamedata/setting/settings.json）。
  *
  * 设计要点：
  * - 封装文件 IO 与序列化细节。
@@ -14,7 +14,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  */
 public class SettingsRepository {
 
-    private static final String SETTINGS_PATH = "gamedata/settings.json";
+    private static final String SETTINGS_PATH = "gamedata/setting/settings.json";
     private final ObjectMapper mapper;
 
     public SettingsRepository() {
@@ -25,9 +25,9 @@ public class SettingsRepository {
      * 加载设置；若文件不存在或损坏，则创建并返回默认设置。
      */
     public GameSettings load() {
-        FileHandle file = Gdx.files.local(SETTINGS_PATH);
+        FileHandle file = Gdx.files.local("../" + SETTINGS_PATH);
         if (!file.exists()) {
-            Gdx.app.log("SettingsRepository", "settings.json not found, creating default.");
+            Gdx.app.log("SettingsRepository", "settings.json not found at " + SETTINGS_PATH + ", creating default.");
             GameSettings defaults = GameSettings.createDefault();
             save(defaults);
             return defaults;
@@ -44,10 +44,10 @@ public class SettingsRepository {
     }
 
     /**
-     * 将设置保存到 gamedata/settings.json。
+     * 将设置保存到 gamedata/setting/settings.json。
      */
     public void save(GameSettings settings) {
-        FileHandle file = Gdx.files.local(SETTINGS_PATH);
+        FileHandle file = Gdx.files.local("../" + SETTINGS_PATH);
         try {
             mapper.writerWithDefaultPrettyPrinter().writeValue(file.writer(false), settings);
         } catch (Exception e) {

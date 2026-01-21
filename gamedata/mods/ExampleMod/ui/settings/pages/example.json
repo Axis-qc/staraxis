@@ -1,0 +1,55 @@
+{
+    "schemaVersion": 1,
+    "type": "scroll",
+    "name": "example_mod_settings_scroll",
+    "properties": {
+        "scrollX": false,
+        "scrollY": true
+    },
+    "children": [
+        {
+            "type": "container",
+            "name": "example_mod_settings_root",
+            "properties": {
+                "align": "top",
+                "pad": 14
+            },
+            "children": [
+                {
+                    "type": "label",
+                    "name": "example_mod_settings_title",
+                    "properties": {
+                        "text": "exampleMod.settings.title",
+                        "color": "#FFFFFFFF",
+                        "cell": {
+                            "align": "left",
+                            "padBottom": 10
+                        }
+                    }
+                },
+                {
+                    "type": "image",
+                    "properties": {
+                        "drawable": "split",
+                        "cell": {
+                            "height": 2,
+                            "fillX": true,
+                            "padBottom": 12
+                        }
+                    }
+                },
+                {
+                    "type": "label",
+                    "properties": {
+                        "text": "exampleMod.settings.demoText",
+                        "color": "#FFFFFFFF",
+                        "cell": {
+                            "align": "left",
+                            "padBottom": 10
+                        }
+                    }
+                }
+            ]
+        }
+    ]
+}
