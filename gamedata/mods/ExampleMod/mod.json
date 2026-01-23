@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "modId": "ExampleMod",
+  "name": "示例模组",
+  "version": "1.0.0",
+  "compatibleGameVersion": "1.6.1",
+  "description": "这是一个示例模组，用于演示模组设置页与模组列表的功能。"
+}

@@ -237,6 +237,7 @@ public class Gui {
                 }
                 return;
             }
+            case "OPEN_MOD_LIST":
             case "SHOW_DEVELOPING_DIALOG":
             case "DEVELOPING": {
                 DevelopingDialog dialog = get(DevelopingDialog.class);

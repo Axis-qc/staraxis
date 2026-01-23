@@ -18,7 +18,7 @@ public class I18nService {
 
         loadAndMerge(Gdx.files.internal("i18n/strings_" + language + ".properties"));
 
-        FileHandle modsDir = Gdx.files.local("gamedata/mods/");
+        FileHandle modsDir = Gdx.files.local("../gamedata/mods/");
         if (modsDir.exists() && modsDir.isDirectory()) {
             FileHandle[] modDirs = modsDir.list();
             Arrays.sort(modDirs, Comparator.comparing(FileHandle::name));
@@ -57,7 +57,7 @@ public class I18nService {
         }
 
         // mods
-        FileHandle modsDir = Gdx.files.local("gamedata/mods/");
+        FileHandle modsDir = Gdx.files.local("../gamedata/mods/");
         if (modsDir.exists() && modsDir.isDirectory()) {
             FileHandle[] modDirs = modsDir.list();
             Arrays.sort(modDirs, Comparator.comparing(FileHandle::name));

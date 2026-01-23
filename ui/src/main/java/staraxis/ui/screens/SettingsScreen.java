@@ -6,7 +6,13 @@ import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Group;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.InputEvent;
+import com.badlogic.gdx.scenes.scene2d.InputListener;
+import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
+import com.badlogic.gdx.scenes.scene2d.ui.CheckBox;
+import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
+import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.Slider;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
@@ -16,6 +22,10 @@ import staraxis.ui.json.ComponentNode;
 import staraxis.ui.json.UiFactory;
 import staraxis.ui.json.UiParser;
 import staraxis.ui.settings.GameSettings;
+import staraxis.ui.settings.ModManager;
+import staraxis.ui.settings.ModMetadata;
+import staraxis.ui.settings.ModMetadataRepository;
+import staraxis.ui.settings.ModOrderRepository;
 import staraxis.ui.settings.SettingsRepository;
 
 import java.math.BigDecimal;
@@ -35,11 +45,13 @@ public class SettingsScreen implements Disposable {
 
     private static final String UI_PATH = "ui/gameui/settings/settings.json";
 
-    private static final String MOD_SETTINGS_UI_DIR = "gamedata/mods";
+    private static final String MOD_SETTINGS_UI_DIR = "../gamedata/mods";
 
     private final Gui gui;
     private final Stage stage;
     private Actor root;
+
+    private final ModManager modManager;
 
     private static class TabBinding {
         final String tabId;
@@ -70,6 +82,7 @@ public class SettingsScreen implements Disposable {
     public SettingsScreen(Gui gui) {
         this.gui = gui;
         this.stage = gui.getStage();
+        this.modManager = new ModManager(new ModOrderRepository(), new ModMetadataRepository());
     }
 
     public void show() {
@@ -243,6 +256,10 @@ public class SettingsScreen implements Disposable {
             fpsPopup.setVisible(false);
         }
 
+        if ("mods".equals(activeTab)) {
+            renderModsList();
+        }
+
         applyTabHighlight(g);
         stage.act(0f);
     }
@@ -278,6 +295,7 @@ public class SettingsScreen implements Disposable {
         registerTabBinding("graphics", "tab_graphics", "graphics_scroll");
         registerTabBinding("input", "tab_input", "input_scroll");
         registerTabBinding("other", "tab_other", "other_scroll");
+        registerTabBinding("mods", "open_mod_list_button", "mods_scroll");
 
         // NOTE: ExampleMod 示例 Tab 不在本体内提供；这里仅注册本体内建的 Tab。
     }
@@ -296,6 +314,7 @@ public class SettingsScreen implements Disposable {
     }
 
     private void loadAndRegisterModTabs() {
+        Gdx.app.log("SettingsScreen", "Scanning mod settings tabs under: " + MOD_SETTINGS_UI_DIR);
         if (!(root instanceof Group)) {
             return;
         }
@@ -616,6 +635,256 @@ public class SettingsScreen implements Disposable {
     private void updateFpsLimitButtonText(TextButton button) {
         button.setText(currentSettings.fpsLimit == 0 ? gui.i18n("settings.unlimited")
                 : String.valueOf(currentSettings.fpsLimit));
+    }
+
+    private void renderModsList() {
+        if (!(root instanceof Group)) {
+            return;
+        }
+
+        Group g = (Group) root;
+        Actor containerActor = g.findActor("mods_list_container");
+        if (!(containerActor instanceof Table)) {
+            return;
+        }
+
+        Table listContainer = (Table) containerActor;
+        listContainer.clearChildren();
+        listContainer.top().left();
+
+        Skin skin = gui.get(Skin.class);
+        if (skin == null) {
+            return;
+        }
+
+        List<ModMetadata> mods = modManager.loadModsOrdered();
+        for (int i = 0; i < mods.size(); i++) {
+            ModMetadata meta = mods.get(i);
+
+            Table block = new Table(skin);
+            block.left();
+            block.setUserObject(meta.modId);
+
+            Table row = new Table(skin);
+            row.left();
+            try {
+                row.setBackground(skin.getDrawable("Small_rounded_button"));
+            } catch (Exception ignored) {
+            }
+            row.pad(4);
+
+            // 列宽按比例分配
+            // 列宽按右侧内容区可视宽度分配（优先 mods_scroll，其次 listContainer，最后回退 stage）
+            float totalW = 0f;
+            if (root instanceof Group) {
+                Actor modsScrollActor = ((Group) root).findActor("mods_scroll");
+                if (modsScrollActor != null) {
+                    totalW = modsScrollActor.getWidth();
+                }
+            }
+            if (totalW <= 0f) {
+                totalW = listContainer.getWidth();
+            }
+            if (totalW <= 0f) {
+                totalW = stage.getWidth();
+            }
+            float wDrag = totalW * 0.10f;
+            float wExpand = totalW * 0.10f;
+            float wName = totalW * 0.40f;
+            float wCompat = totalW * 0.20f;
+            float wEnable = totalW * 0.20f;
+
+            Label handle = new Label("≡", skin);
+            handle.setColor(com.badlogic.gdx.graphics.Color.WHITE);
+            handle.addListener(new ModRowDragHandleListener(listContainer, meta.modId));
+
+            Label expand = new Label(">", skin);
+            expand.setColor(com.badlogic.gdx.graphics.Color.LIGHT_GRAY);
+
+            Label nameLabel = new Label(meta.name != null ? meta.name : meta.modId, skin);
+            nameLabel.setColor(com.badlogic.gdx.graphics.Color.WHITE);
+
+            String compatText = meta.compatibleGameVersion != null ? meta.compatibleGameVersion : "";
+            Label compatLabel = new Label(compatText, skin);
+            compatLabel.setColor(com.badlogic.gdx.graphics.Color.LIGHT_GRAY);
+            compatLabel.setAlignment(com.badlogic.gdx.utils.Align.right);
+
+            // 勾选框：暂存于 UI（后续可接入 mod-enable 持久化）
+            CheckBox enabled = new CheckBox("", skin);
+            enabled.setChecked(true);
+
+            Image divider1 = new Image(skin.getDrawable("split"));
+            Image divider2 = new Image(skin.getDrawable("split"));
+            Image divider3 = new Image(skin.getDrawable("split"));
+            Image divider4 = new Image(skin.getDrawable("split"));
+
+            row.add(handle).width(wDrag).center();
+            row.add(divider1).width(2).fillY().padLeft(6).padRight(6);
+            row.add(expand).width(wExpand).center();
+            row.add(divider2).width(2).fillY().padLeft(6).padRight(6);
+            row.add(nameLabel).width(wName).left();
+            row.add(divider3).width(2).fillY().padLeft(6).padRight(6);
+            row.add(compatLabel).width(wCompat).right();
+            row.add(divider4).width(2).fillY().padLeft(6).padRight(6);
+            row.add(enabled).width(wEnable).center();
+
+            block.add(row).growX().fillX().row();
+
+            Table detailRow = null;
+            if (meta.description != null && !meta.description.isBlank()) {
+                detailRow = new Table(skin);
+                detailRow.left();
+                detailRow.setVisible(false);
+                detailRow.padLeft(26);
+
+                Label descLabel = new Label(meta.description, skin);
+                descLabel.setWrap(true);
+                descLabel.setColor(com.badlogic.gdx.graphics.Color.LIGHT_GRAY);
+
+                detailRow.add(descLabel).left().growX().fillX().width(560).padTop(2).padBottom(6);
+                block.add(detailRow).growX().fillX().row();
+
+                Table finalDetailRow = detailRow;
+                Runnable toggle = () -> {
+                    boolean newVisible = !finalDetailRow.isVisible();
+                    finalDetailRow.setVisible(newVisible);
+                    expand.setText(newVisible ? "v" : ">");
+                    listContainer.invalidateHierarchy();
+                };
+
+                expand.addListener(new ClickListener() {
+                    @Override
+                    public void clicked(InputEvent event, float x, float y) {
+                        toggle.run();
+                    }
+                });
+
+                nameLabel.addListener(new ClickListener() {
+                    @Override
+                    public void clicked(InputEvent event, float x, float y) {
+                        toggle.run();
+                    }
+                });
+            }
+
+            listContainer.add(block).growX().fillX().padBottom(4).row();
+        }
+
+        listContainer.invalidateHierarchy();
+    }
+
+    private class ModRowDragHandleListener extends InputListener {
+
+        private final Table listContainer;
+        private final String modId;
+
+        private float startStageY;
+        private boolean dragging;
+
+        ModRowDragHandleListener(Table listContainer, String modId) {
+            this.listContainer = listContainer;
+            this.modId = modId;
+        }
+
+        @Override
+        public boolean touchDown(InputEvent event, float x, float y, int pointer, int button) {
+            dragging = true;
+            startStageY = event.getStageY();
+            return true;
+        }
+
+        @Override
+        public void touchDragged(InputEvent event, float x, float y, int pointer) {
+            if (!dragging) {
+                return;
+            }
+
+            float dy = event.getStageY() - startStageY;
+            if (Math.abs(dy) < 12f) {
+                return;
+            }
+
+            int currentIndex = findIndexByModId(modId);
+            if (currentIndex < 0) {
+                return;
+            }
+
+            // 根据拖拽方向尝试与相邻项交换
+            if (dy > 0 && currentIndex > 0) {
+                swapRows(currentIndex, currentIndex - 1);
+                startStageY = event.getStageY();
+            } else if (dy < 0 && currentIndex < listContainer.getChildren().size - 1) {
+                swapRows(currentIndex, currentIndex + 1);
+                startStageY = event.getStageY();
+            }
+        }
+
+        @Override
+        public void touchUp(InputEvent event, float x, float y, int pointer, int button) {
+            if (!dragging) {
+                return;
+            }
+            dragging = false;
+
+            List<String> newOrder = new ArrayList<>();
+            for (Actor a : listContainer.getChildren()) {
+                Object uo = a.getUserObject();
+                if (uo instanceof String) {
+                    String s = (String) uo;
+                    if (!s.startsWith("detail:")) {
+                        newOrder.add(s);
+                    }
+                }
+            }
+
+            modManager.saveOrder(newOrder);
+        }
+
+        private int findIndexByModId(String targetModId) {
+            int idx = 0;
+            for (Actor a : listContainer.getChildren()) {
+                if (targetModId.equals(a.getUserObject())) {
+                    return idx;
+                }
+                idx++;
+            }
+            return -1;
+        }
+
+        private void swapRows(int i, int j) {
+            if (i == j) {
+                return;
+            }
+
+            com.badlogic.gdx.utils.Array<Actor> children = listContainer.getChildren();
+            if (i < 0 || j < 0 || i >= children.size || j >= children.size) {
+                return;
+            }
+
+            Actor a = children.get(i);
+            Actor b = children.get(j);
+
+            children.set(i, b);
+            children.set(j, a);
+
+            // NOTE: Table 的布局顺序由 Cells 决定；仅交换 children 数组不足以改变 row 显示顺序。
+            // 这里重建一次 cell 顺序，确保可视顺序与 children 顺序一致。
+            rebuildTableOrder();
+        }
+
+        private void rebuildTableOrder() {
+            java.util.List<Actor> ordered = new java.util.ArrayList<>();
+            for (Actor a : listContainer.getChildren()) {
+                ordered.add(a);
+            }
+
+            listContainer.clearChildren();
+            listContainer.top().left();
+            for (Actor a : ordered) {
+                listContainer.add(a).growX().fillX().padBottom(10).row();
+            }
+            listContainer.invalidateHierarchy();
+        }
     }
 
     @Override

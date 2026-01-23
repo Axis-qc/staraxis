@@ -68,7 +68,7 @@ public final class FontProvider {
         // NOTE: 基础字符集（控制符号/常用 ASCII），避免某些 UI 文本不是 i18n 时缺字。
         String base = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789" +
                 "-()（）/\\ _" +
-                ">v";
+                ">v≡";
 
         Set<Character> chars = new LinkedHashSet<>();
         for (int i = 0; i < base.length(); i++) {
@@ -76,16 +76,41 @@ public final class FontProvider {
         }
 
         FileHandle dir = Gdx.files.internal("i18n");
-        if (!dir.exists() || !dir.isDirectory()) {
-            return toString(chars);
+        if (dir.exists() && dir.isDirectory()) {
+            for (FileHandle f : dir.list()) {
+                String name = f.name();
+                if (!name.startsWith("strings_") || !name.endsWith(".properties")) {
+                    continue;
+                }
+                mergePropertiesValueChars(chars, f);
+            }
         }
 
-        for (FileHandle f : dir.list()) {
-            String name = f.name();
-            if (!name.startsWith("strings_") || !name.endsWith(".properties")) {
-                continue;
+        // NOTE: 同时扫描 mod 的 i18n，确保字体位图包含 mod 文本需要的字符，避免运行时缺字。
+        // 由于 :lwjgl3:run 的 workingDir 为 assets/，这里用 ../gamedata/mods 定位项目根下的 mod 目录。
+        FileHandle modsDir = Gdx.files.local("../gamedata/mods/");
+        if (modsDir.exists() && modsDir.isDirectory()) {
+            FileHandle[] modDirs = modsDir.list();
+            java.util.Arrays.sort(modDirs, java.util.Comparator.comparing(FileHandle::name));
+
+            for (FileHandle modDir : modDirs) {
+                if (!modDir.isDirectory()) {
+                    continue;
+                }
+
+                FileHandle modI18nDir = modDir.child("i18n");
+                if (!modI18nDir.exists() || !modI18nDir.isDirectory()) {
+                    continue;
+                }
+
+                for (FileHandle f : modI18nDir.list()) {
+                    String name = f.name();
+                    if (!name.startsWith("strings_") || !name.endsWith(".properties")) {
+                        continue;
+                    }
+                    mergePropertiesValueChars(chars, f);
+                }
             }
-            mergePropertiesValueChars(chars, f);
         }
 
         return toString(chars);
