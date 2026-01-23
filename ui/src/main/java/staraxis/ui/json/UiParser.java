@@ -97,6 +97,12 @@ public class UiParser {
     private ComponentNode toNode(JsonValue value) {
         ComponentNode node = new ComponentNode(value.getString("type", null));
         node.name = value.getString("name", null);
+        node.include = value.getString("include", null);
+        // params 可以是对象
+        JsonValue paramsVal = value.get("params");
+        if (paramsVal != null && paramsVal.isObject()) {
+            node.params = toMap(paramsVal);
+        }
 
         JsonValue props = value.get("properties");
         if (props != null)

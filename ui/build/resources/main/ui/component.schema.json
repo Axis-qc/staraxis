@@ -27,7 +27,11 @@
         "slider",
         "progressBar",
         "textField",
-        "selectBox"
+        "selectBox",
+        "checkBox",
+        "horizontalGroup",
+        "imageButton",
+        "textButton"
       ]
     },
     "name": {
@@ -44,9 +48,26 @@
       "items": {
         "$ref": "#"
       }
+    },
+    "include": {
+      "description": "Reference a component template from ui/common/components.json",
+      "type": "string"
+    },
+    "params": {
+      "description": "Parameters for include template substitution",
+      "type": "object"
     }
   },
-  "required": [
-    "type"
+  "anyOf": [
+    {
+      "required": [
+        "type"
+      ]
+    },
+    {
+      "required": [
+        "include"
+      ]
+    }
   ]
 }

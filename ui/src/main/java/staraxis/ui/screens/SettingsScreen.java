@@ -7,15 +7,14 @@ import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Group;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
-import com.badlogic.gdx.scenes.scene2d.InputListener;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
+import com.badlogic.gdx.scenes.scene2d.utils.DragAndDrop;
 import com.badlogic.gdx.scenes.scene2d.ui.CheckBox;
-import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
-import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.Slider;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
+import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.utils.Disposable;
 import staraxis.ui.Gui;
 import staraxis.ui.json.ComponentNode;
@@ -461,8 +460,8 @@ public class SettingsScreen implements Disposable {
         UiFactory factory = gui.get(UiFactory.class);
         if (factory == null)
             return;
-        factory.renderRepeatItems((Group) repeatActor, resolutionOptions, currentSettings.resolution,
-                "SELECT_RESOLUTION");
+        factory.renderRepeatItems((Group) repeatActor, toRepeatItemsData(resolutionOptions, currentSettings.resolution,
+                "SELECT_RESOLUTION"));
     }
 
     private void renderFpsRepeat() {
@@ -478,7 +477,8 @@ public class SettingsScreen implements Disposable {
         List<String> fpsItems = new ArrayList<>();
         for (Integer v : FPS_PRESETS)
             fpsItems.add(String.valueOf(v));
-        factory.renderRepeatItems((Group) repeatActor, fpsItems, selectedFpsText, "SELECT_FPS_LIMIT");
+        factory.renderRepeatItems((Group) repeatActor,
+                toRepeatItemsData(fpsItems, selectedFpsText, "SELECT_FPS_LIMIT"));
     }
 
     public void selectResolution(String resolution) {
@@ -513,6 +513,22 @@ public class SettingsScreen implements Disposable {
             hidePopups();
         } catch (Exception ignored) {
         }
+    }
+
+    private List<Map<String, Object>> toRepeatItemsData(List<String> items, String selected, String actionPrefix) {
+        List<Map<String, Object>> data = new ArrayList<>();
+        if (items == null) {
+            return data;
+        }
+
+        for (String item : items) {
+            Map<String, Object> row = new HashMap<>();
+            row.put("item", item != null ? item : "");
+            row.put("selected", item != null && item.equals(selected));
+            row.put("action", actionPrefix + ":" + (item != null ? item : ""));
+            data.add(row);
+        }
+        return data;
     }
 
     private void hidePopups() {
@@ -643,247 +659,252 @@ public class SettingsScreen implements Disposable {
         }
 
         Group g = (Group) root;
-        Actor containerActor = g.findActor("mods_list_container");
-        if (!(containerActor instanceof Table)) {
+        Actor repeatActor = g.findActor("mods_repeat");
+        if (!(repeatActor instanceof Group)) {
             return;
         }
 
-        Table listContainer = (Table) containerActor;
-        listContainer.clearChildren();
-        listContainer.top().left();
-
-        Skin skin = gui.get(Skin.class);
-        if (skin == null) {
+        UiFactory factory = gui.get(UiFactory.class);
+        if (factory == null) {
             return;
         }
 
         List<ModMetadata> mods = modManager.loadModsOrdered();
-        for (int i = 0; i < mods.size(); i++) {
-            ModMetadata meta = mods.get(i);
+        List<Map<String, Object>> itemsData = new ArrayList<>();
+        for (ModMetadata meta : mods) {
+            Map<String, Object> data = new HashMap<>();
+            data.put("modId", meta.modId);
+            data.put("modName", meta.name != null ? meta.name : meta.modId);
+            data.put("compatibleGameVersion", meta.compatibleGameVersion != null ? meta.compatibleGameVersion : "");
+            data.put("description", meta.description != null ? meta.description : "");
+            data.put("enabled", true);
+            itemsData.add(data);
+        }
 
-            Table block = new Table(skin);
-            block.left();
-            block.setUserObject(meta.modId);
-
-            Table row = new Table(skin);
-            row.left();
-            try {
-                row.setBackground(skin.getDrawable("Small_rounded_button"));
-            } catch (Exception ignored) {
+        factory.renderRepeatItemsWithActors((Group) repeatActor, itemsData, (rowActor, data) -> {
+            if (!(rowActor instanceof Group)) {
+                return;
             }
-            row.pad(4);
 
-            // 列宽按比例分配
-            // 列宽按右侧内容区可视宽度分配（优先 mods_scroll，其次 listContainer，最后回退 stage）
-            float totalW = 0f;
-            if (root instanceof Group) {
-                Actor modsScrollActor = ((Group) root).findActor("mods_scroll");
-                if (modsScrollActor != null) {
-                    totalW = modsScrollActor.getWidth();
+            String modId = data.get("modId") != null ? data.get("modId").toString() : null;
+            if (modId != null && !modId.isBlank()) {
+                rowActor.setUserObject(modId);
+            }
+
+            Group rowGroup = (Group) rowActor;
+
+            Actor detailActor = rowGroup.findActor("mod_detail_template");
+            if (detailActor != null) {
+                detailActor.setVisible(false);
+            }
+
+            Label expandLabel = rowGroup.findActor("expand");
+            if (expandLabel != null) {
+                expandLabel.setText(">");
+            }
+
+            Runnable toggleDetail = () -> {
+                if (detailActor == null) {
+                    return;
                 }
-            }
-            if (totalW <= 0f) {
-                totalW = listContainer.getWidth();
-            }
-            if (totalW <= 0f) {
-                totalW = stage.getWidth();
-            }
-            float wDrag = totalW * 0.10f;
-            float wExpand = totalW * 0.10f;
-            float wName = totalW * 0.40f;
-            float wCompat = totalW * 0.20f;
-            float wEnable = totalW * 0.20f;
+                boolean newVisible = !detailActor.isVisible();
+                detailActor.setVisible(newVisible);
+                if (expandLabel != null) {
+                    expandLabel.setText(newVisible ? "v" : ">");
+                }
+                if (repeatActor instanceof com.badlogic.gdx.scenes.scene2d.ui.Table) {
+                    ((com.badlogic.gdx.scenes.scene2d.ui.Table) repeatActor).invalidateHierarchy();
+                }
+            };
 
-            Label handle = new Label("≡", skin);
-            handle.setColor(com.badlogic.gdx.graphics.Color.WHITE);
-            handle.addListener(new ModRowDragHandleListener(listContainer, meta.modId));
-
-            Label expand = new Label(">", skin);
-            expand.setColor(com.badlogic.gdx.graphics.Color.LIGHT_GRAY);
-
-            Label nameLabel = new Label(meta.name != null ? meta.name : meta.modId, skin);
-            nameLabel.setColor(com.badlogic.gdx.graphics.Color.WHITE);
-
-            String compatText = meta.compatibleGameVersion != null ? meta.compatibleGameVersion : "";
-            Label compatLabel = new Label(compatText, skin);
-            compatLabel.setColor(com.badlogic.gdx.graphics.Color.LIGHT_GRAY);
-            compatLabel.setAlignment(com.badlogic.gdx.utils.Align.right);
-
-            // 勾选框：暂存于 UI（后续可接入 mod-enable 持久化）
-            CheckBox enabled = new CheckBox("", skin);
-            enabled.setChecked(true);
-
-            Image divider1 = new Image(skin.getDrawable("split"));
-            Image divider2 = new Image(skin.getDrawable("split"));
-            Image divider3 = new Image(skin.getDrawable("split"));
-            Image divider4 = new Image(skin.getDrawable("split"));
-
-            row.add(handle).width(wDrag).center();
-            row.add(divider1).width(2).fillY().padLeft(6).padRight(6);
-            row.add(expand).width(wExpand).center();
-            row.add(divider2).width(2).fillY().padLeft(6).padRight(6);
-            row.add(nameLabel).width(wName).left();
-            row.add(divider3).width(2).fillY().padLeft(6).padRight(6);
-            row.add(compatLabel).width(wCompat).right();
-            row.add(divider4).width(2).fillY().padLeft(6).padRight(6);
-            row.add(enabled).width(wEnable).center();
-
-            block.add(row).growX().fillX().row();
-
-            Table detailRow = null;
-            if (meta.description != null && !meta.description.isBlank()) {
-                detailRow = new Table(skin);
-                detailRow.left();
-                detailRow.setVisible(false);
-                detailRow.padLeft(26);
-
-                Label descLabel = new Label(meta.description, skin);
-                descLabel.setWrap(true);
-                descLabel.setColor(com.badlogic.gdx.graphics.Color.LIGHT_GRAY);
-
-                detailRow.add(descLabel).left().growX().fillX().width(560).padTop(2).padBottom(6);
-                block.add(detailRow).growX().fillX().row();
-
-                Table finalDetailRow = detailRow;
-                Runnable toggle = () -> {
-                    boolean newVisible = !finalDetailRow.isVisible();
-                    finalDetailRow.setVisible(newVisible);
-                    expand.setText(newVisible ? "v" : ">");
-                    listContainer.invalidateHierarchy();
-                };
-
-                expand.addListener(new ClickListener() {
+            if (expandLabel != null) {
+                expandLabel.addListener(new ClickListener() {
                     @Override
                     public void clicked(InputEvent event, float x, float y) {
-                        toggle.run();
+                        toggleDetail.run();
                     }
                 });
+            }
 
+            Label nameLabel = rowGroup.findActor("mod_name");
+            if (nameLabel != null) {
                 nameLabel.addListener(new ClickListener() {
                     @Override
                     public void clicked(InputEvent event, float x, float y) {
-                        toggle.run();
+                        toggleDetail.run();
                     }
                 });
             }
 
-            listContainer.add(block).growX().fillX().padBottom(4).row();
-        }
+            // 拖拽交互由 DragAndDrop 统一注册（见 renderModsList 末尾 setupModListDragAndDrop）
 
-        listContainer.invalidateHierarchy();
+            CheckBox enabledCheckBox = rowGroup.findActor("mod_enabled");
+            if (enabledCheckBox != null) {
+                Object enabledValue = data.get("enabled");
+                enabledCheckBox.setChecked(enabledValue instanceof Boolean && (Boolean) enabledValue);
+                enabledCheckBox.addListener(new ChangeListener() {
+                    @Override
+                    public void changed(ChangeEvent event, Actor actor) {
+                        // NOTE: 仅 UI 暂存；启用/禁用的持久化与加载链路后续再接。
+                    }
+                });
+            }
+        });
+
+        if (repeatActor instanceof com.badlogic.gdx.scenes.scene2d.ui.Table) {
+            Table t = (Table) repeatActor;
+            t.invalidateHierarchy();
+            setupModListDragAndDrop(t);
+        }
     }
 
-    private class ModRowDragHandleListener extends InputListener {
+    private final DragAndDrop modListDragAndDrop = new DragAndDrop();
 
-        private final Table listContainer;
-        private final String modId;
+    private void setupModListDragAndDrop(Table repeatTable) {
+        if (repeatTable == null) {
+            return;
+        }
 
-        private float startStageY;
-        private boolean dragging;
+        // 先清理旧的 sources/targets（DragAndDrop 无 clear API，只能新建实例；这里保持实例常驻，重复 add 也没问题，因为
+        // Actor 会被重建）
+        // 由于 renderModsList 每次都会重新 create row actors，这里每次调用都需要重新注册。
+        for (Actor row : repeatTable.getChildren()) {
+            if (!(row instanceof Group)) {
+                continue;
+            }
 
-        ModRowDragHandleListener(Table listContainer, String modId) {
-            this.listContainer = listContainer;
-            this.modId = modId;
+            Actor handle = ((Group) row).findActor("handle");
+            if (handle == null) {
+                continue;
+            }
+
+            modListDragAndDrop.addSource(new ModRowDragSource(handle, row, repeatTable));
+            modListDragAndDrop.addTarget(new ModRowDragTarget(row, repeatTable));
+        }
+    }
+
+    private Actor buildDragPreview(Actor rowActor) {
+        Table preview = new Table();
+        preview.setSize(rowActor.getWidth(), rowActor.getHeight());
+        preview.getColor().a = 0.75f;
+
+        if (rowActor instanceof Group) {
+            Actor modName = ((Group) rowActor).findActor("mod_name");
+            Actor compat = ((Group) rowActor).findActor("mod_compat");
+
+            String nameText = modName instanceof Label ? ((Label) modName).getText().toString() : "";
+            String compatText = compat instanceof Label ? ((Label) compat).getText().toString() : "";
+
+            Label nameLabel = new Label(nameText, gui.get(com.badlogic.gdx.scenes.scene2d.ui.Skin.class));
+            Label compatLabel = new Label(compatText, gui.get(com.badlogic.gdx.scenes.scene2d.ui.Skin.class));
+            nameLabel.getColor().a = 0.95f;
+            compatLabel.getColor().a = 0.85f;
+
+            preview.add(nameLabel).left().growX().fillX().padLeft(12);
+            preview.add(compatLabel).right().padRight(12).width(120);
+        }
+
+        return preview;
+    }
+
+    private class ModRowDragSource extends DragAndDrop.Source {
+
+        private final Actor rowActor;
+        private final Table repeatTable;
+
+        ModRowDragSource(Actor handleActor, Actor rowActor, Table repeatTable) {
+            super(handleActor);
+            this.rowActor = rowActor;
+            this.repeatTable = repeatTable;
         }
 
         @Override
-        public boolean touchDown(InputEvent event, float x, float y, int pointer, int button) {
-            dragging = true;
-            startStageY = event.getStageY();
+        public DragAndDrop.Payload dragStart(InputEvent event, float x, float y, int pointer) {
+            if (rowActor == null || repeatTable == null) {
+                return null;
+            }
+
+            DragAndDrop.Payload payload = new DragAndDrop.Payload();
+            payload.setObject(rowActor);
+
+            // 不能直接用原行作为 dragActor：DragAndDrop 会临时把它挂到 stage，导致列表布局错乱。
+            // 这里用一个半透明的快照（只复制文本），实现“跟随鼠标”的视觉反馈。
+            payload.setDragActor(buildDragPreview(rowActor));
+            payload.setValidDragActor(payload.getDragActor());
+            payload.setInvalidDragActor(payload.getDragActor());
+
+            // 轻微透明作为拖拽反馈
+            rowActor.getColor().a = 0.82f;
+            return payload;
+        }
+
+        @Override
+        public void dragStop(InputEvent event, float x, float y, int pointer, DragAndDrop.Payload payload,
+                DragAndDrop.Target target) {
+            if (rowActor != null) {
+                rowActor.getColor().a = 1.0f;
+            }
+            super.dragStop(event, x, y, pointer, payload, target);
+        }
+    }
+
+    private class ModRowDragTarget extends DragAndDrop.Target {
+
+        private final Actor targetRow;
+        private final Table repeatTable;
+
+        ModRowDragTarget(Actor targetRow, Table repeatTable) {
+            super(targetRow);
+            this.targetRow = targetRow;
+            this.repeatTable = repeatTable;
+        }
+
+        @Override
+        public boolean drag(DragAndDrop.Source source, DragAndDrop.Payload payload, float x, float y, int pointer) {
+            // 只允许在同一个列表内拖拽
+            if (!(payload.getObject() instanceof Actor)) {
+                return false;
+            }
             return true;
         }
 
         @Override
-        public void touchDragged(InputEvent event, float x, float y, int pointer) {
-            if (!dragging) {
+        public void drop(DragAndDrop.Source source, DragAndDrop.Payload payload, float x, float y, int pointer) {
+            if (!(payload.getObject() instanceof Actor)) {
+                return;
+            }
+            Actor draggedRow = (Actor) payload.getObject();
+
+            int from = indexOf(repeatTable, draggedRow);
+            int to = indexOf(repeatTable, targetRow);
+            if (from < 0 || to < 0 || from == to) {
                 return;
             }
 
-            float dy = event.getStageY() - startStageY;
-            if (Math.abs(dy) < 12f) {
-                return;
-            }
-
-            int currentIndex = findIndexByModId(modId);
-            if (currentIndex < 0) {
-                return;
-            }
-
-            // 根据拖拽方向尝试与相邻项交换
-            if (dy > 0 && currentIndex > 0) {
-                swapRows(currentIndex, currentIndex - 1);
-                startStageY = event.getStageY();
-            } else if (dy < 0 && currentIndex < listContainer.getChildren().size - 1) {
-                swapRows(currentIndex, currentIndex + 1);
-                startStageY = event.getStageY();
-            }
-        }
-
-        @Override
-        public void touchUp(InputEvent event, float x, float y, int pointer, int button) {
-            if (!dragging) {
-                return;
-            }
-            dragging = false;
+            // 仅支持列表内垂直排序：按照目标行索引插入
+            repeatTable.getChildren().removeValue(draggedRow, true);
+            repeatTable.getChildren().insert(to, draggedRow);
+            repeatTable.invalidateHierarchy();
 
             List<String> newOrder = new ArrayList<>();
-            for (Actor a : listContainer.getChildren()) {
+            for (Actor a : repeatTable.getChildren()) {
                 Object uo = a.getUserObject();
                 if (uo instanceof String) {
-                    String s = (String) uo;
-                    if (!s.startsWith("detail:")) {
-                        newOrder.add(s);
-                    }
+                    newOrder.add((String) uo);
                 }
             }
-
             modManager.saveOrder(newOrder);
         }
 
-        private int findIndexByModId(String targetModId) {
+        private int indexOf(Table table, Actor actor) {
             int idx = 0;
-            for (Actor a : listContainer.getChildren()) {
-                if (targetModId.equals(a.getUserObject())) {
+            for (Actor a : table.getChildren()) {
+                if (a == actor) {
                     return idx;
                 }
                 idx++;
             }
             return -1;
-        }
-
-        private void swapRows(int i, int j) {
-            if (i == j) {
-                return;
-            }
-
-            com.badlogic.gdx.utils.Array<Actor> children = listContainer.getChildren();
-            if (i < 0 || j < 0 || i >= children.size || j >= children.size) {
-                return;
-            }
-
-            Actor a = children.get(i);
-            Actor b = children.get(j);
-
-            children.set(i, b);
-            children.set(j, a);
-
-            // NOTE: Table 的布局顺序由 Cells 决定；仅交换 children 数组不足以改变 row 显示顺序。
-            // 这里重建一次 cell 顺序，确保可视顺序与 children 顺序一致。
-            rebuildTableOrder();
-        }
-
-        private void rebuildTableOrder() {
-            java.util.List<Actor> ordered = new java.util.ArrayList<>();
-            for (Actor a : listContainer.getChildren()) {
-                ordered.add(a);
-            }
-
-            listContainer.clearChildren();
-            listContainer.top().left();
-            for (Actor a : ordered) {
-                listContainer.add(a).growX().fillX().padBottom(10).row();
-            }
-            listContainer.invalidateHierarchy();
         }
     }
 

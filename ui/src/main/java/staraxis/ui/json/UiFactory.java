@@ -14,8 +14,11 @@ import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
 import com.badlogic.gdx.utils.Align;
 import staraxis.ui.Gui;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.List;
 
 /**
  * UI 工厂：将 {@link ComponentNode}（声明式 UI 节点树）构建为 Scene2D 的 {@link Actor} 树。
@@ -25,80 +28,238 @@ public class UiFactory {
     private final Skin skin;
     private final Gui gui;
 
+    private static final Map<String, Map<String, Object>> CLASS_STYLES = new HashMap<>();
+    private static Map<String, ComponentNode> COMPONENT_LIB = java.util.Collections.emptyMap();
+
+    static {
+        // 注册默认 class 样式
+        Map<String, Object> modRow = new HashMap<>();
+        modRow.put("background", "Small_rounded_button");
+        modRow.put("pad", 4f);
+        CLASS_STYLES.put("mod-row", modRow);
+
+        Map<String, Object> btnSmall = new HashMap<>();
+        btnSmall.put("background", "Small_rounded_button");
+        CLASS_STYLES.put("btn-small", btnSmall);
+
+        // 预加载组件库（可忽略失败）
+        try {
+            com.badlogic.gdx.files.FileHandle fh = Gdx.files.internal("ui/common/components.json");
+            if (fh.exists()) {
+                COMPONENT_LIB = new java.util.HashMap<>();
+                String json = fh.readString("UTF-8");
+                com.badlogic.gdx.utils.JsonReader jr = new com.badlogic.gdx.utils.JsonReader();
+                com.badlogic.gdx.utils.JsonValue root = jr.parse(json);
+                UiParser p = new UiParser();
+                for (com.badlogic.gdx.utils.JsonValue child : root) {
+                    String key = child.name;
+                    String childJson = child.toJson(com.badlogic.gdx.utils.JsonWriter.OutputType.json);
+                    ComponentNode n = p.parseString("component-lib:" + key, childJson);
+                    if (n != null)
+                        COMPONENT_LIB.put(key, n);
+                }
+            }
+        } catch (Exception e) {
+            Gdx.app.error("UiFactory", "Failed to load components.json", e);
+        }
+    }
+
     public UiFactory(Gui gui) {
         this.gui = gui;
         this.skin = gui.get(Skin.class);
     }
 
     public Actor create(ComponentNode node) {
+        // 处理 include
+        if (node.include != null && COMPONENT_LIB.containsKey(node.include)) {
+            ComponentNode tpl = deepCopy(COMPONENT_LIB.get(node.include));
+            if (node.params != null)
+                substituteProps(tpl, node.params);
+            if (node.children != null && !node.children.isEmpty())
+                tpl.children.addAll(node.children); // 允许额外 children
+            node = tpl;
+        }
+
+        ComponentNode effectiveNode = mergeStyleNode(node);
+
         Actor actor;
-        switch (safeLower(node.type)) {
+        switch (safeLower(effectiveNode.type)) {
             case "container":
-                actor = buildTable(node);
+                actor = buildTable(effectiveNode);
                 break;
             case "stack":
-                actor = buildStack(node);
+                actor = buildStack(effectiveNode);
                 break;
             case "position":
-                actor = buildPosition(node);
+                actor = buildPosition(effectiveNode);
                 break;
             case "scroll":
-                actor = buildScroll(node);
+                actor = buildScroll(effectiveNode);
                 break;
             case "window":
-                actor = buildWindow(node);
+                actor = buildWindow(effectiveNode);
                 break;
             case "dialog":
-                actor = buildDialog(node);
+                actor = buildDialog(effectiveNode);
                 break;
             case "verticalgroup":
-                actor = buildVerticalGroup(node);
+                actor = buildVerticalGroup(effectiveNode);
                 break;
             case "horizontalgroup":
-                actor = buildHorizontalGroup(node);
+                actor = buildHorizontalGroup(effectiveNode);
                 break;
             case "repeat":
-                actor = buildRepeat(node);
+                actor = buildRepeat(effectiveNode);
                 break;
             case "label":
-                actor = buildLabel(node);
+                actor = buildLabel(effectiveNode);
                 break;
             case "button":
             case "textbutton":
-                actor = buildButton(node);
+                actor = buildButton(effectiveNode);
                 break;
             case "checkbox":
-                actor = buildCheckBox(node);
+                actor = buildCheckBox(effectiveNode);
                 break;
             case "imagebutton":
-                actor = buildImageButton(node);
+                actor = buildImageButton(effectiveNode);
                 break;
             case "image":
-                actor = buildImage(node);
+                actor = buildImage(effectiveNode);
                 break;
             case "slider":
-                actor = buildSlider(node);
+                actor = buildSlider(effectiveNode);
                 break;
             case "selectbox":
-                actor = buildSelectBox(node);
+                actor = buildSelectBox(effectiveNode);
                 break;
             case "progressbar":
-                actor = buildProgressBar(node);
+                actor = buildProgressBar(effectiveNode);
                 break;
             case "textfield":
-                actor = buildTextField(node);
+                actor = buildTextField(effectiveNode);
                 break;
             default:
                 actor = new Group();
         }
 
-        applyCommonActorProps(actor, node);
-        applyColorAnim(actor, node);
+        applyCommonActorProps(actor, effectiveNode);
+        applyColorAnim(actor, effectiveNode);
+        applyInheritance(actor, effectiveNode);
+        applyPostCreate(actor, effectiveNode);
         return actor;
     }
 
     private String safeLower(String s) {
         return s == null ? "" : s.toLowerCase(Locale.ROOT);
+    }
+
+    private ComponentNode mergeStyleNode(ComponentNode node) {
+        if (node == null) {
+            return null;
+        }
+
+        ComponentNode merged = deepCopy(node);
+
+        Map<String, Object> mergedProps = new HashMap<>();
+
+        Map<String, Object> defaultProps = defaultPropsForNode(merged);
+        if (defaultProps != null) {
+            mergedProps.putAll(defaultProps);
+        }
+
+        Object classValue = merged.properties.get("class");
+        if (classValue != null) {
+            List<String> classes = parseClassList(classValue.toString());
+            for (String clazz : classes) {
+                Map<String, Object> styleProps = CLASS_STYLES.get(clazz);
+                if (styleProps != null) {
+                    mergedProps.putAll(styleProps);
+                }
+            }
+        }
+
+        Object styleValue = merged.properties.get("style");
+        if (styleValue instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> inlineStyle = (Map<String, Object>) styleValue;
+            mergedProps.putAll(inlineStyle);
+        }
+
+        mergedProps.putAll(merged.properties);
+        merged.properties = mergedProps;
+
+        for (int i = 0; i < merged.children.size(); i++) {
+            merged.children.set(i, mergeStyleNode(merged.children.get(i)));
+        }
+
+        return merged;
+    }
+
+    private List<String> parseClassList(String value) {
+        List<String> result = new ArrayList<>();
+        if (value == null) {
+            return result;
+        }
+        String[] parts = value.trim().split("\\s+");
+        for (String p : parts) {
+            if (p != null) {
+                String s = p.trim();
+                if (!s.isEmpty()) {
+                    result.add(s);
+                }
+            }
+        }
+        return result;
+    }
+
+    private Map<String, Object> defaultPropsForNode(ComponentNode node) {
+        Map<String, Object> defaults = new HashMap<>();
+
+        String type = safeLower(node.type);
+        if ("container".equals(type) || "repeat".equals(type)) {
+            if (!node.properties.containsKey("display")) {
+                defaults.put("display", "block");
+            }
+            if (!node.properties.containsKey("layout")) {
+                defaults.put("layout", "column");
+            }
+        }
+
+        return defaults;
+    }
+
+    private void applyInheritance(Actor actor, ComponentNode node) {
+        if (actor == null || node == null) {
+            return;
+        }
+
+        Object inherit = node.properties.get("inherit");
+        if (!(inherit instanceof Boolean) || !((Boolean) inherit)) {
+            return;
+        }
+
+        if (actor.getParent() == null) {
+            return;
+        }
+
+        Actor parent = actor.getParent();
+        if (node.properties.get("color") == null) {
+            actor.setColor(parent.getColor());
+        }
+    }
+
+    private void applyPostCreate(Actor actor, ComponentNode node) {
+        if (actor == null || node == null) {
+            return;
+        }
+
+        Object display = node.properties.get("display");
+        if (display != null && "block".equalsIgnoreCase(display.toString())) {
+            if (actor instanceof Table) {
+                ((Table) actor).defaults().growX().fillX();
+            }
+        }
     }
 
     private void applyCommonActorProps(Actor actor, ComponentNode node) {
@@ -111,6 +272,11 @@ public class UiFactory {
                 actor.setVisible(Boolean.parseBoolean(visible.toString()));
             } catch (Exception ignored) {
             }
+        }
+
+        Object userObject = node.properties.get("userObject");
+        if (userObject != null) {
+            actor.setUserObject(userObject);
         }
     }
 
@@ -217,10 +383,18 @@ public class UiFactory {
                 table.setBackground(d);
         }
         boolean horizontal = Boolean.TRUE.equals(node.properties.get("horizontal"));
+        Object layout = node.properties.get("layout");
+        if (layout != null && "row".equalsIgnoreCase(layout.toString())) {
+            horizontal = true;
+        }
+
         for (ComponentNode child : node.children) {
             Actor childActor = create(child);
             Cell<?> cell = table.add(childActor);
+
+            applyDefaultBlockCell(node, child, cell, horizontal);
             applyCell(child, cell);
+
             if (!horizontal)
                 table.row();
         }
@@ -241,6 +415,40 @@ public class UiFactory {
             table.right();
         if (a.contains("center"))
             table.center();
+    }
+
+    private void applyDefaultBlockCell(ComponentNode parentNode, ComponentNode childNode, Cell<?> cell,
+            boolean horizontal) {
+        if (parentNode == null || childNode == null || cell == null) {
+            return;
+        }
+
+        Object parentLayout = parentNode.properties.get("layout");
+        if (parentLayout != null && "row".equalsIgnoreCase(parentLayout.toString())) {
+            return;
+        }
+
+        if (horizontal) {
+            return;
+        }
+
+        Object display = childNode.properties.get("display");
+        if (display == null || !"block".equalsIgnoreCase(display.toString())) {
+            return;
+        }
+
+        Object cellObj = childNode.properties.get("cell");
+        if (cellObj instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> c = (Map<String, Object>) cellObj;
+            if (Boolean.TRUE.equals(c.get("grow")) || Boolean.TRUE.equals(c.get("growX"))
+                    || Boolean.TRUE.equals(c.get("fillX")) || Boolean.TRUE.equals(c.get("expandX"))
+                    || c.containsKey("width")) {
+                return;
+            }
+        }
+
+        cell.growX().fillX();
     }
 
     private void applyCell(ComponentNode child, Cell<?> cell) {
@@ -490,6 +698,38 @@ public class UiFactory {
             substituteProps(inst, data);
             Actor row = create(inst);
             row.setName((inst.name != null ? inst.name : "repeat_item") + "_" + i);
+            t.add(row).growX().fillX().row();
+        }
+        t.invalidateHierarchy();
+    }
+
+    public void renderRepeatItemsWithActors(Group repeatActor, java.util.List<Map<String, Object>> itemsData,
+            java.util.function.BiConsumer<Actor, Map<String, Object>> actorBinder) {
+        Object uo = repeatActor.getUserObject();
+        if (!(uo instanceof ComponentNode))
+            return;
+        ComponentNode template = (ComponentNode) uo;
+        if (!(repeatActor instanceof Table)) {
+            Gdx.app.error("UiFactory",
+                    "Repeat actor must be a 'container' (Table) to use renderRepeatItemsWithActors.");
+            return;
+        }
+        Table t = (Table) repeatActor;
+        t.clearChildren();
+        t.top().left();
+        for (int i = 0; i < itemsData.size(); i++) {
+            Map<String, Object> data = itemsData.get(i);
+            ComponentNode inst = deepCopy(template);
+            substituteProps(inst, data);
+            Actor row = create(inst);
+            row.setName((inst.name != null ? inst.name : "repeat_item") + "_" + i);
+            if (actorBinder != null) {
+                try {
+                    actorBinder.accept(row, data);
+                } catch (Exception e) {
+                    Gdx.app.error("UiFactory", "Failed to bind repeat item actor at index=" + i, e);
+                }
+            }
             t.add(row).growX().fillX().row();
         }
         t.invalidateHierarchy();

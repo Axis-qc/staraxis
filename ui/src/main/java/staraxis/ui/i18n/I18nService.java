@@ -20,14 +20,21 @@ public class I18nService {
 
         FileHandle modsDir = Gdx.files.local("../gamedata/mods/");
         if (modsDir.exists() && modsDir.isDirectory()) {
-            FileHandle[] modDirs = modsDir.list();
-            Arrays.sort(modDirs, Comparator.comparing(FileHandle::name));
+            staraxis.ui.settings.ModManager modManager = new staraxis.ui.settings.ModManager(
+                    new staraxis.ui.settings.ModOrderRepository(),
+                    new staraxis.ui.settings.ModMetadataRepository());
 
-            for (FileHandle modDir : modDirs) {
-                if (modDir.isDirectory()) {
-                    FileHandle modI18nFile = modDir.child("i18n/strings_" + language + ".properties");
-                    loadAndMerge(modI18nFile);
+            java.util.List<String> orderedModIds = modManager.listModIdsOrdered();
+            for (String modId : orderedModIds) {
+                if (modId == null || modId.isBlank()) {
+                    continue;
                 }
+                FileHandle modDir = modsDir.child(modId);
+                if (!modDir.exists() || !modDir.isDirectory()) {
+                    continue;
+                }
+                FileHandle modI18nFile = modDir.child("i18n/strings_" + language + ".properties");
+                loadAndMerge(modI18nFile);
             }
         }
     }

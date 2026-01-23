@@ -18,6 +18,10 @@
       --accent2: #a78bfa;
       --danger: #ff5c7a;
       --radius: 14px;
+      --row: rgba(255, 255, 255, 0.06);
+      --rowHover: rgba(255, 255, 255, 0.09);
+      --rowActive: rgba(99, 179, 255, 0.16);
+      --rowBorder: rgba(255, 255, 255, 0.10);
     }
 
     * {
@@ -31,7 +35,7 @@
 
     body {
       margin: 0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
       background: radial-gradient(1200px 600px at 40% 0%, rgba(99, 179, 255, 0.16), transparent 55%),
         radial-gradient(900px 500px at 80% 20%, rgba(167, 139, 250, 0.14), transparent 55%),
         var(--bg);
@@ -65,6 +69,7 @@
       font-size: 13px;
       color: var(--muted2);
       margin-top: 4px;
+      line-height: 1.35;
     }
 
     .frame {
@@ -74,8 +79,8 @@
       background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.035));
       overflow: hidden;
       display: grid;
-      grid-template-columns: 240px 1fr;
-      min-height: 640px;
+      grid-template-columns: 260px 1fr;
+      min-height: 680px;
     }
 
     .sidebar {
@@ -242,15 +247,6 @@
       background: rgba(99, 179, 255, 0.24);
     }
 
-    .footer {
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-      padding: 14px;
-      border-top: 1px solid var(--border);
-      background: rgba(0, 0, 0, 0.10);
-    }
-
     .badge {
       padding: 3px 8px;
       border-radius: 999px;
@@ -261,6 +257,148 @@
 
     .hidden {
       display: none;
+    }
+
+    /* Mods 原型 */
+    .mods-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .mods-header .note {
+      color: var(--muted2);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .mods-list {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      background: rgba(0, 0, 0, 0.10);
+    }
+
+    .mod-item {
+      border-top: 1px solid var(--rowBorder);
+    }
+
+    .mod-item:first-child {
+      border-top: none;
+    }
+
+    .mod-row {
+      display: grid;
+      grid-template-columns: 40px 14px 40px 14px 1fr 14px 120px 14px 80px;
+      align-items: center;
+      gap: 0;
+      padding: 8px 10px;
+      background: var(--row);
+      user-select: none;
+    }
+
+    .mod-row:hover {
+      background: var(--rowHover);
+    }
+
+    .mod-row[data-dragging="true"] {
+      background: rgba(99, 179, 255, 0.12);
+      outline: 1px solid rgba(99, 179, 255, 0.22);
+    }
+
+    .mod-row .cell {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .mod-row .divider {
+      height: 18px;
+      width: 100%;
+      background: rgba(255, 255, 255, 0.10);
+    }
+
+    .mod-row .name {
+      justify-content: flex-start;
+      color: var(--text);
+      font-weight: 600;
+      padding-left: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .mod-row .compat {
+      justify-content: flex-end;
+      color: var(--muted2);
+    }
+
+    .mod-row .enabled {
+      justify-content: center;
+    }
+
+    .handle {
+      cursor: grab;
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .handle:active {
+      cursor: grabbing;
+    }
+
+    .expand {
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    .mod-detail {
+      padding: 8px 12px 10px 66px;
+      background: rgba(255, 255, 255, 0.035);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+      display: none;
+    }
+
+    .mod-item[data-expanded="true"] .mod-detail {
+      display: block;
+    }
+
+    /* 仅用于原型说明：拖拽预览与列表边界 */
+    .drag-preview {
+      position: fixed;
+      left: 0;
+      top: 0;
+      transform: translate(-9999px, -9999px);
+      pointer-events: none;
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(99, 179, 255, 0.35);
+      background: rgba(99, 179, 255, 0.16);
+      color: var(--text);
+      font-weight: 600;
+      width: 420px;
+      display: grid;
+      grid-template-columns: 1fr 120px;
+      gap: 10px;
+      z-index: 9999;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+
+    .drag-preview .compat {
+      text-align: right;
+      color: var(--muted2);
+      font-weight: 500;
+    }
+
+    .mods-list[data-drag-active="true"] {
+      outline: 1px solid rgba(99, 179, 255, 0.22);
+      box-shadow: 0 0 0 2px rgba(99, 179, 255, 0.08) inset;
     }
 
     @media (max-width: 900px) {
@@ -282,6 +420,10 @@
       .grid {
         grid-template-columns: 1fr;
       }
+
+      .mod-row {
+        grid-template-columns: 40px 10px 40px 10px 1fr 10px 90px 10px 70px;
+      }
     }
   </style>
 </head>
@@ -291,7 +433,10 @@
     <div class="header">
       <div>
         <div class="title">设置</div>
-        <div class="subtitle">左右分栏原型：左侧 Tab，右侧标签页内容（可扩展 Mod Tab）</div>
+        <div class="subtitle">
+          当前原型对齐 `assets/ui/gameui/settings/settings.json` 的整体结构：
+          左侧 Tab + 右侧内容栈（Stack）+ Mods 列表（Repeat，含展开详情与拖拽排序）。
+        </div>
       </div>
       <div class="badge" id="activeTabBadge">当前：通用</div>
     </div>
@@ -303,8 +448,9 @@
           <button class="tab" data-tab="graphics" aria-selected="false">画面 <small>Graphics</small></button>
           <button class="tab" data-tab="input" aria-selected="false">输入 <small>Input</small></button>
           <button class="tab" data-tab="other" aria-selected="false">其他 <small>Other</small></button>
+          <button class="tab" data-tab="mods" aria-selected="false">模组 <small>Mods</small></button>
 
-          <div style="height: 8px"></div>
+          <div style="height: 10px"></div>
           <div class="badge" style="align-self:flex-start">Mod Tabs（占位）</div>
           <button class="tab" data-tab="mod_example" aria-selected="false">示例 Mod <small>mod:example</small></button>
 
@@ -353,7 +499,7 @@
 
         <section class="panel hidden" data-pane="graphics">
           <h2>画面</h2>
-          <p>渲染相关设置（分辨率、VSync、FPS、画质等）。</p>
+          <p>渲染相关设置（分辨率、VSync、FPS 等）。</p>
           <div class="grid">
             <div class="label">分辨率 <span>Resolution</span></div>
             <div class="control">
@@ -378,16 +524,6 @@
                 <option>120</option>
               </select>
             </div>
-
-            <div class="label">画质预设 <span>Quality Preset</span></div>
-            <div class="control">
-              <select>
-                <option>低</option>
-                <option>中</option>
-                <option>高</option>
-                <option>极致</option>
-              </select>
-            </div>
           </div>
         </section>
 
@@ -399,11 +535,6 @@
             <div class="control">
               <input type="range" min="1" max="20" value="10" />
             </div>
-
-            <div class="label">反转 Y 轴 <span>Invert Y</span></div>
-            <div class="control">
-              <button class="btn">开 / 关</button>
-            </div>
           </div>
         </section>
 
@@ -414,6 +545,68 @@
             <div class="label">开发者控制台 <span>Dev Console</span></div>
             <div class="control">
               <button class="btn">开 / 关</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel hidden" data-pane="mods">
+          <div class="mods-header">
+            <div>
+              <h2 style="margin:0">模组</h2>
+              <div class="note">
+                列表项结构：<br />
+                `handle(≡)`（拖拽） / `expand(>)`（展开详情） / `mod_name`（grow） / `mod_compat`（右对齐） / `mod_enabled`（复选框）。
+                <br />
+                拖拽预览（DragAndDrop）会跟随鼠标，但 **drop 仅允许在列表区域内**（后续实现）。
+              </div>
+            </div>
+            <div class="badge">mod-order.json</div>
+          </div>
+
+          <div class="mods-list" id="modsList" aria-label="Mods list">
+            <div class="mod-item" data-modid="ExampleMod" data-expanded="true">
+              <div class="mod-row" draggable="false">
+                <div class="cell handle" data-role="handle">≡</div>
+                <div class="divider"></div>
+                <div class="cell expand" data-role="expand">v</div>
+                <div class="divider"></div>
+                <div class="cell name">示例模组</div>
+                <div class="divider"></div>
+                <div class="cell compat">1.6.1</div>
+                <div class="divider"></div>
+                <div class="cell enabled"><input type="checkbox" checked /></div>
+              </div>
+              <div class="mod-detail">这是一个示例模组，用于演示模组设置页模组列表的功能。</div>
+            </div>
+
+            <div class="mod-item" data-modid="ExampleMod3" data-expanded="false">
+              <div class="mod-row" draggable="false">
+                <div class="cell handle" data-role="handle">≡</div>
+                <div class="divider"></div>
+                <div class="cell expand" data-role="expand">&gt;</div>
+                <div class="divider"></div>
+                <div class="cell name">示例模组 3</div>
+                <div class="divider"></div>
+                <div class="cell compat">1.6.1</div>
+                <div class="divider"></div>
+                <div class="cell enabled"><input type="checkbox" checked /></div>
+              </div>
+              <div class="mod-detail">第三个示例模组，用于测试设置页模组列表拖拽排序。</div>
+            </div>
+
+            <div class="mod-item" data-modid="ExampleMod2" data-expanded="true">
+              <div class="mod-row" draggable="false">
+                <div class="cell handle" data-role="handle">≡</div>
+                <div class="divider"></div>
+                <div class="cell expand" data-role="expand">v</div>
+                <div class="divider"></div>
+                <div class="cell name">示例模组 2</div>
+                <div class="divider"></div>
+                <div class="cell compat">1.6.1</div>
+                <div class="divider"></div>
+                <div class="cell enabled"><input type="checkbox" checked /></div>
+              </div>
+              <div class="mod-detail">第二个示例模组，用于测试设置页模组列表的拖拽排序与 mod-order.json 持久化。</div>
             </div>
           </div>
         </section>
@@ -433,6 +626,11 @@
 
   </div>
 
+  <div class="drag-preview" id="dragPreview">
+    <div id="dragPreviewName">示例模组 2</div>
+    <div class="compat" id="dragPreviewCompat">1.6.1</div>
+  </div>
+
   <script>
     const tabs = Array.from(document.querySelectorAll('.tab'));
     const panes = Array.from(document.querySelectorAll('[data-pane]'));
@@ -450,6 +648,73 @@
       if (!btn) return;
       setTab(btn.dataset.tab);
     });
+
+    // 原型交互：展开/折叠 + 模拟拖拽预览与“列表区域限制”
+    const modsList = document.getElementById('modsList');
+    const dragPreview = document.getElementById('dragPreview');
+    const dragPreviewName = document.getElementById('dragPreviewName');
+    const dragPreviewCompat = document.getElementById('dragPreviewCompat');
+
+    function updateExpandIcon(item) {
+      const expanded = item.dataset.expanded === 'true';
+      const icon = item.querySelector('[data-role="expand"]');
+      if (icon) icon.textContent = expanded ? 'v' : '>';
+    }
+
+    modsList.addEventListener('click', (e) => {
+      const expand = e.target.closest('[data-role="expand"]');
+      if (!expand) return;
+      const item = expand.closest('.mod-item');
+      if (!item) return;
+      item.dataset.expanded = String(!(item.dataset.expanded === 'true'));
+      updateExpandIcon(item);
+    });
+
+    // 模拟：按住 handle 时显示 dragPreview，鼠标移动跟随
+    let dragging = false;
+    let dragItem = null;
+
+    modsList.addEventListener('mousedown', (e) => {
+      const handle = e.target.closest('[data-role="handle"]');
+      if (!handle) return;
+      dragging = true;
+      dragItem = handle.closest('.mod-item');
+      if (dragItem) {
+        const name = dragItem.querySelector('.name')?.textContent ?? '';
+        const compat = dragItem.querySelector('.compat')?.textContent ?? '';
+        dragPreviewName.textContent = name;
+        dragPreviewCompat.textContent = compat;
+        dragItem.querySelector('.mod-row')?.setAttribute('data-dragging', 'true');
+      }
+      modsList.dataset.dragActive = 'true';
+      dragPreview.style.transform = `translate(${e.clientX + 12}px, ${e.clientY + 12}px)`;
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      dragPreview.style.transform = `translate(${e.clientX + 12}px, ${e.clientY + 12}px)`;
+
+      // 原型：只有在列表区域内才算有效 drop
+      const rect = modsList.getBoundingClientRect();
+      const inside = e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
+      dragPreview.style.borderColor = inside ? 'rgba(99, 179, 255, 0.35)' : 'rgba(255, 92, 122, 0.35)';
+      dragPreview.style.background = inside ? 'rgba(99, 179, 255, 0.16)' : 'rgba(255, 92, 122, 0.12)';
+    });
+
+    window.addEventListener('mouseup', (e) => {
+      if (!dragging) return;
+      dragging = false;
+
+      if (dragItem) {
+        dragItem.querySelector('.mod-row')?.removeAttribute('data-dragging');
+      }
+      dragItem = null;
+      modsList.dataset.dragActive = 'false';
+      dragPreview.style.transform = 'translate(-9999px, -9999px)';
+    });
+
+    // 初始化展开图标
+    document.querySelectorAll('.mod-item').forEach(updateExpandIcon);
   </script>
 </body>
 

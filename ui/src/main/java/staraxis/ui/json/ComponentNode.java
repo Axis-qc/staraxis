@@ -11,6 +11,8 @@ import java.util.Map;
 public class ComponentNode {
     public String type;
     public String name;
+    public String include; // 若不为空表示引用组件库
+    public Map<String, Object> params; // include 时的占位符参数
     public Map<String, Object> properties = new HashMap<>();
     public List<ComponentNode> children = new ArrayList<>();
 

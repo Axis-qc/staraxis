@@ -1,0 +1,56 @@
+{
+  "btn-small": {
+    "type": "button",
+    "properties": {
+      "class": "btn-small",
+      "text": "${text}",
+      "onClick": "${onClick}"
+    }
+  },
+  "divider": {
+    "type": "image",
+    "properties": {
+      "drawable": "split",
+      "cell": {
+        "height": 2
+      }
+    }
+  },
+  "divider-vert": {
+    "type": "image",
+    "properties": {
+      "drawable": "split",
+      "cell": {
+        "width": 2
+      }
+    }
+  },
+  "panel-rounded": {
+    "type": "container",
+    "properties": {
+      "background": "Rounded_background",
+      "pad": 14
+    },
+    "children": []
+  },
+  "row": {
+    "type": "container",
+    "properties": {
+      "layout": "row"
+    },
+    "children": []
+  },
+  "scroll-vert": {
+    "type": "scroll",
+    "properties": {
+      "scrollX": false,
+      "scrollY": true
+    },
+    "children": [
+      {
+        "type": "container",
+        "children": []
+      }
+    ]
+  }
+}
