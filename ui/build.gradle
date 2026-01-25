@@ -21,4 +21,5 @@ dependencies {
   implementation 'com.networknt:json-schema-validator:1.0.87'
   // logging api only (binding provided by lwjgl3 via logback)
   implementation 'org.slf4j:slf4j-api:2.0.12'
+  implementation "space.earlygrey:shapedrawer:$shapeDrawerVersion"
 }

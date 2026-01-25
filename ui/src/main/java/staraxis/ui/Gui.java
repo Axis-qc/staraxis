@@ -10,6 +10,7 @@ import staraxis.ui.json.UiFactory;
 import staraxis.ui.json.UiParser;
 import staraxis.ui.screens.MainMenuScreen;
 import staraxis.ui.screens.SettingsScreen;
+import staraxis.ui.screens.UiComponentsTestScreen;
 import staraxis.ui.widgets.DevelopingDialog;
 
 import java.util.HashMap;
@@ -114,6 +115,13 @@ public class Gui {
 
     public void showSettingsScreen() {
         SettingsScreen screen = get(SettingsScreen.class);
+        if (screen != null) {
+            switchScreen(screen, screen::show);
+        }
+    }
+
+    public void showUiComponentsTestScreen() {
+        UiComponentsTestScreen screen = get(UiComponentsTestScreen.class);
         if (screen != null) {
             switchScreen(screen, screen::show);
         }

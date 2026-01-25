@@ -1,4 +1,4 @@
 {
   "schemaVersion" : 1,
-  "order" : [ "ExampleMod3", "ExampleMod", "ExampleMod2" ]
+  "order" : [ "ExampleMod", "ExampleMod3", "ExampleMod2" ]
 }

@@ -51,7 +51,6 @@
 
 - `name`：设置 `Actor#setName(name)`。
 - `properties.visible`（可选，boolean/string）：是否可见。
-- `properties.colorAnim`（可选，object）：颜色动画（见“颜色动画属性”）
 
 ### 2) container（Table）
 
@@ -146,19 +145,6 @@
   - `repeat` 的第一个 child 作为“模板节点”，会存入 `container.setUserObject(templateNode)`
   - 实际渲染由 `UiFactory#renderRepeatItems(...)` 完成
 
-#### Repeat 占位符与替换规则
-
-在模板节点（及其子节点）的 `properties` 字符串字段中支持：
-
-- `${item}`：当前 item 字符串
-- `${selected}`：当前 item 是否为选中项，替换为 `true/false`
-
-对模板节点（及其子节点）的 `onClick` 字段支持：
-
-- `${action}`：会被替换为 `actionPrefix + ":" + item`
-
-> 注意：替换仅发生在字符串值上；非字符串值不做处理。
-
 ### 10) label（Label）
 
 - **type**：`label`
@@ -229,30 +215,6 @@
 
 具体 `actionId` 的解析与执行逻辑不在本目录内（由 `staraxis.ui.Gui` 负责）。
 
-## 颜色动画属性（colorAnim）
-
-`colorAnim` 适用于所有 `Actor`（即所有组件类型），用于在两种颜色之间往复渐变。
-
-JSON 格式：
-
-```json
-{
-  "colorAnim": {
-    "from": "#FF0000FF",
-    "to": "#00FFFFFF",
-    "duration": 1.2
-  }
-}
-```
-
-- `from`（string）：起始颜色，支持 `#RRGGBB/#RRGGBBAA` 或 Skin color 名称。
-- `to`（string）：目标颜色，支持 `#RRGGBB/#RRGGBBAA` 或 Skin color 名称。
-- `duration`（number）：从 `from` 到 `to` 的耗时（秒）。实际效果为 `from -> to -> from -> ...`。
-
-说明：
-- 若配置非法（缺字段、颜色解析失败、duration<=0），会忽略该动画并在日志中输出错误。
-- 如果你同时设置了静态 `color`，`colorAnim` 会在构建时把颜色重置为 `from` 并开始动画。
-
 ## 示例
 
 ### 示例 1：主菜单布局（container + label + button）
@@ -307,36 +269,6 @@ JSON 格式：
   ]
 }
 ```
-
-### 示例 2：Repeat 列表（模板 + 占位符）
-
-> 假设外部将 `repeatActor` 渲染为 items：`["a","b"]`，selected：`"b"`，actionPrefix：`"select"`。
-
-```json
-{
-  "type": "repeat",
-  "name": "list",
-  "children": [
-    {
-      "type": "button",
-      "name": "item",
-      "properties": {
-        "text": "${item}",
-        "onClick": "${action}",
-        "cell": {
-          "growX": true,
-          "fillX": true,
-          "padBottom": 4
-        }
-      }
-    }
-  ]
-}
-```
-
-渲染后按钮的 `onClick` 将分别变为：
-- `select:a`
-- `select:b`
 
 ## 注意事项
 

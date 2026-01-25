@@ -26,6 +26,8 @@ import java.io.File;
 import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.lwjgl.system.JNI.invokePPP;
 import static org.lwjgl.system.JNI.invokePPZ;
@@ -38,12 +40,17 @@ import static org.lwjgl.system.macosx.ObjCRuntime.sel_getUid;
  * to function. Also helps on Windows when users have names with characters from
  * outside the Latin alphabet, a common cause of startup crashes.
  * <br>
- * <a href="https://jvm-gaming.org/t/starting-jvm-on-mac-with-xstartonfirstthread-programmatically/57547">Based on this java-gaming.org post by kappa</a>
+ * <a href=
+ * "https://jvm-gaming.org/t/starting-jvm-on-mac-with-xstartonfirstthread-programmatically/57547">Based
+ * on this java-gaming.org post by kappa</a>
+ * 
  * @author damios
  */
 public class StartupHelper {
 
     private static final String JVM_RESTARTED_ARG = "jvmIsRestarted";
+
+    private static final Logger log = LoggerFactory.getLogger(StartupHelper.class);
 
     private StartupHelper() {
         throw new UnsupportedOperationException();
@@ -59,17 +66,21 @@ public class StartupHelper {
      * <p>
      * <u>Usage:</u>
      *
-     * <pre><code>
+     * <pre>
+     * <code>
      * public static void main(String... args) {
      * 	if (StartupHelper.startNewJvmIfRequired(true)) return; // This handles macOS support and helps on Windows.
      * 	// after this is the actual main method code
      * }
-     * </code></pre>
+     * </code>
+     * </pre>
      *
      * @param redirectOutput
-     *            whether the output of the new JVM should be rerouted to the
-     *            old JVM, so it can be accessed in the same place; keeps the
-     *            old JVM running if enabled
+     *                       whether the output of the new JVM should be rerouted to
+     *                       the
+     *                       old JVM, so it can be accessed in the same place; keeps
+     *                       the
+     *                       old JVM running if enabled
      * @return whether a new JVM was started and thus no code should be executed
      *         in this one
      */
@@ -77,18 +88,25 @@ public class StartupHelper {
         String osName = System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT);
         if (!osName.contains("mac")) {
             if (osName.contains("windows")) {
-// Here, we are trying to work around an issue with how LWJGL3 loads its extracted .dll files.
-// By default, LWJGL3 extracts to the directory specified by "java.io.tmpdir", which is usually the user's home.
-// If the user's name has non-ASCII (or some non-alphanumeric) characters in it, that would fail.
-// By extracting to the relevant "ProgramData" folder, which is usually "C:\ProgramData", we avoid this.
-// We also temporarily change the "user.name" property to one without any chars that would be invalid.
-// We revert our changes immediately after loading LWJGL3 natives.
+                // Here, we are trying to work around an issue with how LWJGL3 loads its
+                // extracted .dll files.
+                // By default, LWJGL3 extracts to the directory specified by "java.io.tmpdir",
+                // which is usually the user's home.
+                // If the user's name has non-ASCII (or some non-alphanumeric) characters in it,
+                // that would fail.
+                // By extracting to the relevant "ProgramData" folder, which is usually
+                // "C:\ProgramData", we avoid this.
+                // We also temporarily change the "user.name" property to one without any chars
+                // that would be invalid.
+                // We revert our changes immediately after loading LWJGL3 natives.
                 String programData = System.getenv("ProgramData");
-                if(programData == null) programData = "C:\\Temp\\"; // if ProgramData isn't set, try some fallback.
+                if (programData == null)
+                    programData = "C:\\Temp\\"; // if ProgramData isn't set, try some fallback.
                 String prevTmpDir = System.getProperty("java.io.tmpdir", programData);
                 String prevUser = System.getProperty("user.name", "libGDX_User");
                 System.setProperty("java.io.tmpdir", programData + "/libGDX-temp");
-                System.setProperty("user.name", ("User_" + prevUser.hashCode() + "_GDX" + Version.VERSION).replace('.', '_'));
+                System.setProperty("user.name",
+                        ("User_" + prevUser.hashCode() + "_GDX" + Version.VERSION).replace('.', '_'));
                 Lwjgl3NativesLoader.load();
                 System.setProperty("java.io.tmpdir", prevTmpDir);
                 System.setProperty("user.name", prevUser);
@@ -101,12 +119,14 @@ public class StartupHelper {
             return false;
         }
 
-        // Checks if we are already on the main thread, such as from running via Construo.
+        // Checks if we are already on the main thread, such as from running via
+        // Construo.
         long objc_msgSend = ObjCRuntime.getLibrary().getFunctionAddress("objc_msgSend");
-        long NSThread      = objc_getClass("NSThread");
+        long NSThread = objc_getClass("NSThread");
         long currentThread = invokePPP(NSThread, sel_getUid("currentThread"), objc_msgSend);
         boolean isMainThread = invokePPZ(currentThread, sel_getUid("isMainThread"), objc_msgSend);
-        if(isMainThread) return false;
+        if (isMainThread)
+            return false;
 
         long pid = LibC.getpid();
 
@@ -118,7 +138,7 @@ public class StartupHelper {
         // check whether the JVM was previously restarted
         // avoids looping, but most certainly leads to a crash
         if ("true".equals(System.getProperty(JVM_RESTARTED_ARG))) {
-            System.err.println(
+            log.error(
                     "There was a problem evaluating whether the JVM was started with the -XstartOnFirstThread argument.");
             return false;
         }
@@ -126,13 +146,15 @@ public class StartupHelper {
         // Restart the JVM with -XstartOnFirstThread
         ArrayList<String> jvmArgs = new ArrayList<>();
         String separator = System.getProperty("file.separator", "/");
-        // The following line is used assuming you target Java 8, the minimum for LWJGL3.
+        // The following line is used assuming you target Java 8, the minimum for
+        // LWJGL3.
         String javaExecPath = System.getProperty("java.home") + separator + "bin" + separator + "java";
-        // If targeting Java 9 or higher, you could use the following instead of the above line:
-        //String javaExecPath = ProcessHandle.current().info().command().orElseThrow();
+        // If targeting Java 9 or higher, you could use the following instead of the
+        // above line:
+        // String javaExecPath = ProcessHandle.current().info().command().orElseThrow();
 
         if (!(new File(javaExecPath)).exists()) {
-            System.err.println(
+            log.error(
                     "A Java installation could not be found. If you are distributing this app with a bundled JRE, be sure to set the -XstartOnFirstThread argument manually!");
             return false;
         }
@@ -149,7 +171,7 @@ public class StartupHelper {
             if (trace.length > 0) {
                 mainClass = trace[trace.length - 1].getClassName();
             } else {
-                System.err.println("The main class could not be determined.");
+                log.error("The main class could not be determined.");
                 return false;
             }
         }
@@ -167,14 +189,14 @@ public class StartupHelper {
                 String line;
 
                 while ((line = processOutput.readLine()) != null) {
-                    System.out.println(line);
+                    log.info(line);
                 }
 
                 process.waitFor();
             }
         } catch (Exception e) {
-            System.err.println("There was a problem restarting the JVM");
-            e.printStackTrace();
+            log.error("There was a problem restarting the JVM");
+            log.error("", e);
         }
 
         return true;
@@ -190,8 +212,9 @@ public class StartupHelper {
      *
      * <pre>
      * public static void main(String... args) {
-     * 	if (StartupHelper.startNewJvmIfRequired()) return; // This handles macOS support and helps on Windows.
-     * 	// the actual main method code
+     *     if (StartupHelper.startNewJvmIfRequired())
+     *         return; // This handles macOS support and helps on Windows.
+     *     // the actual main method code
      * }
      * </pre>
      *

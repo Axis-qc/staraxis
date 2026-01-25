@@ -16,6 +16,9 @@ import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
 import staraxis.ui.Gui;
 import staraxis.ui.utils.DragAndClampListener;
 
+import static java.lang.Math.max;
+import static java.lang.Math.min;
+
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -31,6 +34,40 @@ import java.util.stream.Collectors;
  * - 拖动与边界限制由通用的 {@link DragAndClampListener} 实现，避免重复逻辑。
  */
 public class DevConsole extends InputAdapter implements ConsoleOutput {
+
+    private void ensureWindowSize() {
+        float width = min(640f, Gdx.graphics.getWidth() * 0.8f);
+        float height = min(320f, Gdx.graphics.getHeight() * 0.5f);
+        if (width < 200f) {
+            width = 200f;
+        }
+        if (height < 120f) {
+            height = 120f;
+        }
+        window.setSize(width, height);
+    }
+
+    private void ensureOnScreen() {
+        float margin = 8f;
+        float screenW = Gdx.graphics.getWidth();
+        float screenH = Gdx.graphics.getHeight();
+
+        float x = window.getX();
+        float y = window.getY();
+
+        float maxX = max(margin, screenW - window.getWidth() - margin);
+        float maxY = max(margin, screenH - window.getHeight() - margin);
+
+        x = max(margin, min(x, maxX));
+        y = max(margin, min(y, maxY));
+
+        window.setPosition(x, y);
+
+        if (visible) {
+            Gdx.app.log("DevConsole", "ensureOnScreen pos=" + window.getX() + "," + window.getY() + " size="
+                    + window.getWidth() + "x" + window.getHeight() + " screen=" + screenW + "x" + screenH);
+        }
+    }
 
     private final Gui gui;
     private final DevConsoleView view;
@@ -85,8 +122,8 @@ public class DevConsole extends InputAdapter implements ConsoleOutput {
         window.add(titleBar).height(20f).expandX().fillX().row();
         window.add(view).expand().fill().row();
 
-        float width = Math.min(640f, stage.getWidth() * 0.8f);
-        float height = Math.min(320f, stage.getHeight() * 0.5f);
+        float width = Math.min(640f, Gdx.graphics.getWidth() * 0.8f);
+        float height = Math.min(320f, Gdx.graphics.getHeight() * 0.5f);
         window.setSize(width, height);
 
         repositionToTopLeft();
@@ -127,19 +164,22 @@ public class DevConsole extends InputAdapter implements ConsoleOutput {
      * 在窗口 resize 后调用，确保控制台位置被夹紧在屏幕内。
      */
     public void onResize() {
+        ensureOnScreen();
         dragListener.onResize();
     }
 
     private void repositionToTopLeft() {
-        Stage stage = gui.getStage();
         float margin = 8f;
-        window.setPosition(margin, stage.getHeight() - window.getHeight() - margin);
+        float screenH = Gdx.graphics.getHeight();
+        window.setPosition(margin, screenH - window.getHeight() - margin);
+        ensureOnScreen();
     }
 
     private void registerDefaultCommands() {
         register(new HelpCommand());
         register(new ClearCommand());
         register(new ReloadUiCommand(gui));
+        register(new OpenUiTestCommand(gui));
         register(new LogTailCommand());
     }
 
@@ -172,11 +212,25 @@ public class DevConsole extends InputAdapter implements ConsoleOutput {
 
     @Override
     public boolean keyDown(int keycode) {
+        Gdx.app.log("DevConsole",
+                "keyDown keycode=" + keycode + " (" + Input.Keys.toString(keycode) + ") visible=" + visible
+                        + " ctrl=" + Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT) + " shift="
+                        + Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT));
+
         // NOTE: 全局热键始终响应，确保在失去焦点时也能关闭/打开。
         if (keycode == Input.Keys.GRAVE || keycode == Input.Keys.F12) {
             toggle();
             return true;
         }
+
+        // 备用热键：Ctrl + Shift + C（避免不同键盘布局下 GRAVE 不可用 / F12 被系统抢占）
+        if (keycode == Input.Keys.C
+                && (Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT) || Gdx.input.isKeyPressed(Input.Keys.CONTROL_RIGHT))
+                && (Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT) || Gdx.input.isKeyPressed(Input.Keys.SHIFT_RIGHT))) {
+            toggle();
+            return true;
+        }
+
         // NOTE: ESC 仅在控制台可见时生效，不要求窗口获得键盘焦点。
         if (keycode == Input.Keys.ESCAPE && visible) {
             hide();
@@ -194,9 +248,14 @@ public class DevConsole extends InputAdapter implements ConsoleOutput {
 
     public void show() {
         visible = true;
+        ensureWindowSize();
         repositionToTopLeft();
         window.setVisible(true);
         window.toFront();
+        ensureOnScreen();
+        Gdx.app.log("DevConsole", "show window pos=" + window.getX() + "," + window.getY() + " size="
+                + window.getWidth() + "x" + window.getHeight() + " screen=" + Gdx.graphics.getWidth() + "x"
+                + Gdx.graphics.getHeight());
         // NOTE: 显示后默认不抢焦点，必须点击窗口才获得焦点。
         gui.getStage().setKeyboardFocus(null);
     }
@@ -275,6 +334,30 @@ public class DevConsole extends InputAdapter implements ConsoleOutput {
         public void execute(String[] args, ConsoleOutput out) {
             out.info("Reloading main menu...");
             gui.showMainMenu();
+        }
+    }
+
+    private static class OpenUiTestCommand implements ConsoleCommand {
+        private final Gui gui;
+
+        public OpenUiTestCommand(Gui gui) {
+            this.gui = gui;
+        }
+
+        @Override
+        public String name() {
+            return "ui_test";
+        }
+
+        @Override
+        public String help() {
+            return "Shows the UI components test screen.";
+        }
+
+        @Override
+        public void execute(String[] args, ConsoleOutput out) {
+            out.info("Opening UI components test screen...");
+            gui.showUiComponentsTestScreen();
         }
     }
 

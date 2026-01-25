@@ -5,11 +5,7 @@
     "properties": {
         "fillParent": true,
         "pad": 24,
-        "colorAnim": {
-            "from": "#081028FF",
-            "to": "#1A0B2EFF",
-            "duration": 4.0
-        }
+        "background": "Rounded_background"
     },
     "children": [
         {
@@ -50,6 +46,8 @@
                             "name": "tab_panel",
                             "properties": {
                                 "background": "Rounded_background",
+                                "borderWidth": 3,
+                                "borderColor": "#66CCFFFF",
                                 "pad": 14,
                                 "cell": {
                                     "width": 260,
@@ -161,7 +159,6 @@
                                             "type": "button",
                                             "name": "back_button",
                                             "properties": {
-                                                "class": "btn-small",
                                                 "text": "settings.back",
                                                 "onClick": "BACK_TO_MAIN_MENU",
                                                 "cell": {
@@ -174,7 +171,6 @@
                                             "type": "button",
                                             "name": "save_button",
                                             "properties": {
-                                                "class": "btn-small",
                                                 "text": "settings.save",
                                                 "onClick": "SAVE_SETTINGS",
                                                 "cell": {
@@ -191,6 +187,8 @@
                             "name": "settings_stack_wrapper",
                             "properties": {
                                 "background": "Rounded_background",
+                                "borderWidth": 3,
+                                "borderColor": "#66CCFFFF",
                                 "pad": 14,
                                 "cell": {
                                     "expand": true,
@@ -636,8 +634,7 @@
                                                                                     "type": "container",
                                                                                     "name": "mod_row_template",
                                                                                     "properties": {
-                                                                                        "layout": "row",
-                                                                                        "class": "mod-row"
+                                                                                        "layout": "row"
                                                                                     },
                                                                                     "children": [
                                                                                         {

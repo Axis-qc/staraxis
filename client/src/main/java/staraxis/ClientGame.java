@@ -14,6 +14,7 @@ import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.utils.ObjectMap;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import staraxis.game.GameRuntime;
+import staraxis.InputDebugProcessor;
 import staraxis.game.SimpleGameRuntime;
 import staraxis.logging.GdxToSlf4jLogger;
 import staraxis.ui.FontProvider;
@@ -23,8 +24,10 @@ import staraxis.ui.console.DevConsole;
 import staraxis.ui.i18n.I18nService;
 import staraxis.ui.screens.MainMenuScreen;
 import staraxis.ui.screens.SettingsScreen;
+import staraxis.ui.screens.UiComponentsTestScreen;
 import staraxis.ui.settings.GameSettings;
 import staraxis.ui.settings.SettingsRepository;
+import staraxis.ui.debug.UiDebugOverlay;
 import staraxis.ui.widgets.DevelopingDialog;
 
 public class ClientGame implements ApplicationListener {
@@ -37,6 +40,7 @@ public class ClientGame implements ApplicationListener {
     private Texture backgroundTexture;
 
     private DevConsole devConsole;
+    private UiDebugOverlay uiDebugOverlay;
     private InputMultiplexer inputMultiplexer;
 
     private float tickAccumulatorSeconds;
@@ -50,6 +54,10 @@ public class ClientGame implements ApplicationListener {
 
         stage = new Stage(new ScreenViewport());
         inputMultiplexer = new InputMultiplexer();
+        inputMultiplexer.addProcessor(new InputDebugProcessor());
+        // NOTE: DevConsole 需要优先于 Stage 接收热键，否则某些控件可能吞掉 keyDown
+        // （InputMultiplexer 会在某个 processor 返回 true 后停止继续分发）
+        // 这里先占位，devConsole 创建后会插入到 index=0 位置。
         inputMultiplexer.addProcessor(stage);
         Gdx.input.setInputProcessor(inputMultiplexer);
 
@@ -89,6 +97,8 @@ public class ClientGame implements ApplicationListener {
         gui.register(MainMenuScreen.class, mainMenuScreen);
         SettingsScreen settingsScreen = new SettingsScreen(gui);
         gui.register(SettingsScreen.class, settingsScreen);
+        UiComponentsTestScreen uiComponentsTestScreen = new UiComponentsTestScreen(gui);
+        gui.register(UiComponentsTestScreen.class, uiComponentsTestScreen);
 
         // Dialogs
         DevelopingDialog developingDialog = new DevelopingDialog(skin, i18nService);
@@ -97,7 +107,15 @@ public class ClientGame implements ApplicationListener {
         // Console
         devConsole = new DevConsole(gui);
         gui.register(DevConsole.class, devConsole);
-        inputMultiplexer.addProcessor(devConsole);
+        // 关键：把 DevConsole 放到最前面，确保热键不被 Stage/控件先消费。
+        inputMultiplexer.addProcessor(0, devConsole);
+        Gdx.input.setCatchKey(com.badlogic.gdx.Input.Keys.F12, true);
+        Gdx.input.setCatchKey(com.badlogic.gdx.Input.Keys.GRAVE, true);
+
+        // UI Debug Overlay (F10 toggle)
+        uiDebugOverlay = new UiDebugOverlay(stage, skin);
+        inputMultiplexer.addProcessor(0, uiDebugOverlay);
+        Gdx.input.setCatchKey(com.badlogic.gdx.Input.Keys.F10, true);
 
         gameRuntime = new SimpleGameRuntime();
         gameRuntime.start();
@@ -173,6 +191,11 @@ public class ClientGame implements ApplicationListener {
 
         stage.act(frameDt);
         stage.draw();
+
+        if (uiDebugOverlay != null) {
+            uiDebugOverlay.update();
+            uiDebugOverlay.render();
+        }
     }
 
     @Override

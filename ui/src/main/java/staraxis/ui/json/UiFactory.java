@@ -14,11 +14,8 @@ import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
 import com.badlogic.gdx.utils.Align;
 import staraxis.ui.Gui;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
-import java.util.List;
 
 /**
  * UI 工厂：将 {@link ComponentNode}（声明式 UI 节点树）构建为 Scene2D 的 {@link Actor} 树。
@@ -28,20 +25,9 @@ public class UiFactory {
     private final Skin skin;
     private final Gui gui;
 
-    private static final Map<String, Map<String, Object>> CLASS_STYLES = new HashMap<>();
     private static Map<String, ComponentNode> COMPONENT_LIB = java.util.Collections.emptyMap();
 
     static {
-        // 注册默认 class 样式
-        Map<String, Object> modRow = new HashMap<>();
-        modRow.put("background", "Small_rounded_button");
-        modRow.put("pad", 4f);
-        CLASS_STYLES.put("mod-row", modRow);
-
-        Map<String, Object> btnSmall = new HashMap<>();
-        btnSmall.put("background", "Small_rounded_button");
-        CLASS_STYLES.put("btn-small", btnSmall);
-
         // 预加载组件库（可忽略失败）
         try {
             com.badlogic.gdx.files.FileHandle fh = Gdx.files.internal("ui/common/components.json");
@@ -80,153 +66,75 @@ public class UiFactory {
             node = tpl;
         }
 
-        ComponentNode effectiveNode = mergeStyleNode(node);
-
         Actor actor;
-        switch (safeLower(effectiveNode.type)) {
+        switch (safeLower(node.type)) {
             case "container":
-                actor = buildTable(effectiveNode);
+                actor = buildTable(node);
                 break;
             case "stack":
-                actor = buildStack(effectiveNode);
+                actor = buildStack(node);
                 break;
             case "position":
-                actor = buildPosition(effectiveNode);
+                actor = buildPosition(node);
                 break;
             case "scroll":
-                actor = buildScroll(effectiveNode);
+                actor = buildScroll(node);
                 break;
             case "window":
-                actor = buildWindow(effectiveNode);
+                actor = buildWindow(node);
                 break;
             case "dialog":
-                actor = buildDialog(effectiveNode);
+                actor = buildDialog(node);
                 break;
             case "verticalgroup":
-                actor = buildVerticalGroup(effectiveNode);
+                actor = buildVerticalGroup(node);
                 break;
             case "horizontalgroup":
-                actor = buildHorizontalGroup(effectiveNode);
+                actor = buildHorizontalGroup(node);
                 break;
             case "repeat":
-                actor = buildRepeat(effectiveNode);
+                actor = buildRepeat(node);
                 break;
             case "label":
-                actor = buildLabel(effectiveNode);
+                actor = buildLabel(node);
                 break;
             case "button":
             case "textbutton":
-                actor = buildButton(effectiveNode);
+                actor = buildButton(node);
                 break;
             case "checkbox":
-                actor = buildCheckBox(effectiveNode);
+                actor = buildCheckBox(node);
                 break;
             case "imagebutton":
-                actor = buildImageButton(effectiveNode);
+                actor = buildImageButton(node);
                 break;
             case "image":
-                actor = buildImage(effectiveNode);
+                actor = buildImage(node);
                 break;
             case "slider":
-                actor = buildSlider(effectiveNode);
+                actor = buildSlider(node);
                 break;
             case "selectbox":
-                actor = buildSelectBox(effectiveNode);
+                actor = buildSelectBox(node);
                 break;
             case "progressbar":
-                actor = buildProgressBar(effectiveNode);
+                actor = buildProgressBar(node);
                 break;
             case "textfield":
-                actor = buildTextField(effectiveNode);
+                actor = buildTextField(node);
                 break;
             default:
                 actor = new Group();
         }
 
-        applyCommonActorProps(actor, effectiveNode);
-        applyColorAnim(actor, effectiveNode);
-        applyInheritance(actor, effectiveNode);
-        applyPostCreate(actor, effectiveNode);
+        applyCommonActorProps(actor, node);
+        applyInheritance(actor, node);
+        applyPostCreate(actor, node);
         return actor;
     }
 
     private String safeLower(String s) {
         return s == null ? "" : s.toLowerCase(Locale.ROOT);
-    }
-
-    private ComponentNode mergeStyleNode(ComponentNode node) {
-        if (node == null) {
-            return null;
-        }
-
-        ComponentNode merged = deepCopy(node);
-
-        Map<String, Object> mergedProps = new HashMap<>();
-
-        Map<String, Object> defaultProps = defaultPropsForNode(merged);
-        if (defaultProps != null) {
-            mergedProps.putAll(defaultProps);
-        }
-
-        Object classValue = merged.properties.get("class");
-        if (classValue != null) {
-            List<String> classes = parseClassList(classValue.toString());
-            for (String clazz : classes) {
-                Map<String, Object> styleProps = CLASS_STYLES.get(clazz);
-                if (styleProps != null) {
-                    mergedProps.putAll(styleProps);
-                }
-            }
-        }
-
-        Object styleValue = merged.properties.get("style");
-        if (styleValue instanceof Map) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> inlineStyle = (Map<String, Object>) styleValue;
-            mergedProps.putAll(inlineStyle);
-        }
-
-        mergedProps.putAll(merged.properties);
-        merged.properties = mergedProps;
-
-        for (int i = 0; i < merged.children.size(); i++) {
-            merged.children.set(i, mergeStyleNode(merged.children.get(i)));
-        }
-
-        return merged;
-    }
-
-    private List<String> parseClassList(String value) {
-        List<String> result = new ArrayList<>();
-        if (value == null) {
-            return result;
-        }
-        String[] parts = value.trim().split("\\s+");
-        for (String p : parts) {
-            if (p != null) {
-                String s = p.trim();
-                if (!s.isEmpty()) {
-                    result.add(s);
-                }
-            }
-        }
-        return result;
-    }
-
-    private Map<String, Object> defaultPropsForNode(ComponentNode node) {
-        Map<String, Object> defaults = new HashMap<>();
-
-        String type = safeLower(node.type);
-        if ("container".equals(type) || "repeat".equals(type)) {
-            if (!node.properties.containsKey("display")) {
-                defaults.put("display", "block");
-            }
-            if (!node.properties.containsKey("layout")) {
-                defaults.put("layout", "column");
-            }
-        }
-
-        return defaults;
     }
 
     private void applyInheritance(Actor actor, ComponentNode node) {
@@ -277,66 +185,6 @@ public class UiFactory {
         Object userObject = node.properties.get("userObject");
         if (userObject != null) {
             actor.setUserObject(userObject);
-        }
-    }
-
-    private void applyColorAnim(Actor actor, ComponentNode node) {
-        Object colorAnimObj = node.properties.get("colorAnim");
-        if (!(colorAnimObj instanceof java.util.Map))
-            return;
-
-        @SuppressWarnings("unchecked")
-        java.util.Map<String, Object> anim = (java.util.Map<String, Object>) colorAnimObj;
-
-        Object fromObj = anim.get("from");
-        Object toObj = anim.get("to");
-        if (fromObj == null || toObj == null)
-            return;
-
-        float duration = toFloat(anim.get("duration"), 1f);
-        if (duration <= 0)
-            duration = 1f;
-
-        Color from = resolveColor(fromObj.toString());
-        Color to = resolveColor(toObj.toString());
-        if (from == null || to == null) {
-            Gdx.app.error("UiFactory", "Invalid colorAnim: from=" + fromObj + ", to=" + toObj);
-            return;
-        }
-
-        actor.setColor(from);
-
-        com.badlogic.gdx.utils.Array<Action> actions = actor.getActions();
-        for (int i = actions.size - 1; i >= 0; i--) {
-            if (actions.get(i) instanceof PingPongColorAction) {
-                actions.removeIndex(i);
-            }
-        }
-        actor.addAction(new PingPongColorAction(from, to, duration));
-    }
-
-    public static class PingPongColorAction extends Action {
-        private final Color from, to;
-        private final float duration;
-        private float time;
-
-        public PingPongColorAction(Color from, Color to, float duration) {
-            this.from = new Color(from);
-            this.to = new Color(to);
-            this.duration = duration;
-        }
-
-        @Override
-        public boolean act(float delta) {
-            if (actor == null)
-                return true;
-            time += delta;
-            float t = (time / duration) % 2f;
-            if (t > 1f)
-                t = 2f - t;
-            actor.getColor().set(from.r + (to.r - from.r) * t, from.g + (to.g - from.g) * t,
-                    from.b + (to.b - from.b) * t, from.a + (to.a - from.a) * t);
-            return false;
         }
     }
 
@@ -963,6 +811,13 @@ public class UiFactory {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private Color resolveColorAny(Object value) {
+        if (value == null) {
+            return null;
+        }
+        return resolveColor(value.toString());
     }
 
     private float clamp(float v, float min, float max) {

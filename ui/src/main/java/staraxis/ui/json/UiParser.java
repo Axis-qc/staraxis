@@ -33,6 +33,25 @@ public class UiParser {
     private static final Logger log = LoggerFactory.getLogger(UiParser.class);
     private final JsonSchema schema;
 
+    private ComponentNode buildErrorNode(String message) {
+        ComponentNode root = new ComponentNode("container");
+        root.properties.put("fillParent", true);
+        root.properties.put("pad", 24f);
+
+        ComponentNode title = new ComponentNode("label");
+        title.properties.put("text", "UI 解析失败");
+        title.properties.put("color", "#FF6666");
+        title.properties.put("alignment", "center");
+        root.children.add(title);
+
+        ComponentNode detail = new ComponentNode("label");
+        detail.properties.put("text", message != null ? message : "");
+        detail.properties.put("color", "#FFFFFF");
+        root.children.add(detail);
+
+        return root;
+    }
+
     public UiParser() {
         // NOTE: schema 文件作为 resource 打包，确保在任何环境下都能从 classpath 加载。
         // 这是保证解析器稳定运行的基础。
@@ -59,8 +78,9 @@ public class UiParser {
     public ComponentNode parseInternal(String internalPath) {
         FileHandle fh = Gdx.files.internal(internalPath);
         if (!fh.exists()) {
-            log.error("UI json not found: {}", internalPath);
-            return null;
+            String msg = "UI json not found: " + internalPath;
+            log.error(msg);
+            return buildErrorNode(msg);
         }
         // NOTE: fh.readString() 默认使用 UTF-8，但显式指定更稳妥。
         return parseString(internalPath, fh.readString(StandardCharsets.UTF_8.name()));
@@ -80,17 +100,22 @@ public class UiParser {
             JsonNode jsonNode = com.fasterxml.jackson.databind.json.JsonMapper.builder().build().readTree(json);
             Set<ValidationMessage> errors = schema.validate(jsonNode);
             if (!errors.isEmpty()) {
+                StringBuilder sb = new StringBuilder();
                 for (ValidationMessage err : errors) {
-                    log.error("{} | {}", source, err.getMessage());
+                    String msg = source + " | " + err.getMessage();
+                    log.error(msg);
+                    sb.append("\n").append(msg);
                 }
-                return null;
+                ComponentNode errorNode = buildErrorNode("Schema validation failed:" + sb.toString());
+                return errorNode;
             }
             // 2. 使用 libGDX 的 JsonReader 将字符串转为 JsonValue 树，便于后续递归
             JsonValue root = new JsonReader().parse(json);
             return toNode(root);
         } catch (Exception e) {
-            log.error("Failed to parse UI json {}", source, e);
-            return null;
+            String msg = "Failed to parse UI json " + source + ": " + e.getMessage();
+            log.error(msg, e);
+            return buildErrorNode(msg);
         }
     }
 
