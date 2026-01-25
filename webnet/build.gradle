@@ -1,0 +1,26 @@
+plugins {
+  id 'java-library'
+  id 'application'
+}
+
+dependencies {
+  implementation project(':game')
+
+  // Undertow: HTTP + WebSocket server
+  implementation 'io.undertow:undertow-core:2.3.12.Final'
+  implementation 'io.undertow:undertow-websockets-jsr:2.3.12.Final'
+
+  // JSON
+  implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
+  implementation 'com.fasterxml.jackson.core:jackson-core:2.17.2'
+  implementation 'com.fasterxml.jackson.core:jackson-annotations:2.17.2'
+}
+
+application {
+  mainClass = 'staraxis.webnet.WebNetLauncher'
+}
+
+run {
+  // Web 版不需要 LibGDX assets workingDir，这里保持在项目根目录，方便读取 ../web/dist
+  workingDir = rootProject.rootDir
+}

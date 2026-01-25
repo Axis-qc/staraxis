@@ -1,4 +1,9 @@
+TODO：告诉游戏什么mod读取什么md不读取，以及读取顺序（后读覆盖）
 {
-  "schemaVersion" : 1,
-  "order" : [ "ExampleMod", "ExampleMod3", "ExampleMod2" ]
+  "schemaVersion": 1,
+  "order": [
+    "ExampleMod",
+    "ExampleMod3",
+    "ExampleMod2"
+  ]
 }

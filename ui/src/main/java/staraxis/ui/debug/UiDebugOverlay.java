@@ -18,7 +18,6 @@ import com.badlogic.gdx.utils.viewport.Viewport;
 public class UiDebugOverlay extends InputAdapter implements Disposable {
 
     private final Stage stage;
-    private final Skin skin;
 
     private final Table root;
     private final Label label;
@@ -32,7 +31,6 @@ public class UiDebugOverlay extends InputAdapter implements Disposable {
 
     public UiDebugOverlay(Stage stage, Skin skin) {
         this.stage = stage;
-        this.skin = skin;
 
         this.root = new Table(skin);
         this.root.setFillParent(true);

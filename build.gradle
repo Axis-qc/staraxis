@@ -69,3 +69,12 @@ subprojects {
 }
 
 eclipse.project.name = 'staraxis' + '-parent'
+
+// Web 版启动入口：仅启动 webnet（HTTP + WebSocket），不启动 lwjgl3/libgdx
+// 用法：./gradlew runWeb
+
+tasks.register('runWeb') {
+  group = 'application'
+  description = 'Run web version (webnet server only).'
+  dependsOn ':webnet:run'
+}

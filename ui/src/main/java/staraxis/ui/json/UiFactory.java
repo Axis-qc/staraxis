@@ -2,7 +2,6 @@ package staraxis.ui.json;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.scenes.scene2d.Action;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Group;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
@@ -811,13 +810,6 @@ public class UiFactory {
         } catch (Exception e) {
             return null;
         }
-    }
-
-    private Color resolveColorAny(Object value) {
-        if (value == null) {
-            return null;
-        }
-        return resolveColor(value.toString());
     }
 
     private float clamp(float v, float min, float max) {

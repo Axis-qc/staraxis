@@ -19,16 +19,21 @@
 
 - `build`: 构建所有项目的源代码和归档文件
 - `clean`: 清理 `build` 文件夹（包含编译后的类和构建的归档文件）
-- `lwjgl3:run`: 启动应用程序
-- `lwjgl3:jar`: 构建可运行的 jar 文件，位于 `lwjgl3/build/libs`
+- `lwjgl3:run`: 启动原生桌面版（LibGDX/LWJGL3）
+- `lwjgl3:jar`: 构建原生桌面版可运行的 jar 文件，位于 `lwjgl3/build/libs`
+- `webnet:run`: 启动 Web 版宿主（本地 HTTP + WebSocket，不启动 LibGDX）
+- `runWeb`: 启动 Web 版（`webnet:run` 的别名）
 - `test`: 运行单元测试
 - `idea`: 生成 IntelliJ IDEA 项目文件
 - `eclipse`: 生成 Eclipse 项目文件
 - `cleanIdea`: 删除 IntelliJ IDEA 项目数据
 - `cleanEclipse`: 删除 Eclipse 项目数据
 
-.\gradlew.bat :server:run 启动服务端
-.\gradlew.bat :lwjgl3:run 启动客户端
+#### Windows 示例
+
+- `./gradlew.bat runWeb`: 启动 Web 版（推荐）
+- `./gradlew.bat :webnet:run`: 启动 Web 版（等价命令）
+- `./gradlew.bat :lwjgl3:run`: 启动原生桌面版
 
 ### 常用 Gradle 参数
 
