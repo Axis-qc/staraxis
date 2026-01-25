@@ -5,7 +5,6 @@ import io.undertow.Handlers;
 import io.undertow.Undertow;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.handlers.PathHandler;
-import io.undertow.server.handlers.resource.ClassPathResourceManager;
 import io.undertow.server.handlers.resource.FileResourceManager;
 import io.undertow.server.handlers.resource.ResourceHandler;
 import io.undertow.util.Headers;
@@ -169,12 +168,16 @@ public class WebNetServer {
 
     private HttpHandler createStaticHandler() {
         File webDist = new File("../web/dist");
-        if (webDist.exists() && webDist.isDirectory()) {
-            ResourceHandler rh = new ResourceHandler(new FileResourceManager(webDist, 1024 * 1024));
-            rh.setWelcomeFiles("index.html");
-            return rh;
+        if (!webDist.exists() || !webDist.isDirectory()) {
+            return exchange -> {
+                exchange.setStatusCode(500);
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain; charset=utf-8");
+                exchange.getResponseSender().send(
+                        "Web 前端未构建：未找到目录 ../web/dist\n" +
+                                "请先构建前端产物到 web/dist（例如执行前端构建命令），或检查工作目录/路径配置。\n");
+            };
         }
-        ResourceHandler rh = new ResourceHandler(new ClassPathResourceManager(getClass().getClassLoader(), "web"));
+        ResourceHandler rh = new ResourceHandler(new FileResourceManager(webDist, 1024 * 1024));
         rh.setWelcomeFiles("index.html");
         return rh;
     }

@@ -1,0 +1,209 @@
+:root {
+    --bg0: #0b1020;
+    --bg1: rgba(255, 255, 255, 0.06);
+    --bg2: rgba(255, 255, 255, 0.10);
+    --text0: rgba(255, 255, 255, 0.92);
+    --text1: rgba(255, 255, 255, 0.70);
+    --border: rgba(255, 255, 255, 0.18);
+    --accent: #6aa8ff;
+    --danger: #ff5d5d;
+    --ok: #4cd77b;
+    --warn: #ffb020;
+}
+
+html,
+body {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    background: radial-gradient(1200px 800px at 20% 0%, rgba(106, 168, 255, 0.22), transparent 55%),
+        radial-gradient(900px 700px at 80% 10%, rgba(76, 215, 123, 0.18), transparent 55%),
+        var(--bg0);
+    color: var(--text0);
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
+        "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+a {
+    color: inherit;
+}
+
+.sa-page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.sa-shell {
+    width: min(1080px, 100%);
+    margin: 0 auto;
+    padding: 24px 16px 48px;
+}
+
+.sa-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.sa-title {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+}
+
+.sa-subtitle {
+    margin-top: 2px;
+    color: var(--text1);
+    font-size: 13px;
+}
+
+.sa-card {
+    border: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
+    border-radius: 14px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.sa-card-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.sa-card-title {
+    font-weight: 700;
+}
+
+.sa-card-body {
+    padding: 16px;
+}
+
+.sa-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+@media (max-width: 760px) {
+    .sa-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.sa-menu-item {
+    padding: 14px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(0, 0, 0, 0.16);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.sa-menu-item:hover {
+    transform: translateY(-1px);
+    border-color: rgba(106, 168, 255, 0.55);
+    background: rgba(0, 0, 0, 0.22);
+}
+
+.sa-menu-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-weight: 700;
+}
+
+.sa-menu-desc {
+    color: var(--text1);
+    font-size: 13px;
+    line-height: 1.35;
+}
+
+.sa-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    font-size: 12px;
+    color: var(--text1);
+}
+
+.sa-tag.ok {
+    border-color: rgba(76, 215, 123, 0.45);
+    color: rgba(76, 215, 123, 0.95);
+}
+
+.sa-tag.warn {
+    border-color: rgba(255, 176, 32, 0.55);
+    color: rgba(255, 176, 32, 0.95);
+}
+
+.sa-tag.error {
+    border-color: rgba(255, 93, 93, 0.55);
+    color: rgba(255, 93, 93, 0.95);
+}
+
+.sa-btn {
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    background: rgba(0, 0, 0, 0.18);
+    color: var(--text0);
+    cursor: pointer;
+    transition: border-color 120ms ease, background 120ms ease;
+}
+
+.sa-btn:hover {
+    border-color: rgba(106, 168, 255, 0.55);
+    background: rgba(0, 0, 0, 0.24);
+}
+
+.sa-btn.danger {
+    border-color: rgba(255, 93, 93, 0.55);
+}
+
+.sa-btn.danger:hover {
+    border-color: rgba(255, 93, 93, 0.75);
+}
+
+.sa-select {
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    padding: 8px 10px;
+    background: rgba(0, 0, 0, 0.18);
+    color: var(--text0);
+}
+
+.sa-kv {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 8px 12px;
+    font-size: 13px;
+}
+
+.sa-kv .k {
+    color: var(--text1);
+}
+
+.sa-kv .v {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+        monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

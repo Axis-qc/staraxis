@@ -200,6 +200,17 @@ logs/
 .vscode/
 *.code-workspace
 
+## Node / Web (Vite/Vue):
+web/node_modules/
+web/dist/
+web/.vite/
+web/.turbo/
+web/.parcel-cache/
+web/npm-debug.log*
+web/yarn-debug.log*
+web/yarn-error.log*
+web/pnpm-debug.log*
+
 ## OS / temp:
 .DS_Store
 Thumbs.db
