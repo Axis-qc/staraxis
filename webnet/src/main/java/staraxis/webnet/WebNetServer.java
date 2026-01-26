@@ -15,10 +15,15 @@ import io.undertow.websockets.core.WebSockets;
 import io.undertow.websockets.spi.WebSocketHttpExchange;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Stream;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -32,6 +37,7 @@ public class WebNetServer {
     private Undertow undertow;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final AuthStore authStore = new AuthStore(objectMapper);
 
     private final Set<WebSocketChannel> channels = ConcurrentHashMap.newKeySet();
 
@@ -83,19 +89,195 @@ public class WebNetServer {
 
         // --- API Routes ---
         PathHandler apiHandler = Handlers.path();
+
+        // --- Auth API ---
+        PathHandler authHandler = Handlers.path();
+        authHandler.addExactPath("/register", exchange -> {
+            exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+            try {
+                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
+                    exchange.setStatusCode(405).endExchange();
+                    return;
+                }
+                exchange.startBlocking();
+                String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                if (body.isBlank())
+                    body = "{}";
+                @SuppressWarnings("unchecked")
+                Map<String, Object> req = objectMapper.readValue(body, Map.class);
+                String username = req.get("username") == null ? null : String.valueOf(req.get("username"));
+                String password = req.get("password") == null ? null : String.valueOf(req.get("password"));
+
+                AuthStore.Account a = authStore.register(username, password);
+                exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                        "ok", true,
+                        "playerId", a.playerId)));
+            } catch (Exception e) {
+                exchange.setStatusCode(400);
+                exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                        "ok", false,
+                        "error", e.getMessage())));
+            }
+        });
+
+        authHandler.addExactPath("/login", exchange -> {
+            exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+            try {
+                String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                if (body.isBlank())
+                    body = "{}";
+                @SuppressWarnings("unchecked")
+                Map<String, Object> req = objectMapper.readValue(body, Map.class);
+                String username = req.get("username") == null ? null : String.valueOf(req.get("username"));
+                String password = req.get("password") == null ? null : String.valueOf(req.get("password"));
+
+                AuthStore.Session s = authStore.login(username, password);
+                exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                        "ok", true,
+                        "playerId", s.playerId,
+                        "username", s.username,
+                        "token", s.token)));
+            } catch (Exception e) {
+                exchange.setStatusCode(401);
+                exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                        "ok", false,
+                        "error", e.getMessage())));
+            }
+        });
+
+        authHandler.addExactPath("/me", exchange -> {
+            exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+            try {
+                String auth = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
+                AuthStore.Session s = authStore.getSessionFromAuthorizationHeader(auth);
+                if (s == null) {
+                    exchange.setStatusCode(401);
+                    exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                            "ok", false,
+                            "error", "unauthorized")));
+                    return;
+                }
+                AuthStore.Account a = authStore.loadAccount(s.username);
+                exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                        "ok", true,
+                        "playerId", s.playerId,
+                        "username", s.username,
+                        "gameId", a == null ? "" : (a.gameId == null ? "" : a.gameId))));
+            } catch (Exception e) {
+                exchange.setStatusCode(500);
+                exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                        "ok", false,
+                        "error", e.getMessage())));
+            }
+        });
+
+        authHandler.addExactPath("/logout", exchange -> {
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
+                exchange.setStatusCode(405).endExchange();
+                return;
+            }
+            exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+            try {
+                String auth = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
+                AuthStore.Session s = authStore.getSessionFromAuthorizationHeader(auth);
+                if (s != null) {
+                    authStore.logout(s.token);
+                }
+                exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of("ok", true)));
+            } catch (Exception e) {
+                exchange.setStatusCode(500);
+                exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                        "ok", false,
+                        "error", e.getMessage())));
+            }
+        });
+
+        authHandler.addExactPath("/gameId", exchange -> {
+            exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+            try {
+                String auth = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
+                AuthStore.Session s = authStore.getSessionFromAuthorizationHeader(auth);
+                if (s == null) {
+                    exchange.setStatusCode(401);
+                    exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                            "ok", false,
+                            "error", "unauthorized")));
+                    return;
+                }
+
+                String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                if (body.isBlank())
+                    body = "{}";
+                @SuppressWarnings("unchecked")
+                Map<String, Object> req = objectMapper.readValue(body, Map.class);
+                String gameId = req.get("gameId") == null ? "" : String.valueOf(req.get("gameId"));
+
+                authStore.setGameId(s.playerId, gameId);
+                exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                        "ok", true,
+                        "playerId", s.playerId,
+                        "gameId", gameId.trim())));
+            } catch (IllegalArgumentException e) {
+                exchange.setStatusCode(400);
+                exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                        "ok", false,
+                        "error", e.getMessage())));
+            } catch (Exception e) {
+                exchange.setStatusCode(500);
+                exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                        "ok", false,
+                        "error", e.getMessage())));
+            }
+        });
+
+        apiHandler.addPrefixPath("/auth", authHandler);
+
         apiHandler.addExactPath("/status", exchange -> {
             exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
             int c = connectionCount.get();
             long last = lastDisconnectAtMs.get();
             long idleMs = last > 0 ? (System.currentTimeMillis() - last) : 0;
+
+            File webUi = new File("webui");
+            boolean webUiExists = webUi.exists() && webUi.isDirectory();
+            long webUiLastModified = webUiExists ? webUi.lastModified() : 0L;
+            boolean webUiIndexExists = webUiExists && new File(webUi, "index.html").isFile();
+
+            long webUiFileCount = 0;
+            long webUiTotalBytes = 0;
+            if (webUiExists) {
+                try (Stream<Path> s = Files.walk(webUi.toPath())) {
+                    for (Path p : (Iterable<Path>) s::iterator) {
+                        if (Files.isRegularFile(p)) {
+                            webUiFileCount++;
+                            try {
+                                webUiTotalBytes += Files.size(p);
+                            } catch (IOException ignored) {
+                            }
+                        }
+                    }
+                } catch (IOException ignored) {
+                }
+            }
+
             String json = "{" +
                     "\"host\":\"" + config.host + "\"," +
                     "\"port\":" + config.port + "," +
                     "\"connections\":" + c + "," +
                     "\"autoExitSeconds\":" + config.autoExitSeconds + "," +
-                    "\"idleSeconds\":" + (idleMs / 1000) +
+                    "\"idleSeconds\":" + (idleMs / 1000) + "," +
+                    "\"webUiExists\":" + webUiExists + "," +
+                    "\"webUiIndexExists\":" + webUiIndexExists + "," +
+                    "\"webUiLastModifiedMs\":" + webUiLastModified + "," +
+                    "\"webUiFileCount\":" + webUiFileCount + "," +
+                    "\"webUiTotalBytes\":" + webUiTotalBytes +
                     "}";
             exchange.getResponseSender().send(json);
+        });
+
+        apiHandler.addExactPath("/ping", exchange -> {
+            exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+            exchange.getResponseSender().send("{\"serverTimeMs\":" + System.currentTimeMillis() + "}");
         });
 
         apiHandler.addExactPath("/quit", exchange -> {
@@ -130,7 +312,20 @@ public class WebNetServer {
         routes.addPrefixPath("/api", apiHandler);
 
         // --- Static Content ---
-        routes.addPrefixPath("/", createStaticHandler());
+        // 游戏主界面（webui 目录）：挂在 /webui
+        routes.addPrefixPath("/webui", createGameUiHandler());
+
+        // 根路径统一跳转到 webui（不再提供 server-ui 页面）
+        routes.addExactPath("/", exchange -> {
+            exchange.setStatusCode(302);
+            exchange.getResponseHeaders().put(Headers.LOCATION, "/webui/");
+            exchange.endExchange();
+        });
+        routes.addExactPath("/index.html", exchange -> {
+            exchange.setStatusCode(302);
+            exchange.getResponseHeaders().put(Headers.LOCATION, "/webui/");
+            exchange.endExchange();
+        });
 
         undertow = Undertow.builder().addHttpListener(config.port, config.host).setHandler(routes).build();
         undertow.start();
@@ -166,20 +361,31 @@ public class WebNetServer {
         }, 1, 1, TimeUnit.SECONDS);
     }
 
-    private HttpHandler createStaticHandler() {
-        File webDist = new File("../web/dist");
-        if (!webDist.exists() || !webDist.isDirectory()) {
+    private HttpHandler createGameUiHandler() {
+        File webUi = new File("webui");
+        if (!webUi.exists() || !webUi.isDirectory()) {
             return exchange -> {
                 exchange.setStatusCode(500);
                 exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain; charset=utf-8");
                 exchange.getResponseSender().send(
-                        "Web 前端未构建：未找到目录 ../web/dist\n" +
-                                "请先构建前端产物到 web/dist（例如执行前端构建命令），或检查工作目录/路径配置。\n");
+                        "Web 前端未构建：未找到目录 ./webui\n" +
+                                "请先将前端构建产物放入 webui/（例如 web 构建后复制 dist 到 webui），或检查工作目录/路径配置。\n");
             };
         }
-        ResourceHandler rh = new ResourceHandler(new FileResourceManager(webDist, 1024 * 1024));
+        ResourceHandler rh = new ResourceHandler(new FileResourceManager(webUi, 1024 * 1024));
         rh.setWelcomeFiles("index.html");
         return rh;
+    }
+
+    private static String escapeHtml(String s) {
+        if (s == null) {
+            return "";
+        }
+        return s.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
     }
 
     public void stop() {

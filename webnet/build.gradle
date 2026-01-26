@@ -20,7 +20,43 @@ application {
   mainClass = 'staraxis.webnet.WebNetLauncher'
 }
 
+tasks.register('fatJar', Jar) {
+  archiveBaseName.set('webnet')
+  archiveClassifier.set('all')
+
+  duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+  manifest {
+    attributes('Main-Class': application.mainClass.get())
+  }
+
+  from(sourceSets.main.output)
+
+  dependsOn configurations.runtimeClasspath
+  from {
+    configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+  }
+}
+
+tasks.register('distLauncher', Copy) {
+  // Gradle 9+ 可能会因为项目根目录下存在不可读/被锁定的文件（如 .gradle/**/checksums.lock）
+  // 而拒绝对 Copy 任务进行状态跟踪，导致任务直接失败。
+  // 这里关闭状态跟踪以保证发行拷贝动作可执行。
+  doNotTrackState("Copy to root dir may contain locked/unreadable files (e.g. .gradle checksums.lock)")
+
+  dependsOn tasks.fatJar
+  from(tasks.fatJar.archiveFile)
+  into(rootProject.rootDir)
+  rename { 'StarAxis.jar' }
+}
+
 run {
   // Web 版不需要 LibGDX assets workingDir，这里保持在项目根目录，方便读取 ../web/dist
   workingDir = rootProject.rootDir
+
+  // server-ui 已废弃：webnet 仅提供 API/WS + 托管 /webui 静态资源
+  // 保留该段仅作兼容（不再传递参数）
+  if (project.hasProperty('serverUi')) {
+    // no-op
+  }
 }

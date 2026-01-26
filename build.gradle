@@ -79,19 +79,3 @@ tasks.register('runWeb') {
   dependsOn ':webnet:run'
 }
 
-// Web 开发态一键启动入口：启动 webnet + 启动 web 前端 dev server
-// 用法：./gradlew runWebDev
-// 注意：该任务会启动一个长期运行的前端进程（npm run dev）
-
-tasks.register('runWebDev') {
-  group = 'application'
-  description = 'Run webnet server + web dev server (npm run dev).'
-  dependsOn ':webnet:run'
-  doLast {
-    def npmCmd = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
-    exec {
-      workingDir = file('web')
-      commandLine npmCmd, 'run', 'dev'
-    }
-  }
-}

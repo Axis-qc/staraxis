@@ -3,6 +3,7 @@ import vue from '@vitejs/plugin-vue'
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/webui/',  // 添加这一行
   plugins: [vue()],
   server: {
     proxy: {
@@ -17,7 +18,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: 'dist',
+    outDir: '../webui',
     emptyOutDir: true,
   },
 })
