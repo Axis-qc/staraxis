@@ -67,8 +67,10 @@ function openSystemPicker() {
   <div class="theme-picker" :class="{ open }" @mouseenter="open = true" @mouseleave="open = false">
     <button class="theme-toggle" type="button" :aria-expanded="open">
       <span class="dot" :style="{ background: 'var(--sa-accent)' }" />
-      <span class="label">{{ t('theme.label') }}</span>
-      <span class="chev">{{ open ? '×' : '▾' }}</span>
+      <span class="toggle-content">
+        <span class="label">{{ t('theme.label') }}</span>
+        <span class="chev">{{ open ? '×' : '▾' }}</span>
+      </span>
     </button>
 
     <transition name="slide-fade">
@@ -152,12 +154,12 @@ function openSystemPicker() {
   bottom: 16px;
   z-index: 50;
   display: flex;
-  flex-direction: column;
+  flex-direction: column-reverse;
   gap: 10px;
 }
 
 .theme-toggle {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
@@ -168,7 +170,9 @@ function openSystemPicker() {
   cursor: pointer;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  box-sizing: border-box;
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .theme-toggle:hover {
@@ -183,9 +187,28 @@ function openSystemPicker() {
   box-shadow: 0 0 18px rgba(168, 85, 247, 0.35);
 }
 
+.toggle-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width 1s ease-out, opacity 1.3s ease-out 1.1s;
+  max-width: 10;
+  opacity: 10;
+}
+
+.theme-picker.open .toggle-content {
+  max-width: 100px; /* A value larger than the content's width */
+  opacity: 1;
+}
+
+
+
 .label {
   font-size: 13px;
   letter-spacing: 0.6px;
+  white-space: nowrap;
 }
 
 .chev {
@@ -330,9 +353,12 @@ function openSystemPicker() {
   justify-content: flex-end;
 }
 
-.slide-fade-enter-active,
+.slide-fade-enter-active {
+  transition: all 0.3s ease-out 0.1s; /* 延迟0.1s后，花0.3s展开 */
+}
+
 .slide-fade-leave-active {
-  transition: all 0.2s ease-out;
+  transition: all 0.2s ease-out; /* 花0.2s收起 */
 }
 
 .slide-fade-enter-from,
