@@ -1,5 +1,19 @@
 package staraxis.webnet;
 
+/**
+ * WebNetLauncher
+ *
+ * 作用：
+ * - webnet 模块的启动入口（main 方法）。
+ * - 负责解析启动参数（host/port/autoExitSeconds 等），创建 WebNetServer 并启动。
+ * - 启动后尝试自动打开浏览器，访问 /webui/。
+ *
+ * 参数：
+ * - --host=127.0.0.1         监听地址
+ * - --port=17890             监听端口
+ * - --autoExitSeconds=60     无 WS 连接空闲自动退出秒数（<=0 关闭）
+ */
+
 import java.awt.Desktop;
 import java.net.URI;
 

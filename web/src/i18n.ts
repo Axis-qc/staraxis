@@ -30,7 +30,10 @@ export const i18nState: I18nState = {
 export const i18n = createI18n({
     legacy: false,
     locale: i18nState.currentLang,
-    fallbackLocale: 'zh',
+    // 不使用 fallbackLocale：缺失 key 时直接显示 key，方便发现语言包不完整
+    fallbackLocale: false,
+    // 缺失 key 时直接返回 key 本身
+    missing: (_locale, key) => key,
     messages: {},
 })
 

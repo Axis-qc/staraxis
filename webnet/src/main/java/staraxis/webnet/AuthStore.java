@@ -1,5 +1,25 @@
 package staraxis.webnet;
 
+/**
+ * AuthStore
+ *
+ * 作用：
+ * - 本地账号/会话管理（注册、登录、会话 token、保存玩家 gameId）。
+ * - 账号数据以 JSON 文件形式存储在项目根目录下的 gamedata/accounts/ 目录。
+ *   - 文件名规则：<username>.json（username 作为文件名）
+ * - 登录成功后生成随机 token，并在内存中维护 token -> Session 映射。
+ *
+ * 数据与口径：
+ * - username：仅允许 [a-zA-Z0-9_-]，长度 1..32（用于文件名安全）。
+ * - playerId：服务端生成的稳定唯一标识（UUID 前缀 p_）。
+ * - gameId：玩家在游戏内的可配置 ID（可用于 UI 展示/索引），通过 /api/auth/gameId 写入账户文件。
+ *
+ * 潜在问题/注意事项：
+ * - 账户文件读写属于阻塞 IO：在 Undertow handler 中调用本类方法时，应使用 exchange.dispatch(...) 切换到 worker 线程。
+ * - token 仅保存在内存：服务端重启后 token 全部失效，需要重新登录（前端 localStorage 里的旧 token 会失效）。
+ * - 当前实现没有账户索引文件：setGameId 通过遍历所有账户文件匹配 playerId（账户数量大时可考虑加索引）。
+ */
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import javax.crypto.SecretKeyFactory;

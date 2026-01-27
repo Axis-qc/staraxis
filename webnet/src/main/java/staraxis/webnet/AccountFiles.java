@@ -1,5 +1,18 @@
 package staraxis.webnet;
 
+/**
+ * AccountFiles
+ *
+ * 作用：
+ * - 统一管理本地账号数据文件的路径与目录操作。
+ * - 账号目录：gamedata/accounts/
+ * - 账号文件：<username>.json（username 作为文件名，username 的合法性由 AuthStore 校验）
+ *
+ * 重要注意事项：
+ * - 所有路径均为相对路径，依赖进程 workingDir（通常应为项目根目录）。
+ * - 目录/文件操作属于阻塞 IO：在 Undertow handler 中调用这些方法时，应使用 exchange.dispatch(...) 切换到 worker 线程。
+ */
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;

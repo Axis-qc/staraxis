@@ -1,5 +1,44 @@
 package staraxis.webnet;
 
+/**
+ * WebNetServer
+ *
+ * 作用：
+ * - StarAxis Web 版本的本地权威服务端（HTTP + WebSocket）。
+ * - 托管前端构建产物（/webui），并提供 /api/** 接口供 Vue 前端调用。
+ *
+ * 路由概览：
+ * - WebSocket：
+ *   - GET /ws
+ *
+ * - 静态资源：
+ *   - GET /webui/**    （项目根目录 webui/ 下的构建产物）
+ *   - GET /            （302 跳转到 /webui/）
+ *
+ * - API：
+ *   - GET  /api/status        本地服务状态
+ *   - GET  /api/ping          RTT/连通性测试
+ *   - POST /api/quit          请求关闭本地服务端进程
+ *   - GET  /api/i18n/**       i18n 语言包相关
+ *
+ * - 认证/账号（本地文件存储在 gamedata/accounts）：
+ *   - POST /api/auth/register   注册（username 作为文件名）
+ *   - POST /api/auth/login      登录（返回 token/playerId）
+ *   - GET  /api/auth/me         获取当前会话信息
+ *   - POST /api/auth/logout     注销
+ *   - POST /api/auth/gameId     保存玩家游戏ID（gameId）
+ *
+ * - Mod 管理（本地文件存储在 gamedata/mods）：
+ *   - GET  /api/mods            返回扫描到的 mods 列表 + 当前 order/disabled
+ *   - POST /api/mods/order      保存 mods 顺序与禁用列表（回写 gamedata/mods/mod-order.json，保留未知字段）
+ *
+ * 重要注意事项（Undertow 阻塞 IO）：
+ * - Undertow 的请求处理默认运行在 IO 线程中。
+ * - 读取请求体（startBlocking/getInputStream）、文件读写（gamedata/**）、以及 JSON 序列化等都可能触发阻塞 IO。
+ * - 如果在 IO 线程里做阻塞操作，会触发 UT000126 并导致请求 500。
+ * - 因此本文件中对涉及阻塞操作的 handler 使用 exchange.dispatch(...) 切换到 worker 线程处理。
+ */
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.undertow.Handlers;
 import io.undertow.Undertow;
@@ -19,16 +58,19 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Stream;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Stream;
 
 public class WebNetServer {
 
@@ -92,145 +134,380 @@ public class WebNetServer {
 
         // --- Auth API ---
         PathHandler authHandler = Handlers.path();
+
         authHandler.addExactPath("/register", exchange -> {
-            exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-            try {
+            exchange.dispatch(() -> {
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
                 if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
-                    exchange.setStatusCode(405).endExchange();
+                    exchange.setStatusCode(405);
+                    try {
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", "method_not_allowed")));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
                     return;
                 }
-                exchange.startBlocking();
-                String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-                if (body.isBlank())
-                    body = "{}";
-                @SuppressWarnings("unchecked")
-                Map<String, Object> req = objectMapper.readValue(body, Map.class);
-                String username = req.get("username") == null ? null : String.valueOf(req.get("username"));
-                String password = req.get("password") == null ? null : String.valueOf(req.get("password"));
+                try {
+                    exchange.startBlocking();
+                    String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                    if (body.isBlank()) {
+                        body = "{}";
+                    }
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> req = objectMapper.readValue(body, Map.class);
+                    String username = req.get("username") == null ? null : String.valueOf(req.get("username"));
+                    String password = req.get("password") == null ? null : String.valueOf(req.get("password"));
 
-                AuthStore.Account a = authStore.register(username, password);
-                exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                        "ok", true,
-                        "playerId", a.playerId)));
-            } catch (Exception e) {
-                exchange.setStatusCode(400);
-                exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                        "ok", false,
-                        "error", e.getMessage())));
-            }
+                    AuthStore.Account a = authStore.register(username, password);
+                    exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                            "ok", true,
+                            "playerId", a.playerId)));
+                } catch (Exception e) {
+                    exchange.setStatusCode(400);
+                    try {
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", String.valueOf(e.getMessage()))));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                }
+            });
         });
 
         authHandler.addExactPath("/login", exchange -> {
-            exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-            try {
-                String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-                if (body.isBlank())
-                    body = "{}";
-                @SuppressWarnings("unchecked")
-                Map<String, Object> req = objectMapper.readValue(body, Map.class);
-                String username = req.get("username") == null ? null : String.valueOf(req.get("username"));
-                String password = req.get("password") == null ? null : String.valueOf(req.get("password"));
+            exchange.dispatch(() -> {
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
+                    exchange.setStatusCode(405);
+                    try {
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", "method_not_allowed")));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                    return;
+                }
+                try {
+                    exchange.startBlocking();
+                    String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                    if (body.isBlank()) {
+                        body = "{}";
+                    }
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> req = objectMapper.readValue(body, Map.class);
+                    String username = req.get("username") == null ? null : String.valueOf(req.get("username"));
+                    String password = req.get("password") == null ? null : String.valueOf(req.get("password"));
 
-                AuthStore.Session s = authStore.login(username, password);
-                exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                        "ok", true,
-                        "playerId", s.playerId,
-                        "username", s.username,
-                        "token", s.token)));
-            } catch (Exception e) {
-                exchange.setStatusCode(401);
-                exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                        "ok", false,
-                        "error", e.getMessage())));
-            }
+                    AuthStore.Session s = authStore.login(username, password);
+                    exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                            "ok", true,
+                            "playerId", s.playerId,
+                            "username", s.username,
+                            "token", s.token)));
+                } catch (Exception e) {
+                    exchange.setStatusCode(401);
+                    try {
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", String.valueOf(e.getMessage()))));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                }
+            });
         });
 
         authHandler.addExactPath("/me", exchange -> {
-            exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-            try {
-                String auth = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
-                AuthStore.Session s = authStore.getSessionFromAuthorizationHeader(auth);
-                if (s == null) {
-                    exchange.setStatusCode(401);
+            exchange.dispatch(() -> {
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                try {
+                    String auth = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
+                    AuthStore.Session s = authStore.getSessionFromAuthorizationHeader(auth);
+                    if (s == null) {
+                        exchange.setStatusCode(401);
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", "unauthorized")));
+                        return;
+                    }
+                    AuthStore.Account a = authStore.loadAccount(s.username);
                     exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                            "ok", false,
-                            "error", "unauthorized")));
-                    return;
+                            "ok", true,
+                            "playerId", s.playerId,
+                            "username", s.username,
+                            "gameId", a == null ? "" : (a.gameId == null ? "" : a.gameId))));
+                } catch (Exception e) {
+                    exchange.setStatusCode(500);
+                    try {
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", String.valueOf(e.getMessage()))));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
                 }
-                AuthStore.Account a = authStore.loadAccount(s.username);
-                exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                        "ok", true,
-                        "playerId", s.playerId,
-                        "username", s.username,
-                        "gameId", a == null ? "" : (a.gameId == null ? "" : a.gameId))));
-            } catch (Exception e) {
-                exchange.setStatusCode(500);
-                exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                        "ok", false,
-                        "error", e.getMessage())));
-            }
+            });
         });
 
         authHandler.addExactPath("/logout", exchange -> {
-            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
-                exchange.setStatusCode(405).endExchange();
-                return;
-            }
-            exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-            try {
-                String auth = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
-                AuthStore.Session s = authStore.getSessionFromAuthorizationHeader(auth);
-                if (s != null) {
-                    authStore.logout(s.token);
+            exchange.dispatch(() -> {
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
+                    exchange.setStatusCode(405);
+                    try {
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", "method_not_allowed")));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                    return;
                 }
-                exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of("ok", true)));
-            } catch (Exception e) {
-                exchange.setStatusCode(500);
-                exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                        "ok", false,
-                        "error", e.getMessage())));
-            }
+                try {
+                    String auth = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
+                    AuthStore.Session s = authStore.getSessionFromAuthorizationHeader(auth);
+                    if (s != null) {
+                        authStore.logout(s.token);
+                    }
+                    exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of("ok", true)));
+                } catch (Exception e) {
+                    exchange.setStatusCode(500);
+                    try {
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", String.valueOf(e.getMessage()))));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                }
+            });
         });
 
         authHandler.addExactPath("/gameId", exchange -> {
-            exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-            try {
-                String auth = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
-                AuthStore.Session s = authStore.getSessionFromAuthorizationHeader(auth);
-                if (s == null) {
-                    exchange.setStatusCode(401);
-                    exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                            "ok", false,
-                            "error", "unauthorized")));
+            exchange.dispatch(() -> {
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
+                    exchange.setStatusCode(405);
+                    try {
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", "method_not_allowed")));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
                     return;
                 }
+                try {
+                    exchange.startBlocking();
+                    String auth = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
+                    AuthStore.Session s = authStore.getSessionFromAuthorizationHeader(auth);
+                    if (s == null) {
+                        exchange.setStatusCode(401);
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", "unauthorized")));
+                        return;
+                    }
 
-                String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-                if (body.isBlank())
-                    body = "{}";
-                @SuppressWarnings("unchecked")
-                Map<String, Object> req = objectMapper.readValue(body, Map.class);
-                String gameId = req.get("gameId") == null ? "" : String.valueOf(req.get("gameId"));
+                    String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                    if (body.isBlank()) {
+                        body = "{}";
+                    }
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> req = objectMapper.readValue(body, Map.class);
+                    String gameId = req.get("gameId") == null ? "" : String.valueOf(req.get("gameId"));
 
-                authStore.setGameId(s.playerId, gameId);
-                exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                        "ok", true,
-                        "playerId", s.playerId,
-                        "gameId", gameId.trim())));
-            } catch (IllegalArgumentException e) {
-                exchange.setStatusCode(400);
-                exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                        "ok", false,
-                        "error", e.getMessage())));
-            } catch (Exception e) {
-                exchange.setStatusCode(500);
-                exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                        "ok", false,
-                        "error", e.getMessage())));
-            }
+                    authStore.setGameId(s.playerId, gameId);
+                    exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                            "ok", true,
+                            "playerId", s.playerId,
+                            "gameId", gameId.trim())));
+                } catch (IllegalArgumentException e) {
+                    exchange.setStatusCode(400);
+                    try {
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", String.valueOf(e.getMessage()))));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                } catch (Exception e) {
+                    exchange.setStatusCode(500);
+                    try {
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", String.valueOf(e.getMessage()))));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                }
+            });
         });
 
         apiHandler.addPrefixPath("/auth", authHandler);
+
+        // --- Mods API ---
+        ModOrderRepository modOrderRepository = new ModOrderRepository();
+        ModManager modManager = new ModManager(modOrderRepository);
+
+        apiHandler.addExactPath("/mods", exchange -> {
+            exchange.dispatch(() -> {
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                try {
+                    ModOrder conf = modOrderRepository.load();
+                    List<String> discovered = modManager.listAllModIdsDiscovered();
+                    List<String> order = conf != null && conf.order != null ? conf.order : List.of();
+                    Set<String> disabledSet = conf != null && conf.disabled != null ? conf.disabled : Set.of();
+
+                    LinkedHashSet<String> merged = new LinkedHashSet<>();
+                    for (String id : order) {
+                        if (id != null && !id.isBlank()) {
+                            merged.add(id.trim());
+                        }
+                    }
+                    for (String id : discovered) {
+                        if (id != null && !id.isBlank()) {
+                            merged.add(id.trim());
+                        }
+                    }
+                    ArrayList<String> mergedList = new ArrayList<>(merged);
+
+                    ArrayList<Map<String, Object>> mods = new ArrayList<>();
+                    for (int i = 0; i < mergedList.size(); i++) {
+                        String id = mergedList.get(i);
+                        boolean enabled = !disabledSet.contains(id);
+
+                        ModMetadata meta = new ModMetadata();
+                        File metaFile = new File("gamedata/mods/" + id + "/mod.json");
+                        if (metaFile.exists() && metaFile.isFile()) {
+                            try {
+                                meta = objectMapper.readValue(metaFile, ModMetadata.class);
+                            } catch (Exception ignored) {
+                            }
+                        }
+
+                        Map<String, Object> modData = new TreeMap<>();
+                        modData.put("id", id);
+                        modData.put("enabled", enabled);
+                        modData.put("orderIndex", i);
+                        modData.put("name", meta.name);
+                        modData.put("description", meta.description);
+                        modData.put("version", meta.version);
+                        modData.put("compatibleGameVersion", meta.compatibleGameVersion);
+                        modData.put("author", meta.author);
+                        mods.add(modData);
+                    }
+
+                    exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                            "ok", true,
+                            "mods", mods,
+                            "order", mergedList,
+                            "disabled", new ArrayList<>(disabledSet))));
+                } catch (Exception e) {
+                    exchange.setStatusCode(500);
+                    try {
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", String.valueOf(e.getMessage()))));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                }
+            });
+        });
+
+        apiHandler.addExactPath("/mods/order", exchange -> {
+            exchange.dispatch(() -> {
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
+                    exchange.setStatusCode(405);
+                    try {
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", "method_not_allowed")));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                    return;
+                }
+                try {
+                    exchange.startBlocking();
+                    String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                    if (body.isBlank()) {
+                        body = "{}";
+                    }
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> req = objectMapper.readValue(body, Map.class);
+
+                    Object orderObj = req.get("order");
+                    Object disabledObj = req.get("disabled");
+
+                    ArrayList<String> newOrder = new ArrayList<>();
+                    if (orderObj instanceof List) {
+                        for (Object o : (List<?>) orderObj) {
+                            if (o == null) {
+                                continue;
+                            }
+                            String s = String.valueOf(o).trim();
+                            if (!s.isBlank()) {
+                                newOrder.add(s);
+                            }
+                        }
+                    }
+
+                    Set<String> newDisabled = new LinkedHashSet<>();
+                    if (disabledObj instanceof List) {
+                        for (Object o : (List<?>) disabledObj) {
+                            if (o == null) {
+                                continue;
+                            }
+                            String s = String.valueOf(o).trim();
+                            if (!s.isBlank()) {
+                                newDisabled.add(s);
+                            }
+                        }
+                    }
+
+                    File f = modOrderRepository.file();
+                    Map<String, Object> root = new TreeMap<>();
+                    if (f.exists() && f.isFile()) {
+                        try {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> old = objectMapper.readValue(f, Map.class);
+                            if (old != null) {
+                                root.putAll(old);
+                            }
+                        } catch (Exception ignored) {
+                        }
+                    }
+
+                    root.put("schemaVersion", 1);
+                    root.put("order", newOrder);
+                    root.put("disabled", new ArrayList<>(newDisabled));
+
+                    if (f.getParentFile() != null) {
+                        f.getParentFile().mkdirs();
+                    }
+                    objectMapper.writerWithDefaultPrettyPrinter().writeValue(f, root);
+
+                    exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                            "ok", true)));
+                } catch (Exception e) {
+                    exchange.setStatusCode(500);
+                    try {
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", String.valueOf(e.getMessage()))));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                }
+            });
+        });
 
         apiHandler.addExactPath("/status", exchange -> {
             exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
@@ -375,17 +652,6 @@ public class WebNetServer {
         ResourceHandler rh = new ResourceHandler(new FileResourceManager(webUi, 1024 * 1024));
         rh.setWelcomeFiles("index.html");
         return rh;
-    }
-
-    private static String escapeHtml(String s) {
-        if (s == null) {
-            return "";
-        }
-        return s.replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;")
-                .replace("'", "&#39;");
     }
 
     public void stop() {

@@ -203,3 +203,48 @@ export async function authSetGameId(gameId: string): Promise<void> {
         throw new Error(txt || `HTTP ${resp.status}`)
     }
 }
+
+export type ModItem = {
+    id: string
+    enabled: boolean
+    orderIndex: number
+    name: string
+    description: string
+    version: string
+    compatibleGameVersion: string
+    author: string
+}
+
+export type ModsStatus = {
+    ok: boolean
+    mods: ModItem[]
+    order: string[]
+    disabled: string[]
+    error?: string
+}
+
+export async function fetchMods(): Promise<ModsStatus> {
+    const resp = await fetch('/api/mods', { cache: 'no-store' })
+    const data = (await resp.json()) as ModsStatus
+    if (!resp.ok) {
+        throw new Error(data && data.error ? data.error : `HTTP ${resp.status}`)
+    }
+    return data
+}
+
+export async function saveMods(order: string[], disabled: string[]): Promise<void> {
+    const resp = await fetch('/api/mods/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order, disabled }),
+    })
+    const txt = await resp.text()
+    if (!resp.ok) {
+        try {
+            const j = JSON.parse(txt)
+            throw new Error(j && j.error ? j.error : `HTTP ${resp.status}`)
+        } catch {
+            throw new Error(txt || `HTTP ${resp.status}`)
+        }
+    }
+}

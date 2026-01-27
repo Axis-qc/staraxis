@@ -1,5 +1,25 @@
 package staraxis.webnet;
 
+/**
+ * I18nApi
+ *
+ * 作用：
+ * - 提供国际化（i18n）相关的功能，主要用于 /api/i18n/** 接口。
+ * - 负责扫描、合并本体与所有已启用 Mods 的语言包文件（.properties）。
+ *
+ * 主要功能：
+ * - listAvailableLanguages()：扫描并返回所有可用的语言代码（例如 ["en", "zh"]）。
+ * - loadMergedStrings(lang)：按“本体 -> Mod 顺序”加载并合并指定语言的字符串，后加载的会覆盖先加载的同名 key。
+ *
+ * 数据来源：
+ * - 本体语言包：assets/i18n/strings_<lang>.properties
+ * - Mod 语言包：gamedata/mods/<modId>/i18n/strings_<lang>.properties
+ *
+ * 注意事项：
+ * - Mod 加载顺序由 ModManager 决定。
+ * - 文件扫描与读取属于阻塞 IO：如果在 Undertow 请求线程中调用，应使用 exchange.dispatch(...) 切换到 worker 线程。
+ */
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
