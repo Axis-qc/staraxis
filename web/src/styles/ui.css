@@ -2,14 +2,22 @@
 
 /* --- Variables --- */
 :root {
-    --glow-color: hsl(193, 100%, 50%);
-    --background-color: #000;
-    --panel-bg: rgba(10, 25, 47, 0.6);
-    --border-color: rgba(0, 191, 255, 0.3);
-    --text-color: #d1d5db;
+    /* 这些变量是通用 UI 的“接口变量”。
+       具体主题会在运行时由 useTheme 写入（或由 theme.css 进行映射）。 */
+    --glow-color: var(--sa-accent, hsl(193, 100%, 50%));
+    --background-color: var(--sa-bg0, #000);
+    --panel-bg: var(--sa-panel, rgba(10, 25, 47, 0.6));
+    --border-color: var(--sa-stroke, rgba(0, 191, 255, 0.3));
+    --text-color: var(--sa-text, #d1d5db);
     --text-color-hover: #ffffff;
-    --primary-color: hsl(193, 100%, 50%);
+    --primary-color: var(--sa-accent, hsl(193, 100%, 50%));
     --danger-color: hsl(0, 80%, 55%);
+}
+
+/* --- Global Defaults --- */
+html,
+body {
+    color: var(--text-color);
 }
 
 /* --- General Components --- */
@@ -50,26 +58,25 @@
 }
 
 .sa-btn:hover {
-    background: rgba(0, 191, 255, 0.15);
+    background: rgba(0, 0, 0, 0.15);
     color: var(--text-color-hover);
     border-color: var(--glow-color);
+    box-shadow: 0 0 0 2px var(--selection-bg, rgba(0, 191, 255, 0.25));
     text-shadow: 0 0 6px var(--glow-color);
 }
 
 .sa-btn.primary {
     background: var(--glow-color);
-    color: #0A192F;
-    /* Dark blue text for contrast */
+    color: var(--background-color);
     font-weight: bold;
     border-color: var(--glow-color);
     text-shadow: none;
-    box-shadow: 0 0 8px rgba(0, 191, 255, 0.5);
+    box-shadow: 0 0 10px var(--selection-bg, rgba(0, 191, 255, 0.25));
 }
 
 .sa-btn.primary:hover {
     box-shadow: 0 0 20px var(--glow-color);
-    background: hsl(193, 100%, 60%);
-    /* Slightly brighter on hover */
+    filter: brightness(1.08);
 }
 
 .sa-btn.danger {

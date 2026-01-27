@@ -9,23 +9,21 @@ import { useMods } from '../composables/useMods'
 import { useServerStatus } from '../composables/useServerStatus'
 import { useStarfield } from '../composables/useStarfield'
 
-// --- Core Composables ---
 const { t } = useI18n()
 const router = useRouter()
 const { auth, loginForm, gameIdInput, gameIdSaveState, doLogin, doRegister, doLogout, saveGameId } = useAuth()
 const { mods, modsLoading, modsError, modsSaveState, expandedModId, loadMods, moveMod, toggleModEnabled, saveModsToServer } = useMods()
 const { wsStateText, wsTagKind } = useServerStatus()
+
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 useStarfield(canvasRef)
 
 const isReady = ref(false)
 
-// --- Component-Specific State ---
 type TabKey = 'status' | 'mods' | 'quit'
 const activeTab = ref<TabKey>('status')
-const showPassword = ref(false) // This state remains as it's purely for UI toggling
+const showPassword = ref(false)
 
-// --- Quit Logic (Component-specific) ---
 const quitting = ref(false)
 const quitHint = ref<string | null>(null)
 const quitError = ref<string | null>(null)
@@ -44,7 +42,6 @@ async function quitServer() {
   }
 }
 
-// --- Language Switcher (Component-specific) ---
 const langs = ref<string[]>(i18nState.availableLangs || [])
 const selectedLang = ref<string>(i18nState.currentLang)
 const langLoading = ref(false)
@@ -67,30 +64,32 @@ async function onChangeLang() {
   }
 }
 
-// --- Navigation ---
 function enterGame() {
   router.push('/main-menu')
 }
 
 onMounted(() => {
   refreshLangs()
-  // Add a small delay to ensure the initial render is complete
   setTimeout(() => {
     isReady.value = true
   }, 100)
 })
-
 </script>
 
 <template>
-  <div class="home-page">
-    <!-- Starfield Background -->
+  <div class="home-view-root">
     <canvas ref="canvasRef" class="background-canvas"></canvas>
 
-    <!-- Main Content Layout -->
-    <div class="layout-container" :class="{ 'is-ready': isReady }">
+    <div class="lang-switcher" v-if="langs.length">
+      <label class="lang-label">
+        <span>{{ t('lang.current') }}：</span>
+        <select v-model="selectedLang" class="sa-select" :disabled="langLoading" @change="onChangeLang">
+          <option v-for="l in langs" :key="l" :value="l">{{ l }}</option>
+        </select>
+      </label>
+    </div>
 
-      <!-- Left Sidebar -->
+    <div class="layout-container" :class="{ 'is-ready': isReady }">
       <aside class="sidebar">
         <header class="sidebar-header">
           <div class="title-group">
@@ -104,7 +103,6 @@ onMounted(() => {
           </div>
         </header>
 
-        <!-- Logged In Navigation -->
         <nav v-if="auth.isLoggedIn" class="sidebar-nav">
           <button class="nav-btn" :class="{ active: activeTab === 'status' }" @click="activeTab = 'status'">
             <span>{{ t('home.tab.status') }}</span>
@@ -117,15 +115,11 @@ onMounted(() => {
           </button>
         </nav>
 
-        <footer class="sidebar-footer">
-          <!-- Language selector can be placed here if needed -->
-        </footer>
+        <footer class="sidebar-footer"></footer>
       </aside>
 
-      <!-- Right Content Panel -->
       <main class="content-panel">
         <div class="content-body">
-          <!-- Logged Out View -->
           <div v-if="!auth.isLoggedIn" class="login-view">
             <div class="form-group">
               <label for="username">{{ t('home.login.username') }}</label>
@@ -133,7 +127,14 @@ onMounted(() => {
             </div>
             <div class="form-group">
               <label for="password">{{ t('home.login.password') }}</label>
-              <input id="password" v-model="loginForm.password" :type="showPassword ? 'text' : 'password'" class="input" :placeholder="t('home.login.passwordPlaceholder')" @keyup.enter="doLogin" />
+              <input
+                id="password"
+                v-model="loginForm.password"
+                :type="showPassword ? 'text' : 'password'"
+                class="input"
+                :placeholder="t('home.login.passwordPlaceholder')"
+                @keyup.enter="doLogin"
+              />
             </div>
             <div class="actions">
               <button class="sa-btn" @click="doLogin" :disabled="loginForm.loading">{{ t('home.login.actionLogin') }}</button>
@@ -142,7 +143,6 @@ onMounted(() => {
             <div v-if="loginForm.error" class="sa-tag error form-error">{{ loginForm.error }}</div>
           </div>
 
-          <!-- Logged In View -->
           <div v-else class="hub-content">
             <transition name="fade-slide" mode="out-in">
               <section v-if="activeTab === 'status'" key="status" class="tab-section">
@@ -166,6 +166,7 @@ onMounted(() => {
                     <button class="sa-btn primary" @click="saveModsToServer" :disabled="modsSaveState === 'saving' || modsLoading">{{ t('mods.save') }}</button>
                   </div>
                 </div>
+
                 <div class="header-status">
                   <span v-if="modsLoading" class="sa-tag warn">{{ t('mods.loading') }}</span>
                   <span v-if="modsSaveState === 'saved'" class="sa-tag ok">{{ t('mods.saved') }}</span>
@@ -175,33 +176,50 @@ onMounted(() => {
                 <div v-if="modsError" class="sa-tag error">{{ modsError }}</div>
                 <div v-if="!modsLoading && mods.length === 0" class="mods-empty">{{ t('mods.empty') }}</div>
 
-                <TransitionGroup v-else tag="div" name="mod-list" class="mods-list">
-                  <div class="mods-list-header">
-                    <span>{{ t('mods.column.enabled') }}</span>
-                    <span>{{ t('mods.column.id') }}</span>
-                    <span class="text-right">{{ t('mods.column.order') }}</span>
+                <div v-else class="mods-table">
+                  <div class="mods-table-head">
+                    <div class="th enabled">{{ t('mods.column.enabled') }}</div>
+                    <div class="th name">{{ t('mods.column.id') }}</div>
+                    <div class="th actions">{{ t('mods.column.order') }}</div>
                   </div>
-                  <div v-for="(m, idx) in mods" :key="m.id" class="mod-item sa-list-item">
-                    <div class="mod-row">
-                      <input type="checkbox" :checked="m.enabled" @change="toggleModEnabled(m.id, ($event.target as HTMLInputElement).checked)" />
-                      <span class="mod-name">{{ m.name }}</span>
-                      <div class="mod-actions">
-                        <button class="sa-btn" @click="expandedModId = expandedModId === m.id ? null : m.id">{{ t('mods.action.details') }}</button>
-                        <button class="sa-btn icon-btn" :disabled="idx === 0" @click="moveMod(idx, -1)">↑</button>
-                        <button class="sa-btn icon-btn" :disabled="idx === mods.length - 1" @click="moveMod(idx, 1)">↓</button>
+
+                  <div class="mods-table-body" role="table">
+                    <div v-for="(m, idx) in mods" :key="m.id" class="row-group">
+                      <div class="tr" role="row">
+                        <div class="td enabled">
+                          <input
+                            type="checkbox"
+                            :checked="m.enabled"
+                            @change="toggleModEnabled(m.id, ($event.target as HTMLInputElement).checked)"
+                          />
+                        </div>
+                        <div class="td name">
+                          <div class="mod-name">{{ m.name }}</div>
+                          <div class="mod-id mono">{{ m.id }}</div>
+                        </div>
+                        <div class="td actions">
+                          <button class="sa-btn" @click="expandedModId = expandedModId === m.id ? null : m.id">
+                            {{ t('mods.action.details') }}
+                          </button>
+                          <button class="sa-btn icon-btn" :disabled="idx === 0" @click="moveMod(idx, -1)">↑</button>
+                          <button class="sa-btn icon-btn" :disabled="idx === mods.length - 1" @click="moveMod(idx, 1)">↓</button>
+                        </div>
+                      </div>
+
+                      <div v-if="expandedModId === m.id" class="tr child" role="row">
+                        <div class="td child-cell" role="cell">
+                          <div class="details-kv">
+                            <div class="k">{{ t('mods.field.id') }}</div><div class="v mono">{{ m.id }}</div>
+                            <div class="k">{{ t('mods.field.author') }}</div><div class="v">{{ m.author }}</div>
+                            <div class="k">{{ t('mods.field.version') }}</div><div class="v">{{ m.version }}</div>
+                            <div class="k">{{ t('mods.field.gameVersion') }}</div><div class="v">{{ m.compatibleGameVersion }}</div>
+                            <div class="k">{{ t('mods.field.description') }}</div><div class="v description">{{ m.description }}</div>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <div v-if="expandedModId === m.id" class="mod-details">
-                      <div class="details-kv">
-                        <div class="k">{{ t('mods.field.id') }}</div><div class="v mono">{{ m.id }}</div>
-                        <div class="k">{{ t('mods.field.author') }}</div><div class="v">{{ m.author }}</div>
-                        <div class="k">{{ t('mods.field.version') }}</div><div class="v">{{ m.version }}</div>
-                        <div class="k">{{ t('mods.field.gameVersion') }}</div><div class="v">{{ m.compatibleGameVersion }}</div>
-                        <div class="k">{{ t('mods.field.description') }}</div><div class="v description">{{ m.description }}</div>
-                      </div>
-                    </div>
                   </div>
-                </TransitionGroup>
+                </div>
               </section>
 
               <section v-else key="quit" class="tab-section">
@@ -218,9 +236,23 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.home-page {
+.home-view-root {
+  /* 主题 token：从 useTheme 写入的 --sa-* 取值，并在本视图内做别名，方便复用 */
+  --bg0: var(--sa-bg0, #070712);
+  --bg1: var(--sa-bg1, #0b0a19);
+  --panel: var(--sa-panel, rgba(13, 14, 26, 0.62));
+  --panel-strong: var(--sa-panel-strong, rgba(13, 14, 26, 0.78));
+  --stroke: var(--sa-stroke, rgba(196, 181, 253, 0.16));
+  --stroke-strong: var(--sa-stroke-strong, rgba(196, 181, 253, 0.24));
+  --text: var(--text-color);
+  --muted: rgba(255, 255, 255, 0.72);
+  --glow: var(--sa-glow, rgba(168, 85, 247, 0.55));
+  --glow-soft: var(--sa-glow-soft, rgba(168, 85, 247, 0.24));
+  --cyan: var(--sa-accent2, rgba(34, 211, 238, 0.22));
+
   position: relative;
-  min-height: 100vh;
+  height: 100%;
+  min-height: 0;
   width: 100%;
   overflow: hidden;
   display: grid;
@@ -235,47 +267,34 @@ onMounted(() => {
   z-index: -1;
   display: block;
   background: transparent;
+  background-color: var(--background-color);
+  opacity: 1;
+  filter: saturate(1.1) contrast(1.05);
 }
 
 .layout-container {
   position: relative;
-  width: min(1200px, calc(100% - 32px));
-  min-height: min(720px, calc(100vh - 48px));
-  max-height: calc(100vh - 48px);
+  width: 80%;
+  height: 70%;
+  min-width: 980px;
+  max-width: 1200px;
+  min-height: 480px;
+  max-height: 860px;
   display: grid;
   grid-template-columns: 280px 1fr;
-  background: rgba(10, 25, 47, 0.5);
-  border: 1px solid rgba(0, 191, 255, 0.2);
-  backdrop-filter: blur(20px);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 191, 255, 0.25);
 
-  /* Add loading transition */
+  background: linear-gradient(180deg, var(--panel), rgba(13, 14, 26, 0.46));
+  border: 1px solid var(--stroke);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  box-shadow:
+    0 18px 60px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(168, 85, 247, 0.10),
+    0 0 80px rgba(168, 85, 247, 0.12);
+
   opacity: 0;
-  transform: scale(0.98);
-  transition: opacity 0.5s cubic-bezier(0.25, 1, 0.5, 1), transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-.layout-container::before, .layout-container::after {
-    content: '';
-    position: absolute;
-    width: 20px;
-    height: 20px;
-    border: 2px solid var(--glow-color);
-    z-index: 1;
-}
-
-.layout-container::before {
-    top: -2px;
-    left: -2px;
-    border-right: none;
-    border-bottom: none;
-}
-
-.layout-container::after {
-    bottom: -2px;
-    right: -2px;
-    border-left: none;
-    border-top: none;
+  transform: translateY(8px) scale(0.985);
+  transition: opacity 0.55s cubic-bezier(0.25, 1, 0.5, 1), transform 0.55s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 .layout-container.is-ready {
@@ -288,7 +307,7 @@ onMounted(() => {
   flex-direction: column;
   gap: 16px;
   padding: 20px;
-  border-right: 1px solid rgba(0, 191, 255, 0.18);
+  border-right: 1px solid var(--stroke);
   min-width: 0;
 }
 
@@ -302,8 +321,15 @@ onMounted(() => {
   margin: 0;
   font-size: 28px;
   line-height: 1.1;
-  font-weight: 700;
-  color: var(--text-color, #d1d5db);
+  font-weight: 750;
+  color: var(--text);
+  letter-spacing: 0.4px;
+}
+
+.sa-subtitle {
+  margin: 6px 0 0;
+  color: rgba(255, 255, 255, 0.72);
+  letter-spacing: 1px;
 }
 
 .status-tags {
@@ -322,47 +348,42 @@ onMounted(() => {
 .nav-btn {
   position: relative;
   appearance: none;
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--text-color, #d1d5db);
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
   padding: 12px 16px;
   cursor: pointer;
   text-align: left;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: background-color 0.22s ease, color 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease;
   clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
-  background-color: rgba(0, 191, 255, 0.1);
-  border: 1px solid rgba(0, 191, 255, 0.2);
 }
 
 .nav-btn:hover {
-  background-color: rgba(0, 191, 255, 0.2);
-  color: #fff;
+  border-color: var(--glow-color);
+  color: var(--text-color-hover);
+  transform: translateY(-1px);
 }
 
 .nav-btn.active {
-  background-color: rgba(0, 191, 255, 0.3);
-  color: #fff;
-  text-shadow: 0 0 5px var(--glow-color);
+  border-color: var(--glow-color);
+  color: var(--text-color-hover);
+  text-shadow: 0 0 10px var(--glow-color);
 }
 
 .nav-btn.active::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 4px;
-    background-color: var(--glow-color);
-    box-shadow: 0 0 10px var(--glow-color);
-}
-
-.sidebar-footer {
-  margin-top: auto;
-  opacity: 0.8;
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--glow-color);
+  box-shadow: 0 0 18px var(--glow-color);
 }
 
 .content-panel {
   min-width: 0;
+  min-height: 0;
   display: flex;
   padding: 24px;
   overflow: hidden;
@@ -371,18 +392,23 @@ onMounted(() => {
 .content-body {
   width: 100%;
   min-width: 0;
-  overflow: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .login-view,
 .hub-content {
   width: 100%;
+  min-height: 0;
 }
 
 .tab-section {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-height: 0;
 }
 
 .tab-title {
@@ -390,20 +416,21 @@ onMounted(() => {
   margin: 0;
   padding-bottom: 12px;
   font-size: 20px;
-  font-weight: 700;
-  color: var(--text-color, #d1d5db);
+  font-weight: 750;
+  color: var(--text);
   text-transform: uppercase;
   letter-spacing: 2px;
 }
 
 .tab-title::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    bottom: 0;
-    width: 100%;
-    height: 2px;
-    background: linear-gradient(to right, var(--glow-color), transparent);
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(to right, var(--glow-color), rgba(255, 255, 255, 0.10), transparent);
+  opacity: 0.9;
 }
 
 .form-group {
@@ -413,8 +440,8 @@ onMounted(() => {
 
 .form-group label {
   font-size: 12px;
-  opacity: 0.9;
-  color: var(--text-color, #d1d5db);
+  opacity: 0.92;
+  color: var(--muted);
 }
 
 .actions {
@@ -429,7 +456,7 @@ onMounted(() => {
 }
 
 .quit-desc {
-  color: var(--text-color, #d1d5db);
+  color: var(--text-color);
   opacity: 0.9;
   line-height: 1.6;
 }
@@ -452,58 +479,102 @@ onMounted(() => {
   margin-top: 8px;
 }
 
-.mods-list {
+.mods-empty {
+  padding: 18px 12px;
+  opacity: 0.85;
+  color: var(--text-color);
+}
+
+.mods-table {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  overflow: auto;
-  padding-right: 8px;
+  min-height: 0;
+  height: calc(100vh - 320px);
+  border: 1px solid var(--border-color);
+  background: rgba(0, 0, 0, 0.16);
 }
 
-.mods-list-header {
+.mods-table-head {
   display: grid;
-  grid-template-columns: 60px 1fr auto;
+  grid-template-columns: 80px 1fr 240px;
   gap: 12px;
-  padding: 0 12px 8px 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+  color: var(--text-color);
   font-size: 12px;
-  opacity: 0.85;
-  text-transform: uppercase;
   letter-spacing: 1px;
-  border-bottom: 1px solid rgba(0, 191, 255, 0.2);
+  text-transform: uppercase;
 }
 
-.mod-actions .sa-btn {
-    padding: 4px 8px;
-    font-size: 14px;
+.mods-table-body {
+  min-height: 0;
+  overflow: auto;
 }
 
-.text-right {
-  text-align: right;
+.lang-switcher {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 60;
 }
 
-.mod-item {
-  background-color: rgba(0, 191, 255, 0.05);
-  border: 1px solid rgba(0, 191, 255, 0.2);
-  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+.lang-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--text-color);
 }
 
-.mod-row {
+.lang-label > span {
+  opacity: 0.9;
+  font-size: 12px;
+  letter-spacing: 0.6px;
+}
+
+.row-group {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tr {
   display: grid;
-  grid-template-columns: 60px 1fr auto;
+  grid-template-columns: 80px 1fr 240px;
   gap: 12px;
   align-items: center;
   padding: 10px 12px;
 }
 
-.mod-actions {
+.tr:hover {
+  background: rgba(0, 0, 0, 0.10);
+}
+
+.td.actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-.mod-details {
-  padding: 12px;
+.mod-name {
+  color: var(--text-color);
+}
+
+.mod-id {
+  opacity: 0.75;
+  color: var(--text-color);
+}
+
+.tr.child {
+  grid-template-columns: 1fr;
+  padding-top: 0;
+}
+
+.child-cell {
+  grid-column: 1 / -1;
+  padding: 0 12px 12px 12px;
 }
 
 .details-kv {
@@ -512,20 +583,52 @@ onMounted(() => {
   gap: 8px 12px;
 }
 
+.details-kv .k {
+  opacity: 0.9;
+  color: var(--text-color);
+}
+
+.details-kv .v {
+  color: var(--text-color);
+}
+
+.details-kv .description {
+  opacity: 0.9;
+  line-height: 1.5;
+}
+
 .mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
 }
 
 @media (max-width: 960px) {
   .layout-container {
+    width: calc(100% - 24px);
+    height: calc(100% - 24px);
+    min-width: 0;
+    max-width: none;
+    min-height: 0;
+    max-height: none;
     grid-template-columns: 1fr;
-    min-height: calc(100vh - 32px);
-    max-height: calc(100vh - 32px);
+  }
+
+  .lang-switcher {
+    top: 10px;
+    right: 10px;
   }
 
   .sidebar {
     border-right: none;
-    border-bottom: 1px solid rgba(0, 191, 255, 0.18);
+    border-bottom: 1px solid var(--stroke);
+  }
+
+  .mods-table {
+    height: calc(100vh - 380px);
+  }
+
+  .mods-table-head,
+  .tr {
+    grid-template-columns: 70px 1fr 200px;
   }
 }
 
@@ -542,21 +645,5 @@ onMounted(() => {
 .fade-slide-leave-to {
   opacity: 0;
   transform: translateX(-20px);
-}
-
-.mod-list-move,
-.mod-list-enter-active,
-.mod-list-leave-active {
-  transition: all 0.2s ease;
-}
-
-.mod-list-enter-from,
-.mod-list-leave-to {
-  opacity: 0;
-  transform: translateY(6px);
-}
-
-.mod-list-leave-active {
-  position: absolute;
 }
 </style>

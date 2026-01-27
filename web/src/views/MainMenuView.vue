@@ -108,12 +108,6 @@ useStarfield(canvasRef)
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
 
-:root {
-  --glow-color: hsl(193, 100%, 50%);
-  --background-color: #000;
-  --text-color: #d1d5db;
-  --text-color-hover: #ffffff;
-}
 
 /* --- Entry Animations --- */
 @keyframes fadeIn {
@@ -153,7 +147,7 @@ useStarfield(canvasRef)
   width: 100%;
   height: 100%;
   z-index: -1;
-  background-color: #000; /* Fallback background */
+  background-color: var(--background-color); /* Fallback background */
 }
 
 .hud {
@@ -245,8 +239,8 @@ useStarfield(canvasRef)
 
 .tag-developing {
   font-size: 0.7rem;
-  background-color: hsl(45, 100%, 50%);
-  color: #030712;
+  background-color: color-mix(in srgb, var(--glow-color) 24%, rgba(255, 255, 255, 0.05));
+  color: var(--text-color-hover);
   padding: 2px 6px;
   border-radius: 4px;
   font-weight: bold;
@@ -259,7 +253,7 @@ useStarfield(canvasRef)
   bottom: 2rem;
   right: 2rem;
   font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.3);
+  color: color-mix(in srgb, var(--text-color) 42%, transparent);
   letter-spacing: 1px;
   z-index: 1;
   opacity: 0;

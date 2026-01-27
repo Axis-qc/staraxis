@@ -1,0 +1,91 @@
+/* 基础主题变量（由 useTheme 写入 --sa-*）。
+   这里提供“派生 token”和给旧变量名的兼容映射。
+   注意：避免 var 自引用（会导致变量无效，进而出现黑色/默认色）。 */
+
+:root {
+    /* 派生（语义化）token */
+    --sa-bg: var(--sa-bg0, #000);
+    --sa-bg-soft: var(--sa-bg1, #000);
+
+    --sa-panel-bg: var(--sa-panel, rgba(10, 25, 47, 0.6));
+    --sa-panel-bg-strong: var(--sa-panel-strong, rgba(10, 25, 47, 0.75));
+    --sa-panel-border: var(--sa-stroke, rgba(0, 191, 255, 0.3));
+    --sa-panel-border-strong: var(--sa-stroke-strong, rgba(0, 191, 255, 0.45));
+
+    --sa-text: var(--sa-text, #d1d5db);
+    --sa-text-muted: var(--sa-muted, rgba(209, 213, 219, 0.72));
+    --sa-text-hover: #ffffff;
+
+    --sa-primary: var(--sa-accent, hsl(193, 100%, 50%));
+    --sa-primary-soft: var(--sa-glow-soft, rgba(0, 191, 255, 0.18));
+    --sa-secondary: var(--sa-accent2, rgba(168, 85, 247, 0.18));
+
+    /* 状态色 */
+    --sa-success: #10b981;
+    --sa-warning: #f59e0b;
+    --sa-danger: #ef4444;
+    --sa-info: #3b82f6;
+
+    /* 阴影 */
+    --sa-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.15);
+    --sa-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.2);
+    --sa-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.3);
+
+    /* 兼容 ui.css 变量（全局 UI 统一走这一组） */
+    --glow-color: var(--sa-primary);
+    --background-color: var(--sa-bg);
+    --panel-bg: var(--sa-panel-bg);
+    --border-color: var(--sa-panel-border);
+    --text-color: var(--sa-text);
+    --text-color-hover: var(--sa-text-hover);
+    --primary-color: var(--sa-primary);
+    --danger-color: hsl(0, 80%, 55%);
+}
+
+/* 过渡效果 */
+.sa-transition {
+    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* 文本选中高亮（跟随主题主色） */
+::selection {
+    background: var(--selection-bg, rgba(0, 191, 255, 0.25));
+    color: var(--text-color-hover);
+}
+
+::-moz-selection {
+    background: var(--selection-bg, rgba(0, 191, 255, 0.25));
+    color: var(--text-color-hover);
+}
+
+/* 输入框/可编辑区域的选中高亮 */
+input::selection,
+textarea::selection {
+    background: var(--selection-bg, rgba(0, 191, 255, 0.25));
+    color: var(--text-color-hover);
+}
+
+input::-moz-selection,
+textarea::-moz-selection {
+    background: var(--selection-bg, rgba(0, 191, 255, 0.25));
+    color: var(--text-color-hover);
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--sa-bg-soft);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--sa-panel-border);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--sa-panel-border-strong);
+}

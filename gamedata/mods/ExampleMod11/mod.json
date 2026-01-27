@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "modId": "ExampleMod11",
+  "name": "示例模组 11",
+  "version": "1.0.0",
+  "compatibleGameVersion": "1.6.1",
+  "description": "第十一个示例模组，用于测试设置页模组列表的拖拽排序与 mod-order.json 持久化。"
+}

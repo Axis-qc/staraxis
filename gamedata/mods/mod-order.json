@@ -1,5 +1,5 @@
 {
-  "disabled" : [ "ExampleMod2", "ExampleMod4", "ExampleMod3", "ExampleMod5", "ExampleMod" ],
-  "order" : [ "ExampleMod2", "ExampleMod4", "ExampleMod3", "ExampleMod5", "ExampleMod" ],
+  "disabled" : [ "ExampleMod2", "ExampleMod4", "ExampleMod3", "ExampleMod5", "ExampleMod", "ExampleMod10", "ExampleMod11", "ExampleMod6", "ExampleMod7", "ExampleMod8", "ExampleMod9" ],
+  "order" : [ "ExampleMod2", "ExampleMod4", "ExampleMod3", "ExampleMod5", "ExampleMod", "ExampleMod10", "ExampleMod11", "ExampleMod6", "ExampleMod7", "ExampleMod8", "ExampleMod9" ],
   "schemaVersion" : 1
 }
