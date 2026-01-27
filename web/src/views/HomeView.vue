@@ -1,4 +1,43 @@
 <script setup lang="ts">
+/**
+ * @file HomeView.vue
+ *
+ * @description
+ * StarAxis 的 Web 启动台/控制台视图（/）。
+ * 提供登录、服务器状态概览、MOD 管理（表格 + 展开详情）、退出本地服务端等入口。
+ * 右上角提供语言切换，右下角通过全局 ThemePicker 提供主题切换。
+ *
+ * @usage
+ * - 通过 Vue Router 进入（根路由 `/`）。
+ * - 本视图大量依赖 i18n 文案：所有可见文字使用 `t('...')`。
+ *
+ * @provides
+ * - **动态背景**：`useStarfield(canvasRef)` 在 `<canvas>` 绘制星空。
+ * - **登录/注册/退出**：通过 `useAuth()` 管理状态与请求。
+ * - **服务器状态**：`useServerStatus()` 提供 WS 状态展示。
+ * - **MOD 管理**：`useMods()` 提供列表加载、启用/禁用、顺序调整、保存。
+ * - **退出服务端**：调用 `requestQuit()` 请求后端退出。
+ * - **语言切换**：调用 `loadAvailableLanguages()` / `loadLanguage()` 拉取并切换语言包。
+ *
+ * @api
+ * - `/api/i18n/languages`：拉取可用语言列表（via `loadAvailableLanguages`）。
+ * - `/api/i18n/{lang}`：拉取语言包（via `loadLanguage`）。
+ * - `/api/auth/*`、`/api/mods`、`/api/status`：由 `useAuth/useMods/useServerStatus` 间接调用。
+ * - `/api/quit`：由 `requestQuit()` 调用。
+ *
+ * @resources
+ * - `../composables/useStarfield`：星空动画。
+ * - `../composables/useAuth`：认证/登录表单。
+ * - `../composables/useMods`：MOD 管理。
+ * - `../composables/useServerStatus`：WS 状态。
+ * - 全局样式：`ui.css/theme.css/controls.css` 提供主题变量与通用控件样式。
+ *
+ * @potential_issues
+ * - **性能**：Canvas 动画在低端设备可能消耗较多 CPU/GPU。
+ * - **网络/后端依赖**：语言包、登录、MOD 等请求依赖本地后端可用；后端不可用时会出现请求失败（如 ECONNREFUSED）。
+ * - **布局约束**：本视图禁用窗口滚动，内部区域（如 MOD 表体）通过 `overflow:auto` 滚动；修改布局时需注意 `min-height: 0` 等 flex 收缩约束。
+ */
+
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -201,22 +240,22 @@ onMounted(() => {
                           <button class="sa-btn" @click="expandedModId = expandedModId === m.id ? null : m.id">
                             {{ t('mods.action.details') }}
                           </button>
-                          <button class="sa-btn icon-btn" :disabled="idx === 0" @click="moveMod(idx, -1)">↑</button>
-                          <button class="sa-btn icon-btn" :disabled="idx === mods.length - 1" @click="moveMod(idx, 1)">↓</button>
-                        </div>
+                        <button class="sa-btn icon-btn" :disabled="idx === 0" @click="moveMod(idx, -1)">↑</button>
+                        <button class="sa-btn icon-btn" :disabled="idx === mods.length - 1" @click="moveMod(idx, 1)">↓</button>
                       </div>
+                    </div>
 
                       <div v-if="expandedModId === m.id" class="tr child" role="row">
                         <div class="td child-cell" role="cell">
-                          <div class="details-kv">
-                            <div class="k">{{ t('mods.field.id') }}</div><div class="v mono">{{ m.id }}</div>
-                            <div class="k">{{ t('mods.field.author') }}</div><div class="v">{{ m.author }}</div>
-                            <div class="k">{{ t('mods.field.version') }}</div><div class="v">{{ m.version }}</div>
-                            <div class="k">{{ t('mods.field.gameVersion') }}</div><div class="v">{{ m.compatibleGameVersion }}</div>
-                            <div class="k">{{ t('mods.field.description') }}</div><div class="v description">{{ m.description }}</div>
-                          </div>
-                        </div>
+                      <div class="details-kv">
+                        <div class="k">{{ t('mods.field.id') }}</div><div class="v mono">{{ m.id }}</div>
+                        <div class="k">{{ t('mods.field.author') }}</div><div class="v">{{ m.author }}</div>
+                        <div class="k">{{ t('mods.field.version') }}</div><div class="v">{{ m.version }}</div>
+                        <div class="k">{{ t('mods.field.gameVersion') }}</div><div class="v">{{ m.compatibleGameVersion }}</div>
+                        <div class="k">{{ t('mods.field.description') }}</div><div class="v description">{{ m.description }}</div>
                       </div>
+                    </div>
+                  </div>
                     </div>
                   </div>
                 </div>
@@ -371,12 +410,12 @@ onMounted(() => {
 }
 
 .nav-btn.active::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
   background: var(--glow-color);
   box-shadow: 0 0 18px var(--glow-color);
 }
@@ -423,12 +462,12 @@ onMounted(() => {
 }
 
 .tab-title::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  width: 100%;
-  height: 2px;
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    height: 2px;
   background: linear-gradient(to right, var(--glow-color), rgba(255, 255, 255, 0.10), transparent);
   opacity: 0.9;
 }

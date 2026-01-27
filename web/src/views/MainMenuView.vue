@@ -1,22 +1,34 @@
 <script setup lang="ts">
 /**
  * @file MainMenuView.vue
+ *
  * @description
- * 该组件是 StarAxis 游戏的主菜单界面。
- * 它是用户在应用程序加载后看到的主要入口点。
+ * StarAxis 的 Web 主菜单视图（/main-menu）。提供一个 HUD 风格的主菜单入口，并在背景渲染动态星空。
+ * 当前各菜单项多为占位：点击后通过对话框提示“开发中”。
  *
  * @usage
- * 该视图通常通过 Vue Router 进行路由。
- * 它向用户展示了核心的导航选项，例如开始新游戏、加载存档、进入设置等。
+ * - 通过 Vue Router 路由进入（例如 `router.push('/main-menu')`）。
+ * - 依赖 i18n 文案：本页面所有可见文本均通过 `t('...')` 获取。
  *
  * @provides
- * - 一个通过 HTML5 Canvas 渲染的动态星空背景。
- * - 一个带有入场动画的交互式 HUD 风格菜单。
- * - 一个可复用的对话框系统，用于处理未完成的功能（例如 'developing' 函数）。
+ * - **动态背景**：使用 `useStarfield(canvasRef)` 在 `<canvas>` 上绘制星空。
+ * - **主菜单交互**：按钮列表（新游戏/加载/多人/舰船设计器/设置/返回）。
+ * - **对话框提示**：`SciFiDialog` 用于展示占位功能提示（developing）。
+ *
+ * @api
+ * - **无直接 HTTP/WS 调用**：本视图本身不请求后端。
+ * - **间接依赖**：`useStarfield` 可能使用 `requestAnimationFrame` 等浏览器 API 驱动动画。
+ *
+ * @resources
+ * - **组件**：`SciFiDialog`（`@/components/SciFiDialog.vue`）。
+ * - **组合式函数**：`useStarfield`（`../composables/useStarfield`）。
+ * - **字体**：Orbitron（通过 CSS `@import` 从 Google Fonts 引入）。
+ * - **主题变量**：使用全局 CSS 变量（如 `--background-color`、`--text-color`、`--glow-color`）。
  *
  * @potential_issues
- * - 基于 Canvas 的背景动画虽然性能良好，但在非常低端的设备或旧版浏览器上仍可能消耗大量 CPU/GPU 资源。
- *   未来可以考虑在游戏设置中提供一个禁用该动画的选项。
+ * - **性能**：Canvas 星空动画在低端设备上可能增加 CPU/GPU 占用；可考虑在设置中提供开关。
+ * - **字体加载**：CSS `@import` 可能阻塞/重复加载；建议后续迁移到全局一次性加载或本地化资源。
+ * - **布局溢出**：如果使用 `100vw/100vh` + 大 padding，可能在某些环境触发溢出；目前已通过页面自身 `overflow: hidden` 控制。
  */
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
