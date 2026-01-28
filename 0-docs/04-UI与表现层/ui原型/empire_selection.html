@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>国家选择 - 设计原型 v3</title>
+    <style>
+        /* --- 字体与全局变量 --- */
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;700&display=swap');
+
+        :root {
+            --sa-bg0: #070712;
+            --sa-panel: rgba(13, 14, 26, 0.82);
+            --sa-stroke: rgba(34, 211, 238, 0.22);
+            --sa-stroke-strong: rgba(34, 211, 238, 0.35);
+            --text-color: rgba(244, 244, 255, 0.92);
+            --text-color-muted: rgba(244, 244, 255, 0.6);
+            --sa-glow: rgba(34, 211, 238, 0.55);
+            --sa-accent: #22d3ee;
+            --sa-accent-purple: #a855f7;
+        }
+
+        body {
+            background-color: #000000;
+            color: var(--text-color);
+            font-family: 'Noto Sans SC', sans-serif;
+            margin: 0;
+            padding: 2.5vh;
+            height: 100vh;
+            box-sizing: border-box;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            background-image:
+                linear-gradient(rgba(34, 211, 238, 0.08) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(34, 211, 238, 0.08) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        h1,
+        h2,
+        h3,
+        h4 {
+            font-family: 'Orbitron', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-shadow: 0 0 8px var(--sa-glow);
+            margin: 0;
+            color: var(--sa-accent);
+        }
+
+        /* --- 主布局 --- */
+        .prototype-container {
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            height: 100%;
+            gap: 20px;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 20px;
+            min-height: 0;
+        }
+
+        /* --- 面板通用样式 (带切角) --- */
+        .panel {
+            background: var(--sa-panel);
+            border: 1px solid var(--sa-stroke);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px));
+        }
+
+        /* --- 预设国家列表 (左侧) --- */
+        .preset-list .preset-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid var(--sa-stroke);
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .preset-list .preset-item:hover {
+            background-color: rgba(34, 211, 238, 0.1);
+        }
+
+        .preset-list .preset-item.selected {
+            background-color: rgba(34, 211, 238, 0.2);
+            font-weight: bold;
+        }
+
+        .preset-list .preset-item.create-new {
+            text-align: center;
+            font-weight: bold;
+            color: var(--sa-accent);
+        }
+
+        /* --- 国家详细设置 (右侧) --- */
+        .settings-panel {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px 30px;
+            align-content: start;
+        }
+
+        .settings-group {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            border-top: 1px solid var(--sa-stroke);
+            padding-top: 15px;
+        }
+
+        .settings-group h4 {
+            font-size: 14px;
+            color: var(--text-color);
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        .form-item {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-item label {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .form-item input,
+        .form-item select,
+        .form-item textarea {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--sa-stroke);
+            color: var(--text-color);
+            padding: 8px 12px;
+            font-family: inherit;
+            font-size: 14px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* --- 底部操作栏 --- */
+        .footer-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 20px;
+        }
+
+        .sa-btn {
+            background: rgba(0, 0, 0, 0.28);
+            border: 1px solid var(--sa-stroke-strong);
+            color: var(--text-color);
+            padding: 12px 24px;
+            cursor: pointer;
+            font-family: 'Orbitron', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            transition: all 0.2s ease;
+            clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+        }
+
+        .sa-btn:hover {
+            border-color: var(--sa-glow);
+            color: var(--text-color-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 0 12px var(--sa-glow);
+        }
+
+        .sa-btn.primary {
+            background: var(--sa-accent-purple);
+            border-color: var(--sa-accent-purple);
+            color: #fff;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="prototype-container">
+        <header class="header">
+            <h1>国家设计</h1>
+        </header>
+
+        <main class="main-content">
+            <!-- 左侧：预设国家列表 -->
+            <div class="panel preset-list">
+                <h3>预设模板</h3>
+                <div class="preset-item selected">人类联邦</div>
+                <div class="preset-item">格式塔意识</div>
+                <div class="preset-item">机械神教</div>
+                <div class="preset-item">星海共同体</div>
+                <div class="preset-item create-new">+ 创建新国家</div>
+            </div>
+
+            <!-- 右侧：国家详细设置 -->
+            <div class="panel settings-panel">
+                <div class="settings-group full-width">
+                    <h4>基础信息</h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div class="form-item">
+                            <label for="empire-name">国家名称</label>
+                            <input type="text" id="empire-name" value="人类联邦">
+                        </div>
+                        <div class="form-item">
+                            <label for="ship-prefix">舰船前缀</label>
+                            <input type="text" id="ship-prefix" value="UNS">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <h4>物种</h4>
+                    <div class="form-item">
+                        <label>名称</label>
+                        <input type="text" value="人类">
+                    </div>
+                    <div class="form-item">
+                        <label>特性 (剩余点数: 1)</label>
+                        <select multiple size="4">
+                            <option selected>适应性 (-2)</option>
+                            <option selected>聪慧 (+2)</option>
+                            <option>强壮 (+1)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <h4>母星</h4>
+                    <div class="form-item">
+                        <label>名称</label>
+                        <input type="text" value="地球">
+                    </div>
+                    <div class="form-item">
+                        <label>类型</label>
+                        <select>
+                            <option>大陆星球</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="settings-group full-width">
+                    <h4>政体与政策</h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;">
+                        <div class="form-item">
+                            <label>政体</label>
+                            <select>
+                                <option>民主制</option>
+                            </select>
+                        </div>
+                        <div class="form-item">
+                            <label>战争政策</label>
+                            <select>
+                                <option>不受限制</option>
+                            </select>
+                        </div>
+                        <div class="form-item">
+                            <label>初始科技</label>
+                            <select>
+                                <option>随机</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="footer-actions">
+            <button class="sa-btn">返回主菜单</button>
+            <button class="sa-btn primary" onclick="location.href='./game_settings.html'">下一步</button>
+        </footer>
+    </div>
+
+</body>
+
+</html>
