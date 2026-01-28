@@ -201,6 +201,7 @@ logs/
 *.code-workspace
 
 ## Node / Web (Vite/Vue):
+node_modules/
 web/node_modules/
 web/dist/
 web/.vite/
