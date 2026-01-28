@@ -1,6 +1,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { fetchStatus, createWsClient, type BackendStatus, type WsState } from '../services/backend'
+import { fetchStatus, type BackendStatus } from '../services/backend'
+import { wsClient, type WsState } from '../services/ws'
 
 /**
  * @description 管理后端状态获取和 WebSocket 连接的 Composable。
@@ -11,11 +12,10 @@ export function useServerStatus() {
     // --- 响应式状态 ---
     const status = ref<BackendStatus | null>(null)
     const statusError = ref<string | null>(null)
-    const wsState = ref<WsState>('disconnected')
+    const wsState = ref<WsState>(wsClient.getState())
     const wsError = ref<string | null>(null)
 
     // --- WebSocket 客户端实例 ---
-    const wsClient = createWsClient('/ws')
     let offState: (() => void) | null = null
     let offErr: (() => void) | null = null
 
@@ -56,8 +56,7 @@ export function useServerStatus() {
         offState = wsClient.onStateChange((s) => (wsState.value = s))
         offErr = wsClient.onError((e) => (wsError.value = e))
 
-        // 开始连接并定期刷新状态
-        wsClient.connect()
+        // 定期刷新状态
         refreshStatus()
         const statusTimer = window.setInterval(refreshStatus, 3000)
 
@@ -66,7 +65,6 @@ export function useServerStatus() {
             window.clearInterval(statusTimer)
             offState?.()
             offErr?.()
-            wsClient.disconnect()
         })
     })
 

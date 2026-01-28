@@ -33,25 +33,16 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import SciFiDialog from '@/components/SciFiDialog.vue'
+
 import { useStarfield } from '../composables/useStarfield'
+import { useDevTooltip } from '../composables/useDevTooltip'
 
 const { t } = useI18n()
 const router = useRouter()
+const tooltip = useDevTooltip()
 
-// --- Dialog State ---
-const dialogVisible = ref(false)
-const dialogTitle = ref('')
-const dialogMessage = ref('')
-
-function developing(label: string) {
-  dialogTitle.value = t('dialog.developing.title')
-  dialogMessage.value = `${t('dialog.developing.text')}: ${label}`
-  dialogVisible.value = true
-}
-
-function closeDialog() {
-  dialogVisible.value = false
+function developing(label: string, event: MouseEvent) {
+  tooltip.show(`${t('mainMenu.tag.developing')}: ${label}`, event)
 }
 
 // --- Canvas Background ---
@@ -71,33 +62,29 @@ useStarfield(canvasRef)
       </header>
 
       <nav class="hud-nav">
-        <button class="menu-item" @click="developing(t('mainMenu.newGame'))">
+        <button class="menu-item" @click="developing(t('mainMenu.newGame'), $event)">
           <span class="bullet" />
           <span>{{ t('mainMenu.newGame') }}</span>
         </button>
 
-        <button class="menu-item" @click="developing(t('mainMenu.loadGame'))">
+        <button class="menu-item" @click="developing(t('mainMenu.loadGame'), $event)">
           <span class="bullet" />
           <span>{{ t('mainMenu.loadGame') }}</span>
           <span class="tag-developing">{{ t('mainMenu.tag.developing') }}</span>
         </button>
 
-        <button class="menu-item" @click="developing(t('mainMenu.multiplayer'))">
+        <button class="menu-item" @click="developing(t('mainMenu.multiplayer'), $event)">
           <span class="bullet" />
           <span>{{ t('mainMenu.multiplayer') }}</span>
           <span class="tag-developing">{{ t('mainMenu.tag.developing') }}</span>
         </button>
 
-        <button class="menu-item" @click="developing(t('mainMenu.shipDesigner'))">
+        <button class="menu-item" @click="developing(t('mainMenu.shipDesigner'), $event)">
           <span class="bullet" />
           <span>{{ t('mainMenu.shipDesigner') }}</span>
           <span class="tag-developing">{{ t('mainMenu.tag.developing') }}</span>
         </button>
 
-        <button class="menu-item" @click="developing(t('mainMenu.settings'))">
-          <span class="bullet" />
-          <span>{{ t('mainMenu.settings') }}</span>
-        </button>
 
         <button class="menu-item" @click="router.push('/')">
           <span class="bullet" />
@@ -108,12 +95,7 @@ useStarfield(canvasRef)
 
     <div class="version-info">v0.0.1</div>
 
-    <SciFiDialog
-      :visible="dialogVisible"
-      :title="dialogTitle"
-      :message="dialogMessage"
-      @close="closeDialog"
-    />
+    
   </div>
 </template>
 
@@ -204,7 +186,7 @@ useStarfield(canvasRef)
   font-size: 1rem;
   color: var(--glow-color);
   margin: 0;
-  letter-spacing: 3px;
+  letter-spacing: 0.1875rem; /* 3px */
   text-transform: uppercase;
 }
 
