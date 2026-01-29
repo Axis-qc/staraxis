@@ -1,4 +1,4 @@
-import { reactive, ref, onMounted } from 'vue'
+import { reactive, ref, onMounted, watch } from 'vue'
 import {
     authLogin,
     authLogout,
@@ -7,11 +7,14 @@ import {
     authSetGameId,
     type AuthMe,
 } from '../services/backend'
+import { useAuthStore } from '../stores/auth'
 
 /**
  * @description 管理用户认证、登录、注册和 Game ID 的 Composable。
  */
 export function useAuth() {
+    const authStore = useAuthStore()
+
     // --- 响应式状态 ---
     const auth = reactive({
         isLoggedIn: false,
@@ -49,6 +52,24 @@ export function useAuth() {
         auth.gameId = data.gameId || ''
         gameIdInput.value = auth.gameId // 同步输入框
     }
+
+    // --- 将 composable 状态同步到 Pinia（全站可读）---
+    watch(
+        () => ({
+            isLoggedIn: auth.isLoggedIn,
+            username: auth.username,
+            playerId: auth.playerId,
+            token: auth.token,
+        }),
+        (s) => {
+            if (s.isLoggedIn && s.username && s.playerId) {
+                authStore.setAuth({ username: s.username, playerId: s.playerId, token: s.token })
+            } else {
+                authStore.clear()
+            }
+        },
+        { immediate: true }
+    )
 
     // --- 暴露给外部的方法 ---
     async function checkAuth() {

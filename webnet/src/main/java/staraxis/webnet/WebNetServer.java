@@ -40,6 +40,9 @@ package staraxis.webnet;
  */
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import staraxis.game.StarAxisGameRuntime;
+import staraxis.webnet.game.GameSessions;
+import staraxis.webnet.websocket.SnapshotMessageFactory;
 import io.undertow.Handlers;
 import io.undertow.Undertow;
 import io.undertow.server.HttpHandler;
@@ -74,6 +77,61 @@ import java.util.stream.Stream;
 
 public class WebNetServer {
 
+    private void tickAndBroadcastSnapshots() {
+        StarAxisGameRuntime runtime = GameSessions.getRuntime();
+        if (runtime == null) {
+            // 没有世界时：不主动广播，等待订阅方触发一次性错误回包
+            return;
+        }
+
+        long t0 = System.nanoTime();
+        try {
+            runtime.update(0f);
+        } catch (Exception e) {
+            // 避免 tick 线程被异常打断
+            return;
+        } finally {
+            long costMs = Math.max(0, (System.nanoTime() - t0) / 1_000_000L);
+            lastTickCostMs.set(costMs);
+        }
+
+        if (snapshotSubscribers.isEmpty()) {
+            return;
+        }
+
+        try {
+            String json = objectMapper.writeValueAsString(
+                    SnapshotMessageFactory.buildSnapshotMessage(runtime, lastTickCostMs.get()));
+            for (WebSocketChannel ch : snapshotSubscribers) {
+                if (ch != null && ch.isOpen()) {
+                    WebSockets.sendText(json, ch, null);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void sendSnapshotToChannel(WebSocketChannel channel) {
+        if (channel == null || !channel.isOpen()) {
+            return;
+        }
+
+        StarAxisGameRuntime runtime = GameSessions.getRuntime();
+        if (runtime == null) {
+            WebSockets.sendText(SnapshotMessageFactory.buildWorldNotCreatedJson(), channel, null);
+            return;
+        }
+
+        try {
+            String json = objectMapper.writeValueAsString(
+                    SnapshotMessageFactory.buildSnapshotMessage(runtime, lastTickCostMs.get()));
+            WebSockets.sendText(json, channel, null);
+        } catch (Exception e) {
+            WebSockets.sendText("{\"type\":\"snapshot\",\"ok\":false,\"error\":\"snapshot_build_failed\"}",
+                    channel, null);
+        }
+    }
+
     private final WebNetServerConfig config;
 
     private Undertow undertow;
@@ -82,6 +140,10 @@ public class WebNetServer {
     private final AuthStore authStore = new AuthStore(objectMapper);
 
     private final Set<WebSocketChannel> channels = ConcurrentHashMap.newKeySet();
+
+    private final Set<WebSocketChannel> snapshotSubscribers = ConcurrentHashMap.newKeySet();
+
+    private final AtomicLong lastTickCostMs = new AtomicLong(0);
 
     private final AtomicInteger connectionCount = new AtomicInteger(0);
     private final AtomicLong lastDisconnectAtMs = new AtomicLong(0);
@@ -92,12 +154,26 @@ public class WebNetServer {
         return t;
     });
 
+    private final ScheduledExecutorService gameTicker = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "webnet-game-ticker");
+        t.setDaemon(true);
+        return t;
+    });
+
+    private volatile boolean serverStarted;
+
     public WebNetServer(WebNetServerConfig config) {
         this.config = config;
     }
 
     public void start() {
+        GameLog.initTruncate();
+        GameLog.log("WebNetServer.start host=" + config.host + " port=" + config.port);
+
         PathHandler routes = Handlers.path();
+
+        // Tick 驱动：单世界（global runtime），仅监控 tickCostMs，不做时间膨胀。
+        gameTicker.scheduleAtFixedRate(this::tickAndBroadcastSnapshots, 0, 40, TimeUnit.MILLISECONDS);
 
         routes.addPrefixPath("/ws", Handlers.websocket((WebSocketHttpExchange exchange, WebSocketChannel channel) -> {
             channels.add(channel);
@@ -110,6 +186,36 @@ public class WebNetServer {
                 protected void onFullTextMessage(WebSocketChannel channel, BufferedTextMessage message) {
                     String text = message.getData();
                     System.out.println("WS recv: " + text);
+
+                    try {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> m = objectMapper.readValue(text, Map.class);
+                        Object typeObj = m.get("type");
+                        String type = typeObj == null ? null : String.valueOf(typeObj);
+
+                        if ("subscribeSnapshot".equals(type)) {
+                            snapshotSubscribers.add(channel);
+                            boolean has = GameSessions.hasRuntime();
+                            GameLog.log("WS subscribeSnapshot hasRuntime=" + has);
+                            if (!has) {
+                                WebSockets.sendText(
+                                        "{\"type\":\"snapshot\",\"ok\":false,\"error\":\"world_not_created\"}",
+                                        channel, null);
+                            } else {
+                                sendSnapshotToChannel(channel);
+                            }
+                            return;
+                        }
+
+                        if ("unsubscribeSnapshot".equals(type)) {
+                            snapshotSubscribers.remove(channel);
+                            WebSockets.sendText("{\"type\":\"unsubscribed\",\"ok\":true}", channel, null);
+                            return;
+                        }
+
+                    } catch (Exception ignored) {
+                    }
+
                     WebSockets.sendText(text, channel, null);
                 }
 
@@ -117,6 +223,7 @@ public class WebNetServer {
                 protected void onClose(WebSocketChannel webSocketChannel,
                         io.undertow.websockets.core.StreamSourceFrameChannel frameChannel) {
                     channels.remove(webSocketChannel);
+                    snapshotSubscribers.remove(webSocketChannel);
                     int left = connectionCount.decrementAndGet();
                     System.out.println("WS close: connections=" + left);
                     if (left <= 0) {
@@ -131,6 +238,227 @@ public class WebNetServer {
 
         // --- API Routes ---
         PathHandler apiHandler = Handlers.path();
+
+        // --- Game/Nations API ---
+        apiHandler.addExactPath("/game/nations", exchange -> {
+            exchange.dispatch(() -> {
+                try {
+                    staraxis.webnet.api.nation.NationPresetsApi.setJsonContentType(exchange);
+                    List<staraxis.game.nation.NationDef> nations = staraxis.webnet.api.nation.NationPresetsApi
+                            .loadAllPresetNations(objectMapper);
+                    exchange.getResponseSender()
+                            .send(objectMapper.writeValueAsString(staraxis.webnet.api.nation.NationPresetsApi
+                                    .toResponse(nations)));
+                } catch (Exception e) {
+                    exchange.setStatusCode(500);
+                    try {
+                        exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", String.valueOf(e.getMessage()))));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                }
+            });
+        });
+
+        // --- Player Nations API ---
+        apiHandler.addExactPath("/nations/players/list", exchange -> {
+            exchange.dispatch(() -> {
+                try {
+                    staraxis.webnet.api.nation.PlayerNationApi.setJsonContentType(exchange);
+                    String username = staraxis.webnet.api.nation.PlayerNationApi.query(exchange, "username");
+                    String playerId = staraxis.webnet.api.nation.PlayerNationApi.query(exchange, "playerId");
+                    String json = staraxis.webnet.api.nation.PlayerNationApi.handleList(objectMapper,
+                            new staraxis.webnet.repo.nation.PlayerNationFileRepository(objectMapper),
+                            username, playerId);
+                    exchange.getResponseSender().send(json);
+                } catch (Exception e) {
+                    exchange.setStatusCode(400);
+                    try {
+                        exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", String.valueOf(e.getMessage()))));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                }
+            });
+        });
+
+        apiHandler.addExactPath("/nations/players/get", exchange -> {
+            exchange.dispatch(() -> {
+                try {
+                    staraxis.webnet.api.nation.PlayerNationApi.setJsonContentType(exchange);
+                    String username = staraxis.webnet.api.nation.PlayerNationApi.query(exchange, "username");
+                    String playerId = staraxis.webnet.api.nation.PlayerNationApi.query(exchange, "playerId");
+                    String nationId = staraxis.webnet.api.nation.PlayerNationApi.query(exchange, "nationId");
+                    String json = staraxis.webnet.api.nation.PlayerNationApi.handleGet(objectMapper,
+                            new staraxis.webnet.repo.nation.PlayerNationFileRepository(objectMapper),
+                            username, playerId, nationId);
+                    exchange.getResponseSender().send(json);
+                } catch (Exception e) {
+                    exchange.setStatusCode(400);
+                    try {
+                        exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", String.valueOf(e.getMessage()))));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                }
+            });
+        });
+
+        apiHandler.addExactPath("/nations/players/save", exchange -> {
+            exchange.dispatch(() -> {
+                staraxis.webnet.api.nation.PlayerNationApi.setJsonContentType(exchange);
+                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
+                    exchange.setStatusCode(405);
+                    try {
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", "method_not_allowed")));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                    return;
+                }
+                try {
+                    exchange.startBlocking();
+                    String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                    String json = staraxis.webnet.api.nation.PlayerNationApi.handleSave(objectMapper,
+                            new staraxis.webnet.repo.nation.PlayerNationFileRepository(objectMapper),
+                            body);
+                    exchange.getResponseSender().send(json);
+                } catch (Exception e) {
+                    exchange.setStatusCode(400);
+                    try {
+                        exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", String.valueOf(e.getMessage()))));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                }
+            });
+        });
+
+        // --- New Game API ---
+        apiHandler.addExactPath("/newgame/step1/selectNation", exchange -> {
+            exchange.dispatch(() -> {
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE,
+                        staraxis.webnet.api.newgame.NewGameApi.jsonContentType());
+                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
+                    exchange.setStatusCode(405);
+                    try {
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", "method_not_allowed")));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                    return;
+                }
+                try {
+                    exchange.startBlocking();
+                    String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                    Map<String, Object> req = staraxis.webnet.api.newgame.NewGameApi.parseBodyToMap(objectMapper, body);
+                    staraxis.webnet.api.newgame.NewGameDraftRepository repo = new staraxis.webnet.api.newgame.NewGameDraftRepository(
+                            objectMapper);
+                    Map<String, Object> resp = staraxis.webnet.api.newgame.NewGameApi.step1SelectNation(objectMapper,
+                            repo, req);
+                    exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
+                } catch (Exception e) {
+                    exchange.setStatusCode(400);
+                    try {
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", String.valueOf(e.getMessage()))));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                }
+            });
+        });
+
+        apiHandler.addExactPath("/newgame/step2/worldSettings", exchange -> {
+            exchange.dispatch(() -> {
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE,
+                        staraxis.webnet.api.newgame.NewGameApi.jsonContentType());
+                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
+                    exchange.setStatusCode(405);
+                    try {
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", "method_not_allowed")));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                    return;
+                }
+                try {
+                    exchange.startBlocking();
+                    String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                    Map<String, Object> req = staraxis.webnet.api.newgame.NewGameApi.parseBodyToMap(objectMapper, body);
+                    staraxis.webnet.api.newgame.NewGameDraftRepository repo = new staraxis.webnet.api.newgame.NewGameDraftRepository(
+                            objectMapper);
+                    Map<String, Object> resp = staraxis.webnet.api.newgame.NewGameApi.step2WorldSettings(objectMapper,
+                            repo, req);
+                    exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
+                } catch (Exception e) {
+                    exchange.setStatusCode(400);
+                    try {
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", String.valueOf(e.getMessage()))));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                }
+            });
+        });
+
+        apiHandler.addExactPath("/newgame/step3/confirm", exchange -> {
+            exchange.dispatch(() -> {
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE,
+                        staraxis.webnet.api.newgame.NewGameApi.jsonContentType());
+                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
+                    exchange.setStatusCode(405);
+                    try {
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", "method_not_allowed")));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                    return;
+                }
+                try {
+                    exchange.startBlocking();
+                    String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                    Map<String, Object> req = staraxis.webnet.api.newgame.NewGameApi.parseBodyToMap(objectMapper, body);
+                    staraxis.webnet.api.newgame.NewGameDraftRepository repo = new staraxis.webnet.api.newgame.NewGameDraftRepository(
+                            objectMapper);
+                    Map<String, Object> resp = staraxis.webnet.api.newgame.NewGameApi.step3Confirm(objectMapper, repo,
+                            req);
+                    exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
+                } catch (Exception e) {
+                    exchange.setStatusCode(400);
+                    try {
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", String.valueOf(e.getMessage()))));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                }
+            });
+        });
 
         // --- Auth API ---
         PathHandler authHandler = Handlers.path();
@@ -676,6 +1004,10 @@ public class WebNetServer {
         channels.clear();
         try {
             stop();
+        } catch (Exception ignored) {
+        }
+        try {
+            gameTicker.shutdownNow();
         } catch (Exception ignored) {
         }
         try {

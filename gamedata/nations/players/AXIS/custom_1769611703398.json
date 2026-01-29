@@ -1,0 +1,14 @@
+{
+  "schemaVersion" : 1,
+  "username" : "AXIS",
+  "playerId" : "p_edef2619-33a3-420f-aacf-89147133cb08",
+  "nation" : {
+    "id" : "custom_1769611703398",
+    "nameKey" : "nation.custom_1769611703398.name",
+    "descriptionKey" : "nation.custom_1769611703398.desc",
+    "governmentId" : "gov_republic",
+    "speciesIds" : [ "species_human" ],
+    "startingTechIds" : [ "tech_basic_mining_1" ]
+  },
+  "updatedAtUnixMs" : 1769611703404
+}

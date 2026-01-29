@@ -183,7 +183,7 @@ public class AuthStore {
         return skf.generateSecret(spec).getEncoded();
     }
 
-    private static boolean isSafeUsername(String username) {
+    public static boolean isSafeUsername(String username) {
         if (username == null)
             return false;
         String u = username.trim();

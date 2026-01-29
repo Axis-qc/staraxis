@@ -4,12 +4,20 @@ import './styles/ui.css'
 import './styles/theme.css'
 import './styles/controls.css'
 
+import { createPinia } from 'pinia'
+import { persistAuthSessionStorage } from './stores/persist'
+
 import App from './App.vue'
 import router from './router'
 import { i18n, loadAvailableLanguages, loadLanguage } from './i18n'
 
 async function bootstrap() {
     const app = createApp(App)
+
+    const pinia = createPinia()
+    pinia.use(persistAuthSessionStorage)
+    app.use(pinia)
+
     app.use(router)
     app.use(i18n)
 
