@@ -28,6 +28,10 @@ export default defineConfig({
         target: 'ws://127.0.0.1:17890',
         ws: true,
       },
+      '/assets': {
+        target: 'http://127.0.0.1:17890',
+        changeOrigin: true,
+      },
     },
   },
   // 定义 webui 为基础路径

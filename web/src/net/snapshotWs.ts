@@ -1,5 +1,37 @@
 export type SectorCenter = { q: number; r: number; x: number; y: number }
 
+export type StarBody = {
+    id: string
+    typeId: string
+    radiusKm: number
+    massSolar: number
+    temperatureK: number
+}
+
+export type PlanetOrbit = {
+    semiMajorAxisAU: number
+    eccentricity: number
+    inclinationDeg: number
+    meanAnomalyDegAtEpoch: number
+    orbitalPeriodDays: number
+}
+
+export type PlanetBody = {
+    id: string
+    typeId: string
+    radiusKm: number
+    rotationPeriodHours: number
+    orbit: PlanetOrbit | null
+}
+
+export type StarSystem = {
+    id: string
+    sectorCoord: { q: number; r: number }
+    centerWorldGU: { x: number; y: number }
+    stars: StarBody[]
+    planets: PlanetBody[]
+}
+
 export type SnapshotMessage = {
     type: 'snapshot'
     ok: boolean
@@ -10,7 +42,8 @@ export type SnapshotMessage = {
         gameDatetimeDay: number
         accGameHoursInDay: number
         worldRadius: number
-        sectorCenters: SectorCenter[]
+        sectorCenters: SectorCenter[],
+        starSystems: StarSystem[]
     }
     dailySettlementState?: {
         settledDay: number

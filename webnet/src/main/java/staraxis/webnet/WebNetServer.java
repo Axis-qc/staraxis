@@ -919,6 +919,7 @@ public class WebNetServer {
         // --- Static Content ---
         // 游戏主界面（webui 目录）：挂在 /webui
         routes.addPrefixPath("/webui", createGameUiHandler());
+        routes.addPrefixPath("/assets", new ResourceHandler(new FileResourceManager(new File("assets"), 1024 * 1024)));
 
         // 根路径统一跳转到 webui（不再提供 server-ui 页面）
         routes.addExactPath("/", exchange -> {

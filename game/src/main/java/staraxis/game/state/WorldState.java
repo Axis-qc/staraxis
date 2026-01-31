@@ -1,5 +1,6 @@
 package staraxis.game.state;
 
+import staraxis.game.astro.AstroData;
 import staraxis.game.sim.SimulationTime;
 import staraxis.game.world.WorldMap;
 
@@ -14,8 +15,14 @@ public class WorldState {
 
     public final WorldMap worldMap;
 
-    public WorldState(SimulationTime time, WorldMap worldMap) {
+    /**
+     * 权威星体数据（恒星系、恒星、行星等）：仅允许模拟层读写。
+     */
+    public final AstroData astro;
+
+    public WorldState(SimulationTime time, WorldMap worldMap, AstroData astro) {
         this.time = time;
         this.worldMap = worldMap;
+        this.astro = astro;
     }
 }

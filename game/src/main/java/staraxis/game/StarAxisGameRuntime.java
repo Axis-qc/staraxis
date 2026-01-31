@@ -1,5 +1,10 @@
 package staraxis.game;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import staraxis.game.astro.AstroData;
+import staraxis.game.astro.AstroGenerator;
+import staraxis.game.astro.StarSystem;
+import staraxis.game.astro.def.AstroAssetRepository;
 import staraxis.game.sim.SimulationClock;
 import staraxis.game.sim.SimulationTime;
 import staraxis.game.state.DailySettlementStateBuffer;
@@ -9,6 +14,8 @@ import staraxis.game.state.WorldState;
 import staraxis.game.world.WorldGenConfig;
 import staraxis.game.world.WorldGenerator;
 import staraxis.game.world.WorldSector;
+
+import java.util.List;
 
 /**
  * StarAxisGameRuntime
@@ -33,7 +40,16 @@ public class StarAxisGameRuntime implements GameRuntime {
 
     public static StarAxisGameRuntime newGame(WorldGenConfig cfg) {
         SimulationTime time = new SimulationTime();
-        return new StarAxisGameRuntime(new WorldState(time, WorldGenerator.generate(cfg)));
+
+        var worldMap = WorldGenerator.generate(cfg);
+
+        AstroAssetRepository astroAssets = new AstroAssetRepository(new ObjectMapper());
+        astroAssets.loadAll();
+        AstroGenerator astroGenerator = new AstroGenerator(astroAssets, cfg.worldSeed);
+        List<StarSystem> systems = astroGenerator.generateSystemsForMap(worldMap, cfg);
+
+        AstroData astro = new AstroData(systems);
+        return new StarAxisGameRuntime(new WorldState(time, worldMap, astro));
     }
 
     @Override
@@ -90,6 +106,8 @@ public class StarAxisGameRuntime implements GameRuntime {
         for (WorldSector sector : worldState.worldMap.getSectorsView()) {
             s.putSectorCenter(sector.coord, sector.centerWorldGU);
         }
+
+        s.setStarSystemsForFill(worldState.astro.getSystemsView());
 
         realTimeBuffer.swapPublish();
     }

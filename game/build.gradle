@@ -13,4 +13,5 @@ repositories {
 
 dependencies {
   // game 层：纯模拟/数据层，不依赖任何渲染或 UI 库
+  api 'com.fasterxml.jackson.core:jackson-databind:2.14.2'
 }

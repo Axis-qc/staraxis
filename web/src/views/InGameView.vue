@@ -16,11 +16,13 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { useAstroAssets } from '../composables/useAstroAssets'
 import { connectSnapshotWs, type SnapshotMessage } from '../net/snapshotWs'
 import { createThreeWorldRenderer, type ThreeWorldRenderer } from '../rendering/threeWorldRenderer'
 
 const { t } = useI18n()
 const router = useRouter()
+const { getSpritePath } = useAstroAssets()
 
 const rootRef = ref<HTMLDivElement | null>(null)
 const containerRef = ref<HTMLDivElement | null>(null)
@@ -115,7 +117,7 @@ onMounted(() => {
 
   const container = containerRef.value
   if (container) {
-    renderer = createThreeWorldRenderer(container, { minZoom: 0.1, maxZoom: 2_000_000 })
+    renderer = createThreeWorldRenderer(container, { minZoom: 0.1, maxZoom: 2_000_000, getSpritePath })
   }
 
   wsClient = connectSnapshotWs({
