@@ -1,33 +1,28 @@
 package staraxis.game.astro;
 
+import staraxis.game.entity.Entity;
+import staraxis.game.entity.EntityType;
+
 /**
- * StarBody
+ * StarBody（恒星实体）
  *
- * Represents a single star within a star system.
+ * 继承自 Entity，代表一个恒星天体。
  */
-public class StarBody {
-    /**
-     * Unique ID for this celestial body.
-     */
-    public long id;
+public class StarBody extends Entity {
 
-    /**
-     * The type ID of the star (e.g., "G_MAIN_SEQUENCE"), linking to StarTypeDef.
-     */
-    public String typeId;
+    /** 恒星类型ID（starTypeId），例如 "G_MAIN_SEQUENCE"。 */
+    public String starTypeId;
 
-    /**
-     * Radius of the star in kilometers.
-     */
-    public double radiusKm;
+    /** 恒星半径（GU）。 */
+    public double radiusGU;
 
-    /**
-     * Mass of the star in solar masses.
-     */
+    /** 恒星质量（太阳质量倍数）。 */
     public double massSolar;
 
-    /**
-     * Surface temperature in Kelvin.
-     */
+    /** 表面温度（开尔文）。 */
     public int temperatureK;
+
+    public StarBody() {
+        this.entityType = EntityType.STAR;
+    }
 }

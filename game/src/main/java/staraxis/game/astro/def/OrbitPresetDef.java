@@ -7,7 +7,7 @@ public class OrbitPresetDef {
     public String presetId;
     public List<Integer> planetCountRange;
     public String orbitSpacingMethod;
-    public List<Double> firstOrbitAuRange;
+    public List<Double> firstOrbitGURange;
     public List<Double> orbitSeparationFactorRange;
     public List<Double> eccentricityRange;
     public List<Double> inclinationDegRange;

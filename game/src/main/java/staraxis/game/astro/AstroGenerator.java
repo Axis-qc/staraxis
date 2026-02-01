@@ -4,7 +4,6 @@ import staraxis.game.astro.def.AstroAssetRepository;
 import staraxis.game.astro.def.OrbitPresetDef;
 import staraxis.game.astro.def.PlanetTypeDef;
 import staraxis.game.astro.def.StarTypeDef;
-import staraxis.game.world.WorldConstants;
 import staraxis.game.world.WorldGenConfig;
 import staraxis.game.world.WorldMap;
 import staraxis.game.world.WorldSector;
@@ -54,13 +53,14 @@ public final class AstroGenerator {
      */
     private StarSystem generateSystemForSector(WorldSector sector) {
         StarSystem system = new StarSystem();
-        system.id = idCounter.incrementAndGet();
+        system.systemId = idCounter.incrementAndGet();
+        system.barycenterEntityId = idCounter.incrementAndGet(); // 预留重心实体ID
         system.sectorCoord = sector.coord;
         // 系统中心 = 星区中心
         system.centerWorldGU = sector.centerWorldGU;
 
         // 生成主星（第一版只支持单星）
-        StarBody primaryStar = generateStar();
+        StarBody primaryStar = generateStar(system);
         system.stars.add(primaryStar);
 
         // 生成行星
@@ -72,13 +72,13 @@ public final class AstroGenerator {
     /**
      * 生成一颗随机恒星。
      */
-    private StarBody generateStar() {
+    private StarBody generateStar(StarSystem system) {
         StarTypeDef type = weightedRandom(assets.getStarTypes(), t -> t.weight);
 
         StarBody star = new StarBody();
-        star.id = idCounter.incrementAndGet();
-        star.typeId = type.typeId;
-        star.radiusKm = randomDouble(type.radiusKmRange.get(0), type.radiusKmRange.get(1));
+        star.entityId = idCounter.incrementAndGet();
+        star.starTypeId = type.typeId;
+        star.radiusGU = randomDouble(type.radiusGURange.get(0), type.radiusGURange.get(1));
         star.massSolar = randomDouble(type.massSolarRange.get(0), type.massSolarRange.get(1));
         star.temperatureK = randomInt(type.temperatureKRange.get(0), type.temperatureKRange.get(1));
         return star;
@@ -94,28 +94,31 @@ public final class AstroGenerator {
         }
 
         int planetCount = randomInt(preset.planetCountRange.get(0), preset.planetCountRange.get(1));
-        double currentOrbitAU = randomDouble(preset.firstOrbitAuRange.get(0), preset.firstOrbitAuRange.get(1));
+        double currentOrbitGU = randomDouble(preset.firstOrbitGURange.get(0), preset.firstOrbitGURange.get(1));
 
         for (int i = 0; i < planetCount; i++) {
             PlanetTypeDef type = weightedRandom(assets.getPlanetTypes(),
                     t -> preset.planetTypeWeights.getOrDefault(t.typeId, 1));
 
             PlanetBody planet = new PlanetBody();
-            planet.id = idCounter.incrementAndGet();
-            planet.typeId = type.typeId;
-            planet.radiusKm = randomDouble(type.radiusKmRange.get(0), type.radiusKmRange.get(1));
+            planet.entityId = idCounter.incrementAndGet();
+            planet.planetTypeId = type.typeId;
+            planet.radiusGU = randomDouble(type.radiusGURange.get(0), type.radiusGURange.get(1));
             planet.rotationPeriodHours = randomDouble(preset.rotationPeriodHoursRange.get(0),
                     preset.rotationPeriodHoursRange.get(1));
 
             // 生成轨道参数
             OrbitParams orbit = new OrbitParams();
-            orbit.semiMajorAxisAU = currentOrbitAU;
+            // 单星系统，轨道中心就是主星
+            orbit.orbitCenterEntityId = primaryStar.entityId;
+            orbit.semiMajorAxisGU = currentOrbitGU;
             orbit.eccentricity = randomDouble(preset.eccentricityRange.get(0), preset.eccentricityRange.get(1));
             orbit.inclinationDeg = randomDouble(preset.inclinationDegRange.get(0), preset.inclinationDegRange.get(1));
             orbit.meanAnomalyDegAtEpoch = randomDouble(0, 360);
 
             // 开普勒第三定律估算公转周期: P^2 = a^3 / M (P in years, a in AU, M in solar masses)
-            double pYears = Math.sqrt(Math.pow(orbit.semiMajorAxisAU, 3) / primaryStar.massSolar);
+            double pYears = Math.sqrt(Math.pow(orbit.semiMajorAxisGU / staraxis.game.world.WorldConstants.AU_IN_GU, 3)
+                    / primaryStar.massSolar);
             orbit.orbitalPeriodDays = pYears * 365.25; // 简化换算
 
             planet.orbit = orbit;
@@ -124,7 +127,7 @@ public final class AstroGenerator {
             // 为下一颗行星增加轨道距离
             double separationFactor = randomDouble(preset.orbitSeparationFactorRange.get(0),
                     preset.orbitSeparationFactorRange.get(1));
-            currentOrbitAU *= separationFactor;
+            currentOrbitGU *= separationFactor;
         }
     }
 

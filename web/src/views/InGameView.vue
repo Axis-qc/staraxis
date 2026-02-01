@@ -46,7 +46,7 @@
  * - **禁用文本选中/拖拽选框复制**：避免误操作。
  * - **浏览器级“返回”无法 100% 禁止**：监听 popstate，把历史栈拉回，尽量降低误触后退造成的跳页。
  */
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAstroAssets } from '../composables/useAstroAssets'
 import { useDevTooltip } from '../composables/useDevTooltip'
@@ -103,7 +103,64 @@ const debugDragOffset = ref({ x: 0, y: 0 })
 
 const activeBottomTab = ref<InGameBottomTab | null>(null)
 
-const selection = useRtsSelection()
+const selection = useRtsSelection({
+  getEntities: () => {
+    const r = hub.getRenderer()
+    if (!r) return []
+
+    const simulationTick = (hub as any)?.lastSnapshot?.value?.realTimeWorldState?.simulationTick ?? 0
+    void simulationTick
+
+    const entities = hub.entities.value
+    const out: Array<{ id: number; type: 'STAR' | 'PLANET'; worldPosGU: { x: number; y: number } }> = []
+
+    const byId = new Map<number, any>()
+    for (const e of entities) {
+      byId.set(e.entityId, e)
+    }
+
+    const GAME_HOUR_PER_TICK = 0.25
+    const snap: any = (hub as any)?.lastSnapshot?.value
+    const tick = snap?.realTimeWorldState?.simulationTick ?? 0
+    const totalHours = tick * GAME_HOUR_PER_TICK
+    const totalDays = totalHours / 24
+
+    for (const e of entities) {
+      if (e.entityType === 'STAR' && e.posWorldGU) {
+        out.push({ id: e.entityId, type: 'STAR', worldPosGU: e.posWorldGU })
+      }
+      if (e.entityType === 'PLANET') {
+        const orbit = (e.details as any)?.orbit
+        if (!orbit) continue
+        const center = byId.get(orbit.orbitCenterEntityId)
+        if (!center?.posWorldGU) continue
+
+        const a = orbit.semiMajorAxisGU
+        const meanAnomaly = (orbit.meanAnomalyDegAtEpoch * Math.PI) / 180
+        const angle = meanAnomaly + (totalDays / orbit.orbitalPeriodDays) * 2 * Math.PI
+        const x = center.posWorldGU.x + a * Math.cos(angle)
+        const y = center.posWorldGU.y + a * Math.sin(angle)
+        out.push({ id: e.entityId, type: 'PLANET', worldPosGU: { x, y } })
+      }
+    }
+
+    return out
+  },
+  worldToClient: (world) => {
+    const el = containerRef.value
+    const r = hub.getRenderer()
+    if (!el || !r) return { x: 0, y: 0 }
+
+    const rect = el.getBoundingClientRect()
+    const cx = rect.left + rect.width / 2
+    const cy = rect.top + rect.height / 2
+
+    const sx = cx + (world.x - r.cameraWorldPosGU.x) / r.zoom.value
+    const sy = cy - (world.y - r.cameraWorldPosGU.y) / r.zoom.value
+
+    return { x: sx, y: sy }
+  },
+})
 
 const rightClickCommand = useRtsRightClickCommand({
   getRenderer: () => hub.getRenderer(),
@@ -113,6 +170,14 @@ const rightClickCommand = useRtsRightClickCommand({
     showDevelopingHintAtCenter()
   },
 })
+
+watch(
+  () => selection.selectedIds.value,
+  (ids) => {
+    hub.getRenderer()?.setSelectedEntityIds(ids)
+  },
+  { deep: true },
+)
 
 function onContextMenu(e: MouseEvent) {
   e.preventDefault()
@@ -183,6 +248,7 @@ function toggleDebugWindow() {
   if (!isDebugHudEnabled) return
   const next = !isDebugWindowVisible.value
   isDebugWindowVisible.value = next
+  hub.setPerformanceTracking(next)
   if (next) {
     centerDebugWindow(DEBUG_WINDOW_SIZE)
   }
@@ -307,6 +373,32 @@ onUnmounted(() => {
           <div class="v debug-text">{{ hub.debug.worldStateText }}</div>
         </div>
         <div class="kv">
+          <div class="k">性能(FPS)</div>
+          <div class="v">{{ hub.performance.fpsText }}</div>
+        </div>
+        <div class="perf-chart" aria-label="FPS history chart">
+          <svg :width="296" :height="44" viewBox="0 0 296 44" role="img" aria-label="FPS history">
+            <rect x="0" y="0" width="296" height="44" fill="transparent" />
+            <polyline
+              v-if="hub.performance.fpsHistory.value.length"
+              :points="hub.performance.fpsHistory.value
+                .map((fps, i) => {
+                  const n = hub.performance.fpsHistory.value.length
+                  const x = n <= 1 ? 0 : (i / (n - 1)) * 296
+                  const y = 44 - Math.min(44, (fps / 60) * 44)
+                  return `${x},${y}`
+                })
+                .join(' ')"
+              fill="none"
+              stroke="rgba(127,211,255,0.9)"
+              stroke-width="2"
+              stroke-linejoin="round"
+              stroke-linecap="round"
+            />
+          </svg>
+          <div class="perf-chart-caption">最近 60 秒 FPS（上限按 60 归一化）</div>
+        </div>
+        <div class="kv">
           <div class="k">镜头中心(GU)</div>
           <div class="v">{{ hub.debug.cameraCenterText }}</div>
         </div>
@@ -388,6 +480,24 @@ onUnmounted(() => {
 
 .debug-window-body {
   padding: 10px 12px;
+}
+
+.perf-chart {
+  padding: 6px 0;
+}
+
+.perf-chart svg {
+  display: block;
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--glow-color) 18%, transparent);
+  background: color-mix(in srgb, var(--background-color) 85%, rgba(0, 0, 0, 0.25));
+}
+
+.perf-chart-caption {
+  margin-top: 4px;
+  font-size: 11px;
+  color: color-mix(in srgb, var(--text-color) 60%, transparent);
 }
 
 .in-game-root {

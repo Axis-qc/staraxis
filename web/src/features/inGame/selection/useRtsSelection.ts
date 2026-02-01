@@ -23,12 +23,15 @@ export type ScreenRect = {
     h: number
 }
 
-export function useRtsSelection() {
+export function useRtsSelection(opts: {
+    getEntities: () => Array<{ id: number; type: 'STAR' | 'PLANET'; worldPosGU: { x: number; y: number } }>
+    worldToClient: (world: { x: number; y: number }) => { x: number; y: number }
+}) {
     const isSelecting = ref(false)
     const startClient = ref<{ x: number; y: number } | null>(null)
     const currentClient = ref<{ x: number; y: number } | null>(null)
 
-    const selectedIds = ref<string[]>([])
+    const selectedIds = ref<number[]>([])
 
     const selectionRect = computed<ScreenRect | null>(() => {
         if (!isSelecting.value) return null
@@ -60,9 +63,24 @@ export function useRtsSelection() {
     }
 
     function commitSelection() {
-        // 当前没有实体系统，先产出空选择集。
-        // 未来：根据 selectionRect + 世界坐标换算得到 worldAabb，再过滤实体得到 selectedIds。
-        selectedIds.value = []
+        const rect = selectionRect.value
+        if (!rect) {
+            selectedIds.value = []
+        } else {
+            const x1 = rect.x
+            const y1 = rect.y
+            const x2 = rect.x + rect.w
+            const y2 = rect.y + rect.h
+
+            const hits: number[] = []
+            for (const e of opts.getEntities()) {
+                const p = opts.worldToClient(e.worldPosGU)
+                if (p.x >= x1 && p.x <= x2 && p.y >= y1 && p.y <= y2) {
+                    hits.push(e.id)
+                }
+            }
+            selectedIds.value = hits
+        }
 
         isSelecting.value = false
         startClient.value = null

@@ -11,7 +11,7 @@ public class StarTypeDef {
     public String typeId;
     public String description;
     public double weight;
-    public List<Double> radiusKmRange;
+    public List<Double> radiusGURange;
     public List<Double> massSolarRange;
     public List<Integer> temperatureKRange;
     public List<String> spriteCandidates;

@@ -6,6 +6,6 @@ public class PlanetTypeDef {
     public String typeId;
     public String description;
     public double weight;
-    public List<Double> radiusKmRange;
+    public List<Double> radiusGURange;
     public List<String> spriteCandidates;
 }

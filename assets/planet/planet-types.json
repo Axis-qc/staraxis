@@ -3,9 +3,9 @@
         "typeId": "TERRESTRIAL",
         "description": "Earth-like, with liquid water and a breathable atmosphere.",
         "weight": 10,
-        "radiusKmRange": [
-            5000,
-            8000
+        "radiusGURange": [
+            50,
+            80
         ],
         "spriteCandidates": [
             "planet/Solid/Terrestrial/Terrestrial_01-512x512.png",
@@ -17,9 +17,9 @@
         "typeId": "ROCKY_BARREN",
         "description": "A desolate, rocky world with little to no atmosphere.",
         "weight": 50,
-        "radiusKmRange": [
-            2000,
-            6000
+        "radiusGURange": [
+            20,
+            60
         ],
         "spriteCandidates": [
             "planet/Solid/Rocky/Rocky_01-512x512.png",
@@ -33,9 +33,9 @@
         "typeId": "GAS_GIANT",
         "description": "A large planet composed mostly of gases, such as hydrogen and helium.",
         "weight": 25,
-        "radiusKmRange": [
-            30000,
-            80000
+        "radiusGURange": [
+            300,
+            800
         ],
         "spriteCandidates": [
             "planet/Gaseous/Blue Giant/BlueGiant_01-512x512.png",
@@ -48,9 +48,9 @@
         "typeId": "ICE_GIANT",
         "description": "A giant planet composed mainly of elements heavier than hydrogen and helium, such as oxygen, carbon, nitrogen, and sulfur.",
         "weight": 20,
-        "radiusKmRange": [
-            20000,
-            50000
+        "radiusGURange": [
+            200,
+            500
         ],
         "spriteCandidates": [
             "planet/Gaseous/Blue Giant/BlueGiant_02-512x512.png",
@@ -61,9 +61,9 @@
         "typeId": "OCEAN_WORLD",
         "description": "A world covered almost entirely by a liquid ocean.",
         "weight": 8,
-        "radiusKmRange": [
-            4000,
-            7500
+        "radiusGURange": [
+            40,
+            75
         ],
         "spriteCandidates": [
             "planet/Solid/Ocean/Ocean_01-512x512.png",
@@ -74,9 +74,9 @@
         "typeId": "LAVA_WORLD",
         "description": "A terrestrial planet with a surface mostly or entirely covered by molten lava.",
         "weight": 5,
-        "radiusKmRange": [
-            3000,
-            7000
+        "radiusGURange": [
+            30,
+            70
         ],
         "spriteCandidates": [
             "planet/Solid/Magma/Magma_01-512x512.png",
@@ -87,9 +87,9 @@
         "typeId": "FROZEN_WORLD",
         "description": "An icy world, with surface temperatures far below the freezing point of water.",
         "weight": 20,
-        "radiusKmRange": [
-            2500,
-            6500
+        "radiusGURange": [
+            25,
+            65
         ],
         "spriteCandidates": [
             "planet/Solid/Icy/Icy_01-512x512.png",

@@ -1,33 +1,28 @@
 package staraxis.game.astro;
 
+import staraxis.game.entity.Entity;
+import staraxis.game.entity.EntityType;
+
 /**
- * PlanetBody
+ * PlanetBody（行星实体）
  *
- * Represents a single planet within a star system.
+ * 继承自 Entity，代表一个行星天体。
  */
-public class PlanetBody {
-    /**
-     * Unique ID for this celestial body.
-     */
-    public long id;
+public class PlanetBody extends Entity {
 
-    /**
-     * The type ID of the planet (e.g., "TERRESTRIAL"), linking to PlanetTypeDef.
-     */
-    public String typeId;
+    /** 行星类型ID（planetTypeId），例如 "TERRESTRIAL"。 */
+    public String planetTypeId;
 
-    /**
-     * Radius of the planet in kilometers.
-     */
-    public double radiusKm;
+    /** 行星半径（GU）。 */
+    public double radiusGU;
 
-    /**
-     * Orbital parameters of the planet.
-     */
+    /** 轨道参数。 */
     public OrbitParams orbit;
 
-    /**
-     * Rotation period in game hours.
-     */
+    /** 自转周期（游戏小时）。 */
     public double rotationPeriodHours;
+
+    public PlanetBody() {
+        this.entityType = EntityType.PLANET;
+    }
 }

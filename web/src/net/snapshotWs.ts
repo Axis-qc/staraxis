@@ -1,35 +1,40 @@
 export type SectorCenter = { q: number; r: number; x: number; y: number }
 
-export type StarBody = {
-    id: string
-    typeId: string
-    radiusKm: number
-    massSolar: number
-    temperatureK: number
-}
+export type EntityType = 'STAR' | 'PLANET' | 'SYSTEM_BARYCENTER' | 'SHIP' | 'STATION'
 
-export type PlanetOrbit = {
-    semiMajorAxisAU: number
+export type OrbitSnapshot = {
+    orbitCenterEntityId: number
+    semiMajorAxisGU: number
     eccentricity: number
     inclinationDeg: number
     meanAnomalyDegAtEpoch: number
     orbitalPeriodDays: number
 }
 
-export type PlanetBody = {
-    id: string
-    typeId: string
-    radiusKm: number
-    rotationPeriodHours: number
-    orbit: PlanetOrbit | null
+export type StarDetails = {
+    starTypeId: string
+    radiusGU: number
+    massSolar: number
+    temperatureK: number
 }
 
-export type StarSystem = {
-    id: string
+export type PlanetDetails = {
+    planetTypeId: string
+    radiusGU: number
+    rotationPeriodHours: number
+    orbit: OrbitSnapshot | null
+}
+
+export type SystemBarycenterDetails = {}
+
+export type EntitySnapshot = {
+    entityId: number
+    entityType: EntityType
+    systemId: number
+    parentEntityId: number
     sectorCoord: { q: number; r: number }
-    centerWorldGU: { x: number; y: number }
-    stars: StarBody[]
-    planets: PlanetBody[]
+    posWorldGU: { x: number; y: number }
+    details: StarDetails | PlanetDetails | SystemBarycenterDetails | null
 }
 
 export type SnapshotMessage = {
@@ -42,8 +47,8 @@ export type SnapshotMessage = {
         gameDatetimeDay: number
         accGameHoursInDay: number
         worldRadius: number
-        sectorCenters: SectorCenter[],
-        starSystems: StarSystem[]
+        sectorCenters: SectorCenter[]
+        entities: EntitySnapshot[]
     }
     dailySettlementState?: {
         settledDay: number

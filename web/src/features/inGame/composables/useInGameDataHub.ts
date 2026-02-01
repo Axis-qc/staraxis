@@ -21,6 +21,7 @@
  * @provides
  * - **overview**：总览面板所需的展示模型（日期、Tick 耗时、星区数量等）。
  * - **debug**：调试浮窗所需的展示模型（缩放倍率、镜头中心、鼠标世界坐标、世界状态摘要等）。
+ * - **entities**：扁平化的实体快照列表，供渲染器等模块消费。
  * - **输入函数**：`setRenderer/setLastSnapshot/onCanvasPointerMove`。
  *
  * @inputs
@@ -32,9 +33,9 @@
  * - **坐标口径**：鼠标世界坐标计算依赖当前相机中心与 zoom（GU/像素换算）；若渲染坐标系变更需同步调整。
  */
 
-import { computed, onUnmounted, ref, type Ref } from 'vue'
-import type { SnapshotMessage } from '../net/snapshotWs'
-import type { ThreeWorldRenderer } from '../rendering/threeWorldRenderer'
+import { computed, onUnmounted, ref, shallowRef, type Ref } from 'vue'
+import type { EntitySnapshot, SnapshotMessage } from '../../../net/snapshotWs'
+import type { ThreeWorldRenderer } from '../../../rendering/threeWorldRenderer'
 
 type Vec2 = { x: number; y: number }
 
@@ -43,6 +44,11 @@ type DebugUiModel = {
     cameraCenterText: Ref<string>
     mouseWorldText: Ref<string>
     worldStateText: Ref<string>
+}
+
+type PerformanceUiModel = {
+    fpsText: Ref<string>
+    fpsHistory: Ref<number[]>
 }
 
 type OverviewUiModel = {
@@ -57,47 +63,31 @@ export type InGameDataHub = {
     setLastSnapshot: (s: SnapshotMessage | null) => void
     onCanvasPointerMove: (e: PointerEvent) => void
 
+    entities: Ref<EntitySnapshot[]>
+
     overview: OverviewUiModel
     debug: DebugUiModel
+    performance: PerformanceUiModel
+
+    setPerformanceTracking: (active: boolean) => void
 }
 
 function buildDebugSnapshotText(s: SnapshotMessage | null) {
-    if (!s) return 'no_snapshot'
+    if (!s || !s.ok || !s.realTimeWorldState) return 'no_snapshot'
 
     const ok = s.ok
     const err = s.error ?? ''
-    const count = s.realTimeWorldState?.sectorCenters?.length ?? 0
-
-    let minX = 0
-    let maxX = 0
-    let minY = 0
-    let maxY = 0
-    const centers = s.realTimeWorldState?.sectorCenters ?? []
-    const first = centers[0]
-    if (first) {
-        minX = first.x
-        maxX = first.x
-        minY = first.y
-        maxY = first.y
-        for (let i = 1; i < centers.length; i++) {
-            const p = centers[i]
-            if (!p) continue
-            if (p.x < minX) minX = p.x
-            if (p.x > maxX) maxX = p.x
-            if (p.y < minY) minY = p.y
-            if (p.y > maxY) maxY = p.y
-        }
-    }
-
+    const entityCount = s.realTimeWorldState?.entities?.length ?? 0
     const cost = s.tickCostMs == null ? '' : `${s.tickCostMs}ms`
-    const range = centers.length === 0 ? '' : `x=[${minX.toFixed(0)},${maxX.toFixed(0)}], y=[${minY.toFixed(0)},${maxY.toFixed(0)}]`
 
-    return `ok=${ok} ${cost} count=${count} ${err} ${range}`.trim()
+    return `ok=${ok} ${cost} entities=${entityCount} ${err}`.trim()
 }
 
 export function useInGameDataHub() {
     const renderer = ref<ThreeWorldRenderer | null>(null)
     const lastSnapshot = ref<SnapshotMessage | null>(null)
+
+    const entities = shallowRef<EntitySnapshot[]>([])
 
     // 鼠标世界坐标：由 UI 事件驱动，确保实时刷新
     const mouseWorldPosGU = ref<Vec2 | null>(null)
@@ -105,9 +95,49 @@ export function useInGameDataHub() {
     // 用于刷新 renderer 内部非响应式字段（zoom/cameraWorldPosGU）
     // 目前按帧刷新：后续 renderer 支持事件回调时可替换为更低频方案
     const debugUiTick = ref(0)
+
+    const fpsText = ref('-')
+    const fpsHistory = shallowRef<number[]>([])
+
+    const FPS_HISTORY_MAX_SECONDS = 60
+
+    let trackingEnabled = false
+    let trackingStartedAtMs = 0
+
+    let frameCountInSecond = 0
+    let secondWindowStartMs = 0
+
     let rafId = 0
-    const rafLoop = () => {
+    const rafLoop = (t: number) => {
         debugUiTick.value++
+
+        if (trackingEnabled) {
+            if (trackingStartedAtMs === 0) {
+                trackingStartedAtMs = t
+                secondWindowStartMs = t
+                frameCountInSecond = 0
+                fpsHistory.value = []
+            }
+
+            frameCountInSecond++
+
+            const elapsedInSecond = t - secondWindowStartMs
+            if (elapsedInSecond >= 1000) {
+                const fps = Math.round((frameCountInSecond * 1000) / elapsedInSecond)
+                fpsText.value = String(fps)
+
+                const next = fpsHistory.value.slice()
+                next.push(fps)
+                if (next.length > FPS_HISTORY_MAX_SECONDS) {
+                    next.splice(0, next.length - FPS_HISTORY_MAX_SECONDS)
+                }
+                fpsHistory.value = next
+
+                secondWindowStartMs = t
+                frameCountInSecond = 0
+            }
+        }
+
         rafId = requestAnimationFrame(rafLoop)
     }
     rafId = requestAnimationFrame(rafLoop)
@@ -115,6 +145,15 @@ export function useInGameDataHub() {
     onUnmounted(() => {
         cancelAnimationFrame(rafId)
     })
+
+    function setPerformanceTracking(active: boolean) {
+        trackingEnabled = active
+        fpsText.value = '-'
+        fpsHistory.value = []
+        trackingStartedAtMs = 0
+        secondWindowStartMs = 0
+        frameCountInSecond = 0
+    }
 
     function setRenderer(r: ThreeWorldRenderer | null) {
         renderer.value = r
@@ -126,6 +165,9 @@ export function useInGameDataHub() {
 
     function setLastSnapshot(s: SnapshotMessage | null) {
         lastSnapshot.value = s
+        if (s?.ok && s.realTimeWorldState?.entities) {
+            entities.value = s.realTimeWorldState.entities
+        }
     }
 
     function onCanvasPointerMove(e: PointerEvent) {
@@ -160,7 +202,7 @@ export function useInGameDataHub() {
     const overviewSectorCountText = computed(() => {
         const s = lastSnapshot.value
         if (!s || !s.ok) return '-'
-        return String(s.dailySettlementState?.sectorCount ?? s.realTimeWorldState?.sectorCenters?.length ?? '-')
+        return String(s.realTimeWorldState?.sectorCenters?.length ?? '-')
     })
 
     const debugZoomText = computed(() => {
@@ -190,6 +232,7 @@ export function useInGameDataHub() {
         getRenderer,
         setLastSnapshot,
         onCanvasPointerMove,
+        entities,
         overview: {
             dayText: overviewDayText,
             tickCostText: overviewTickCostText,
@@ -201,5 +244,10 @@ export function useInGameDataHub() {
             mouseWorldText: debugMouseWorldText,
             worldStateText: debugWorldStateText,
         },
+        performance: {
+            fpsText,
+            fpsHistory,
+        },
+        setPerformanceTracking,
     } satisfies InGameDataHub
 }

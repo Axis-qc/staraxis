@@ -7,36 +7,26 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * StarSystem
+ * StarSystem（恒星系）
  *
- * Represents a single star system, containing one or more stars and a set of
- * planets.
+ * 恒星系：一个逻辑组织，用于表达“这几颗恒星与行星属于同一系统/同一重心参考系”。
  */
 public class StarSystem {
-    /**
-     * Unique ID for this star system.
-     */
-    public long id;
+    /** 恒星系ID（systemId）。 */
+    public long systemId;
 
-    /**
-     * The sector this system belongs to.
-     */
+    /** 恒星系重心实体ID（barycenterEntityId），用于行星轨道指向。 */
+    public long barycenterEntityId;
+
+    /** 恒星系当前所在星区坐标（sectorCoord = sectorId 口径）。 */
     public SectorCoord sectorCoord;
 
-    /**
-     * The center of the system in world coordinates (GU).
-     * For single-star systems, this is the star's position.
-     * For multi-star systems, this is the barycenter.
-     */
+    /** 恒星系重心世界坐标（centerWorldGU），可随恒星运动更新。 */
     public Vec2d centerWorldGU;
 
-    /**
-     * List of stars in this system. Supports multi-star systems.
-     */
+    /** 属于该系统的恒星实体列表。 */
     public final List<StarBody> stars = new ArrayList<>();
 
-    /**
-     * List of planets orbiting the system's barycenter or primary star.
-     */
+    /** 属于该系统的行星实体列表。 */
     public final List<PlanetBody> planets = new ArrayList<>();
 }

@@ -3,9 +3,9 @@
         "typeId": "G_MAIN_SEQUENCE",
         "description": "Yellow main-sequence star, like the Sun.",
         "weight": 20,
-        "radiusKmRange": [
-            600000,
-            800000
+        "radiusGURange": [
+            6000,
+            8000
         ],
         "massSolarRange": [
             0.8,
@@ -26,9 +26,9 @@
         "typeId": "K_MAIN_SEQUENCE",
         "description": "Orange main-sequence star.",
         "weight": 30,
-        "radiusKmRange": [
-            480000,
-            670000
+        "radiusGURange": [
+            4800,
+            6700
         ],
         "massSolarRange": [
             0.45,
@@ -49,9 +49,9 @@
         "typeId": "M_MAIN_SEQUENCE",
         "description": "Red dwarf, the most common type of star.",
         "weight": 100,
-        "radiusKmRange": [
-            100000,
-            480000
+        "radiusGURange": [
+            1000,
+            4800
         ],
         "massSolarRange": [
             0.08,
@@ -72,9 +72,9 @@
         "typeId": "A_MAIN_SEQUENCE",
         "description": "White main-sequence star.",
         "weight": 5,
-        "radiusKmRange": [
-            970000,
-            1250000
+        "radiusGURange": [
+            9700,
+            12500
         ],
         "massSolarRange": [
             1.4,
@@ -95,9 +95,9 @@
         "typeId": "B_MAIN_SEQUENCE",
         "description": "Blue-white main-sequence star.",
         "weight": 2,
-        "radiusKmRange": [
-            1250000,
-            4600000
+        "radiusGURange": [
+            12500,
+            46000
         ],
         "massSolarRange": [
             2.1,
@@ -118,9 +118,9 @@
         "typeId": "RED_GIANT",
         "description": "A large, luminous star in a late phase of stellar evolution.",
         "weight": 3,
-        "radiusKmRange": [
-            70000000,
-            200000000
+        "radiusGURange": [
+            700000,
+            2000000
         ],
         "massSolarRange": [
             0.3,
@@ -141,9 +141,9 @@
         "typeId": "BLUE_GIANT",
         "description": "A hot, luminous giant star.",
         "weight": 1,
-        "radiusKmRange": [
-            3500000,
-            10000000
+        "radiusGURange": [
+            35000,
+            100000
         ],
         "massSolarRange": [
             2,

@@ -1,20 +1,20 @@
 package staraxis.game.state;
 
-import staraxis.game.astro.StarSystem;
+import staraxis.game.entity.Entity;
+import staraxis.game.state.snapshot.EntitySnapshot;
 import staraxis.game.world.Vec2d;
 import staraxis.game.world.hex.SectorCoord;
 
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
- * RealTimeWorldState
+ * RealTimeWorldState（实时世界状态）
  *
  * 实时世界状态（只读快照）：用于战斗、移动、即时事件等实时系统；以及需要即时数据的 UI 展示。
  *
  * 更新方式：每个 simulationTick 结束时，模拟层在 inactive 缓冲中全量填充后 swap 发布为 active。
+ *
+ * 核心数据结构：以扁平化的实体表（entitiesById）为核心，并提供按星区/星系的索引，以支持“归属可变”与高效查询。
  */
 public class RealTimeWorldState {
 
@@ -26,15 +26,19 @@ public class RealTimeWorldState {
 
     public int worldRadius;
 
-    /**
-     * 星系列表（只读快照数据）。
-     */
-    private List<StarSystem> starSystems = List.of();
+    /** 实体总表（entityId -> Entity），新的核心数据结构。 */
+    private final Map<Long, Entity> entitiesById = new LinkedHashMap<>();
 
-    /**
-     * 星区中心点缓存：key 为 SectorCoord（axial q,r）。
-     */
+    /** 空间索引（sectorCoord -> entityIds），用于按星区查询。 */
+    private final Map<SectorCoord, List<Long>> entityIdsBySector = new LinkedHashMap<>();
+
+    /** 系统索引（systemId -> entityIds），用于按恒星系查询。 */
+    private final Map<Long, List<Long>> entityIdsBySystem = new LinkedHashMap<>();
+
+    /** 星区中心点缓存（sectorCoord -> centerWorldGU）。 */
     private final Map<SectorCoord, Vec2d> sectorCentersWorldGU = new LinkedHashMap<>();
+
+    private final List<EntitySnapshot> entitySnapshots = new ArrayList<>();
 
     public RealTimeWorldState() {
     }
@@ -47,8 +51,28 @@ public class RealTimeWorldState {
         gameDatetimeDay = 0;
         accGameHoursInDay = 0;
         worldRadius = 0;
+        entitiesById.clear();
+        entityIdsBySector.clear();
+        entityIdsBySystem.clear();
         sectorCentersWorldGU.clear();
-        starSystems = List.of();
+        entitySnapshots.clear();
+    }
+
+    /**
+     * 模拟层填充：注册一个实体及其索引。
+     */
+    public void putEntity(Entity entity) {
+        if (entity == null)
+            return;
+
+        entitiesById.put(entity.entityId, entity);
+    }
+
+    public void putEntitySnapshot(EntitySnapshot snapshot) {
+        if (snapshot == null)
+            return;
+
+        entitySnapshots.add(snapshot);
     }
 
     /**
@@ -58,18 +82,25 @@ public class RealTimeWorldState {
         sectorCentersWorldGU.put(coord, centerWorldGU);
     }
 
-    /**
-     * 只读视图：按 id（SectorCoord）索引。
-     */
+    // --- 只读视图 --- //
+
+    public Map<Long, Entity> getEntitiesByIdView() {
+        return Collections.unmodifiableMap(entitiesById);
+    }
+
+    public Map<SectorCoord, List<Long>> getEntityIdsBySectorView() {
+        return Collections.unmodifiableMap(entityIdsBySector);
+    }
+
+    public Map<Long, List<Long>> getEntityIdsBySystemView() {
+        return Collections.unmodifiableMap(entityIdsBySystem);
+    }
+
     public Map<SectorCoord, Vec2d> getSectorCentersWorldGUView() {
         return Collections.unmodifiableMap(sectorCentersWorldGU);
     }
 
-    public void setStarSystemsForFill(List<StarSystem> starSystems) {
-        this.starSystems = starSystems != null ? List.copyOf(starSystems) : List.of();
-    }
-
-    public List<StarSystem> getStarSystemsView() {
-        return Collections.unmodifiableList(starSystems);
+    public List<EntitySnapshot> getEntitySnapshotsView() {
+        return Collections.unmodifiableList(entitySnapshots);
     }
 }

@@ -6,14 +6,19 @@ package staraxis.game.state.snapshot;
  * 轨道参数的只读快照。
  */
 public class OrbitSnapshot {
-    public final double semiMajorAxisAU;
+    /** 轨道中心实体ID（orbitCenterEntityId）。 */
+    public final long orbitCenterEntityId;
+
+    public final double semiMajorAxisGU;
     public final double eccentricity;
     public final double orbitalPeriodDays;
     public final double meanAnomalyDegAtEpoch;
 
-    public OrbitSnapshot(double semiMajorAxisAU, double eccentricity, double orbitalPeriodDays,
+    public OrbitSnapshot(long orbitCenterEntityId, double semiMajorAxisGU, double eccentricity,
+            double orbitalPeriodDays,
             double meanAnomalyDegAtEpoch) {
-        this.semiMajorAxisAU = semiMajorAxisAU;
+        this.orbitCenterEntityId = orbitCenterEntityId;
+        this.semiMajorAxisGU = semiMajorAxisGU;
         this.eccentricity = eccentricity;
         this.orbitalPeriodDays = orbitalPeriodDays;
         this.meanAnomalyDegAtEpoch = meanAnomalyDegAtEpoch;

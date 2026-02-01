@@ -3,33 +3,35 @@ package staraxis.game.astro;
 /**
  * OrbitParams
  *
- * Holds the orbital parameters of a celestial body.
- * All distances are in astronomical units (AU) and angles in degrees.
+ * 轨道参数（Orbit Params）：描述一个天体绕某个“轨道中心”的运动参数。
+ *
+ * 说明：
+ * - 距离单位：GU。
+ * - 角度单位：度。
+ * - 轨道中心通过 orbitCenterEntityId 指定，可支持：
+ * - 行星绕某颗恒星（orbitCenterEntityId = star.entityId）
+ * - 行星绕星系重心实体（orbitCenterEntityId = barycenter.entityId）
  */
 public class OrbitParams {
-    /**
-     * Semi-major axis in astronomical units (AU).
-     */
-    public double semiMajorAxisAU;
 
-    /**
-     * Eccentricity of the orbit (0=circle, <1=ellipse).
-     */
+    /** 轨道中心实体ID（orbitCenterEntityId）。 */
+    public long orbitCenterEntityId;
+
+    /** 轨道长半轴（GU）。 */
+    public double semiMajorAxisGU;
+
+    /** 轨道偏心率（0=圆，<1=椭圆）。 */
     public double eccentricity;
 
-    /**
-     * Inclination of the orbit in degrees.
-     */
+    /** 轨道倾角（度）。 */
     public double inclinationDeg;
 
-    /**
-     * Orbital period in game days.
-     */
+    /** 轨道周期（游戏日）。 */
     public double orbitalPeriodDays;
 
     /**
-     * Mean anomaly at epoch (t=0) in degrees.
-     * Used to determine the body's position in its orbit at a given time.
+     * 纪元时刻（t=0）的平近点角（度）。
+     * 用于计算任意时刻的轨道位置。
      */
     public double meanAnomalyDegAtEpoch;
 }

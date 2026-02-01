@@ -107,7 +107,11 @@ public class WebNetServer {
                     WebSockets.sendText(json, ch, null);
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            try {
+                GameLog.log("tickAndBroadcastSnapshots snapshot_build_failed: " + String.valueOf(e));
+            } catch (Exception ignored) {
+            }
         }
     }
 
@@ -118,7 +122,14 @@ public class WebNetServer {
 
         StarAxisGameRuntime runtime = GameSessions.getRuntime();
         if (runtime == null) {
-            WebSockets.sendText(SnapshotMessageFactory.buildWorldNotCreatedJson(), channel, null);
+            try {
+                WebSockets.sendText(
+                        objectMapper.writeValueAsString(SnapshotMessageFactory.buildWorldNotCreatedMessage()),
+                        channel, null);
+            } catch (Exception e) {
+                WebSockets.sendText("{\"type\":\"snapshot\",\"ok\":false,\"error\":\"world_not_created\"}",
+                        channel, null);
+            }
             return;
         }
 
@@ -127,6 +138,10 @@ public class WebNetServer {
                     SnapshotMessageFactory.buildSnapshotMessage(runtime, lastTickCostMs.get()));
             WebSockets.sendText(json, channel, null);
         } catch (Exception e) {
+            try {
+                GameLog.log("sendSnapshotToChannel snapshot_build_failed: " + String.valueOf(e));
+            } catch (Exception ignored) {
+            }
             WebSockets.sendText("{\"type\":\"snapshot\",\"ok\":false,\"error\":\"snapshot_build_failed\"}",
                     channel, null);
         }

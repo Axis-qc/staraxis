@@ -15,7 +15,7 @@ import type { ThreeWorldRenderer } from '../../../rendering/threeWorldRenderer'
 export type RtsCommandIntent =
     | {
         type: 'Move'
-        unitIds: string[]
+        unitIds: number[]
         targetWorldGU: { x: number; y: number }
     }
 
@@ -33,7 +33,7 @@ function clientToWorldGU(renderer: ThreeWorldRenderer, canvasRect: DOMRect, clie
 
 export function useRtsRightClickCommand(opts: {
     getRenderer: () => ThreeWorldRenderer | null
-    getSelectedIds: () => string[]
+    getSelectedIds: () => number[]
     onCommandIntent?: (intent: RtsCommandIntent) => void
 }) {
     function onPointerDown(e: PointerEvent) {

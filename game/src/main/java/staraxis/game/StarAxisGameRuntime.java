@@ -3,19 +3,27 @@ package staraxis.game;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import staraxis.game.astro.AstroData;
 import staraxis.game.astro.AstroGenerator;
+import staraxis.game.astro.PlanetBody;
+import staraxis.game.astro.StarBody;
 import staraxis.game.astro.StarSystem;
 import staraxis.game.astro.def.AstroAssetRepository;
+import staraxis.game.entity.Entity;
+import staraxis.game.entity.EntityType;
 import staraxis.game.sim.SimulationClock;
 import staraxis.game.sim.SimulationTime;
 import staraxis.game.state.DailySettlementStateBuffer;
 import staraxis.game.state.RealTimeWorldState;
 import staraxis.game.state.RealTimeWorldStateBuffer;
 import staraxis.game.state.WorldState;
+import staraxis.game.state.snapshot.EntitySnapshot;
+import staraxis.game.state.snapshot.OrbitSnapshot;
+import staraxis.game.world.hex.SectorCoord;
 import staraxis.game.world.WorldGenConfig;
 import staraxis.game.world.WorldGenerator;
 import staraxis.game.world.WorldSector;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * StarAxisGameRuntime
@@ -107,7 +115,77 @@ public class StarAxisGameRuntime implements GameRuntime {
             s.putSectorCenter(sector.coord, sector.centerWorldGU);
         }
 
-        s.setStarSystemsForFill(worldState.astro.getSystemsView());
+        for (StarSystem system : worldState.astro.getSystemsView()) {
+            // 1. 创建并注册重心实体
+            Entity barycenter = new Entity();
+            barycenter.entityId = system.barycenterEntityId;
+            barycenter.entityType = EntityType.SYSTEM_BARYCENTER;
+            barycenter.systemId = system.systemId;
+            barycenter.parentEntityId = 0;
+            barycenter.sectorCoord = system.sectorCoord;
+            barycenter.posWorldGU = system.centerWorldGU;
+            s.putEntity(barycenter);
+            s.putEntitySnapshot(new EntitySnapshot(
+                    barycenter.entityId,
+                    barycenter.entityType,
+                    barycenter.systemId,
+                    barycenter.parentEntityId,
+                    barycenter.sectorCoord,
+                    barycenter.posWorldGU,
+                    new EntitySnapshot.SystemBarycenterDetails()));
+
+            // 2. 注册恒星实体
+            for (StarBody star : system.stars) {
+                star.systemId = system.systemId;
+                star.parentEntityId = system.barycenterEntityId; // 单星系统也挂在重心下
+                star.sectorCoord = system.sectorCoord;
+                star.posWorldGU = system.centerWorldGU; // 单星系统：恒星位置=重心位置
+                s.putEntity(star);
+                s.putEntitySnapshot(new EntitySnapshot(
+                        star.entityId,
+                        star.entityType,
+                        star.systemId,
+                        star.parentEntityId,
+                        star.sectorCoord,
+                        star.posWorldGU,
+                        new EntitySnapshot.StarDetails(star.starTypeId, star.radiusGU, star.massSolar,
+                                star.temperatureK)));
+            }
+
+            // 3. 注册行星实体
+            for (PlanetBody planet : system.planets) {
+                planet.systemId = system.systemId;
+                // 默认行星归属重心（单星系统里重心=恒星）
+                planet.parentEntityId = system.barycenterEntityId;
+                if (planet.orbit != null) {
+                    planet.orbit.orbitCenterEntityId = system.barycenterEntityId;
+                }
+                planet.sectorCoord = system.sectorCoord;
+                // 行星 posWorldGU 由前端根据轨道计算，这里不填充
+                s.putEntity(planet);
+
+                OrbitSnapshot orbitSnapshot = null;
+                if (planet.orbit != null) {
+                    orbitSnapshot = new OrbitSnapshot(
+                            planet.orbit.orbitCenterEntityId,
+                            planet.orbit.semiMajorAxisGU,
+                            planet.orbit.eccentricity,
+                            planet.orbit.orbitalPeriodDays,
+                            planet.orbit.meanAnomalyDegAtEpoch);
+                }
+
+                s.putEntitySnapshot(new EntitySnapshot(
+                        planet.entityId,
+                        planet.entityType,
+                        planet.systemId,
+                        planet.parentEntityId,
+                        planet.sectorCoord,
+                        planet.posWorldGU,
+                        new EntitySnapshot.PlanetDetails(planet.planetTypeId, planet.radiusGU,
+                                planet.rotationPeriodHours,
+                                orbitSnapshot)));
+            }
+        }
 
         realTimeBuffer.swapPublish();
     }

@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { SnapshotMessage } from '../net/snapshotWs'
+import type { EntitySnapshot, SnapshotMessage, StarDetails, PlanetDetails } from '../net/snapshotWs'
 import { buildHexSegmentPositions, SECTOR_SIZE_GU } from './hexSectorGeometry'
 
 export type ThreeWorldRenderer = {
@@ -7,6 +7,7 @@ export type ThreeWorldRenderer = {
     cameraWorldPosGU: THREE.Vector2
     setZoom: (z: number) => void
     applyCameraTransform: () => void
+    setSelectedEntityIds: (ids: number[]) => void
     updateFromSnapshot: (snapshot: SnapshotMessage) => void
     dispose: () => void
 }
@@ -31,13 +32,11 @@ function createDynamicGrid() {
         const viewWidthGU = (camera.right - camera.left) / camera.zoom
         const viewHeightGU = (camera.top - camera.bottom) / camera.zoom
 
-        // 视野范围以“相机局部坐标”(0,0)为中心
         const viewMinX = -viewWidthGU / 2
         const viewMaxX = viewWidthGU / 2
         const viewMinY = -viewHeightGU / 2
         const viewMaxY = viewHeightGU / 2
 
-        // 目标：每格约 10px。权威口径：1px = zoom GU => 10px = 10*zoom GU
         const minStepGU = 10 * zoom
         const powerOf10 = 10 ** Math.floor(Math.log10(minStepGU))
         let stepGU = powerOf10
@@ -70,13 +69,8 @@ function createDynamicGrid() {
     return { grid, update, dispose }
 }
 
-function worldAabbIntersects(a: { minX: number; maxX: number; minY: number; maxY: number }, b: {
-    minX: number
-    maxX: number
-    minY: number
-    maxY: number
-}): boolean {
-    return !(a.maxX < b.minX || a.minX > b.maxX || a.maxY < b.minY || a.minY > b.maxY)
+function isPointInAabb(point: { x: number; y: number }, aabb: { minX: number; maxX: number; minY: number; maxY: number }): boolean {
+    return point.x >= aabb.minX && point.x <= aabb.maxX && point.y >= aabb.minY && point.y <= aabb.maxY
 }
 
 export function createThreeWorldRenderer(
@@ -118,7 +112,6 @@ export function createThreeWorldRenderer(
     const getTexture = (path: string) => {
         let texture = textureCache.get(path)
         if (!texture) {
-            // All assets are served from the root /assets path
             texture = textureLoader.load(`/assets/${path}`)
             texture.anisotropy = renderer.capabilities.getMaxAnisotropy()
             textureCache.set(path, texture)
@@ -130,16 +123,118 @@ export function createThreeWorldRenderer(
 
     container.appendChild(renderer.domElement)
 
-    // 权威相机世界坐标（GU，float64 语义）
     const cameraWorldPosGU = new THREE.Vector2(0, 0)
 
-    // world 数据缓存（权威坐标，仅用于逻辑判断，不进 GPU）
     let worldSectorCenters: { q: number; r: number; x: number; y: number }[] = []
-    let worldStarSystems: any[] = []
+    let entities = new Map<number, EntitySnapshot>()
     let lastSnapshot: SnapshotMessage | null = null
 
-    const starSystemsGroup = new THREE.Group()
-    worldGroup.add(starSystemsGroup)
+    const entitiesGroup = new THREE.Group()
+    worldGroup.add(entitiesGroup)
+
+    // --- Object pools / caches ---
+
+    const starDotPool: THREE.Mesh[] = []
+    const activeStarDotByEntityId = new Map<number, THREE.Mesh>()
+
+    const starSpritePoolByPath = new Map<string, THREE.Sprite[]>()
+    const activeStarSpriteByEntityId = new Map<number, THREE.Sprite>()
+
+    const planetSpritePoolByPath = new Map<string, THREE.Sprite[]>()
+    const activePlanetSpriteByEntityId = new Map<number, THREE.Sprite>()
+
+    const orbitLinePool: THREE.Line[] = []
+    const activeOrbitLineByEntityId = new Map<number, THREE.Line>()
+
+    let selectedEntityIds = new Set<number>()
+
+    const selectionRingPool: THREE.Mesh[] = []
+    const activeSelectionRingByEntityId = new Map<number, THREE.Mesh>()
+
+    const acquireSelectionRing = () => {
+        const ring = selectionRingPool.pop()
+        if (ring) {
+            ring.visible = true
+            return ring
+        }
+
+        const geo = new THREE.RingGeometry(0.85, 1.0, 48)
+        const mat = new THREE.MeshBasicMaterial({
+            color: 0xffe04d,
+            transparent: true,
+            opacity: 0.95,
+            depthWrite: false,
+        })
+        const m = new THREE.Mesh(geo, mat)
+        m.visible = true
+        return m
+    }
+
+    const releaseSelectionRing = (ring: THREE.Mesh) => {
+        ring.visible = false
+        entitiesGroup.remove(ring)
+        selectionRingPool.push(ring)
+    }
+
+    const acquireStarDot = () => {
+        const dot = starDotPool.pop()
+        if (dot) {
+            dot.visible = true
+            return dot
+        }
+
+        const geo = new THREE.CircleGeometry(1, 12)
+        const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false })
+        const m = new THREE.Mesh(geo, mat)
+        m.visible = true
+        return m
+    }
+
+    const releaseStarDot = (dot: THREE.Mesh) => {
+        dot.visible = false
+        entitiesGroup.remove(dot)
+        starDotPool.push(dot)
+    }
+
+    const acquireSprite = (poolByPath: Map<string, THREE.Sprite[]>, spritePath: string, texture: THREE.Texture) => {
+        const pool = poolByPath.get(spritePath)
+        if (pool && pool.length > 0) {
+            const s = pool.pop()!
+            s.visible = true
+            return s
+        }
+        const material = new THREE.SpriteMaterial({ map: texture, sizeAttenuation: false, depthWrite: false })
+        const sprite = new THREE.Sprite(material)
+        sprite.visible = true
+        return sprite
+    }
+
+    const releaseSprite = (poolByPath: Map<string, THREE.Sprite[]>, spritePath: string, sprite: THREE.Sprite) => {
+        sprite.visible = false
+        entitiesGroup.remove(sprite)
+        const pool = poolByPath.get(spritePath) ?? []
+        pool.push(sprite)
+        poolByPath.set(spritePath, pool)
+    }
+
+    const acquireOrbitLine = () => {
+        const line = orbitLinePool.pop()
+        if (line) {
+            line.visible = true
+            return line
+        }
+        const geometry = new THREE.BufferGeometry()
+        const material = new THREE.LineBasicMaterial({ color: 0xaaaaaa, transparent: true, opacity: 0.5 })
+        const l = new THREE.Line(geometry, material)
+        l.visible = true
+        return l
+    }
+
+    const releaseOrbitLine = (line: THREE.Line) => {
+        line.visible = false
+        entitiesGroup.remove(line)
+        orbitLinePool.push(line)
+    }
 
     let hexOutlines: THREE.LineSegments | undefined
 
@@ -181,198 +276,275 @@ export function createThreeWorldRenderer(
     const ORBIT_DISABLE_ZOOM_THRESHOLD = 200_000
 
     const rebuildVisibleObjects = (snapshot: SnapshotMessage | null) => {
-        if (worldSectorCenters.length === 0) {
-            return
-        }
-
-        // 当前视野的 world AABB（用于逻辑裁剪）
-        const viewWidthGU = (camera.right - camera.left) / camera.zoom
-        const viewHeightGU = (camera.top - camera.bottom) / camera.zoom
-        const viewAabb = {
-            minX: cameraWorldPosGU.x - viewWidthGU / 2,
-            maxX: cameraWorldPosGU.x + viewWidthGU / 2,
-            minY: cameraWorldPosGU.y - viewHeightGU / 2,
-            maxY: cameraWorldPosGU.y + viewHeightGU / 2,
-        }
-
-        // 星区包围盒：中心点 + 半径近似
-        const radius = SECTOR_SIZE_GU
-
-        // GPU 只吃 CameraLocal：cameraLocal = world - cameraWorldPosGU
-        const visibleCentersCameraLocal: { x: number; y: number }[] = []
-        for (const s of worldSectorCenters) {
-            const aabb = {
-                minX: s.x - radius,
-                maxX: s.x + radius,
-                minY: s.y - radius,
-                maxY: s.y + radius,
-            }
-            if (worldAabbIntersects(aabb, viewAabb)) {
-                visibleCentersCameraLocal.push({
-                    x: s.x - cameraWorldPosGU.x,
-                    y: s.y - cameraWorldPosGU.y,
-                })
-            }
-        }
-
         if (hexOutlines) {
             worldGroup.remove(hexOutlines)
-            hexOutlines.geometry.dispose()
-            if (Array.isArray(hexOutlines.material)) {
-                hexOutlines.material.forEach((m) => m.dispose())
-            } else {
-                hexOutlines.material.dispose()
-            }
+            hexOutlines.geometry.dispose();
+            (hexOutlines.material as THREE.Material).dispose()
             hexOutlines = undefined
+        }
+
+        const viewWidthGU = (camera.right - camera.left) / camera.zoom
+        const viewHeightGU = (camera.top - camera.bottom) / camera.zoom
+        const cullingAabb = {
+            minX: cameraWorldPosGU.x - (viewWidthGU * 1.5) / 2,
+            maxX: cameraWorldPosGU.x + (viewWidthGU * 1.5) / 2,
+            minY: cameraWorldPosGU.y - (viewHeightGU * 1.5) / 2,
+            maxY: cameraWorldPosGU.y + (viewHeightGU * 1.5) / 2,
+        }
+
+        const visibleCentersCameraLocal: { x: number; y: number }[] = []
+        for (const s of worldSectorCenters) {
+            if (isPointInAabb(s, cullingAabb)) {
+                visibleCentersCameraLocal.push({ x: s.x - cameraWorldPosGU.x, y: s.y - cameraWorldPosGU.y })
+            }
         }
 
         const segPositions = buildHexSegmentPositions(visibleCentersCameraLocal)
         const geometry = new THREE.BufferGeometry()
         geometry.setAttribute('position', new THREE.BufferAttribute(segPositions, 3))
-
-        const material = new THREE.LineBasicMaterial({
-            color: 0x7fd3ff,
-            transparent: true,
-            opacity: 0.55,
-        })
-
+        const material = new THREE.LineBasicMaterial({ color: 0x7fd3ff, transparent: true, opacity: 0.55 })
         hexOutlines = new THREE.LineSegments(geometry, material)
         worldGroup.add(hexOutlines)
 
-        // --- Star Systems ---
-        // Naive rebuild: clear and add all visible stars. For performance, use object pooling and instancing.
-        while (starSystemsGroup.children.length > 0) {
-            const obj = starSystemsGroup.children[0] as any
-            starSystemsGroup.remove(obj)
-            obj.geometry?.dispose?.()
-            if (Array.isArray(obj.material)) {
-                obj.material.forEach((m: any) => m.dispose?.())
-            } else {
-                obj.material?.dispose?.()
-            }
-        }
+        const GAME_HOUR_PER_TICK = 0.25
 
-        const GAME_UNIT_IN_METERS = 100_000
-        const AU_TO_GU = 149597870700 / GAME_UNIT_IN_METERS
-        const GAME_HOUR_PER_TICK = 0.25 // From SimulationClock.java
+        const farZoomStars = zoom.value > STAR_SPRITE_DISABLE_ZOOM_THRESHOLD
+        const showPlanets = zoom.value <= PLANET_SPRITE_DISABLE_ZOOM_THRESHOLD
 
-        const starSystemAabb = { minX: 0, maxX: 0, minY: 0, maxY: 0 }
+        const nextStarDotIds = new Set<number>()
+        const nextStarSpriteIds = new Set<number>()
+        const nextPlanetSpriteIds = new Set<number>()
+        const nextOrbitIds = new Set<number>()
+        const nextSelectionRingIds = new Set<number>()
 
-        for (const system of worldStarSystems) {
-            if (!system.centerWorldGU) continue
+        for (const entity of entities.values()) {
+            switch (entity.entityType) {
+                case 'STAR': {
+                    if (!entity.posWorldGU || !isPointInAabb(entity.posWorldGU, cullingAabb)) {
+                        continue
+                    }
 
-            const center = system.centerWorldGU
+                    const details = entity.details as StarDetails
 
-            // Calculate a bounding radius for the system for culling
-            let maxOrbitAU = 0
-            for (const planet of system.planets) {
-                if (planet.orbit && planet.orbit.semiMajorAxisAU > maxOrbitAU) {
-                    maxOrbitAU = planet.orbit.semiMajorAxisAU
-                }
-            }
-            let maxStarRadiusKm = 0
-            for (const star of system.stars) {
-                if (star.radiusKm > maxStarRadiusKm) {
-                    maxStarRadiusKm = star.radiusKm
-                }
-            }
-            const maxStarRadiusGU = (maxStarRadiusKm * 1000) / GAME_UNIT_IN_METERS
-            const systemRadiusGU = maxOrbitAU * AU_TO_GU + maxStarRadiusGU
-
-            starSystemAabb.minX = center.x - systemRadiusGU
-            starSystemAabb.maxX = center.x + systemRadiusGU
-            starSystemAabb.minY = center.y - systemRadiusGU
-            starSystemAabb.maxY = center.y + systemRadiusGU
-
-            if (worldAabbIntersects(starSystemAabb, viewAabb)) {
-                const farZoom = zoom.value > STAR_SPRITE_DISABLE_ZOOM_THRESHOLD
-
-                for (const star of system.stars) {
-                    if (farZoom) {
-                        // 远距离：禁用纹理精灵，改为轻量点（Circle）
-                        const radiusGU = (star.radiusKm * 1000) / GAME_UNIT_IN_METERS
+                    if (farZoomStars) {
+                        nextStarDotIds.add(entity.entityId)
+                        const radiusGU = details.radiusGU
                         const size = Math.max(zoom.value * 2, radiusGU * 2)
 
-                        const geo = new THREE.CircleGeometry(size / 2, 12)
-                        const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false })
-                        const dot = new THREE.Mesh(geo, mat)
-                        dot.position.set(center.x - cameraWorldPosGU.x, center.y - cameraWorldPosGU.y, 0)
-                        starSystemsGroup.add(dot)
-                        continue
+                        let dot = activeStarDotByEntityId.get(entity.entityId)
+                        if (!dot) {
+                            dot = acquireStarDot()
+                            activeStarDotByEntityId.set(entity.entityId, dot)
+                            entitiesGroup.add(dot)
+                        }
+                        dot.scale.set(size, size, 1)
+                        dot.position.set(entity.posWorldGU.x - cameraWorldPosGU.x, entity.posWorldGU.y - cameraWorldPosGU.y, 0)
+                        dot.visible = true
+
+                        const oldSprite = activeStarSpriteByEntityId.get(entity.entityId)
+                        if (oldSprite) {
+                            oldSprite.visible = false
+                        }
+
+                    } else {
+                        const spritePath = getSpritePath(details.starTypeId)
+                        if (!spritePath) {
+                            continue
+                        }
+
+                        nextStarSpriteIds.add(entity.entityId)
+
+                        const texture = getTexture(spritePath)
+                        const radiusGU = details.radiusGU
+                        const size = radiusGU * 2
+
+                        let sprite = activeStarSpriteByEntityId.get(entity.entityId)
+                        if (!sprite) {
+                            sprite = acquireSprite(starSpritePoolByPath, spritePath, texture)
+                            activeStarSpriteByEntityId.set(entity.entityId, sprite)
+                            entitiesGroup.add(sprite)
+                        } else {
+                            const mat = sprite.material as THREE.SpriteMaterial
+                            if (mat.map !== texture) {
+                                mat.map = texture
+                                mat.needsUpdate = true
+                            }
+                        }
+
+                        sprite.scale.set(size, size, 1)
+                        sprite.position.set(entity.posWorldGU.x - cameraWorldPosGU.x, entity.posWorldGU.y - cameraWorldPosGU.y, 0)
+                        sprite.visible = true
+
+                        const oldDot = activeStarDotByEntityId.get(entity.entityId)
+                        if (oldDot) {
+                            oldDot.visible = false
+                        }
                     }
 
-                    const spritePath = getSpritePath(star.typeId)
-                    if (spritePath) {
-                        const texture = getTexture(spritePath)
-                        const material = new THREE.SpriteMaterial({ map: texture, sizeAttenuation: false, depthWrite: false })
-                        const sprite = new THREE.Sprite(material)
-                        const radiusGU = (star.radiusKm * 1000) / GAME_UNIT_IN_METERS
-                        const size = radiusGU * 2
-                        sprite.scale.set(size, size, 1)
-                        sprite.position.set(center.x - cameraWorldPosGU.x, center.y - cameraWorldPosGU.y, 0)
-                        starSystemsGroup.add(sprite)
+                    if (selectedEntityIds.has(entity.entityId)) {
+                        nextSelectionRingIds.add(entity.entityId)
+                        let ring = activeSelectionRingByEntityId.get(entity.entityId)
+                        if (!ring) {
+                            ring = acquireSelectionRing()
+                            activeSelectionRingByEntityId.set(entity.entityId, ring)
+                            entitiesGroup.add(ring)
+                        }
+                        const size = Math.max(details.radiusGU * 2.4, zoom.value * 4)
+                        ring.scale.set(size, size, 1)
+                        ring.position.set(entity.posWorldGU.x - cameraWorldPosGU.x, entity.posWorldGU.y - cameraWorldPosGU.y, 1) // z=1 to be on top
+                        ring.visible = true
                     }
+
+                    break
                 }
 
-                const showPlanets = zoom.value <= PLANET_SPRITE_DISABLE_ZOOM_THRESHOLD
-                const showOrbits = zoom.value <= ORBIT_DISABLE_ZOOM_THRESHOLD
+                case 'PLANET': {
+                    if (!showPlanets) continue
+                    const details = entity.details as PlanetDetails
+                    const orbit = details.orbit
+                    if (!orbit) continue
 
-                for (const planet of system.planets) {
-                    if (!planet.orbit) continue
+                    const orbitCenter = entities.get(orbit.orbitCenterEntityId)
+                    if (!orbitCenter || !orbitCenter.posWorldGU) continue
 
-                    const orbit = planet.orbit
-                    const semiMajorAxisGU = orbit.semiMajorAxisAU * AU_TO_GU
+                    const semiMajorAxisGU = orbit.semiMajorAxisGU
 
-                    if (showOrbits) {
-                        // Draw orbit
-                        const curve = new THREE.EllipseCurve(
-                            center.x - cameraWorldPosGU.x,
-                            center.y - cameraWorldPosGU.y,
-                            semiMajorAxisGU,
-                            semiMajorAxisGU * Math.sqrt(1 - orbit.eccentricity ** 2),
-                            0,
-                            2 * Math.PI,
-                            false,
-                            0
-                        )
-                        const points = curve.getPoints(128)
-                        const geometry = new THREE.BufferGeometry().setFromPoints(points)
-                        const material = new THREE.LineBasicMaterial({ color: 0xaaaaaa, transparent: true, opacity: 0.5 })
-                        const ellipse = new THREE.Line(geometry, material)
-                        starSystemsGroup.add(ellipse)
-                    }
-
-                    if (!showPlanets) {
-                        continue
-                    }
-
-                    // Draw planet
                     const simulationTick = snapshot?.realTimeWorldState?.simulationTick ?? 0
                     const totalHours = simulationTick * GAME_HOUR_PER_TICK
                     const totalDays = totalHours / 24
                     const meanAnomaly = (orbit.meanAnomalyDegAtEpoch * Math.PI) / 180
                     const angle = meanAnomaly + (totalDays / orbit.orbitalPeriodDays) * 2 * Math.PI
 
-                    const planetX = center.x + semiMajorAxisGU * Math.cos(angle)
-                    const planetY = center.y + semiMajorAxisGU * Math.sin(angle)
+                    const planetX = orbitCenter.posWorldGU.x + semiMajorAxisGU * Math.cos(angle)
+                    const planetY = orbitCenter.posWorldGU.y + semiMajorAxisGU * Math.sin(angle)
 
-                    const spritePath = getSpritePath(planet.typeId)
-                    if (spritePath) {
-                        const texture = getTexture(spritePath)
-                        const spriteMaterial = new THREE.SpriteMaterial({ map: texture, sizeAttenuation: false, depthWrite: false })
-                        const sprite = new THREE.Sprite(spriteMaterial)
-                        const radiusGU = (planet.radiusKm * 1000) / GAME_UNIT_IN_METERS
-                        const size = radiusGU * 2
-                        sprite.scale.set(size, size, 1)
-                        sprite.position.set(planetX - cameraWorldPosGU.x, planetY - cameraWorldPosGU.y, 0)
-                        starSystemsGroup.add(sprite)
+                    if (!isPointInAabb({ x: planetX, y: planetY }, cullingAabb)) {
+                        continue
                     }
+
+                    const spritePath = getSpritePath(details.planetTypeId)
+                    if (!spritePath) {
+                        continue
+                    }
+
+                    nextPlanetSpriteIds.add(entity.entityId)
+                    const texture = getTexture(spritePath)
+
+                    let sprite = activePlanetSpriteByEntityId.get(entity.entityId)
+                    if (!sprite) {
+                        sprite = acquireSprite(planetSpritePoolByPath, spritePath, texture)
+                        activePlanetSpriteByEntityId.set(entity.entityId, sprite)
+                        entitiesGroup.add(sprite)
+                    } else {
+                        const mat = sprite.material as THREE.SpriteMaterial
+                        if (mat.map !== texture) {
+                            mat.map = texture
+                            mat.needsUpdate = true
+                        }
+                    }
+
+                    const radiusGU = details.radiusGU
+                    const size = radiusGU * 2
+                    sprite.scale.set(size, size, 1)
+                    sprite.position.set(planetX - cameraWorldPosGU.x, planetY - cameraWorldPosGU.y, 0)
+                    sprite.visible = true
+
+                    if (zoom.value <= ORBIT_DISABLE_ZOOM_THRESHOLD) {
+                        nextOrbitIds.add(entity.entityId)
+                        let ellipse = activeOrbitLineByEntityId.get(entity.entityId)
+                        if (!ellipse) {
+                            ellipse = acquireOrbitLine()
+                            activeOrbitLineByEntityId.set(entity.entityId, ellipse)
+                            entitiesGroup.add(ellipse)
+                        }
+
+                        const curve = new THREE.EllipseCurve(
+                            orbitCenter.posWorldGU.x - cameraWorldPosGU.x,
+                            orbitCenter.posWorldGU.y - cameraWorldPosGU.y,
+                            semiMajorAxisGU,
+                            semiMajorAxisGU * Math.sqrt(1 - orbit.eccentricity ** 2),
+                            0, 2 * Math.PI, false, 0
+                        )
+                        const points = curve.getPoints(128)
+                        ellipse.geometry.setFromPoints(points)
+                        ellipse.visible = true
+
+                    } else {
+                        const ellipse = activeOrbitLineByEntityId.get(entity.entityId)
+                        if (ellipse) {
+                            ellipse.visible = false
+                        }
+                    }
+
+                    if (selectedEntityIds.has(entity.entityId)) {
+                        nextSelectionRingIds.add(entity.entityId)
+                        let ring = activeSelectionRingByEntityId.get(entity.entityId)
+                        if (!ring) {
+                            ring = acquireSelectionRing()
+                            activeSelectionRingByEntityId.set(entity.entityId, ring)
+                            entitiesGroup.add(ring)
+                        }
+                        const size = Math.max(details.radiusGU * 2.4, zoom.value * 4)
+                        ring.scale.set(size, size, 1)
+                        ring.position.set(planetX - cameraWorldPosGU.x, planetY - cameraWorldPosGU.y, 1) // z=1 to be on top
+                        ring.visible = true
+                    }
+
+                    break
                 }
+            }
+        }
+
+        for (const [id, dot] of activeStarDotByEntityId.entries()) {
+            if (!nextStarDotIds.has(id)) {
+                activeStarDotByEntityId.delete(id)
+                releaseStarDot(dot)
+            }
+        }
+
+        for (const [id, sprite] of activeStarSpriteByEntityId.entries()) {
+            if (!nextStarSpriteIds.has(id)) {
+                activeStarSpriteByEntityId.delete(id)
+                const details = entities.get(id)?.details as StarDetails | undefined
+                const spritePath = details ? getSpritePath(details.starTypeId) : undefined
+                if (spritePath) {
+                    releaseSprite(starSpritePoolByPath, spritePath, sprite)
+                } else {
+                    sprite.visible = false
+                    entitiesGroup.remove(sprite)
+                }
+            }
+        }
+
+        for (const [id, sprite] of activePlanetSpriteByEntityId.entries()) {
+            if (!nextPlanetSpriteIds.has(id)) {
+                activePlanetSpriteByEntityId.delete(id)
+                const details = entities.get(id)?.details as PlanetDetails | undefined
+                const spritePath = details ? getSpritePath(details.planetTypeId) : undefined
+                if (spritePath) {
+                    releaseSprite(planetSpritePoolByPath, spritePath, sprite)
+                } else {
+                    sprite.visible = false
+                    entitiesGroup.remove(sprite)
+                }
+            }
+        }
+
+        for (const [id, ellipse] of activeOrbitLineByEntityId.entries()) {
+            if (!nextOrbitIds.has(id)) {
+                activeOrbitLineByEntityId.delete(id)
+                releaseOrbitLine(ellipse)
+            }
+        }
+
+        for (const [id, ring] of activeSelectionRingByEntityId.entries()) {
+            if (!nextSelectionRingIds.has(id)) {
+                activeSelectionRingByEntityId.delete(id)
+                releaseSelectionRing(ring)
             }
         }
     }
 
-    // input: drag pan
     let isDragging = false
     const dragStartClient = new THREE.Vector2(0, 0)
     const dragStartCamera = new THREE.Vector2(0, 0)
@@ -400,10 +572,8 @@ export function createThreeWorldRenderer(
         const dxPx = e.clientX - dragStartClient.x
         const dyPx = e.clientY - dragStartClient.y
 
-        // worldDeltaGU = screenDeltaPx * zoom
         cameraWorldPosGU.set(dragStartCamera.x - dxPx * zoom.value, dragStartCamera.y + dyPx * zoom.value)
 
-        // 这里不再平移 worldGroup、不再引入 renderOrigin：保证逻辑裁剪与 GPU 坐标一致
         applyCameraTransform()
         e.preventDefault()
     }
@@ -460,11 +630,19 @@ export function createThreeWorldRenderer(
     }
     rafId = requestAnimationFrame(renderLoop)
 
-    const updateFromSnapshot = (snapshot: SnapshotMessage) => {
-        if (!snapshot.ok || !snapshot.realTimeWorldState?.sectorCenters) return
+    const setSelectedEntityIds = (ids: number[]) => {
+        selectedEntityIds = new Set(ids)
+        rebuildVisibleObjects(lastSnapshot)
+    }
 
-        worldSectorCenters = snapshot.realTimeWorldState.sectorCenters
-        worldStarSystems = snapshot.realTimeWorldState.starSystems ?? []
+    const updateFromSnapshot = (snapshot: SnapshotMessage) => {
+        if (!snapshot.ok || !snapshot.realTimeWorldState) return
+
+        worldSectorCenters = snapshot.realTimeWorldState.sectorCenters ?? []
+        entities.clear()
+        for (const entity of snapshot.realTimeWorldState.entities ?? []) {
+            entities.set(entity.entityId, entity)
+        }
 
         if (axes) {
             const axisSize = Math.max(2_000, SECTOR_SIZE_GU * 0.25)
@@ -492,21 +670,68 @@ export function createThreeWorldRenderer(
 
         if (hexOutlines) {
             worldGroup.remove(hexOutlines)
-            hexOutlines.geometry.dispose()
-            if (Array.isArray(hexOutlines.material)) {
-                hexOutlines.material.forEach((m) => m.dispose())
-            } else {
-                hexOutlines.material.dispose()
-            }
+            hexOutlines.geometry.dispose();
+            (hexOutlines.material as THREE.Material).dispose()
             hexOutlines = undefined
         }
 
         dynamicGrid.dispose()
 
+        for (const dot of starDotPool) {
+            dot.geometry.dispose()
+            if (Array.isArray(dot.material)) {
+                dot.material.forEach((m) => m.dispose())
+            } else {
+                ; (dot.material as THREE.Material).dispose()
+            }
+        }
+        for (const dot of activeStarDotByEntityId.values()) {
+            dot.geometry.dispose()
+            if (Array.isArray(dot.material)) {
+                dot.material.forEach((m) => m.dispose())
+            } else {
+                ; (dot.material as THREE.Material).dispose()
+            }
+        }
+
+        const disposeSprite = (sprite: THREE.Sprite) => {
+            ; (sprite.material as THREE.SpriteMaterial).dispose()
+        }
+        for (const pool of starSpritePoolByPath.values()) {
+            pool.forEach(disposeSprite)
+        }
+        for (const pool of planetSpritePoolByPath.values()) {
+            pool.forEach(disposeSprite)
+        }
+        for (const sprite of activeStarSpriteByEntityId.values()) {
+            disposeSprite(sprite)
+        }
+        for (const sprite of activePlanetSpriteByEntityId.values()) {
+            disposeSprite(sprite)
+        }
+
+        for (const line of orbitLinePool) {
+            line.geometry.dispose()
+                ; (line.material as THREE.Material).dispose()
+        }
+        for (const line of activeOrbitLineByEntityId.values()) {
+            line.geometry.dispose()
+                ; (line.material as THREE.Material).dispose()
+        }
+
+        for (const ring of selectionRingPool) {
+            ring.geometry.dispose()
+                ; (ring.material as THREE.Material).dispose()
+        }
+        for (const ring of activeSelectionRingByEntityId.values()) {
+            ring.geometry.dispose()
+                ; (ring.material as THREE.Material).dispose()
+        }
+
         if (axes) {
-            scene.remove(axes)
-                ; (axes.geometry as any)?.dispose?.()
-                ; (axes.material as any)?.dispose?.()
+            scene.remove(axes);
+            (axes.geometry as any)?.dispose?.();
+            (axes.material as any)?.dispose?.()
             axes = null
         }
 
@@ -524,6 +749,7 @@ export function createThreeWorldRenderer(
         cameraWorldPosGU,
         setZoom,
         applyCameraTransform,
+        setSelectedEntityIds,
         updateFromSnapshot,
         dispose,
     }
