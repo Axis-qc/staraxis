@@ -68,6 +68,10 @@ function onClickQuit() {
         <button class="menu-item" type="button" @click="onClickSave">保存游戏</button>
         <button class="menu-item" type="button" @click="onClickLoad">加载游戏</button>
         <button class="menu-item danger" type="button" @click="onClickQuit">退出游戏</button>
+
+        <div class="menu-hint">
+          将此站点加入 浏览器设置 &gt; 外观 &gt; 浏览器行为和功能 &gt; 配置鼠标手势 &gt; 自定义行为，禁用此站点的鼠标手势中体验更佳
+        </div>
       </div>
 
       <div class="menu-footer">ESC：关闭</div>
@@ -158,6 +162,17 @@ function onClickQuit() {
 
 .menu-item.danger {
   border-color: color-mix(in srgb, #ff4d4f 45%, transparent);
+}
+
+.menu-hint {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.14);
+  border: 1px solid color-mix(in srgb, var(--glow-color) 18%, transparent);
+  font-size: 12px;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--text-color) 72%, transparent);
 }
 
 .menu-footer {

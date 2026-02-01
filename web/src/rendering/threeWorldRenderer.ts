@@ -176,6 +176,10 @@ export function createThreeWorldRenderer(
         applyCameraTransform()
     }
 
+    const STAR_SPRITE_DISABLE_ZOOM_THRESHOLD = 100_000
+    const PLANET_SPRITE_DISABLE_ZOOM_THRESHOLD = 100_000
+    const ORBIT_DISABLE_ZOOM_THRESHOLD = 200_000
+
     const rebuildVisibleObjects = (snapshot: SnapshotMessage | null) => {
         if (worldSectorCenters.length === 0) {
             return
@@ -238,13 +242,13 @@ export function createThreeWorldRenderer(
         // --- Star Systems ---
         // Naive rebuild: clear and add all visible stars. For performance, use object pooling and instancing.
         while (starSystemsGroup.children.length > 0) {
-            const obj = starSystemsGroup.children[0] as THREE.Mesh
+            const obj = starSystemsGroup.children[0] as any
             starSystemsGroup.remove(obj)
-            obj.geometry.dispose()
+            obj.geometry?.dispose?.()
             if (Array.isArray(obj.material)) {
-                obj.material.forEach(m => m.dispose())
+                obj.material.forEach((m: any) => m.dispose?.())
             } else {
-                obj.material.dispose()
+                obj.material?.dispose?.()
             }
         }
 
@@ -281,7 +285,22 @@ export function createThreeWorldRenderer(
             starSystemAabb.maxY = center.y + systemRadiusGU
 
             if (worldAabbIntersects(starSystemAabb, viewAabb)) {
+                const farZoom = zoom.value > STAR_SPRITE_DISABLE_ZOOM_THRESHOLD
+
                 for (const star of system.stars) {
+                    if (farZoom) {
+                        // 远距离：禁用纹理精灵，改为轻量点（Circle）
+                        const radiusGU = (star.radiusKm * 1000) / GAME_UNIT_IN_METERS
+                        const size = Math.max(zoom.value * 2, radiusGU * 2)
+
+                        const geo = new THREE.CircleGeometry(size / 2, 12)
+                        const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false })
+                        const dot = new THREE.Mesh(geo, mat)
+                        dot.position.set(center.x - cameraWorldPosGU.x, center.y - cameraWorldPosGU.y, 0)
+                        starSystemsGroup.add(dot)
+                        continue
+                    }
+
                     const spritePath = getSpritePath(star.typeId)
                     if (spritePath) {
                         const texture = getTexture(spritePath)
@@ -295,28 +314,37 @@ export function createThreeWorldRenderer(
                     }
                 }
 
+                const showPlanets = zoom.value <= PLANET_SPRITE_DISABLE_ZOOM_THRESHOLD
+                const showOrbits = zoom.value <= ORBIT_DISABLE_ZOOM_THRESHOLD
+
                 for (const planet of system.planets) {
                     if (!planet.orbit) continue
 
                     const orbit = planet.orbit
                     const semiMajorAxisGU = orbit.semiMajorAxisAU * AU_TO_GU
 
-                    // Draw orbit
-                    const curve = new THREE.EllipseCurve(
-                        center.x - cameraWorldPosGU.x,
-                        center.y - cameraWorldPosGU.y,
-                        semiMajorAxisGU,
-                        semiMajorAxisGU * Math.sqrt(1 - orbit.eccentricity ** 2),
-                        0,
-                        2 * Math.PI,
-                        false,
-                        0
-                    )
-                    const points = curve.getPoints(128)
-                    const geometry = new THREE.BufferGeometry().setFromPoints(points)
-                    const material = new THREE.LineBasicMaterial({ color: 0xaaaaaa, transparent: true, opacity: 0.5 })
-                    const ellipse = new THREE.Line(geometry, material)
-                    starSystemsGroup.add(ellipse)
+                    if (showOrbits) {
+                        // Draw orbit
+                        const curve = new THREE.EllipseCurve(
+                            center.x - cameraWorldPosGU.x,
+                            center.y - cameraWorldPosGU.y,
+                            semiMajorAxisGU,
+                            semiMajorAxisGU * Math.sqrt(1 - orbit.eccentricity ** 2),
+                            0,
+                            2 * Math.PI,
+                            false,
+                            0
+                        )
+                        const points = curve.getPoints(128)
+                        const geometry = new THREE.BufferGeometry().setFromPoints(points)
+                        const material = new THREE.LineBasicMaterial({ color: 0xaaaaaa, transparent: true, opacity: 0.5 })
+                        const ellipse = new THREE.Line(geometry, material)
+                        starSystemsGroup.add(ellipse)
+                    }
+
+                    if (!showPlanets) {
+                        continue
+                    }
 
                     // Draw planet
                     const simulationTick = snapshot?.realTimeWorldState?.simulationTick ?? 0
@@ -357,7 +385,7 @@ export function createThreeWorldRenderer(
             canvas.setPointerCapture(e.pointerId)
             return
         }
-        if (e.button !== 0) return
+        if (e.button !== 1) return
 
         isDragging = true
         dragStartClient.set(e.clientX, e.clientY)

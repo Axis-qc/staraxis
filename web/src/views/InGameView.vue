@@ -50,20 +50,23 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAstroAssets } from '../composables/useAstroAssets'
 import { useDevTooltip } from '../composables/useDevTooltip'
-import InGameBuildBar from '../components/inGame/InGameBuildBar.vue'
-import InGameEscMenu from '../components/inGame/InGameEscMenu.vue'
-import InGameOverviewPanel from '../components/inGame/InGameOverviewPanel.vue'
-import InGameDevelopmentPanel from '../components/inGame/panels/InGameDevelopmentPanel.vue'
-import InGameTechPanel from '../components/inGame/panels/InGameTechPanel.vue'
-import InGameMilitaryPanel from '../components/inGame/panels/InGameMilitaryPanel.vue'
-import InGameDomesticPanel from '../components/inGame/panels/InGameDomesticPanel.vue'
-import InGameDiplomacyPanel from '../components/inGame/panels/InGameDiplomacyPanel.vue'
+import InGameBuildBar from '../features/inGame/components/InGameBuildBar.vue'
+import InGameEscMenu from '../features/inGame/components/InGameEscMenu.vue'
+import InGameOverviewPanel from '../features/inGame/components/InGameOverviewPanel.vue'
+import InGameDevelopmentPanel from '../features/inGame/panels/InGameDevelopmentPanel.vue'
+import InGameTechPanel from '../features/inGame/panels/InGameTechPanel.vue'
+import InGameMilitaryPanel from '../features/inGame/panels/InGameMilitaryPanel.vue'
+import InGameDomesticPanel from '../features/inGame/panels/InGameDomesticPanel.vue'
+import InGameDiplomacyPanel from '../features/inGame/panels/InGameDiplomacyPanel.vue'
 import { connectSnapshotWs } from '../net/snapshotWs'
 import { createThreeWorldRenderer } from '../rendering/threeWorldRenderer'
-import { useInGameDataHub } from '../composables/useInGameDataHub'
-import { useInGameInputController } from '../inGame/input/useInGameInputController'
-import { useInGameUiInputBindings } from '../inGame/input/useInGameUiInputBindings'
-import type { GameAction, InGameBottomTab } from '../inGame/input/gameActions'
+import { useInGameDataHub } from '../features/inGame/composables/useInGameDataHub'
+import { useInGameInputController } from '../features/inGame/input/useInGameInputController'
+import { useInGameUiInputBindings } from '../features/inGame/input/useInGameUiInputBindings'
+import type { GameAction, InGameBottomTab } from '../features/inGame/input/gameActions'
+import { useRtsSelection } from '../features/inGame/selection/useRtsSelection'
+import InGameSelectionRect from '../features/inGame/components/InGameSelectionRect.vue'
+import { useRtsRightClickCommand } from '../features/inGame/commands/useRtsRightClickCommand'
 
 const router = useRouter()
 const { getSpritePath } = useAstroAssets()
@@ -99,6 +102,17 @@ const isDraggingDebugWindow = ref(false)
 const debugDragOffset = ref({ x: 0, y: 0 })
 
 const activeBottomTab = ref<InGameBottomTab | null>(null)
+
+const selection = useRtsSelection()
+
+const rightClickCommand = useRtsRightClickCommand({
+  getRenderer: () => hub.getRenderer(),
+  getSelectedIds: () => selection.selectedIds.value,
+  onCommandIntent: (intent) => {
+    void intent
+    showDevelopingHintAtCenter()
+  },
+})
 
 function onContextMenu(e: MouseEvent) {
   e.preventDefault()
@@ -245,7 +259,17 @@ onUnmounted(() => {
 
 <template>
   <div ref="rootRef" class="in-game-root">
-    <div ref="containerRef" class="render-container" @pointermove="hub.onCanvasPointerMove"></div>
+    <div
+      ref="containerRef"
+      class="render-container"
+      @pointermove="hub.onCanvasPointerMove"
+      @pointerdown="(e) => { selection.onPointerDown(e); rightClickCommand.onPointerDown(e) }"
+      @pointermove.capture="selection.onPointerMove"
+      @pointerup.capture="selection.onPointerUp"
+      @pointercancel.capture="selection.cancelSelection"
+    ></div>
+
+    <InGameSelectionRect :rect="selection.selectionRect.value" />
 
     <InGameEscMenu
       v-model:open="isEscMenuOpen"
