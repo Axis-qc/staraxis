@@ -66,6 +66,9 @@ import { useInGameUiInputBindings } from '../features/inGame/input/useInGameUiIn
 import type { GameAction, InGameBottomTab } from '../features/inGame/input/gameActions'
 import { useRtsSelection } from '../features/inGame/selection/useRtsSelection'
 import InGameSelectionRect from '../features/inGame/components/InGameSelectionRect.vue'
+import InGameTimeHud from '../features/inGame/components/InGameTimeHud.vue'
+import InGameSelectionListHud from '../features/inGame/components/InGameSelectionListHud.vue'
+import InGamePlanetWindow from '../features/inGame/components/InGamePlanetWindow.vue'
 import { useRtsRightClickCommand } from '../features/inGame/commands/useRtsRightClickCommand'
 
 const router = useRouter()
@@ -101,46 +104,36 @@ const debugWindowRef = ref<HTMLDivElement | null>(null)
 const isDraggingDebugWindow = ref(false)
 const debugDragOffset = ref({ x: 0, y: 0 })
 
+const planetWindowOpen = ref(false)
+const planetEntity = ref<any>(null)
+
+function openPlanetWindow(entity: any) {
+  planetEntity.value = entity
+  planetWindowOpen.value = true
+}
+
+function closePlanetWindow() {
+  planetWindowOpen.value = false
+  planetEntity.value = null
+}
+
 const activeBottomTab = ref<InGameBottomTab | null>(null)
+
 
 const selection = useRtsSelection({
   getEntities: () => {
     const r = hub.getRenderer()
     if (!r) return []
 
-    const simulationTick = (hub as any)?.lastSnapshot?.value?.realTimeWorldState?.simulationTick ?? 0
-    void simulationTick
-
     const entities = hub.entities.value
     const out: Array<{ id: number; type: 'STAR' | 'PLANET'; worldPosGU: { x: number; y: number } }> = []
 
-    const byId = new Map<number, any>()
     for (const e of entities) {
-      byId.set(e.entityId, e)
-    }
+      const p = r.getEntityWorldPosGU(e.entityId)
+      if (!p) continue
 
-    const GAME_HOUR_PER_TICK = 0.25
-    const snap: any = (hub as any)?.lastSnapshot?.value
-    const tick = snap?.realTimeWorldState?.simulationTick ?? 0
-    const totalHours = tick * GAME_HOUR_PER_TICK
-    const totalDays = totalHours / 24
-
-    for (const e of entities) {
-      if (e.entityType === 'STAR' && e.posWorldGU) {
-        out.push({ id: e.entityId, type: 'STAR', worldPosGU: e.posWorldGU })
-      }
-      if (e.entityType === 'PLANET') {
-        const orbit = (e.details as any)?.orbit
-        if (!orbit) continue
-        const center = byId.get(orbit.orbitCenterEntityId)
-        if (!center?.posWorldGU) continue
-
-        const a = orbit.semiMajorAxisGU
-        const meanAnomaly = (orbit.meanAnomalyDegAtEpoch * Math.PI) / 180
-        const angle = meanAnomaly + (totalDays / orbit.orbitalPeriodDays) * 2 * Math.PI
-        const x = center.posWorldGU.x + a * Math.cos(angle)
-        const y = center.posWorldGU.y + a * Math.sin(angle)
-        out.push({ id: e.entityId, type: 'PLANET', worldPosGU: { x, y } })
+      if (e.entityType === 'STAR' || e.entityType === 'PLANET') {
+        out.push({ id: e.entityId, type: e.entityType, worldPosGU: p })
       }
     }
 
@@ -334,6 +327,36 @@ onUnmounted(() => {
       @pointerup.capture="selection.onPointerUp"
       @pointercancel.capture="selection.cancelSelection"
     ></div>
+
+    <InGameSelectionListHud
+      :selected-ids="selection.selectedIds.value"
+      :entities="hub.entities.value"
+      @open="({ entityId }) => {
+        const entity = hub.entities.value.find(e => e.entityId === entityId)
+        if (entity && entity.entityType === 'PLANET') {
+          openPlanetWindow(entity)
+        } else {
+          showDevelopingHintAtCenter()
+        }
+      }"
+      @focus="({ entityId }) => {
+        // TODO: 双击聚焦视角：后续可扩展为平滑过渡、缩放自适应、锁定跟随等。
+        const r = hub.getRenderer()
+        if (!r) return
+        const p = r.getEntityWorldPosGU(entityId)
+        if (!p) return
+        r.cameraWorldPosGU.set(p.x, p.y)
+        r.applyCameraTransform()
+      }"
+    />
+
+    <InGameTimeHud :snapshot="hub.lastSnapshot.value" />
+
+    <InGamePlanetWindow
+      v-if="planetWindowOpen && planetEntity"
+      :entity="planetEntity"
+      @close="closePlanetWindow"
+    />
 
     <InGameSelectionRect :rect="selection.selectionRect.value" />
 

@@ -14,6 +14,7 @@ export default defineConfig({
     // 自动将服务器暴露到局域网
     host: true, // 等同于 --host
     port: 5173, // 明确指定前端开发服务器端口
+    allowedHosts: ['frp-put.com'],
     proxy: {
       // 配置 API 请求代理
       // 将所有发往 /api 的请求转发到 http://127.0.0.1:17890

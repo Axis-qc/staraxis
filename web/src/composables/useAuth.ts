@@ -22,6 +22,7 @@ export function useAuth() {
         playerId: '',
         username: '',
         gameId: '',
+        role: 'USER',
     })
 
     const loginForm = reactive({
@@ -50,6 +51,7 @@ export function useAuth() {
         auth.playerId = data.playerId || ''
         auth.username = data.username || ''
         auth.gameId = data.gameId || ''
+        auth.role = data.role || 'USER'
         gameIdInput.value = auth.gameId // 同步输入框
     }
 
@@ -60,10 +62,11 @@ export function useAuth() {
             username: auth.username,
             playerId: auth.playerId,
             token: auth.token,
+            role: auth.role,
         }),
         (s) => {
             if (s.isLoggedIn && s.username && s.playerId) {
-                authStore.setAuth({ username: s.username, playerId: s.playerId, token: s.token })
+                authStore.setAuth({ username: s.username, playerId: s.playerId, token: s.token, role: s.role })
             } else {
                 authStore.clear()
             }

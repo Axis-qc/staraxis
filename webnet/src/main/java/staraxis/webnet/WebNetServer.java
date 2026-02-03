@@ -43,6 +43,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import staraxis.game.StarAxisGameRuntime;
 import staraxis.webnet.game.GameSessions;
 import staraxis.webnet.websocket.SnapshotMessageFactory;
+import staraxis.webnet.command.WebCommandRegistry;
+import staraxis.webnet.command.SetSimTimeSpeedCommand;
 import io.undertow.Handlers;
 import io.undertow.Undertow;
 import io.undertow.server.HttpHandler;
@@ -154,6 +156,8 @@ public class WebNetServer {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final AuthStore authStore = new AuthStore(objectMapper);
 
+    private final WebCommandRegistry commandRegistry = new WebCommandRegistry(objectMapper);
+
     private final Set<WebSocketChannel> channels = ConcurrentHashMap.newKeySet();
 
     private final Set<WebSocketChannel> snapshotSubscribers = ConcurrentHashMap.newKeySet();
@@ -179,6 +183,8 @@ public class WebNetServer {
 
     public WebNetServer(WebNetServerConfig config) {
         this.config = config;
+
+        commandRegistry.register(new SetSimTimeSpeedCommand());
     }
 
     public void start() {
@@ -225,6 +231,13 @@ public class WebNetServer {
                         if ("unsubscribeSnapshot".equals(type)) {
                             snapshotSubscribers.remove(channel);
                             WebSockets.sendText("{\"type\":\"unsubscribed\",\"ok\":true}", channel, null);
+                            return;
+                        }
+
+                        // 处理游戏命令（模块化命令注册表）
+                        if (commandRegistry.supports(type)) {
+                            String response = commandRegistry.handleTextMessage(text);
+                            WebSockets.sendText(response, channel, null);
                             return;
                         }
 
@@ -546,10 +559,13 @@ public class WebNetServer {
                     String password = req.get("password") == null ? null : String.valueOf(req.get("password"));
 
                     AuthStore.Session s = authStore.login(username, password);
+                    AuthStore.Account a = authStore.loadAccount(s.username);
+                    String role = a != null && a.role != null && !a.role.isBlank() ? a.role : "USER";
                     exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
                             "ok", true,
                             "playerId", s.playerId,
                             "username", s.username,
+                            "role", role,
                             "token", s.token)));
                 } catch (Exception e) {
                     exchange.setStatusCode(401);
@@ -578,11 +594,13 @@ public class WebNetServer {
                         return;
                     }
                     AuthStore.Account a = authStore.loadAccount(s.username);
+                    String role = a != null && a.role != null && !a.role.isBlank() ? a.role : "USER";
                     exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
                             "ok", true,
                             "playerId", s.playerId,
                             "username", s.username,
-                            "gameId", a == null ? "" : (a.gameId == null ? "" : a.gameId))));
+                            "gameId", a == null ? "" : (a.gameId == null ? "" : a.gameId),
+                            "role", role)));
                 } catch (Exception e) {
                     exchange.setStatusCode(500);
                     try {
@@ -901,13 +919,33 @@ public class WebNetServer {
         });
 
         apiHandler.addExactPath("/quit", exchange -> {
-            System.out.println("HTTP quit requested: " + exchange.getRequestMethod() + " " + exchange.getRequestPath());
-            exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-            exchange.getResponseSender().send("{\"ok\":true}");
-            exchange.endExchange();
-            Thread t = new Thread(() -> shutdownAndExit(0), "webnet-quit");
-            t.setDaemon(false);
-            t.start();
+            exchange.dispatch(() -> {
+                System.out.println(
+                        "HTTP quit requested: " + exchange.getRequestMethod() + " " + exchange.getRequestPath());
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+
+                String auth = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
+                AuthStore.Session s = authStore.getSessionFromAuthorizationHeader(auth);
+                if (s == null) {
+                    exchange.setStatusCode(401);
+                    exchange.getResponseSender().send("{\"ok\":false,\"error\":\"unauthorized\"}");
+                    return;
+                }
+
+                AuthStore.Account a = authStore.loadAccount(s.username);
+                String role = a != null && a.role != null && !a.role.isBlank() ? a.role : "USER";
+                if (!"ADMIN".equalsIgnoreCase(role)) {
+                    exchange.setStatusCode(403);
+                    exchange.getResponseSender().send("{\"ok\":false,\"error\":\"forbidden\"}");
+                    return;
+                }
+
+                exchange.getResponseSender().send("{\"ok\":true}");
+                exchange.endExchange();
+                Thread t = new Thread(() -> shutdownAndExit(0), "webnet-quit");
+                t.setDaemon(false);
+                t.start();
+            });
         });
 
         // --- i18n API ---

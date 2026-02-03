@@ -7,6 +7,7 @@ export type OrbitSnapshot = {
     semiMajorAxisGU: number
     eccentricity: number
     inclinationDeg: number
+    periapsisArgDeg: number
     meanAnomalyDegAtEpoch: number
     orbitalPeriodDays: number
 }

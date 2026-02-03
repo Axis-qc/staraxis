@@ -11,15 +11,21 @@ public class OrbitSnapshot {
 
     public final double semiMajorAxisGU;
     public final double eccentricity;
+    public final double inclinationDeg;
+    public final double periapsisArgDeg;
     public final double orbitalPeriodDays;
     public final double meanAnomalyDegAtEpoch;
 
     public OrbitSnapshot(long orbitCenterEntityId, double semiMajorAxisGU, double eccentricity,
+            double inclinationDeg,
+            double periapsisArgDeg,
             double orbitalPeriodDays,
             double meanAnomalyDegAtEpoch) {
         this.orbitCenterEntityId = orbitCenterEntityId;
         this.semiMajorAxisGU = semiMajorAxisGU;
         this.eccentricity = eccentricity;
+        this.inclinationDeg = inclinationDeg;
+        this.periapsisArgDeg = periapsisArgDeg;
         this.orbitalPeriodDays = orbitalPeriodDays;
         this.meanAnomalyDegAtEpoch = meanAnomalyDegAtEpoch;
     }

@@ -1,3 +1,26 @@
+/**
+ * @file threeWorldRenderer.ts
+ *
+ * @description
+ * Three 世界渲染器（World Renderer）。
+ *
+ * 职责：
+ * - 创建并维护 three.js 的 `Scene`/`OrthographicCamera`/`WebGLRenderer`。
+ * - 按后端快照（`SnapshotMessage`）重建可见对象：恒星/行星/轨道/选中环/网格等。
+ * - 提供镜头缩放/平移能力，并维护相机中心（`cameraWorldPosGU`）与缩放倍率（`zoom.value`）。
+ * - 渲染剔除使用自定义 AABB（`cullingAabb`）与对象池回收机制；为避免 three.js 自动视锥裁剪带来的不稳定，
+ *   本文件对渲染对象统一关闭 `frustumCulled`。
+ *
+ * @usage
+ * - 在视图层（如 `InGameView.vue`）中调用 `createThreeWorldRenderer(container, options)`。
+ * - 收到 WS 快照后调用 `updateFromSnapshot(snapshot)`。
+ * - UI 侧选择变化时调用 `setSelectedEntityIds(ids)`。
+ *
+ * @provides
+ * - **渲染实例**：`WebGLRenderer` 的创建/销毁与渲染循环。
+ * - **实体渲染**：STAR/PLANET sprite、轨道线、选择环、网格等。
+ * - **相机控制**：缩放与平移（GU/像素口径）。
+ */
 import * as THREE from 'three'
 import type { EntitySnapshot, SnapshotMessage, StarDetails, PlanetDetails } from '../net/snapshotWs'
 import { buildHexSegmentPositions, SECTOR_SIZE_GU } from './hexSectorGeometry'
@@ -9,6 +32,7 @@ export type ThreeWorldRenderer = {
     applyCameraTransform: () => void
     setSelectedEntityIds: (ids: number[]) => void
     updateFromSnapshot: (snapshot: SnapshotMessage) => void
+    getEntityWorldPosGU: (entityId: number) => { x: number; y: number } | null
     dispose: () => void
 }
 
@@ -99,12 +123,14 @@ export function createThreeWorldRenderer(
     camera.lookAt(0, 0, 0)
 
     const worldGroup = new THREE.Group()
+    worldGroup.frustumCulled = false
     scene.add(worldGroup)
 
     const dynamicGrid = createDynamicGrid()
     scene.add(dynamicGrid.grid)
 
     let axes: THREE.AxesHelper | null = new THREE.AxesHelper(2_000)
+    axes.frustumCulled = false
     scene.add(axes)
 
     const textureLoader = new THREE.TextureLoader()
@@ -130,6 +156,7 @@ export function createThreeWorldRenderer(
     let lastSnapshot: SnapshotMessage | null = null
 
     const entitiesGroup = new THREE.Group()
+    entitiesGroup.frustumCulled = false
     worldGroup.add(entitiesGroup)
 
     // --- Object pools / caches ---
@@ -167,6 +194,7 @@ export function createThreeWorldRenderer(
         })
         const m = new THREE.Mesh(geo, mat)
         m.visible = true
+        m.frustumCulled = false
         return m
     }
 
@@ -187,6 +215,7 @@ export function createThreeWorldRenderer(
         const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false })
         const m = new THREE.Mesh(geo, mat)
         m.visible = true
+        m.frustumCulled = false
         return m
     }
 
@@ -206,6 +235,7 @@ export function createThreeWorldRenderer(
         const material = new THREE.SpriteMaterial({ map: texture, sizeAttenuation: false, depthWrite: false })
         const sprite = new THREE.Sprite(material)
         sprite.visible = true
+        sprite.frustumCulled = false
         return sprite
     }
 
@@ -224,9 +254,16 @@ export function createThreeWorldRenderer(
             return line
         }
         const geometry = new THREE.BufferGeometry()
-        const material = new THREE.LineBasicMaterial({ color: 0xaaaaaa, transparent: true, opacity: 0.5 })
+        const material = new THREE.LineBasicMaterial({
+            color: 0xaaaaaa,
+            transparent: true,
+            opacity: 0.5,
+            depthTest: false,
+            depthWrite: false,
+        })
         const l = new THREE.Line(geometry, material)
         l.visible = true
+        l.frustumCulled = false
         return l
     }
 
@@ -273,7 +310,6 @@ export function createThreeWorldRenderer(
 
     const STAR_SPRITE_DISABLE_ZOOM_THRESHOLD = 100_000
     const PLANET_SPRITE_DISABLE_ZOOM_THRESHOLD = 100_000
-    const ORBIT_DISABLE_ZOOM_THRESHOLD = 200_000
 
     const rebuildVisibleObjects = (snapshot: SnapshotMessage | null) => {
         if (hexOutlines) {
@@ -285,11 +321,12 @@ export function createThreeWorldRenderer(
 
         const viewWidthGU = (camera.right - camera.left) / camera.zoom
         const viewHeightGU = (camera.top - camera.bottom) / camera.zoom
+        const cullingScale = zoom.value <= 100_000 ? 3.0 : 1.5
         const cullingAabb = {
-            minX: cameraWorldPosGU.x - (viewWidthGU * 1.5) / 2,
-            maxX: cameraWorldPosGU.x + (viewWidthGU * 1.5) / 2,
-            minY: cameraWorldPosGU.y - (viewHeightGU * 1.5) / 2,
-            maxY: cameraWorldPosGU.y + (viewHeightGU * 1.5) / 2,
+            minX: cameraWorldPosGU.x - (viewWidthGU * cullingScale) / 2,
+            maxX: cameraWorldPosGU.x + (viewWidthGU * cullingScale) / 2,
+            minY: cameraWorldPosGU.y - (viewHeightGU * cullingScale) / 2,
+            maxY: cameraWorldPosGU.y + (viewHeightGU * cullingScale) / 2,
         }
 
         const visibleCentersCameraLocal: { x: number; y: number }[] = []
@@ -304,9 +341,8 @@ export function createThreeWorldRenderer(
         geometry.setAttribute('position', new THREE.BufferAttribute(segPositions, 3))
         const material = new THREE.LineBasicMaterial({ color: 0x7fd3ff, transparent: true, opacity: 0.55 })
         hexOutlines = new THREE.LineSegments(geometry, material)
+        hexOutlines.frustumCulled = false
         worldGroup.add(hexOutlines)
-
-        const GAME_HOUR_PER_TICK = 0.25
 
         const farZoomStars = zoom.value > STAR_SPRITE_DISABLE_ZOOM_THRESHOLD
         const showPlanets = zoom.value <= PLANET_SPRITE_DISABLE_ZOOM_THRESHOLD
@@ -320,7 +356,9 @@ export function createThreeWorldRenderer(
         for (const entity of entities.values()) {
             switch (entity.entityType) {
                 case 'STAR': {
-                    if (!entity.posWorldGU || !isPointInAabb(entity.posWorldGU, cullingAabb)) {
+                    const isSelected = selectedEntityIds.has(entity.entityId)
+
+                    if (!entity.posWorldGU || (!isSelected && !isPointInAabb(entity.posWorldGU, cullingAabb))) {
                         continue
                     }
 
@@ -381,7 +419,7 @@ export function createThreeWorldRenderer(
                         }
                     }
 
-                    if (selectedEntityIds.has(entity.entityId)) {
+                    if (isSelected) {
                         nextSelectionRingIds.add(entity.entityId)
                         let ring = activeSelectionRingByEntityId.get(entity.entityId)
                         if (!ring) {
@@ -399,7 +437,8 @@ export function createThreeWorldRenderer(
                 }
 
                 case 'PLANET': {
-                    if (!showPlanets) continue
+                    const isSelected = selectedEntityIds.has(entity.entityId)
+                    if (!showPlanets && !isSelected) continue
                     const details = entity.details as PlanetDetails
                     const orbit = details.orbit
                     if (!orbit) continue
@@ -409,16 +448,27 @@ export function createThreeWorldRenderer(
 
                     const semiMajorAxisGU = orbit.semiMajorAxisGU
 
-                    const simulationTick = snapshot?.realTimeWorldState?.simulationTick ?? 0
-                    const totalHours = simulationTick * GAME_HOUR_PER_TICK
-                    const totalDays = totalHours / 24
+                    const totalDays =
+                        (snapshot?.realTimeWorldState?.gameDatetimeDay ?? 0) +
+                        (snapshot?.realTimeWorldState?.accGameHoursInDay ?? 0) / 24
                     const meanAnomaly = (orbit.meanAnomalyDegAtEpoch * Math.PI) / 180
                     const angle = meanAnomaly + (totalDays / orbit.orbitalPeriodDays) * 2 * Math.PI
 
-                    const planetX = orbitCenter.posWorldGU.x + semiMajorAxisGU * Math.cos(angle)
-                    const planetY = orbitCenter.posWorldGU.y + semiMajorAxisGU * Math.sin(angle)
+                    const a = semiMajorAxisGU
+                    const b = semiMajorAxisGU * Math.sqrt(1 - orbit.eccentricity ** 2)
 
-                    if (!isPointInAabb({ x: planetX, y: planetY }, cullingAabb)) {
+                    const periapsisArgRad = ((orbit as any).periapsisArgDeg ?? 0) * (Math.PI / 180)
+                    const localX = a * Math.cos(angle)
+                    const localY = b * Math.sin(angle)
+                    const cosW = Math.cos(periapsisArgRad)
+                    const sinW = Math.sin(periapsisArgRad)
+                    const rotatedX = localX * cosW - localY * sinW
+                    const rotatedY = localX * sinW + localY * cosW
+
+                    const planetX = orbitCenter.posWorldGU.x + rotatedX
+                    const planetY = orbitCenter.posWorldGU.y + rotatedY
+
+                    if (!isSelected && !isPointInAabb({ x: planetX, y: planetY }, cullingAabb)) {
                         continue
                     }
 
@@ -449,7 +499,7 @@ export function createThreeWorldRenderer(
                     sprite.position.set(planetX - cameraWorldPosGU.x, planetY - cameraWorldPosGU.y, 0)
                     sprite.visible = true
 
-                    if (zoom.value <= ORBIT_DISABLE_ZOOM_THRESHOLD) {
+                    {
                         nextOrbitIds.add(entity.entityId)
                         let ellipse = activeOrbitLineByEntityId.get(entity.entityId)
                         if (!ellipse) {
@@ -459,24 +509,25 @@ export function createThreeWorldRenderer(
                         }
 
                         const curve = new THREE.EllipseCurve(
-                            orbitCenter.posWorldGU.x - cameraWorldPosGU.x,
-                            orbitCenter.posWorldGU.y - cameraWorldPosGU.y,
+                            0,
+                            0,
                             semiMajorAxisGU,
                             semiMajorAxisGU * Math.sqrt(1 - orbit.eccentricity ** 2),
-                            0, 2 * Math.PI, false, 0
+                            0,
+                            2 * Math.PI,
+                            false,
+                            ((orbit as any).periapsisArgDeg ?? 0) * (Math.PI / 180),
                         )
                         const points = curve.getPoints(128)
+                        for (const p of points) {
+                            p.x += orbitCenter.posWorldGU.x - cameraWorldPosGU.x
+                            p.y += orbitCenter.posWorldGU.y - cameraWorldPosGU.y
+                        }
                         ellipse.geometry.setFromPoints(points)
                         ellipse.visible = true
-
-                    } else {
-                        const ellipse = activeOrbitLineByEntityId.get(entity.entityId)
-                        if (ellipse) {
-                            ellipse.visible = false
-                        }
                     }
 
-                    if (selectedEntityIds.has(entity.entityId)) {
+                    if (isSelected) {
                         nextSelectionRingIds.add(entity.entityId)
                         let ring = activeSelectionRingByEntityId.get(entity.entityId)
                         if (!ring) {
@@ -744,6 +795,47 @@ export function createThreeWorldRenderer(
         }
     }
 
+    const getEntityWorldPosGU = (entityId: number): { x: number; y: number } | null => {
+        const e = entities.get(entityId)
+        if (!e) return null
+
+        if (e.entityType === 'STAR') {
+            return e.posWorldGU ?? null
+        }
+
+        if (e.entityType === 'PLANET') {
+            const details = e.details as PlanetDetails
+            const orbit = details.orbit
+            if (!orbit) return null
+
+            const orbitCenter = entities.get(orbit.orbitCenterEntityId)
+            if (!orbitCenter?.posWorldGU) return null
+
+            const totalDays =
+                (lastSnapshot?.realTimeWorldState?.gameDatetimeDay ?? 0) +
+                (lastSnapshot?.realTimeWorldState?.accGameHoursInDay ?? 0) / 24
+            const meanAnomaly = (orbit.meanAnomalyDegAtEpoch * Math.PI) / 180
+            const angle = meanAnomaly + (totalDays / orbit.orbitalPeriodDays) * 2 * Math.PI
+
+            const a = orbit.semiMajorAxisGU
+            const b = orbit.semiMajorAxisGU * Math.sqrt(1 - orbit.eccentricity ** 2)
+
+            const periapsisArgRad = ((orbit as any).periapsisArgDeg ?? 0) * (Math.PI / 180)
+            const localX = a * Math.cos(angle)
+            const localY = b * Math.sin(angle)
+            const cosW = Math.cos(periapsisArgRad)
+            const sinW = Math.sin(periapsisArgRad)
+            const rotatedX = localX * cosW - localY * sinW
+            const rotatedY = localX * sinW + localY * cosW
+
+            const x = orbitCenter.posWorldGU.x + rotatedX
+            const y = orbitCenter.posWorldGU.y + rotatedY
+            return { x, y }
+        }
+
+        return null
+    }
+
     return {
         zoom,
         cameraWorldPosGU,
@@ -751,6 +843,7 @@ export function createThreeWorldRenderer(
         applyCameraTransform,
         setSelectedEntityIds,
         updateFromSnapshot,
+        getEntityWorldPosGU,
         dispose,
     }
 }

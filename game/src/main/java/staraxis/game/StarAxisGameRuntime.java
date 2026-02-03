@@ -17,13 +17,14 @@ import staraxis.game.state.RealTimeWorldStateBuffer;
 import staraxis.game.state.WorldState;
 import staraxis.game.state.snapshot.EntitySnapshot;
 import staraxis.game.state.snapshot.OrbitSnapshot;
-import staraxis.game.world.hex.SectorCoord;
 import staraxis.game.world.WorldGenConfig;
 import staraxis.game.world.WorldGenerator;
 import staraxis.game.world.WorldSector;
+import staraxis.game.command.CommandBus;
+import staraxis.game.command.SetTimeScaleCommand;
+import staraxis.game.command.SetTimeScaleHandler;
 
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * StarAxisGameRuntime
@@ -42,8 +43,16 @@ public class StarAxisGameRuntime implements GameRuntime {
 
     private final DailySettlementStateBuffer dailySettlementBuffer = new DailySettlementStateBuffer();
 
+    private final CommandBus commandBus = new CommandBus();
+
     public StarAxisGameRuntime(WorldState worldState) {
         this.worldState = worldState;
+
+        commandBus.register(SetTimeScaleCommand.class, new SetTimeScaleHandler());
+    }
+
+    public CommandBus getCommandBusForSimOnly() {
+        return commandBus;
     }
 
     public static StarAxisGameRuntime newGame(WorldGenConfig cfg) {
@@ -71,9 +80,10 @@ public class StarAxisGameRuntime implements GameRuntime {
     @Override
     public void update(float dtSeconds) {
         // PrepareTick
-        SimulationClock.prepareTick(worldState.time);
+        double dtGameHours = SimulationClock.prepareTick(worldState.time);
 
-        // TODO: 处理 Command 队列并更新 WorldState
+        // 处理 Command 队列并更新 WorldState
+        commandBus.executeCommands(worldState, dtGameHours);
         // TODO: 各系统使用 dtGameHours 推进
 
         // Commit
@@ -170,6 +180,8 @@ public class StarAxisGameRuntime implements GameRuntime {
                             planet.orbit.orbitCenterEntityId,
                             planet.orbit.semiMajorAxisGU,
                             planet.orbit.eccentricity,
+                            planet.orbit.inclinationDeg,
+                            planet.orbit.periapsisArgDeg,
                             planet.orbit.orbitalPeriodDays,
                             planet.orbit.meanAnomalyDegAtEpoch);
                 }

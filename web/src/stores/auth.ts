@@ -4,6 +4,7 @@ export type AuthState = {
     username: string
     playerId: string
     token: string
+    role: string
 }
 
 /**
@@ -19,20 +20,23 @@ export const useAuthStore = defineStore('auth', {
         username: '',
         playerId: '',
         token: '',
+        role: 'USER',
     }),
     getters: {
         isLoggedIn: (s) => !!s.username && !!s.playerId,
     },
     actions: {
-        setAuth(payload: { username: string; playerId: string; token?: string }) {
+        setAuth(payload: { username: string; playerId: string; token?: string; role?: string }) {
             this.username = payload.username
             this.playerId = payload.playerId
             this.token = payload.token || ''
+            this.role = payload.role || 'USER'
         },
         clear() {
             this.username = ''
             this.playerId = ''
             this.token = ''
+            this.role = 'USER'
         },
     },
 })

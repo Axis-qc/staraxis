@@ -26,6 +26,13 @@ public class OrbitParams {
     /** 轨道倾角（度）。 */
     public double inclinationDeg;
 
+    /**
+     * 近地点方向角（度）。
+     * 在轨道平面内，椭圆长轴相对于 +X 方向的旋转角。
+     * 0 表示近地点朝向 +X；90 表示近地点朝向 +Y。
+     */
+    public double periapsisArgDeg;
+
     /** 轨道周期（游戏日）。 */
     public double orbitalPeriodDays;
 

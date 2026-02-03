@@ -1,8 +1,9 @@
 {
-  "username" : "AXIS",
-  "playerId" : "p_edef2619-33a3-420f-aacf-89147133cb08",
-  "passwordSaltB64" : "0PIwJ6+jPbXzOQP6bqSsHw==",
-  "passwordHashB64" : "NIIasxpyeMshIhP7o9WgoHIlawQzhFiQnWpM+YMY8l0=",
-  "createdAtMs" : 1769432284088,
-  "gameId" : "世界之轴"
+  "username": "AXIS",
+  "playerId": "p_edef2619-33a3-420f-aacf-89147133cb08",
+  "passwordSaltB64": "0PIwJ6+jPbXzOQP6bqSsHw==",
+  "passwordHashB64": "NIIasxpyeMshIhP7o9WgoHIlawQzhFiQnWpM+YMY8l0=",
+  "createdAtMs": 1769432284088,
+  "gameId": "世界之轴",
+  "role": "ADMIN"
 }

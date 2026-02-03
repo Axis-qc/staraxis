@@ -15,9 +15,10 @@ export async function fetchStatus(): Promise<BackendStatus> {
 }
 
 export async function requestQuit(): Promise<void> {
-    const resp = await fetch('/api/quit', { method: 'POST' })
+    const resp = await authFetch('/api/quit', { method: 'POST' })
     if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`)
+        const txt = await resp.text()
+        throw new Error(txt || `HTTP ${resp.status}`)
     }
 }
 
@@ -28,6 +29,7 @@ export type AuthMe = {
     playerId?: string
     username?: string
     gameId?: string
+    role?: string
     error?: string
 }
 
@@ -35,6 +37,7 @@ export type AuthLoginResponse = {
     ok: boolean
     playerId?: string
     username?: string
+    role?: string
     token?: string
     error?: string
 }

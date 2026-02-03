@@ -61,6 +61,12 @@ const isReady = ref(false)
 
 type TabKey = 'status' | 'mods' | 'quit'
 const activeTab = ref<TabKey>('status')
+
+function onClickTab(tab: TabKey) {
+  const canQuit = auth.isLoggedIn && auth.role === 'ADMIN'
+  if (tab === 'quit' && !canQuit) return
+  activeTab.value = tab
+}
 const showPassword = ref(false)
 
 const quitting = ref(false)
@@ -143,13 +149,13 @@ onMounted(() => {
         </header>
 
         <nav v-if="auth.isLoggedIn" class="sidebar-nav">
-          <button class="nav-btn" :class="{ active: activeTab === 'status' }" @click="activeTab = 'status'">
+          <button class="nav-btn" :class="{ active: activeTab === 'status' }" @click="onClickTab('status')">
             <span>{{ t('home.tab.status') }}</span>
           </button>
-          <button class="nav-btn" :class="{ active: activeTab === 'mods' }" @click="activeTab = 'mods'">
+          <button class="nav-btn" :class="{ active: activeTab === 'mods' }" @click="onClickTab('mods')">
             <span>{{ t('home.tab.mods') }}</span>
           </button>
-          <button class="nav-btn" :class="{ active: activeTab === 'quit' }" @click="activeTab = 'quit'">
+          <button v-if="auth.isLoggedIn && auth.role === 'ADMIN'" class="nav-btn" :class="{ active: activeTab === 'quit' }" @click="onClickTab('quit')">
             <span>{{ t('home.tab.quit') }}</span>
           </button>
         </nav>
@@ -261,7 +267,7 @@ onMounted(() => {
                 </div>
               </section>
 
-              <section v-else key="quit" class="tab-section">
+              <section v-else-if="activeTab === 'quit' && auth.isLoggedIn && auth.role === 'ADMIN'" key="quit" class="tab-section">
                 <h2 class="tab-title">{{ t('home.tab.quit') }}</h2>
                 <p class="quit-desc">{{ t('home.quit.desc') }}</p>
                 <button class="sa-btn danger" @click="quitServer" :disabled="quitting">{{ t('home.quit.action') }}</button>

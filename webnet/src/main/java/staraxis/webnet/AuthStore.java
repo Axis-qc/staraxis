@@ -84,6 +84,7 @@ public class AuthStore {
         a.passwordSaltB64 = Base64.getEncoder().encodeToString(salt);
         a.passwordHashB64 = Base64.getEncoder().encodeToString(hash);
         a.createdAtMs = System.currentTimeMillis();
+        a.role = "USER";
 
         AccountFiles.ensureDir();
         objectMapper.writerWithDefaultPrettyPrinter().writeValue(AccountFiles.accountPath(username).toFile(), a);
@@ -220,5 +221,6 @@ public class AuthStore {
         public String passwordHashB64;
         public long createdAtMs;
         public String gameId;
+        public String role;
     }
 }

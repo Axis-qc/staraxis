@@ -114,6 +114,7 @@ public final class AstroGenerator {
             orbit.semiMajorAxisGU = currentOrbitGU;
             orbit.eccentricity = randomDouble(preset.eccentricityRange.get(0), preset.eccentricityRange.get(1));
             orbit.inclinationDeg = randomDouble(preset.inclinationDegRange.get(0), preset.inclinationDegRange.get(1));
+            orbit.periapsisArgDeg = randomDouble(0, 360);
             orbit.meanAnomalyDegAtEpoch = randomDouble(0, 360);
 
             // 开普勒第三定律估算公转周期: P^2 = a^3 / M (P in years, a in AU, M in solar masses)

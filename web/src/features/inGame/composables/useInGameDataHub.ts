@@ -65,6 +65,8 @@ export type InGameDataHub = {
 
     entities: Ref<EntitySnapshot[]>
 
+    lastSnapshot: Ref<SnapshotMessage | null>
+
     overview: OverviewUiModel
     debug: DebugUiModel
     performance: PerformanceUiModel
@@ -233,6 +235,7 @@ export function useInGameDataHub() {
         setLastSnapshot,
         onCanvasPointerMove,
         entities,
+        lastSnapshot,
         overview: {
             dayText: overviewDayText,
             tickCostText: overviewTickCostText,
