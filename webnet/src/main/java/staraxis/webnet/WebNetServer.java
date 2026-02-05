@@ -97,13 +97,28 @@ public class WebNetServer {
             lastTickCostMs.set(costMs);
         }
 
-        if (snapshotSubscribers.isEmpty()) {
-            return;
-        }
-
         try {
-            String json = objectMapper.writeValueAsString(
-                    SnapshotMessageFactory.buildSnapshotMessage(runtime, lastTickCostMs.get()));
+            var snapshotDto = SnapshotMessageFactory.buildSnapshotMessage(runtime, lastTickCostMs.get());
+            var rts = snapshotDto.realTimeWorldState;
+            if (rts != null) {
+                int day = rts.gameDatetimeDay;
+                if (day != lastLoggedGameDay) {
+                    lastLoggedGameDay = day;
+                    double timeScale = 1.0;
+                    try {
+                        timeScale = runtime.getWorldStateForSimOnly().time.timeScale;
+                    } catch (Exception ignored) {
+                    }
+                    GameLog.log("day_advance day=" + day + " tick=" + rts.simulationTick + " accHours="
+                            + rts.accGameHoursInDay + " timeScale=" + timeScale);
+                }
+            }
+
+            if (snapshotSubscribers.isEmpty()) {
+                return;
+            }
+
+            String json = objectMapper.writeValueAsString(snapshotDto);
             for (WebSocketChannel ch : snapshotSubscribers) {
                 if (ch != null && ch.isOpen()) {
                     WebSockets.sendText(json, ch, null);
@@ -163,6 +178,8 @@ public class WebNetServer {
     private final Set<WebSocketChannel> snapshotSubscribers = ConcurrentHashMap.newKeySet();
 
     private final AtomicLong lastTickCostMs = new AtomicLong(0);
+
+    private volatile int lastLoggedGameDay = -1;
 
     private final AtomicInteger connectionCount = new AtomicInteger(0);
     private final AtomicLong lastDisconnectAtMs = new AtomicLong(0);
@@ -966,6 +983,10 @@ public class WebNetServer {
             exchange.getResponseSender().send(objectMapper.writeValueAsString(strings));
         });
         apiHandler.addPrefixPath("/i18n", i18nHandler);
+
+        // --- Ship API ---
+        ShipApi shipApi = new ShipApi(objectMapper);
+        apiHandler.addPrefixPath("/ship", shipApi.createHandler());
 
         routes.addPrefixPath("/api", apiHandler);
 

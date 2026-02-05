@@ -79,7 +79,7 @@ useStarfield(canvasRef)
           <span class="tag-developing">{{ t('mainMenu.tag.developing') }}</span>
         </button>
 
-        <button class="menu-item" @click="developing(t('mainMenu.shipDesigner'), $event)">
+        <button class="menu-item" @click="router.push('/ship-designer')">
           <span class="bullet" />
           <span>{{ t('mainMenu.shipDesigner') }}</span>
           <span class="tag-developing">{{ t('mainMenu.tag.developing') }}</span>

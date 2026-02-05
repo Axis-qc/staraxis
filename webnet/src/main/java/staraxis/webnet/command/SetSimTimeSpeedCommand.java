@@ -1,6 +1,7 @@
 package staraxis.webnet.command;
 
 import staraxis.game.StarAxisGameRuntime;
+import staraxis.webnet.GameLog;
 
 import java.util.Map;
 
@@ -63,7 +64,15 @@ public class SetSimTimeSpeedCommand implements WebCommandHandler {
                 return "{\"type\":\"command_response\",\"ok\":false,\"error\":\"invalid_scale\"}";
             }
 
+            double before = 1.0;
+            try {
+                before = runtime.getWorldStateForSimOnly().time.timeScale;
+            } catch (Exception ignored) {
+            }
+
             runtime.getCommandBusForSimOnly().submit(new staraxis.game.command.SetTimeScaleCommand(scale));
+
+            GameLog.log("cmd setSimTimeSpeed queued scale=" + scale + " beforeTimeScale=" + before);
 
             return "{\"type\":\"command_response\",\"ok\":true,\"command\":\"setSimTimeSpeed\",\"scale\":" + scale
                     + "}";

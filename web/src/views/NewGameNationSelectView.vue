@@ -44,6 +44,9 @@ const router = useRouter()
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 useStarfield(canvasRef)
 
+// --- Animation state ---
+const entered = ref(false)
+
 // --- Global identity (session) ---
 // 说明：身份来源改为全局状态（Pinia store）。
 // 只要登录后不关闭页面且不退出登录，所有页面都可读取。
@@ -221,6 +224,10 @@ async function createSamplePlayerNation() {
 
 onMounted(() => {
   refreshAll()
+  // 触发入场动画
+  setTimeout(() => {
+    entered.value = true
+  }, 100)
 })
 
 </script>
@@ -229,84 +236,81 @@ onMounted(() => {
   <div class="page">
     <canvas ref="canvasRef" class="background-canvas"></canvas>
 
-    <div class="hud">
-      <header class="hud-header">
-        <h1 class="title">{{ t('mainMenu.newGame') }}</h1>
-        <p class="subtitle">{{ t('mainMenu.web.subtitle') }}</p>
+    <div class="hud" :class="{ entered: entered }">
+      <header class="card card-top">
+        <div class="header-left">
+          <h2 class="panel-title">{{ t('newGame.nationSelect.title') }}</h2>
+          <p class="panel-desc">{{ t('newGame.nationSelect.desc') }}</p>
+        </div>
+        <div class="header-right">
+          <div class="meta-row">
+            <div class="meta-item">
+              <span class="meta-label">username</span>
+              <span class="meta-value">{{ username }}</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">playerId</span>
+              <span class="meta-value">{{ playerId }}</span>
+            </div>
+            <button class="btn small" @click="refreshAll" :disabled="loading">
+              {{ loading ? '...' : t('common.refresh') }}
+            </button>
+          </div>
+        </div>
       </header>
 
-      <section class="panel">
-        <h2 class="panel-title">{{ t('newGame.nationSelect.title') }}</h2>
-        <p class="panel-desc">{{ t('newGame.nationSelect.desc') }}</p>
+      <div v-if="errorMsg" class="error">
+        {{ errorMsg }}
+      </div>
 
-        <div class="meta-row">
-          <div class="meta-item">
-            <span class="meta-label">username</span>
-            <span class="meta-value">{{ username }}</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">playerId</span>
-            <span class="meta-value">{{ playerId }}</span>
-          </div>
-          <button class="btn small" @click="refreshAll" :disabled="loading">
-            {{ loading ? '...' : t('common.refresh') }}
-          </button>
-        </div>
-
-        <div v-if="errorMsg" class="error">
-          {{ errorMsg }}
-        </div>
-
-        <div class="content">
-          <div class="columns">
-            <div class="col">
-              <h3 class="col-title">{{ t('newGame.nationSelect.presets') }}</h3>
-              <div v-if="loading" class="placeholder">{{ t('common.loading') }}</div>
-              <div v-else class="list">
-                <button
-                  v-for="n in presetNations"
-                  :key="n.id"
-                  class="list-item"
-                  :class="{ selected: selectedNationSource === 'preset' && selectedNationId === n.id }"
-                  @click="choosePreset(n.id)"
-                >
-                  <div class="item-title">{{ t(n.nameKey) || n.id }}</div>
-                  <div class="item-sub">{{ n.id }}</div>
-                </button>
-              </div>
+      <main class="main-row">
+        <section class="card card-left nation-list">
+          <div class="nation-list-section">
+            <div class="section-header">
+              <h3 class="section-title">{{ t('newGame.nationSelect.presets') }}</h3>
             </div>
 
-            <div class="col">
-              <div class="col-header">
-                <h3 class="col-title">{{ t('newGame.nationSelect.playerDesigns') }}</h3>
-                <button class="btn small" @click="createSamplePlayerNation" :disabled="loading">
-                  {{ t('newGame.nationSelect.createSample') }}
-                </button>
-              </div>
+            <div v-if="loading" class="placeholder">{{ t('common.loading') }}</div>
+            <div v-else class="list">
+              <button v-for="n in presetNations" :key="n.id" class="list-item"
+                :class="{ selected: selectedNationSource === 'preset' && selectedNationId === n.id }"
+                @click="choosePreset(n.id)">
+                <div class="item-title">{{ t(n.nameKey) || n.id }}</div>
+                <div class="item-sub">{{ n.id }}</div>
+              </button>
+            </div>
+          </div>
 
-              <div v-if="loading" class="placeholder">{{ t('common.loading') }}</div>
-              <div v-else class="list">
-                <button
-                  v-for="id in playerNationIds"
-                  :key="id"
-                  class="list-item"
-                  :class="{ selected: selectedNationSource === 'player' && selectedNationId === id }"
-                  @click="choosePlayer(id)"
-                >
-                  <div class="item-title">
-                    {{ playerNations[id] ? (t(playerNations[id].nation.nameKey) || id) : id }}
-                  </div>
-                  <div class="item-sub">{{ id }}</div>
-                </button>
+          <div class="nation-list-divider"></div>
 
-                <div v-if="playerNationIds.length === 0" class="placeholder">
-                  {{ t('newGame.nationSelect.noPlayerDesigns') }}
+          <div class="nation-list-section">
+            <div class="section-header">
+              <h3 class="section-title">{{ t('newGame.nationSelect.playerDesigns') }}</h3>
+              <button class="btn small" @click="createSamplePlayerNation" :disabled="loading">
+                {{ t('newGame.nationSelect.createSample') }}
+              </button>
+            </div>
+
+            <div v-if="loading" class="placeholder">{{ t('common.loading') }}</div>
+            <div v-else class="list">
+              <button v-for="id in playerNationIds" :key="id" class="list-item"
+                :class="{ selected: selectedNationSource === 'player' && selectedNationId === id }"
+                @click="choosePlayer(id)">
+                <div class="item-title">
+                  {{ playerNations[id] ? (t(playerNations[id].nation.nameKey) || id) : id }}
                 </div>
+                <div class="item-sub">{{ id }}</div>
+              </button>
+
+              <div v-if="playerNationIds.length === 0" class="placeholder">
+                {{ t('newGame.nationSelect.noPlayerDesigns') }}
               </div>
             </div>
           </div>
+        </section>
 
-          <div class="detail" v-if="selectedNation">
+        <section class="card card-right nation-detail">
+          <div class="detail-content" v-if="selectedNation">
             <h3 class="detail-title">{{ t(selectedNation.nameKey) || selectedNation.id }}</h3>
             <div class="detail-row">
               <span class="detail-label">id</span>
@@ -326,20 +330,20 @@ onMounted(() => {
             </div>
           </div>
 
-          <div class="detail" v-else>
+          <div class="detail-content" v-else>
             <div class="placeholder">{{ t('newGame.nationSelect.pickOne') }}</div>
           </div>
-        </div>
+        </section>
+      </main>
 
-        <div class="actions">
-          <button class="btn" @click="router.push('/main-menu')">
-            {{ t('common.back') }}
-          </button>
-          <button class="btn primary" :disabled="!selectedNation || loading" @click="handleNextStep">
-            {{ loading ? '...' : t('common.next') }}
-          </button>
-        </div>
-      </section>
+      <footer class="card card-bottom">
+        <button class="btn" @click="router.push('/main-menu')">
+          {{ t('common.back') }}
+        </button>
+        <button class="btn primary" :disabled="!selectedNation || loading" @click="handleNextStep">
+          {{ loading ? '...' : t('common.next') }}
+        </button>
+      </footer>
     </div>
   </div>
 </template>
@@ -354,8 +358,9 @@ onMounted(() => {
   font-family: 'Orbitron', sans-serif;
   overflow: hidden;
   position: relative;
-  padding: 4rem;
+  padding: 2.5rem;
   box-sizing: border-box;
+  justify-content: center;
 }
 
 .background-canvas {
@@ -371,37 +376,63 @@ onMounted(() => {
 .hud {
   position: relative;
   z-index: 1;
-  width: 960px;
-  max-width: 100%;
+  width: min(1200px, 100%);
   height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 1rem;
+  min-height: 0;
 }
 
-.hud-header {
-  margin-bottom: 2rem;
-}
-
-.title {
-  font-size: 2.6rem;
-  font-weight: 700;
-  color: var(--text-color-hover);
-  text-shadow: 0 0 8px var(--glow-color), 0 0 15px var(--glow-color);
-  margin: 0;
-}
-
-.subtitle {
-  font-size: 1rem;
-  color: var(--glow-color);
-  margin: 0.25rem 0 0 0;
-  letter-spacing: 0.1875rem;
-  text-transform: uppercase;
-}
-
-.panel {
+.card {
   background: color-mix(in srgb, var(--background-color) 68%, rgba(255, 255, 255, 0.05));
   border: 1px solid color-mix(in srgb, var(--glow-color) 32%, transparent);
   box-shadow: 0 0 24px color-mix(in srgb, var(--glow-color) 12%, transparent);
   border-radius: 12px;
-  padding: 1.5rem;
+  padding: 1.25rem;
+  min-height: 0;
+}
+
+.main-row {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 1rem;
+  min-height: 0;
+}
+
+.card-top {
+  transform: translateY(-24px);
+  opacity: 0;
+  transition: transform 420ms ease, opacity 420ms ease;
+}
+
+.card-left {
+  transform: translateX(-24px);
+  opacity: 0;
+  transition: transform 420ms ease, opacity 420ms ease;
+}
+
+.card-right {
+  transform: translateX(24px);
+  opacity: 0;
+  transition: transform 420ms ease, opacity 420ms ease;
+}
+
+.card-bottom {
+  transform: translateY(24px);
+  opacity: 0;
+  transition: transform 420ms ease, opacity 420ms ease;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.hud.entered .card-top,
+.hud.entered .card-left,
+.hud.entered .card-right,
+.hud.entered .card-bottom {
+  transform: translate(0, 0);
+  opacity: 1;
 }
 
 .panel-title {
@@ -448,39 +479,105 @@ onMounted(() => {
   font-size: 0.85rem;
 }
 
-.content {
-  margin-top: 1.25rem;
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--glow-color) 18%, transparent);
 }
 
-.columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+.header-left {
+  min-width: 0;
+}
+
+.header-right {
+  min-width: 0;
+}
+
+.panel-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-top: 1rem;
+}
+
+.panel-footer {
+  display: flex;
+  justify-content: space-between;
   gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid color-mix(in srgb, var(--glow-color) 18%, transparent);
 }
 
-.col {
+
+.two-pane {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 1rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.nation-list {
   border: 1px solid color-mix(in srgb, var(--glow-color) 20%, transparent);
   border-radius: 12px;
   padding: 0.75rem;
+  overflow: auto;
+  height: 100%;
+  min-height: 0;
 }
 
-.col-header {
+.nation-list-section+.nation-list-section {
+  margin-top: 1rem;
+}
+
+.nation-list-divider {
+  height: 1px;
+  background: color-mix(in srgb, var(--glow-color) 18%, transparent);
+  margin: 0.75rem 0;
+}
+
+.section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 0.75rem;
 }
 
-.col-title {
+.section-title {
   margin: 0;
   font-size: 0.95rem;
   color: var(--text-color-hover);
+}
+
+.nation-detail {
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--glow-color) 20%, transparent);
+  border-radius: 12px;
+  padding: 0.9rem;
+  overflow: auto;
+  height: 100%;
+  min-height: 0;
 }
 
 .list {
   margin-top: 0.75rem;
   display: grid;
   gap: 0.5rem;
+}
+
+@media (max-width: 880px) {
+  .two-pane {
+    grid-template-columns: 1fr;
+  }
+
+  .nation-list {
+    height: 280px;
+  }
 }
 
 .list-item {
@@ -516,15 +613,12 @@ onMounted(() => {
   color: color-mix(in srgb, var(--text-color) 60%, transparent);
 }
 
-.detail {
-  margin-top: 1rem;
-  border: 1px solid color-mix(in srgb, var(--glow-color) 20%, transparent);
-  border-radius: 12px;
-  padding: 0.9rem;
+.detail-content {
+  min-width: 0;
 }
 
 .detail-title {
-  margin: 0;
+  margin: 0 0 1rem 0;
   color: var(--text-color-hover);
   font-size: 1.05rem;
 }
@@ -553,12 +647,7 @@ onMounted(() => {
   font-size: 0.85rem;
 }
 
-.actions {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-top: 1.5rem;
-}
+
 
 .btn {
   background: transparent;

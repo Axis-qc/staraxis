@@ -43,7 +43,8 @@ public class EntitySnapshot {
     @JsonSubTypes({
             @JsonSubTypes.Type(value = StarDetails.class, name = "STAR"),
             @JsonSubTypes.Type(value = PlanetDetails.class, name = "PLANET"),
-            @JsonSubTypes.Type(value = SystemBarycenterDetails.class, name = "SYSTEM_BARYCENTER")
+            @JsonSubTypes.Type(value = SystemBarycenterDetails.class, name = "SYSTEM_BARYCENTER"),
+            @JsonSubTypes.Type(value = ShipDetails.class, name = "SHIP")
     })
     public final Object details;
 

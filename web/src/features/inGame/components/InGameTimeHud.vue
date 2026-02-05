@@ -22,9 +22,9 @@
  * 
  */
 import { computed, ref } from 'vue'
-import type { SnapshotMessage } from '../../../net/snapshotWs'
+import type { SnapshotMessage, SnapshotWsClient } from '../../../net/snapshotWs'
 
-const props = defineProps<{ snapshot: SnapshotMessage | null }>()
+const props = defineProps<{ snapshot: SnapshotMessage | null; wsClient?: SnapshotWsClient | null }>()
 
 const SPEED_OPTIONS = [0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0] as const
 type SpeedOption = (typeof SPEED_OPTIONS)[number]
@@ -36,30 +36,9 @@ function getSpeedLabel(s: SpeedOption) {
 }
 
 function sendSimTimeSpeed(scale: SpeedOption) {
-  // 通过 /ws 将指令发给模拟层（与快照 WS 同一路径）。
-  // 注意：后端需要支持该消息类型。
+  // 复用快照 WS 连接发送命令，避免短连接频繁建立/关闭导致 WS 不稳定。
   try {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//${window.location.host}/ws`
-    const ws = new WebSocket(wsUrl)
-
-    ws.onopen = () => {
-      try {
-        ws.send(JSON.stringify({ type: 'setSimTimeSpeed', scale }))
-      } catch {
-      }
-      try {
-        ws.close()
-      } catch {
-      }
-    }
-
-    ws.onerror = () => {
-      try {
-        ws.close()
-      } catch {
-      }
-    }
+    props.wsClient?.send({ type: 'setSimTimeSpeed', scale })
   } catch {
   }
 }

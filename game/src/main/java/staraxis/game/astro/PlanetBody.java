@@ -22,6 +22,11 @@ public class PlanetBody extends Entity {
     /** 自转周期（游戏小时）。 */
     public double rotationPeriodHours;
 
+    /**
+     * 星球地表纹理资源路径（相对于 assets/planet/，例如 "terrestrial/seed_12345678.png"），无地表时为 null
+     */
+    public String surfaceTexturePath;
+
     public PlanetBody() {
         this.entityType = EntityType.PLANET;
     }

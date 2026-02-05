@@ -35,7 +35,7 @@
 
 import { computed, onUnmounted, ref, shallowRef, type Ref } from 'vue'
 import type { EntitySnapshot, SnapshotMessage } from '../../../net/snapshotWs'
-import type { ThreeWorldRenderer } from '../../../rendering/threeWorldRenderer'
+import type { WorldRenderer as ThreeWorldRenderer } from '../../../rendering/worldRenderManager'
 
 type Vec2 = { x: number; y: number }
 

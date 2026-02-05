@@ -10,7 +10,7 @@
  * - 未来接入后端 Command 时，可在 `issueMoveCommand` 处将命令通过 WS/HTTP 发往服务端。
  */
 
-import type { ThreeWorldRenderer } from '../../../rendering/threeWorldRenderer'
+import type { WorldRenderer as ThreeWorldRenderer } from '../../../rendering/worldRenderManager'
 
 export type RtsCommandIntent =
     | {

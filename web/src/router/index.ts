@@ -20,7 +20,12 @@ const router = createRouter({
         {
             path: '/ship-designer',
             name: 'ship-designer',
-            component: () => import('../views/DevelopingView.vue'),
+            component: () => import('../views/ShipDesignerView.vue'),
+        },
+        {
+            path: '/ship-designer/dev',
+            name: 'ship-designer-dev',
+            component: () => import('../views/ShipDesignerDevView.vue'),
         },
         {
             path: '/load-game',

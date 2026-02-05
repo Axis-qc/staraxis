@@ -6,7 +6,7 @@
  * 游戏主界面视图（/in-game）。
  *
  * 本视图负责：
- * - 初始化并承载 three 渲染画布（`createThreeWorldRenderer`）。
+ * - 初始化并承载渲染画布（`createWorldRenderManager`）。
  * - 建立与后端的快照 WebSocket 连接（`connectSnapshotWs`），接收权威世界快照用于渲染与 UI 展示。
  * - 提供游戏内 HUD/UI：右侧总览、底部主控制栏、ESC 菜单。
  * - 在 DEV 环境提供可拖拽调试浮窗（`O` 键开关），展示缩放倍率/镜头中心/鼠标世界坐标/世界状态摘要等。
@@ -30,7 +30,7 @@
  * - WebSocket：由 `connectSnapshotWs` 连接（具体 WS 地址与协议由该模块内部实现）。
  *
  * @resources
- * - `../rendering/threeWorldRenderer`：三维/二维世界渲染。
+ * - `../rendering/worldRenderManager`：世界渲染管理器（重构入口）。
  * - `../net/snapshotWs`：快照 WS 客户端。
  * - `../composables/useInGameDataHub`：UI/渲染所需数据聚合与派发。
  * - `../composables/useAstroAssets`：恒星/行星贴图资源路径。
@@ -59,7 +59,7 @@ import InGameMilitaryPanel from '../features/inGame/panels/InGameMilitaryPanel.v
 import InGameDomesticPanel from '../features/inGame/panels/InGameDomesticPanel.vue'
 import InGameDiplomacyPanel from '../features/inGame/panels/InGameDiplomacyPanel.vue'
 import { connectSnapshotWs } from '../net/snapshotWs'
-import { createThreeWorldRenderer } from '../rendering/threeWorldRenderer'
+import { createWorldRenderManager } from '../rendering/worldRenderManager'
 import { useInGameDataHub } from '../features/inGame/composables/useInGameDataHub'
 import { useInGameInputController } from '../features/inGame/input/useInGameInputController'
 import { useInGameUiInputBindings } from '../features/inGame/input/useInGameUiInputBindings'
@@ -93,7 +93,7 @@ const containerRef = ref<HTMLDivElement | null>(null)
 
 const hub = useInGameDataHub()
 
-let wsClient: ReturnType<typeof connectSnapshotWs> | null = null
+const wsClient = ref<ReturnType<typeof connectSnapshotWs> | null>(null)
 
 const isDebugHudEnabled = import.meta.env.DEV
 
@@ -287,11 +287,11 @@ onMounted(() => {
 
   const container = containerRef.value
   if (container) {
-    const r = createThreeWorldRenderer(container, { minZoom: 0.1, maxZoom: 2_000_000, getSpritePath })
+    const r = createWorldRenderManager(container, { minZoom: 0.1, maxZoom: 2_000_000, getSpritePath })
     hub.setRenderer(r)
   }
 
-  wsClient = connectSnapshotWs({
+  wsClient.value = connectSnapshotWs({
     reconnectDelayMs: 3000,
     onSnapshot: (s) => {
       hub.setLastSnapshot(s)
@@ -308,8 +308,8 @@ onUnmounted(() => {
   window.removeEventListener('popstate', onPopState)
   inputController.detach()
 
-  wsClient?.close()
-  wsClient = null
+  wsClient.value?.close()
+  wsClient.value = null
 
   hub.getRenderer()?.dispose()
   hub.setRenderer(null)
@@ -350,7 +350,7 @@ onUnmounted(() => {
       }"
     />
 
-    <InGameTimeHud :snapshot="hub.lastSnapshot.value" />
+    <InGameTimeHud :snapshot="hub.lastSnapshot.value" :ws-client="wsClient" />
 
     <InGamePlanetWindow
       v-if="planetWindowOpen && planetEntity"
