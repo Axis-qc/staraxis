@@ -248,3 +248,5 @@ __pycache__/
 .vscode/
 .windsurf/
 specs/
+.claude/
+.github/

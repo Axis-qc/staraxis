@@ -965,6 +965,36 @@ public class WebNetServer {
             });
         });
 
+        apiHandler.addExactPath("/restart", exchange -> {
+            exchange.dispatch(() -> {
+                System.out.println(
+                        "HTTP restart requested: " + exchange.getRequestMethod() + " " + exchange.getRequestPath());
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+
+                String auth = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
+                AuthStore.Session s = authStore.getSessionFromAuthorizationHeader(auth);
+                if (s == null) {
+                    exchange.setStatusCode(401);
+                    exchange.getResponseSender().send("{\"ok\":false,\"error\":\"unauthorized\"}");
+                    return;
+                }
+
+                AuthStore.Account a = authStore.loadAccount(s.username);
+                String role = a != null && a.role != null && !a.role.isBlank() ? a.role : "USER";
+                if (!"ADMIN".equalsIgnoreCase(role)) {
+                    exchange.setStatusCode(403);
+                    exchange.getResponseSender().send("{\"ok\":false,\"error\":\"forbidden\"}");
+                    return;
+                }
+
+                exchange.getResponseSender().send("{\"ok\":true}");
+                exchange.endExchange();
+                Thread t = new Thread(() -> shutdownAndRestart(), "webnet-restart");
+                t.setDaemon(false);
+                t.start();
+            });
+        });
+
         // --- i18n API ---
         PathHandler i18nHandler = Handlers.path();
         i18nHandler.addExactPath("/languages", exchange -> {
@@ -1062,6 +1092,61 @@ public class WebNetServer {
             undertow.stop();
             undertow = null;
         }
+    }
+
+    private void shutdownAndRestart() {
+        System.out.println("WebNet restart requested...");
+
+        // 先停止HTTP服务器释放端口
+        System.out.println("Stopping HTTP server to release port " + config.port + "...");
+        stop();
+
+        // 短暂延迟确保端口释放
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException ignored) {}
+
+        // 构建重启命令
+        String javaHome = System.getProperty("java.home");
+        String javaExecutable = javaHome + File.separator + "bin" + File.separator + "java";
+
+        // 获取类路径
+        String classpath = System.getProperty("java.class.path");
+
+        // 构建参数
+        List<String> command = new ArrayList<>();
+        command.add(javaExecutable);
+        command.add("-cp");
+        command.add(classpath);
+        command.add("staraxis.webnet.WebNetLauncher");
+        command.add("--host=" + config.host);
+        command.add("--port=" + config.port);
+        command.add("--autoExitSeconds=" + config.autoExitSeconds);
+        if (config.serverUiEnabled) {
+            command.add("--serverUi=true");
+        }
+        if (config.gameUiUrl != null && !config.gameUiUrl.isBlank()) {
+            command.add("--gameUiUrl=" + config.gameUiUrl);
+        }
+
+        try {
+            System.out.println("Starting new WebNet process...");
+            ProcessBuilder pb = new ProcessBuilder(command);
+            pb.directory(new File(System.getProperty("user.dir")));
+            pb.inheritIO(); // 继承当前进程的IO
+            Process process = pb.start();
+            System.out.println("New WebNet process started (PID: " + process.pid() + ")");
+
+            // 短暂延迟确保新进程已启动
+            Thread.sleep(1000);
+        } catch (Exception e) {
+            System.err.println("Failed to restart WebNet: " + e.getMessage());
+            e.printStackTrace();
+            // 即使重启失败也继续退出
+        }
+
+        // 关闭当前进程
+        shutdownAndExit(0);
     }
 
     private void shutdownAndExit(int code) {

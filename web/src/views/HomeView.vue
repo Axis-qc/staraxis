@@ -41,7 +41,7 @@
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { requestQuit } from '../services/backend'
+import { requestQuit, requestRestart } from '../services/backend'
 import { i18nState, loadAvailableLanguages, loadLanguage } from '../i18n'
 import { useAuth } from '../composables/useAuth'
 import { useMods } from '../composables/useMods'
@@ -52,43 +52,50 @@ const { t } = useI18n()
 const router = useRouter()
 const { auth, loginForm, gameIdInput, gameIdSaveState, doLogin, doRegister, doLogout, saveGameId } = useAuth()
 const { mods, modsLoading, modsError, modsSaveState, expandedModId, loadMods, moveMod, toggleModEnabled, saveModsToServer } = useMods()
-const { wsStateText, wsTagKind } = useServerStatus()
+const { wsStateText, wsTagKind, status, statusError, refreshStatus } = useServerStatus()
 
-const canvasRef = ref<HTMLCanvasElement | null>(null)
+/** @type {import('vue').Ref<HTMLCanvasElement|null>} */
+const canvasRef = ref(null)
 useStarfield(canvasRef)
 
 const isReady = ref(false)
 
-type TabKey = 'status' | 'mods' | 'quit'
-const activeTab = ref<TabKey>('status')
+const activeTab = ref('status')
 
-function onClickTab(tab: TabKey) {
+function onClickTab(tab) {
   const canQuit = auth.isLoggedIn && auth.role === 'ADMIN'
   if (tab === 'quit' && !canQuit) return
   activeTab.value = tab
 }
+
 const showPassword = ref(false)
 
 const quitting = ref(false)
-const quitHint = ref<string | null>(null)
-const quitError = ref<string | null>(null)
-async function quitServer() {
-  if (quitting.value) return
-  quitting.value = true
-  quitError.value = null
-  quitHint.value = null
+const quitHint = ref(null)
+const quitError = ref(null)
+
+const restarting = ref(false)
+const restartHint = ref(null)
+const restartError = ref(null)
+async function restartServer() {
+  if (restarting.value) return
+  restarting.value = true
+  restartError.value = null
+  restartHint.value = null
   try {
-    await requestQuit()
-    quitHint.value = t('mainMenu.log.quitRequested')
+    await requestRestart()
+    restartHint.value = t('mainMenu.log.restartRequested')
   } catch (e) {
-    quitError.value = (e as Error).message
+    restartError.value = e instanceof Error ? e.message : String(e)
   } finally {
-    quitting.value = false
+    restarting.value = false
   }
 }
 
-const langs = ref<string[]>(i18nState.availableLangs || [])
-const selectedLang = ref<string>(i18nState.currentLang)
+/** @type {import('vue').Ref<string[]>} */
+const langs = ref(i18nState.availableLangs || [])
+/** @type {import('vue').Ref<string>} */
+const selectedLang = ref(i18nState.currentLang)
 const langLoading = ref(false)
 async function refreshLangs() {
   langLoading.value = true
@@ -268,9 +275,47 @@ onMounted(() => {
               </section>
 
               <section v-else-if="activeTab === 'quit' && auth.isLoggedIn && auth.role === 'ADMIN'" key="quit" class="tab-section">
-                <h2 class="tab-title">{{ t('home.tab.quit') }}</h2>
-                <p class="quit-desc">{{ t('home.quit.desc') }}</p>
-                <button class="sa-btn danger" @click="quitServer" :disabled="quitting">{{ t('home.quit.action') }}</button>
+                <div class="server-status-header">
+                  <h2 class="tab-title">{{ t('home.tab.quit') }}</h2>
+                  <button class="sa-btn" @click="refreshServerStatus" :disabled="statusLoading">{{ t('home.server.refresh') }}</button>
+                </div>
+
+                <div v-if="statusError" class="sa-tag error">{{ statusError }}</div>
+
+                <div v-if="status" class="server-status-grid">
+                  <div class="status-row">
+                    <span class="status-label">{{ t('home.server.http') }}</span>
+                    <span class="status-value">{{ status.host }}:{{ status.port }}</span>
+                  </div>
+                  <div class="status-row">
+                    <span class="status-label">{{ t('home.server.ws') }}</span>
+                    <span class="status-value">{{ wsStateText }}</span>
+                  </div>
+                  <div class="status-row">
+                    <span class="status-label">{{ t('home.server.connections') }}</span>
+                    <span class="status-value">{{ status.connections }}</span>
+                  </div>
+                  <div class="status-row">
+                    <span class="status-label">{{ t('mainMenu.label.autoExit') }}</span>
+                    <span class="status-value">{{ status.autoExitSeconds }}秒</span>
+                  </div>
+                  <div class="status-row">
+                    <span class="status-label">{{ t('mainMenu.label.idle') }}</span>
+                    <span class="status-value">{{ status.idleSeconds }}秒</span>
+                  </div>
+                </div>
+
+                <div v-else-if="!statusError" class="sa-tag warn">{{ t('common.loading') }}</div>
+
+                <div v-if="restartHint" class="sa-tag ok">{{ restartHint }}</div>
+                <div v-if="restartError" class="sa-tag error">{{ restartError }}</div>
+                <div v-if="quitHint" class="sa-tag ok">{{ quitHint }}</div>
+                <div v-if="quitError" class="sa-tag error">{{ quitError }}</div>
+
+                <div class="server-actions">
+                  <button class="sa-btn danger" @click="quitServer" :disabled="quitting">{{ t('home.quit.action') }}</button>
+                  <button class="sa-btn" @click="restartServer" :disabled="restarting">{{ t('home.restart.action') }}</button>
+                </div>
               </section>
             </transition>
           </div>
@@ -644,6 +689,45 @@ onMounted(() => {
 
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+}
+
+.server-status-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.server-status-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid var(--stroke);
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.status-label {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.status-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 14px;
+}
+
+.server-actions {
+  margin-top: 24px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 @media (max-width: 960px) {

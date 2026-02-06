@@ -163,3 +163,11 @@ export async function saveMods(order: string[], disabled: string[]): Promise<voi
         }
     }
 }
+
+export async function requestRestart(): Promise<void> {
+    const resp = await authFetch('/api/restart', { method: 'POST' })
+    if (!resp.ok) {
+        const txt = await resp.text()
+        throw new Error(txt || `HTTP ${resp.status}`)
+    }
+}
