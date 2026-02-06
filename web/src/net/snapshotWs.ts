@@ -2,15 +2,6 @@ export type SectorCenter = { q: number; r: number; x: number; y: number }
 
 export type EntityType = 'STAR' | 'PLANET' | 'SYSTEM_BARYCENTER' | 'SHIP' | 'STATION'
 
-export type OrbitSnapshot = {
-    orbitCenterEntityId: number
-    semiMajorAxisGU: number
-    eccentricity: number
-    inclinationDeg: number
-    periapsisArgDeg: number
-    meanAnomalyDegAtEpoch: number
-    orbitalPeriodDays: number
-}
 
 export type StarDetails = {
     starTypeId: string
@@ -23,7 +14,14 @@ export type PlanetDetails = {
     planetTypeId: string
     radiusGU: number
     rotationPeriodHours: number
-    orbit: OrbitSnapshot | null
+    surfaceTexturePath: string | null
+    orbitCenterEntityId: number
+    semiMajorAxisGU: number
+    eccentricity: number
+    inclinationDeg: number
+    periapsisArgDeg: number
+    orbitalPeriodDays: number
+    meanAnomalyDegAtEpoch: number
 }
 
 export type SystemBarycenterDetails = {}

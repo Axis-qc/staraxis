@@ -16,7 +16,6 @@ import staraxis.game.state.RealTimeWorldState;
 import staraxis.game.state.RealTimeWorldStateBuffer;
 import staraxis.game.state.WorldState;
 import staraxis.game.state.snapshot.EntitySnapshot;
-import staraxis.game.state.snapshot.OrbitSnapshot;
 import staraxis.game.world.WorldGenConfig;
 import staraxis.game.world.WorldGenerator;
 import staraxis.game.world.WorldSector;
@@ -164,27 +163,8 @@ public class StarAxisGameRuntime implements GameRuntime {
 
             // 3. 注册行星实体
             for (PlanetBody planet : system.planets) {
-                planet.systemId = system.systemId;
-                // 默认行星归属重心（单星系统里重心=恒星）
-                planet.parentEntityId = system.barycenterEntityId;
-                if (planet.orbit != null) {
-                    planet.orbit.orbitCenterEntityId = system.barycenterEntityId;
-                }
-                planet.sectorCoord = system.sectorCoord;
                 // 行星 posWorldGU 由前端根据轨道计算，这里不填充
                 s.putEntity(planet);
-
-                OrbitSnapshot orbitSnapshot = null;
-                if (planet.orbit != null) {
-                    orbitSnapshot = new OrbitSnapshot(
-                            planet.orbit.orbitCenterEntityId,
-                            planet.orbit.semiMajorAxisGU,
-                            planet.orbit.eccentricity,
-                            planet.orbit.inclinationDeg,
-                            planet.orbit.periapsisArgDeg,
-                            planet.orbit.orbitalPeriodDays,
-                            planet.orbit.meanAnomalyDegAtEpoch);
-                }
 
                 s.putEntitySnapshot(new EntitySnapshot(
                         planet.entityId,
@@ -193,9 +173,18 @@ public class StarAxisGameRuntime implements GameRuntime {
                         planet.parentEntityId,
                         planet.sectorCoord,
                         planet.posWorldGU,
-                        new EntitySnapshot.PlanetDetails(planet.planetTypeId, planet.radiusGU,
+                        new EntitySnapshot.PlanetDetails(
+                                planet.planetTypeId,
+                                planet.radiusGU,
                                 planet.rotationPeriodHours,
-                                orbitSnapshot)));
+                                planet.surfaceTexturePath,
+                                planet.orbitCenterEntityId,
+                                planet.semiMajorAxisGU,
+                                planet.eccentricity,
+                                planet.inclinationDeg,
+                                planet.periapsisArgDeg,
+                                planet.orbitalPeriodDays,
+                                planet.meanAnomalyDegAtEpoch)));
             }
         }
 

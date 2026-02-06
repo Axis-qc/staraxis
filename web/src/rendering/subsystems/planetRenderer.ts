@@ -34,10 +34,13 @@ import * as THREE from 'three'
 import type { WorldRenderContext, WorldFrameState } from '../worldRenderManager'
 import type { WorldRenderSubsystem } from './worldRenderSubsystem'
 import type { PlanetDetails } from '../../net/snapshotWs'
+import type { TextureManager } from './textureManager'
 
 export class PlanetRenderer implements WorldRenderSubsystem {
     private planetMeshPool: THREE.Mesh[] = []
     private activePlanetMeshesByEntityId = new Map<number, THREE.Mesh>()
+    private materialPool: THREE.MeshStandardMaterial[] = []
+    private textureCache = new Map<string, THREE.Texture>()
 
     init(ctx: WorldRenderContext): void {
         void ctx // unused
@@ -54,6 +57,7 @@ export class PlanetRenderer implements WorldRenderSubsystem {
             mesh.visible = false
             mesh.frustumCulled = false
             this.planetMeshPool.push(mesh)
+            this.materialPool.push(material)
         }
     }
 
@@ -70,13 +74,11 @@ export class PlanetRenderer implements WorldRenderSubsystem {
             if (!showPlanets && !isSelected) continue
 
             const details = entity.details as PlanetDetails
-            const orbit = details.orbit
-            if (!orbit) continue
 
-            const orbitCenter = entitiesById.get(orbit.orbitCenterEntityId)
+            const orbitCenter = entitiesById.get(details.orbitCenterEntityId)
             if (!orbitCenter?.posWorldGU) continue
 
-            const planetPos = computePlanetPosWorldGU({ orbit, orbitCenter, totalDays })
+            const planetPos = computePlanetPosWorldGU({ details, orbitCenter, totalDays })
             if (!planetPos) continue
 
             if (!isSelected && !isPointInAabb(planetPos, cullingAabb)) {
@@ -85,7 +87,7 @@ export class PlanetRenderer implements WorldRenderSubsystem {
 
             nextPlanetMeshIds.add(entity.entityId)
 
-            // 3D 球体渲染（白模）
+            // 3D 球体渲染
             const radiusGU = details.radiusGU
             const size = radiusGU * 2
 
@@ -94,6 +96,12 @@ export class PlanetRenderer implements WorldRenderSubsystem {
                 mesh = this.acquirePlanetMesh()
                 this.activePlanetMeshesByEntityId.set(entity.entityId, mesh)
                 entitiesGroup.add(mesh)
+            }
+
+            // 纹理加载
+            const material = mesh.material as THREE.MeshStandardMaterial
+            if (details.surfaceTexturePath && !material.map) {
+                this.loadAndApplyTexture(material, details.surfaceTexturePath)
             }
 
             mesh.scale.set(size, size, size)
@@ -147,9 +155,36 @@ export class PlanetRenderer implements WorldRenderSubsystem {
     }
 
     private releasePlanetMesh(mesh: THREE.Mesh): void {
+        const material = mesh.material as THREE.MeshStandardMaterial
+        material.map = null
+        material.needsUpdate = true
+
         mesh.visible = false
         mesh.parent?.remove(mesh)
         this.planetMeshPool.push(mesh)
+    }
+
+    private loadAndApplyTexture(material: THREE.MeshStandardMaterial, surfaceTexturePath: string): void {
+        if (this.textureCache.has(surfaceTexturePath)) {
+            material.map = this.textureCache.get(surfaceTexturePath)!
+            material.needsUpdate = true
+            return
+        }
+
+        const loader = new THREE.TextureLoader()
+        loader.load(
+            `/assets/${surfaceTexturePath}`,
+            (texture) => {
+                texture.anisotropy = 16
+                this.textureCache.set(surfaceTexturePath, texture)
+                material.map = texture
+                material.needsUpdate = true
+            },
+            undefined,
+            () => {
+                // 加载失败则保持白模
+            },
+        )
     }
 }
 
@@ -161,24 +196,24 @@ function isPointInAabb(
 }
 
 function computePlanetPosWorldGU(args: {
-    orbit: any
+    details: PlanetDetails
     orbitCenter: any
     totalDays: number
 }): { x: number; y: number } | null {
-    const { orbit, orbitCenter, totalDays } = args
-    if (!orbit || !orbitCenter.posWorldGU) return null
+    const { details, orbitCenter, totalDays } = args
+    if (!orbitCenter.posWorldGU) return null
 
-    const meanAnomaly = (Number(orbit.meanAnomalyDegAtEpoch ?? 0) * Math.PI) / 180
-    const periodDays = Number(orbit.orbitalPeriodDays ?? 0)
+    const meanAnomaly = (Number(details.meanAnomalyDegAtEpoch ?? 0) * Math.PI) / 180
+    const periodDays = Number(details.orbitalPeriodDays ?? 0)
     if (!Number.isFinite(periodDays) || periodDays <= 0) return null
 
     const angle = meanAnomaly + (totalDays / periodDays) * 2 * Math.PI
 
-    const a = Number(orbit.semiMajorAxisGU ?? 0)
-    const e = Number(orbit.eccentricity ?? 0)
+    const a = Number(details.semiMajorAxisGU ?? 0)
+    const e = Number(details.eccentricity ?? 0)
     const b = a * Math.sqrt(Math.max(0, 1 - e ** 2))
 
-    const periapsisArgRad = (Number(orbit.periapsisArgDeg ?? 0) * Math.PI) / 180
+    const periapsisArgRad = (Number(details.periapsisArgDeg ?? 0) * Math.PI) / 180
 
     const localX = a * Math.cos(angle)
     const localY = b * Math.sin(angle)

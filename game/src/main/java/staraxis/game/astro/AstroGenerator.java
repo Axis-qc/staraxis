@@ -107,22 +107,27 @@ public final class AstroGenerator {
             planet.rotationPeriodHours = randomDouble(preset.rotationPeriodHoursRange.get(0),
                     preset.rotationPeriodHoursRange.get(1));
 
-            // 生成轨道参数
-            OrbitParams orbit = new OrbitParams();
-            // 单星系统，轨道中心就是主星
-            orbit.orbitCenterEntityId = primaryStar.entityId;
-            orbit.semiMajorAxisGU = currentOrbitGU;
-            orbit.eccentricity = randomDouble(preset.eccentricityRange.get(0), preset.eccentricityRange.get(1));
-            orbit.inclinationDeg = randomDouble(preset.inclinationDegRange.get(0), preset.inclinationDegRange.get(1));
-            orbit.periapsisArgDeg = randomDouble(0, 360);
-            orbit.meanAnomalyDegAtEpoch = randomDouble(0, 360);
+            // 从 spriteCandidates 中确定性选择纹理
+            if (type.spriteCandidates != null && !type.spriteCandidates.isEmpty()) {
+                int idx = random.nextInt(type.spriteCandidates.size());
+                planet.surfaceTexturePath = type.spriteCandidates.get(idx);
+            } else {
+                planet.surfaceTexturePath = null;
+            }
+
+            // 直接填充轨道字段到 PlanetBody
+            planet.orbitCenterEntityId = primaryStar.entityId;
+            planet.semiMajorAxisGU = currentOrbitGU;
+            planet.eccentricity = randomDouble(preset.eccentricityRange.get(0), preset.eccentricityRange.get(1));
+            planet.inclinationDeg = randomDouble(preset.inclinationDegRange.get(0), preset.inclinationDegRange.get(1));
+            planet.periapsisArgDeg = randomDouble(0, 360);
+            planet.meanAnomalyDegAtEpoch = randomDouble(0, 360);
 
             // 开普勒第三定律估算公转周期: P^2 = a^3 / M (P in years, a in AU, M in solar masses)
-            double pYears = Math.sqrt(Math.pow(orbit.semiMajorAxisGU / staraxis.game.world.WorldConstants.AU_IN_GU, 3)
+            double pYears = Math.sqrt(Math.pow(planet.semiMajorAxisGU / staraxis.game.world.WorldConstants.AU_IN_GU, 3)
                     / primaryStar.massSolar);
-            orbit.orbitalPeriodDays = pYears * 365.25; // 简化换算
+            planet.orbitalPeriodDays = pYears * 365.25; // 简化换算
 
-            planet.orbit = orbit;
             system.planets.add(planet);
 
             // 为下一颗行星增加轨道距离

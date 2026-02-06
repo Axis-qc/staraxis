@@ -79,13 +79,37 @@ public class EntitySnapshot {
         public final String planetTypeId;
         public final double radiusGU;
         public final double rotationPeriodHours;
-        public final OrbitSnapshot orbit;
+        public final String surfaceTexturePath;
 
-        public PlanetDetails(String planetTypeId, double radiusGU, double rotationPeriodHours, OrbitSnapshot orbit) {
+        public final long orbitCenterEntityId;
+        public final double semiMajorAxisGU;
+        public final double eccentricity;
+        public final double inclinationDeg;
+        public final double periapsisArgDeg;
+        public final double orbitalPeriodDays;
+        public final double meanAnomalyDegAtEpoch;
+
+        public PlanetDetails(String planetTypeId, double radiusGU, double rotationPeriodHours,
+                String surfaceTexturePath,
+                long orbitCenterEntityId,
+                double semiMajorAxisGU,
+                double eccentricity,
+                double inclinationDeg,
+                double periapsisArgDeg,
+                double orbitalPeriodDays,
+                double meanAnomalyDegAtEpoch) {
             this.planetTypeId = planetTypeId;
             this.radiusGU = radiusGU;
             this.rotationPeriodHours = rotationPeriodHours;
-            this.orbit = orbit;
+            this.surfaceTexturePath = surfaceTexturePath;
+
+            this.orbitCenterEntityId = orbitCenterEntityId;
+            this.semiMajorAxisGU = semiMajorAxisGU;
+            this.eccentricity = eccentricity;
+            this.inclinationDeg = inclinationDeg;
+            this.periapsisArgDeg = periapsisArgDeg;
+            this.orbitalPeriodDays = orbitalPeriodDays;
+            this.meanAnomalyDegAtEpoch = meanAnomalyDegAtEpoch;
         }
     }
 
