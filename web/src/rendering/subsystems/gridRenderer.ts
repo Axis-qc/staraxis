@@ -41,8 +41,12 @@ export class GridRenderer implements WorldRenderSubsystem {
         this.geometry = new THREE.BufferGeometry()
         this.grid = new THREE.LineSegments(this.geometry, this.material)
         this.grid.frustumCulled = false
+        // 设置网格的 z 位置在背景，位于实体（恒星/行星）下方
+        this.grid.position.z = -1
+        this.grid.renderOrder = -1
 
-        ctx.scene.add(this.grid)
+        // 添加到 worldGroup 而不是 scene，确保在实体后面渲染
+        ctx.worldGroup.add(this.grid)
     }
 
     update(ctx: WorldRenderContext, frame: WorldFrameState): void {
@@ -87,7 +91,7 @@ export class GridRenderer implements WorldRenderSubsystem {
 
     dispose(ctx: WorldRenderContext): void {
         if (this.grid) {
-            ctx.scene.remove(this.grid)
+            ctx.worldGroup.remove(this.grid)
             this.grid = null
         }
         if (this.geometry) {

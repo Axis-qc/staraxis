@@ -17,8 +17,8 @@ public class PlanetBody extends Entity {
     public double radiusGU;
 
     /**
-     * 星球地表纹理资源路径（相对于 assets/planet/，例如
-     * "planet/Solid/Terrestrial/Terrestrial_01-512x512.png"），无地表时为 null。
+     * 星球纹理资源路径（相对于 assets/planet/，例如
+     * "planet/Solid/Terrestrial/Terrestrial_01-512x512.png"），无时为 null。
      */
     public String surfaceTexturePath;
 

@@ -372,11 +372,29 @@ class SmartSearcher:
 
         elif format == 'simple':
             output = []
-            for i, r in enumerate(results, 1):
+            # 按文件路径分组结果
+            from collections import defaultdict
+            files_dict = defaultdict(list)
+
+            for r in results:
                 rel_path = os.path.relpath(r.file_path, self.root_dir)
-                line_info = f":{r.line_number}" if r.line_number > 0 else ""
-                output.append(f"{i:3d}. [{r.score:.1f}] {rel_path}{line_info}")
-                output.append(f"     {r.line_content[:100]}{'...' if len(r.line_content) > 100 else ''}")
+                files_dict[rel_path].append(r)
+
+            # 按文件输出
+            file_count = 1
+            for rel_path in sorted(files_dict.keys()):
+                matches = files_dict[rel_path]
+                output.append(f"\n[{file_count}] {rel_path}")
+                output.append(f"{'─' * (len(rel_path) + 8)}")
+
+                for match_idx, r in enumerate(matches, 1):
+                    line_info = f":{r.line_number}" if r.line_number > 0 else ""
+                    score_info = f" [{r.score:.1f}]" if r.line_number > 0 else ""
+                    output.append(f"    {match_idx}. {line_info}{score_info}")
+                    output.append(f"       {r.line_content[:95]}{'...' if len(r.line_content) > 95 else ''}")
+
+                file_count += 1
+
             return '\n'.join(output)
 
         else:
@@ -406,9 +424,10 @@ def main():
     parser.add_argument('--root', default='.', help='根目录路径（默认: 当前目录）')
     parser.add_argument('--types', help='限制文件类型，多个用逗号分隔（如: java,python,markdown）')
     parser.add_argument('--dirs', help='限制搜索的目录，多个用逗号分隔（如: game,web,webnet）')
-    parser.add_argument('--max', type=int, default=20, help='最大结果数（默认: 20）')
-    parser.add_argument('--format', choices=['human', 'simple', 'json'], default='human',
-                       help='输出格式（默认: human）')
+    parser.add_argument('--max', type=int, default=9999, help='最大结果数（默认: 9999，输出所有结果）')
+    parser.add_argument('--format', choices=['human', 'simple', 'json'], default='simple',
+                       help='输出格式（默认: simple）')
+    parser.add_argument('--output', '-o', help='输出文件路径（默认: 在tools目录下生成 search_result.txt）')
     parser.add_argument('--preview', action='store_true', help='显示第一个结果的文件预览')
 
     args = parser.parse_args()
@@ -423,6 +442,13 @@ def main():
     if args.dirs:
         allowed_dirs = [d.strip() for d in args.dirs.split(',')]
 
+    # 确定输出文件路径
+    if args.output:
+        output_file = Path(args.output)
+    else:
+        # 默认输出到 tools 目录下
+        output_file = Path(__file__).parent / 'search_result.txt'
+
     # 创建搜索器
     searcher = SmartSearcher(args.root, allowed_dirs=allowed_dirs)
 
@@ -433,18 +459,28 @@ def main():
         file_types=file_types
     )
 
-    # 输出结果
+    # 格式化输出
     if results:
         output = searcher.format_results(results, args.format)
-        print(output)
-
-        # 如果需要预览
-        if args.preview and results:
-            first_result = results[0]
-            print(f"\n📄 文件预览: {first_result.file_path}")
-            print(searcher.get_file_preview(first_result.file_path))
     else:
-        print("❌ 未找到匹配结果")
+        output = "❌ 未找到匹配结果"
+
+    # 同时输出到控制台和文件
+    print(output)
+
+    # 写入输出文件
+    try:
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(output)
+            if args.preview and results:
+                first_result = results[0]
+                f.write(f"\n\n{'='*80}\n")
+                f.write(f"📄 文件预览: {first_result.file_path}\n")
+                f.write(f"{'='*80}\n")
+                f.write(searcher.get_file_preview(first_result.file_path))
+        print(f"\n✅ 结果已保存到: {output_file}", file=sys.stderr)
+    except Exception as e:
+        print(f"❌ 保存结果失败: {e}", file=sys.stderr)
 
 
 if __name__ == '__main__':

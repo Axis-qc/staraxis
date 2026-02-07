@@ -88,24 +88,24 @@ export type WorldFrameState = {
 
 function computePlanetPosWorldGU(args: {
     planet: EntitySnapshot
-    orbit: any
+    details: PlanetDetails
     orbitCenter: EntitySnapshot
     totalDays: number
 }): { x: number; y: number } | null {
-    const { orbit, orbitCenter, totalDays } = args
-    if (!orbit || !orbitCenter.posWorldGU) return null
+    const { details, orbitCenter, totalDays } = args
+    if (!details || !orbitCenter.posWorldGU) return null
 
-    const meanAnomaly = (Number(orbit.meanAnomalyDegAtEpoch ?? 0) * Math.PI) / 180
-    const periodDays = Number(orbit.orbitalPeriodDays ?? 0)
+    const meanAnomaly = (Number(details.meanAnomalyDegAtEpoch ?? 0) * Math.PI) / 180
+    const periodDays = Number(details.orbitalPeriodDays ?? 0)
     if (!Number.isFinite(periodDays) || periodDays <= 0) return null
 
     const angle = meanAnomaly + (totalDays / periodDays) * 2 * Math.PI
 
-    const a = Number(orbit.semiMajorAxisGU ?? 0)
-    const e = Number(orbit.eccentricity ?? 0)
+    const a = Number(details.semiMajorAxisGU ?? 0)
+    const e = Number(details.eccentricity ?? 0)
     const b = a * Math.sqrt(Math.max(0, 1 - e ** 2))
 
-    const periapsisArgRad = (Number(orbit.periapsisArgDeg ?? 0) * Math.PI) / 180
+    const periapsisArgRad = (Number(details.periapsisArgDeg ?? 0) * Math.PI) / 180
 
     const localX = a * Math.cos(angle)
     const localY = b * Math.sin(angle)
@@ -185,17 +185,16 @@ export function createWorldRenderManager(container: HTMLDivElement, options: Wor
 
         if (e.entityType === 'PLANET') {
             const details = e.details as PlanetDetails
-            const orbit = (details as any)?.orbit
-            if (!orbit) return null
+            if (!details) return null
 
-            const center = entitiesById.get(orbit.orbitCenterEntityId)
+            const center = entitiesById.get(details.orbitCenterEntityId)
             if (!center) return null
 
             const totalDays =
                 (lastSnapshot?.realTimeWorldState?.gameDatetimeDay ?? 0) +
                 (lastSnapshot?.realTimeWorldState?.accGameHoursInDay ?? 0) / 24
 
-            return computePlanetPosWorldGU({ planet: e, orbit, orbitCenter: center, totalDays })
+            return computePlanetPosWorldGU({ planet: e, details, orbitCenter: center, totalDays })
         }
 
         return null
@@ -384,17 +383,16 @@ export function createWorldRenderManager(container: HTMLDivElement, options: Wor
 
         if (e.entityType === 'PLANET') {
             const details = e.details as PlanetDetails
-            const orbit = (details as any)?.orbit
-            if (!orbit) return null
+            if (!details) return null
 
-            const center = entitiesById.get(orbit.orbitCenterEntityId)
+            const center = entitiesById.get(details.orbitCenterEntityId)
             if (!center) return null
 
             const totalDays =
                 (lastSnapshot?.realTimeWorldState?.gameDatetimeDay ?? 0) +
                 (lastSnapshot?.realTimeWorldState?.accGameHoursInDay ?? 0) / 24
 
-            return computePlanetPosWorldGU({ planet: e, orbit, orbitCenter: center, totalDays })
+            return computePlanetPosWorldGU({ planet: e, details, orbitCenter: center, totalDays })
         }
 
         return null

@@ -6,7 +6,7 @@
  *
  * 作用：
  * - 根据快照数据渲染行星实体。
- * - 使用球体几何体（白模）渲染 3D 行星。
+ * - 使用 2D 精灵（sprite）渲染行星，展示表面纹理。
  * - 计算行星轨道位置（基于轨道参数）。
  * - 管理对象池，提高性能。
  *
@@ -15,7 +15,7 @@
  * - 管理器在 update 时传入 context 和 frameState。
  *
  * @provides
- * - **3D 行星渲染**：使用球体几何体（白模）。
+ * - **2D 行星精灵渲染**：使用表面贴图渲染平面精灵。
  * - **轨道位置计算**：基于轨道参数计算行星位置。
  * - **对象池**：复用 Three.js 对象，减少 GC 压力。
  *
@@ -25,7 +25,7 @@
  * - dispose(ctx: WorldRenderContext): void
  *
  * @important_notes
- * - 使用球体几何体 + PBR 贴图渲染 3D 行星。
+ * - 使用 2D 平面精灵 + 纹理渲染行星。
  * - 根据轨道参数计算行星位置，支持椭圆轨道。
  * - 只渲染可见范围内的行星，提高渲染效率。
  * - 使用对象池避免频繁创建/销毁 Three.js 对象。
@@ -34,30 +34,24 @@ import * as THREE from 'three'
 import type { WorldRenderContext, WorldFrameState } from '../worldRenderManager'
 import type { WorldRenderSubsystem } from './worldRenderSubsystem'
 import type { PlanetDetails } from '../../net/snapshotWs'
-import type { TextureManager } from './textureManager'
 
 export class PlanetRenderer implements WorldRenderSubsystem {
-    private planetMeshPool: THREE.Mesh[] = []
-    private activePlanetMeshesByEntityId = new Map<number, THREE.Mesh>()
-    private materialPool: THREE.MeshStandardMaterial[] = []
+    private planetSpritePool: THREE.Sprite[] = []
+    private activePlanetSpritesByEntityId = new Map<number, THREE.Sprite>()
     private textureCache = new Map<string, THREE.Texture>()
 
     init(ctx: WorldRenderContext): void {
         void ctx // unused
 
-        // 预创建一些球体对象以避免运行时创建
+        // 预创建一些精灵对象以避免运行时创建
         for (let i = 0; i < 20; i++) {
-            const geometry = new THREE.SphereGeometry(1, 32, 16)
-            const material = new THREE.MeshStandardMaterial({
-                color: 0xcccccc, // 白模
-                transparent: false,
-                depthWrite: true,
+            const material = new THREE.SpriteMaterial({
+                color: 0xffffff,
+                sizeAttenuation: true,
             })
-            const mesh = new THREE.Mesh(geometry, material)
-            mesh.visible = false
-            mesh.frustumCulled = false
-            this.planetMeshPool.push(mesh)
-            this.materialPool.push(material)
+            const sprite = new THREE.Sprite(material)
+            sprite.visible = false
+            this.planetSpritePool.push(sprite)
         }
     }
 
@@ -65,7 +59,7 @@ export class PlanetRenderer implements WorldRenderSubsystem {
         const { entitiesGroup } = ctx
         const { entitiesById, selectedIds, cullingAabb, showPlanets, totalDays } = frame
 
-        const nextPlanetMeshIds = new Set<number>()
+        const nextPlanetSpriteIds = new Set<number>()
 
         for (const entity of entitiesById.values()) {
             if (entity.entityType !== 'PLANET') continue
@@ -85,35 +79,35 @@ export class PlanetRenderer implements WorldRenderSubsystem {
                 continue
             }
 
-            nextPlanetMeshIds.add(entity.entityId)
+            nextPlanetSpriteIds.add(entity.entityId)
 
-            // 3D 球体渲染
+            // 2D 精灵渲染
             const radiusGU = details.radiusGU
             const size = radiusGU * 2
 
-            let mesh = this.activePlanetMeshesByEntityId.get(entity.entityId)
-            if (!mesh) {
-                mesh = this.acquirePlanetMesh()
-                this.activePlanetMeshesByEntityId.set(entity.entityId, mesh)
-                entitiesGroup.add(mesh)
+            let sprite = this.activePlanetSpritesByEntityId.get(entity.entityId)
+            if (!sprite) {
+                sprite = this.acquirePlanetSprite()
+                this.activePlanetSpritesByEntityId.set(entity.entityId, sprite)
+                entitiesGroup.add(sprite)
             }
 
             // 纹理加载
-            const material = mesh.material as THREE.MeshStandardMaterial
+            const material = sprite.material as THREE.SpriteMaterial
             if (details.surfaceTexturePath && !material.map) {
                 this.loadAndApplyTexture(material, details.surfaceTexturePath)
             }
 
-            mesh.scale.set(size, size, size)
-            mesh.position.set(planetPos.x - ctx.cameraWorldPosGU.x, planetPos.y - ctx.cameraWorldPosGU.y, 0)
-            mesh.visible = true
+            sprite.scale.set(size, size, 1)
+            sprite.position.set(planetPos.x - ctx.cameraWorldPosGU.x, planetPos.y - ctx.cameraWorldPosGU.y, 0)
+            sprite.visible = true
         }
 
         // 回收不可见的对象
-        for (const [id, mesh] of this.activePlanetMeshesByEntityId.entries()) {
-            if (!nextPlanetMeshIds.has(id)) {
-                this.activePlanetMeshesByEntityId.delete(id)
-                this.releasePlanetMesh(mesh)
+        for (const [id, sprite] of this.activePlanetSpritesByEntityId.entries()) {
+            if (!nextPlanetSpriteIds.has(id)) {
+                this.activePlanetSpritesByEntityId.delete(id)
+                this.releasePlanetSprite(sprite)
             }
         }
     }
@@ -122,49 +116,44 @@ export class PlanetRenderer implements WorldRenderSubsystem {
         void ctx // unused
 
         // 释放所有对象
-        for (const mesh of this.planetMeshPool) {
-            mesh.geometry.dispose()
-                ; (mesh.material as THREE.Material).dispose()
+        for (const sprite of this.planetSpritePool) {
+            (sprite.material as THREE.Material).dispose()
         }
-        for (const mesh of this.activePlanetMeshesByEntityId.values()) {
-            mesh.geometry.dispose()
-                ; (mesh.material as THREE.Material).dispose()
+        for (const sprite of this.activePlanetSpritesByEntityId.values()) {
+            (sprite.material as THREE.Material).dispose()
         }
 
-        this.planetMeshPool = []
-        this.activePlanetMeshesByEntityId.clear()
+        this.planetSpritePool = []
+        this.activePlanetSpritesByEntityId.clear()
     }
 
-    private acquirePlanetMesh(): THREE.Mesh {
-        const mesh = this.planetMeshPool.pop()
-        if (mesh) {
-            mesh.visible = true
-            return mesh
+    private acquirePlanetSprite(): THREE.Sprite {
+        const sprite = this.planetSpritePool.pop()
+        if (sprite) {
+            sprite.visible = true
+            return sprite
         }
 
-        const geometry = new THREE.SphereGeometry(1, 32, 16)
-        const material = new THREE.MeshStandardMaterial({
-            color: 0xcccccc,
-            transparent: false,
-            depthWrite: true,
+        const material = new THREE.SpriteMaterial({
+            color: 0xffffff,
+            sizeAttenuation: true,
         })
-        const m = new THREE.Mesh(geometry, material)
-        m.visible = true
-        m.frustumCulled = false
-        return m
+        const s = new THREE.Sprite(material)
+        s.visible = true
+        return s
     }
 
-    private releasePlanetMesh(mesh: THREE.Mesh): void {
-        const material = mesh.material as THREE.MeshStandardMaterial
+    private releasePlanetSprite(sprite: THREE.Sprite): void {
+        const material = sprite.material as THREE.SpriteMaterial
         material.map = null
         material.needsUpdate = true
 
-        mesh.visible = false
-        mesh.parent?.remove(mesh)
-        this.planetMeshPool.push(mesh)
+        sprite.visible = false
+        sprite.parent?.remove(sprite)
+        this.planetSpritePool.push(sprite)
     }
 
-    private loadAndApplyTexture(material: THREE.MeshStandardMaterial, surfaceTexturePath: string): void {
+    private loadAndApplyTexture(material: THREE.SpriteMaterial, surfaceTexturePath: string): void {
         if (this.textureCache.has(surfaceTexturePath)) {
             material.map = this.textureCache.get(surfaceTexturePath)!
             material.needsUpdate = true
@@ -182,7 +171,7 @@ export class PlanetRenderer implements WorldRenderSubsystem {
             },
             undefined,
             () => {
-                // 加载失败则保持白模
+                // 加载失败则保持纯白
             },
         )
     }
