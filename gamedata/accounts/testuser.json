@@ -1,0 +1,9 @@
+{
+  "username" : "testuser",
+  "playerId" : "p_02b1813c-a969-428b-a0b6-456d03f5478b",
+  "passwordSaltB64" : "SlC06pzrdut88QFvAALFEA==",
+  "passwordHashB64" : "/gWVEQLrrDZbdKSWzmQmUs/KbKNsWWXWsLPhGXCCg3Y=",
+  "createdAtMs" : 1770455272479,
+  "gameId" : null,
+  "role" : "USER"
+}

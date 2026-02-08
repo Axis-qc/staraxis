@@ -158,7 +158,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                         star.sectorCoord,
                         star.posWorldGU,
                         new EntitySnapshot.StarDetails(star.starTypeId, star.radiusGU, star.massSolar,
-                                star.temperatureK)));
+                                star.temperatureK, star.description, star.surfaceTexturePath)));
             }
 
             // 3. 注册行星实体

@@ -8,6 +8,8 @@ export type StarDetails = {
     radiusGU: number
     massSolar: number
     temperatureK: number
+    description: string
+    surfaceTexturePath: string | null
 }
 
 export type PlanetDetails = {

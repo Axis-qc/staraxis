@@ -14,7 +14,7 @@ import staraxis.game.world.hex.SectorCoord;
  * 游戏世界中所有实体的统一、扁平化快照结构。
  * 用于将后端权威状态高效、清晰地传递给前端。
  */
-@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonInclude(JsonInclude.Include.ALWAYS)
 public class EntitySnapshot {
 
     /** 实体唯一ID（entityId）。 */
@@ -61,20 +61,27 @@ public class EntitySnapshot {
 
     // --- Details Payloads ---
 
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     public static class StarDetails {
         public final String starTypeId;
         public final double radiusGU;
         public final double massSolar;
         public final int temperatureK;
+        public final String description;
+        public final String surfaceTexturePath;
 
-        public StarDetails(String starTypeId, double radiusGU, double massSolar, int temperatureK) {
+        public StarDetails(String starTypeId, double radiusGU, double massSolar, int temperatureK,
+                           String description, String surfaceTexturePath) {
             this.starTypeId = starTypeId;
             this.radiusGU = radiusGU;
             this.massSolar = massSolar;
             this.temperatureK = temperatureK;
+            this.description = description;
+            this.surfaceTexturePath = surfaceTexturePath;
         }
     }
 
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     public static class PlanetDetails {
         public final String planetTypeId;
         public final double radiusGU;

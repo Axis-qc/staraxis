@@ -52,7 +52,10 @@ export class GridRenderer implements WorldRenderSubsystem {
     update(ctx: WorldRenderContext, frame: WorldFrameState): void {
         void frame
 
-        if (!this.geometry) return
+        if (!this.geometry || !this.grid) return
+
+        // 网格始终可见，不参与LOD系统
+        this.grid.visible = true
 
         const camera = ctx.camera
         const zoom = ctx.zoom.value
@@ -71,6 +74,11 @@ export class GridRenderer implements WorldRenderSubsystem {
         if (stepGU / zoom < 10) stepGU *= 2
         if (stepGU / zoom < 10) stepGU *= 2.5
         if (stepGU / zoom < 10) stepGU *= 2
+
+        // 固定透明度，不参与LOD
+        if (this.material) {
+            this.material.opacity = 0.5
+        }
 
         const vertices: number[] = []
 

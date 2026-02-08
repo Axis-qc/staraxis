@@ -38,20 +38,29 @@ export function createTextureManager(): TextureManager {
     const loader = new THREE.TextureLoader()
 
     const getTexture = async (path: string): Promise<THREE.Texture> => {
+
+        if (!path || path.trim() === '') {
+            console.error(`TextureManager: invalid path: "${path}"`)
+            return Promise.reject(new Error(`Invalid texture path: "${path}"`))
+        }
+
         if (cache.has(path)) {
             return cache.get(path)!
         }
 
+        const fullPath = `/assets/${path}`
+
         return new Promise((resolve, reject) => {
             loader.load(
-                `/assets/${path}`,
+                fullPath,
                 (texture) => {
                     texture.anisotropy = 16 // 默认各向异性
                     cache.set(path, texture)
                     resolve(texture)
                 },
+                undefined, // onProgress callback (optional)
                 (error) => {
-                    console.error(`Failed to load texture: ${path}`, error)
+                    console.error(`TextureManager: failed to load texture: "${path}"`, error)
                     reject(error)
                 }
             )

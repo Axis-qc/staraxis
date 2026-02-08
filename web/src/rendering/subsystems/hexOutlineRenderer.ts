@@ -28,6 +28,7 @@ import * as THREE from 'three'
 import type { WorldRenderContext, WorldFrameState } from '../worldRenderManager'
 import type { WorldRenderSubsystem } from './worldRenderSubsystem'
 import { buildHexSegmentPositions } from '../hexSectorGeometry'
+import { shouldRender } from './lodSystem'
 
 export class HexOutlineRenderer implements WorldRenderSubsystem {
     private line: THREE.LineSegments | null = null
@@ -43,7 +44,17 @@ export class HexOutlineRenderer implements WorldRenderSubsystem {
     }
 
     update(ctx: WorldRenderContext, frame: WorldFrameState): void {
-        if (!this.geometry) return
+        if (!this.geometry || !this.line) return
+
+        const { lod } = frame
+        const hexLod = lod.hexOutline
+
+        // 使用LOD系统判断是否应该渲染
+        if (!shouldRender(hexLod, false)) {
+            this.line.visible = false
+            return
+        }
+        this.line.visible = true
 
         const visibleCentersCameraLocal: { x: number; y: number }[] = []
 
@@ -55,6 +66,11 @@ export class HexOutlineRenderer implements WorldRenderSubsystem {
 
         const segPositions = buildHexSegmentPositions(visibleCentersCameraLocal)
         this.geometry.setAttribute('position', new THREE.BufferAttribute(segPositions, 3))
+
+        // 根据LOD调整透明度
+        if (this.material) {
+            this.material.opacity = 0.55 * hexLod.params.textureQuality
+        }
     }
 
     dispose(ctx: WorldRenderContext): void {

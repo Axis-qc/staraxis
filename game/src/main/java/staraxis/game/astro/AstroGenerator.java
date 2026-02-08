@@ -81,6 +81,22 @@ public final class AstroGenerator {
         star.radiusGU = randomDouble(type.radiusGURange.get(0), type.radiusGURange.get(1));
         star.massSolar = randomDouble(type.massSolarRange.get(0), type.massSolarRange.get(1));
         star.temperatureK = randomInt(type.temperatureKRange.get(0), type.temperatureKRange.get(1));
+        star.description = type.description;
+
+        // 从 spriteCandidates 中确定性选择纹理
+        if (type.spriteCandidates != null && !type.spriteCandidates.isEmpty()) {
+            int idx = random.nextInt(type.spriteCandidates.size());
+            star.surfaceTexturePath = type.spriteCandidates.get(idx);
+        } else {
+            star.surfaceTexturePath = null;
+            System.out.println("[WARN AstroGenerator] Star type " + type.typeId + " has no spriteCandidates");
+        }
+
+        // 调试日志
+        System.out.println("[DEBUG AstroGenerator] Generated star: typeId=" + type.typeId +
+                         ", description='" + type.description + "'" +
+                         ", spriteCandidates=" + type.spriteCandidates +
+                         ", selectedTexture='" + star.surfaceTexturePath + "'");
         return star;
     }
 
