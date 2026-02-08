@@ -26,19 +26,23 @@ import type { SnapshotMessage, SnapshotWsClient } from '../../../net/snapshotWs'
 
 const props = defineProps<{ snapshot: SnapshotMessage | null; wsClient?: SnapshotWsClient | null }>()
 
-const SPEED_OPTIONS = [0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0] as const
+const SPEED_OPTIONS = [1, 5, 10, 30, 60, 720, 1440] as const
 type SpeedOption = (typeof SPEED_OPTIONS)[number]
 
 const speedIndex = ref<number>(Math.max(0, SPEED_OPTIONS.indexOf(1.0)))
 
 function getSpeedLabel(s: SpeedOption) {
-  return `${s}x`
+  if (s === 60) return '1h/s'
+  if (s === 720) return '12h/s'
+  if (s === 1440) return '1d/s'
+  return `${s}m/s`
 }
 
-function sendSimTimeSpeed(scale: SpeedOption) {
+function sendSimTimeSpeed(minutesPerSecond: SpeedOption) {
   // 复用快照 WS 连接发送命令，避免短连接频繁建立/关闭导致 WS 不稳定。
   try {
-    props.wsClient?.send({ type: 'setSimTimeSpeed', scale })
+    // 兼容旧后端字段名 scale（语义已变为 minutesPerSecond）喵
+    props.wsClient?.send({ type: 'setSimTimeSpeed', minutesPerSecond })
   } catch {
   }
 }

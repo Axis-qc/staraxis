@@ -20,8 +20,10 @@ import staraxis.game.world.WorldGenConfig;
 import staraxis.game.world.WorldGenerator;
 import staraxis.game.world.WorldSector;
 import staraxis.game.command.CommandBus;
-import staraxis.game.command.SetTimeScaleCommand;
-import staraxis.game.command.SetTimeScaleHandler;
+import staraxis.game.command.SetPlayerTimeStepCommand;
+import staraxis.game.command.SetPlayerTimeStepHandler;
+import staraxis.game.command.SetSystemTimeScaleCommand;
+import staraxis.game.command.SetSystemTimeScaleHandler;
 
 import java.util.List;
 
@@ -47,7 +49,8 @@ public class StarAxisGameRuntime implements GameRuntime {
     public StarAxisGameRuntime(WorldState worldState) {
         this.worldState = worldState;
 
-        commandBus.register(SetTimeScaleCommand.class, new SetTimeScaleHandler());
+        commandBus.register(SetPlayerTimeStepCommand.class, new SetPlayerTimeStepHandler());
+        commandBus.register(SetSystemTimeScaleCommand.class, new SetSystemTimeScaleHandler());
     }
 
     public CommandBus getCommandBusForSimOnly() {

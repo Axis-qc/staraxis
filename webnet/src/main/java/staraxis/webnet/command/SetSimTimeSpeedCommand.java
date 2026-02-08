@@ -23,14 +23,13 @@ import java.util.Map;
  *
  * @provides
  *           - **命令类型**: type() = "setSimTimeSpeed"
- *           - **命令提交**: 提交 SetTimeScaleCommand 到 game 层的命令队列
+ *           - **命令提交**: 提交 SetPlayerTimeStepCommand 到 game 层的命令队列
  *
  * @api
  *      - 入参字段：
- *      - scale: number（double），建议范围 0.25/0.5/0.75/1/2/3/4（前端档位）
+ *      - minutesPerSecond: number（double），建议档位：1, 5, 10, 30, 60, 720, 1440 喵
  *      - 返回：统一 command_response：
- *      - ok=true:
- *      {"type":"command_response","ok":true,"command":"setSimTimeSpeed","scale":...}
+ *      {"type":"command_response","ok":true,"command":"setSimTimeSpeed","minutesPerSecond":...}
  *      - ok=false: {"type":"command_response","ok":false,"error":"..."}
  *
  * @important_notes
@@ -48,33 +47,39 @@ public class SetSimTimeSpeedCommand implements WebCommandHandler {
     @Override
     public String handle(Map<String, Object> message, StarAxisGameRuntime runtime) {
         try {
+            // 兼容旧字段名 scale，但语义已变为每秒推进的游戏分钟数喵
             Object scaleObj = message.get("scale");
             if (scaleObj == null) {
-                return "{\"type\":\"command_response\",\"ok\":false,\"error\":\"missing_scale\"}";
+                scaleObj = message.get("minutesPerSecond");
+            }
+            if (scaleObj == null) {
+                return "{\"type\":\"command_response\",\"ok\":false,\"error\":\"missing_speed_value\"}";
             }
 
-            double scale;
+            double mps;
             if (scaleObj instanceof Number) {
-                scale = ((Number) scaleObj).doubleValue();
+                mps = ((Number) scaleObj).doubleValue();
             } else {
-                scale = Double.parseDouble(String.valueOf(scaleObj));
+                mps = Double.parseDouble(String.valueOf(scaleObj));
             }
 
-            if (scale < 0.1 || scale > 10.0) {
-                return "{\"type\":\"command_response\",\"ok\":false,\"error\":\"invalid_scale\"}";
+            // 校验玩家档位范围：1分钟/s 到 1440分钟(1日)/s 喵
+            if (mps < 1.0 || mps > 1440.0) {
+                return "{\"type\":\"command_response\",\"ok\":false,\"error\":\"invalid_time_step\"}";
             }
 
-            double before = 1.0;
+            double currentStep = 1.0;
             try {
-                before = runtime.getWorldStateForSimOnly().time.timeScale;
+                currentStep = runtime.getWorldStateForSimOnly().time.playerTimeStep;
             } catch (Exception ignored) {
             }
 
-            runtime.getCommandBusForSimOnly().submit(new staraxis.game.command.SetTimeScaleCommand(scale));
+            runtime.getCommandBusForSimOnly().submit(new staraxis.game.command.SetPlayerTimeStepCommand(mps));
 
-            GameLog.log("cmd setSimTimeSpeed queued scale=" + scale + " beforeTimeScale=" + before);
+            GameLog.log("cmd setSimTimeSpeed queued mps=" + mps + " beforeStep=" + currentStep);
 
-            return "{\"type\":\"command_response\",\"ok\":true,\"command\":\"setSimTimeSpeed\",\"scale\":" + scale
+            return "{\"type\":\"command_response\",\"ok\":true,\"command\":\"setSimTimeSpeed\",\"minutesPerSecond\":"
+                    + mps
                     + "}";
         } catch (Exception e) {
             return "{\"type\":\"command_response\",\"ok\":false,\"error\":\"command_failed\"}";

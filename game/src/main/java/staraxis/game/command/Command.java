@@ -12,9 +12,9 @@ package staraxis.game.command;
  *
  * @usage
  *        - 创建具体命令类继承 Command：
- *        - public class SetTimeScaleCommand extends Command { ... }
+ *        - public class SetPlayerTimeStepCommand extends Command { ... }
  *        - 通过 CommandBus 提交命令到队列：
- *        - commandBus.submit(new SetTimeScaleCommand(scale));
+ *        - commandBus.submit(new SetPlayerTimeStepCommand(mps));
  *
  * @provides
  *           - **命令类型标识**: type() 方法返回命令类型字符串。

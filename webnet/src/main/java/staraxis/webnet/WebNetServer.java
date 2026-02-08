@@ -105,12 +105,15 @@ public class WebNetServer {
                 if (day != lastLoggedGameDay) {
                     lastLoggedGameDay = day;
                     double timeScale = 1.0;
+                    double playerTimeStep = 1.0;
                     try {
                         timeScale = runtime.getWorldStateForSimOnly().time.timeScale;
+                        playerTimeStep = runtime.getWorldStateForSimOnly().time.playerTimeStep;
                     } catch (Exception ignored) {
                     }
                     GameLog.log("day_advance day=" + day + " tick=" + rts.simulationTick + " accHours="
-                            + rts.accGameHoursInDay + " timeScale=" + timeScale);
+                            + rts.accGameHoursInDay + " playerStepMps=" + playerTimeStep + " systemTimeScale="
+                            + timeScale);
                 }
             }
 
@@ -1104,7 +1107,8 @@ public class WebNetServer {
         // 短暂延迟确保端口释放
         try {
             Thread.sleep(500);
-        } catch (InterruptedException ignored) {}
+        } catch (InterruptedException ignored) {
+        }
 
         // 构建重启命令
         String javaHome = System.getProperty("java.home");

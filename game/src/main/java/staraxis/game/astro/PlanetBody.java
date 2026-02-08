@@ -89,22 +89,30 @@ public class PlanetBody extends Entity {
     }
 
     /**
-     * 获取行星描述信息，包含地表状态喵。
+     * 获取行星描述信息的本地化 Key 及其参数喵。
+     * 遵循项目“模拟层权威”原则，仅提供数据口径喵。
      *
-     * @return 行星描述字符串喵。
+     * @return 格式化后的描述信息，目前仍返回字符串供兼容使用，但内部已使用 Key 喵。
      */
     public String getDescriptionWithSurface() {
-        String baseDesc = String.format("行星[%d] 类型:%s 半径:%.2fGU", entityId, planetTypeId, radiusGU);
+        // 基础信息：astro.planet.desc.base=行星[{0}] 类型:{1} 半径:{2}GU
+        String desc = String.format("astro.planet.desc.base|%d|%s|%.2f", entityId, planetTypeId, radiusGU);
+
         if (hasSurfaceComponent()) {
             if (hasCities()) {
-                return baseDesc + String.format(" (有%d个城市)", surface.cities.size());
+                // astro.planet.desc.hasCities= (有{0}个城市)
+                desc += String.format("|astro.planet.desc.hasCities|%d", surface.cities.size());
             } else if (hasSurfaceRegions()) {
-                return baseDesc + String.format(" (有%d个区域)", surface.surfaceRegions.size());
+                // astro.planet.desc.hasRegions= (有{0}个区域)
+                desc += String.format("|astro.planet.desc.hasRegions|%d", surface.surfaceRegions.size());
             } else {
-                return baseDesc + " (有地表组件但未初始化区域)";
+                // astro.planet.desc.noRegions= (有地表组件但未初始化区域)
+                desc += "|astro.planet.desc.noRegions";
             }
         } else {
-            return baseDesc + " (无地表组件)";
+            // astro.planet.desc.noSurface= (无地表组件)
+            desc += "|astro.planet.desc.noSurface";
         }
+        return desc;
     }
 }

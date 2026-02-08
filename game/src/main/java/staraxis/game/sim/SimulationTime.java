@@ -23,7 +23,14 @@ public class SimulationTime {
     public double accGameHoursInDay;
 
     /**
-     * 全局时间倍率 (时间速度)；合成自玩家档位、技能倍率、系统上限的最终值。
+     * 玩家选择的时间推进速度（游戏分钟 / 现实秒）喵。
+     * 可选档位：1, 5, 10, 30, 60(1h), 720(12h), 1440(1d) 喵。
+     */
+    public double playerTimeStep = 1.0;
+
+    /**
+     * 系统时间倍率喵。
+     * 由系统根据性能、战斗状态等控制，不再由玩家直接修改喵。
      */
     public double timeScale = 1.0;
 

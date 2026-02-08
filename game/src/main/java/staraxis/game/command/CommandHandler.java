@@ -14,11 +14,11 @@ import staraxis.game.state.WorldState;
  *
  * @usage
  *        - 实现具体命令处理器：
- *        - public class SetTimeScaleHandler implements
- *        CommandHandler<SetTimeScaleCommand> { ... }
+ *        - public class SetPlayerTimeStepHandler implements
+ *        CommandHandler<SetPlayerTimeStepCommand> { ... }
  *        - 在 CommandBus 中注册处理器：
- *        - commandBus.register(SetTimeScaleCommand.class, new
- *        SetTimeScaleHandler());
+ *        - commandBus.register(SetPlayerTimeStepCommand.class, new
+ *        SetPlayerTimeStepHandler());
  *
  * @provides
  *           - **命令处理契约**: handle() 方法定义了命令执行的标准接口。

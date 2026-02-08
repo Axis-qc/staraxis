@@ -22,10 +22,10 @@ import java.util.concurrent.atomic.AtomicLong;
  *        - 在 StarAxisGameRuntime 中创建实例：
  *        - commandBus = new CommandBus();
  *        - 注册命令处理器：
- *        - commandBus.register(SetTimeScaleCommand.class, new
- *        SetTimeScaleHandler());
+ *        - commandBus.register(SetPlayerTimeStepCommand.class, new
+ *        SetPlayerTimeStepHandler());
  *        - 提交命令（通常由 webnet 层调用）：
- *        - commandBus.submit(new SetTimeScaleCommand(scale));
+ *        - commandBus.submit(new SetPlayerTimeStepCommand(minutesPerSecond));
  *        - 在 update() 方法中执行命令：
  *        - commandBus.executeCommands(worldState, dtGameHours);
  *

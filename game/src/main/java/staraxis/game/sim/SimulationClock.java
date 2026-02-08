@@ -13,14 +13,9 @@ public final class SimulationClock {
     public static final int TICKS_PER_SECOND = 25;
 
     /**
-     * 每游戏小时对应的标准 Tick 数；仅用于 timeScale=1.0 的基准换算。
+     * 默认时间口径：1 现实秒 = 25 tick = 1 游戏分钟喵。
      */
-    public static final int TICKS_PER_HOUR = 25;
-
-    /**
-     * baseDtGameHours = 1 / ticksPerHour = 1/25 游戏小时。
-     */
-    public static final double BASE_DT_GAME_HOURS = 1.0 / TICKS_PER_HOUR;
+    public static final double BASE_GAME_MINUTES_PER_REAL_SECOND = 1.0;
 
     /**
      * PrepareTick 阶段：推进 simulationTick，自增当日累计游戏小时数。
@@ -32,7 +27,13 @@ public final class SimulationClock {
 
         time.simulationTick += 1;
 
-        double dtGameHours = BASE_DT_GAME_HOURS * time.timeScale;
+        // 玩家档位：每现实秒推进的游戏分钟数（minutes/realSecond）喵。
+        // 系统倍率：timeScale，由系统控制（例如性能限制/战斗加速）喵。
+        double effectiveGameMinutesPerRealSecond = time.playerTimeStep * time.timeScale;
+
+        // 固定口径：25 tick / 现实秒；所以每 tick 推进的游戏小时数为：
+        // (minutes/realSecond) / 60 / 25 = minutes / 1500 喵。
+        double dtGameHours = (effectiveGameMinutesPerRealSecond / 60.0) / TICKS_PER_SECOND;
         time.accGameHoursInDay += dtGameHours;
 
         return dtGameHours;
