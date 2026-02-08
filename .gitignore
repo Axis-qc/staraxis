@@ -250,3 +250,7 @@ __pycache__/
 specs/
 .claude/
 .github/
+**/build/
+*.bin
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
