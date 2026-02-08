@@ -68,6 +68,7 @@ export type WorldRenderContext = {
     zoom: { value: number }
     cameraWorldPosGU: THREE.Vector2
     getTexture: (path: string) => Promise<THREE.Texture>
+    getEntityWorldPosGU: (entityId: number) => { x: number; y: number } | null
     options: WorldRendererOptions
 }
 
@@ -99,6 +100,9 @@ export function createWorldRenderManager(
     // 初始化纹理管理器
     const textureManager = createTextureManager()
 
+    // 初始化实体查询系统
+    const entityQuery = createEntityQuerySystem()
+
     // 初始化渲染上下文
     const ctx: WorldRenderContext = {
         renderer,
@@ -109,11 +113,9 @@ export function createWorldRenderManager(
         zoom,
         cameraWorldPosGU,
         getTexture: textureManager.getTexture,
+        getEntityWorldPosGU: entityQuery.getEntityWorldPosGU,
         options,
     }
-
-    // 初始化实体查询系统
-    const entityQuery = createEntityQuerySystem()
 
     // 初始化帧状态构建器
     const frameBuilder = createFrameStateBuilder(container, cameraWorldPosGU, zoom, options.lod)
@@ -192,7 +194,7 @@ export function createWorldRenderManager(
         isDragging = false
         try {
             canvas.releasePointerCapture(e.pointerId)
-        } catch {}
+        } catch { }
         e.preventDefault()
     }
 
