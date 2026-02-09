@@ -1,0 +1,164 @@
+[
+    {
+        "typeId": "CONTINENT",
+        "nameKey": "surface.regionType.continent",
+        "namePoolId": "continent",
+        "weight": 1.0,
+        "surfacePercentageRange": [
+            0.15,
+            0.40
+        ],
+        "developableSpaceRatioRange": [
+            0.30,
+            0.80
+        ],
+        "baseResourceDiscoveryChance": 0.15,
+        "subFeatures": [
+            {
+                "featureTypeId": "MOUNTAINS",
+                "percentageRange": [
+                    0.10,
+                    0.30
+                ],
+                "resourceTendencies": {
+                    "MINING": 1.5,
+                    "ENERGY": 0.5
+                }
+            },
+            {
+                "featureTypeId": "PLAINS",
+                "percentageRange": [
+                    0.40,
+                    0.70
+                ],
+                "resourceTendencies": {
+                    "FARMING": 1.4,
+                    "ADMINISTRATION": 1.1
+                }
+            }
+        ]
+    },
+    {
+        "typeId": "OCEAN",
+        "nameKey": "surface.regionType.ocean",
+        "namePoolId": "ocean",
+        "weight": 1.0,
+        "surfacePercentageRange": [
+            0.10,
+            0.60
+        ],
+        "developableSpaceRatioRange": [
+            0.05,
+            0.20
+        ],
+        "baseResourceDiscoveryChance": 0.08,
+        "subFeatures": [
+            {
+                "featureTypeId": "SHALLOW_SEA",
+                "percentageRange": [
+                    0.20,
+                    0.50
+                ],
+                "resourceTendencies": {
+                    "FARMING": 1.2,
+                    "RESEARCH": 1.1
+                }
+            },
+            {
+                "featureTypeId": "DEEP_SEA",
+                "percentageRange": [
+                    0.50,
+                    0.80
+                ],
+                "resourceTendencies": {
+                    "MINING": 0.8,
+                    "RESEARCH": 1.3
+                }
+            }
+        ]
+    },
+    {
+        "typeId": "LAVA_LAKE",
+        "nameKey": "surface.regionType.lavaLake",
+        "namePoolId": "lava",
+        "weight": 1.0,
+        "surfacePercentageRange": [
+            0.10,
+            0.30
+        ],
+        "developableSpaceRatioRange": [
+            0.00,
+            0.10
+        ],
+        "baseResourceDiscoveryChance": 0.20,
+        "subFeatures": [
+            {
+                "featureTypeId": "MAGMA_VENTS",
+                "percentageRange": [
+                    0.30,
+                    0.60
+                ],
+                "resourceTendencies": {
+                    "MINING": 2.0,
+                    "ENERGY": 1.8
+                }
+            }
+        ]
+    },
+    {
+        "typeId": "ICE_SHELF",
+        "nameKey": "surface.regionType.iceShelf",
+        "namePoolId": "ice",
+        "weight": 1.0,
+        "surfacePercentageRange": [
+            0.20,
+            0.50
+        ],
+        "developableSpaceRatioRange": [
+            0.10,
+            0.30
+        ],
+        "baseResourceDiscoveryChance": 0.12,
+        "subFeatures": [
+            {
+                "featureTypeId": "GLACIER",
+                "percentageRange": [
+                    0.40,
+                    0.70
+                ],
+                "resourceTendencies": {
+                    "RESEARCH": 1.5,
+                    "MINING": 0.6
+                }
+            }
+        ]
+    },
+    {
+        "typeId": "DESERT_WASTE",
+        "nameKey": "surface.regionType.desertWaste",
+        "namePoolId": "desert",
+        "weight": 1.0,
+        "surfacePercentageRange": [
+            0.25,
+            0.50
+        ],
+        "developableSpaceRatioRange": [
+            0.20,
+            0.50
+        ],
+        "baseResourceDiscoveryChance": 0.18,
+        "subFeatures": [
+            {
+                "featureTypeId": "DUNE_FIELD",
+                "percentageRange": [
+                    0.50,
+                    0.90
+                ],
+                "resourceTendencies": {
+                    "ENERGY": 1.6,
+                    "MINING": 0.9
+                }
+            }
+        ]
+    }
+]

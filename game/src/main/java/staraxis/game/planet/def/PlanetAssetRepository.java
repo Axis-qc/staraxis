@@ -6,8 +6,12 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import staraxis.game.mod.ModManager;
+import staraxis.game.mod.ModOrderRepository;
+
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * PlanetAssetRepository（行星资产仓库）
@@ -23,12 +27,14 @@ public class PlanetAssetRepository {
     private List<CityStageDef> cityStages = List.of();
     private List<CitySpecializationDef> citySpecializations = List.of();
     private List<ResourceTypeDef> resourceTypes = List.of();
+    private List<NamePoolDef> namePools = List.of();
 
     // 快速查找映射
     private Map<String, SurfaceRegionTypeDef> surfaceRegionTypeMap = new HashMap<>();
     private Map<String, CityStageDef> cityStageMap = new HashMap<>();
     private Map<String, CitySpecializationDef> citySpecializationMap = new HashMap<>();
     private Map<String, ResourceTypeDef> resourceTypeMap = new HashMap<>();
+    private Map<String, NamePoolDef> namePoolMap = new HashMap<>();
 
     public PlanetAssetRepository(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
@@ -38,10 +44,36 @@ public class PlanetAssetRepository {
      * 加载所有行星资产定义喵。
      */
     public void loadAll() {
-        surfaceRegionTypes = readList("assets/planet/surface-region-types.json", SurfaceRegionTypeDef[].class);
-        cityStages = readList("assets/planet/city-stages.json", CityStageDef[].class);
-        citySpecializations = readList("assets/planet/city-specializations.json", CitySpecializationDef[].class);
-        resourceTypes = readList("assets/planet/resource-types.json", ResourceTypeDef[].class);
+        // base + mods（后读覆盖前读）喵
+        surfaceRegionTypes = readMergedListByKey(
+                "assets/planet/surface-region-types.json",
+                "planet/surface-region-types.json",
+                SurfaceRegionTypeDef[].class,
+                def -> def == null ? null : def.typeId);
+
+        cityStages = readMergedListByKey(
+                "assets/planet/city-stages.json",
+                "planet/city-stages.json",
+                CityStageDef[].class,
+                def -> def == null ? null : def.stageId);
+
+        citySpecializations = readMergedListByKey(
+                "assets/planet/city-specializations.json",
+                "planet/city-specializations.json",
+                CitySpecializationDef[].class,
+                def -> def == null ? null : def.specializationId);
+
+        resourceTypes = readMergedListByKey(
+                "assets/planet/resource-types.json",
+                "planet/resource-types.json",
+                ResourceTypeDef[].class,
+                def -> def == null ? null : def.resourceId);
+
+        namePools = readMergedListByKey(
+                "assets/planet/name-pools.json",
+                "planet/name-pools.json",
+                NamePoolDef[].class,
+                def -> def == null ? null : def.poolId);
 
         // 构建快速查找映射
         buildLookupMaps();
@@ -69,6 +101,13 @@ public class PlanetAssetRepository {
         resourceTypeMap.clear();
         for (ResourceTypeDef def : resourceTypes) {
             resourceTypeMap.put(def.resourceId, def);
+        }
+
+        namePoolMap.clear();
+        for (NamePoolDef def : namePools) {
+            if (def != null && def.poolId != null && !def.poolId.isBlank()) {
+                namePoolMap.put(def.poolId, def);
+            }
         }
     }
 
@@ -149,6 +188,25 @@ public class PlanetAssetRepository {
     }
 
     /**
+     * 获取所有命名池定义喵。
+     *
+     * @return 不可修改的命名池列表喵。
+     */
+    public List<NamePoolDef> getNamePools() {
+        return Collections.unmodifiableList(namePools);
+    }
+
+    /**
+     * 根据ID获取命名池定义喵。
+     *
+     * @param poolId 命名池ID喵。
+     * @return 命名池定义，如果不存在返回null喵。
+     */
+    public NamePoolDef getNamePool(String poolId) {
+        return namePoolMap.get(poolId);
+    }
+
+    /**
      * 获取默认城市阶段（通常为OUTPOST）喵。
      *
      * @return 默认城市阶段定义喵。
@@ -225,11 +283,56 @@ public class PlanetAssetRepository {
     }
 
     /**
+     * 读取基础配置与所有已启用 Mod 的配置并按 ID 覆盖合并喵。
+     *
+     * @param basePath        基础资产路径（如 "assets/planet/xxx.json"）喵。
+     * @param modRelativePath Mod 内部相对路径（如 "planet/xxx.json"）喵。
+     * @param arrayClazz      反序列化的数组类喵。
+     * @param keyExtractor    从对象中提取唯一 ID 的函数喵。
+     * @param <T>             元素类型喵。
+     * @return 合并后的列表喵。
+     */
+    private <T> List<T> readMergedListByKey(
+            String basePath,
+            String modRelativePath,
+            Class<?> arrayClazz,
+            Function<T, String> keyExtractor) {
+
+        Map<String, T> mergedMap = new java.util.LinkedHashMap<>();
+
+        // 1. 加载本体配置喵
+        List<T> baseList = readList(basePath, arrayClazz);
+        for (T item : baseList) {
+            String key = keyExtractor.apply(item);
+            if (key != null) {
+                mergedMap.put(key, item);
+            }
+        }
+
+        // 2. 加载所有已启用 Mod 的配置并覆盖喵
+        ModManager modMgr = new ModManager(new ModOrderRepository());
+        List<String> modIds = modMgr.listModIdsOrderedAndEnabled();
+
+        for (String modId : modIds) {
+            String modPath = "gamedata/mods/" + modId + "/" + modRelativePath;
+            List<T> modList = readList(modPath, arrayClazz);
+            for (T item : modList) {
+                String key = keyExtractor.apply(item);
+                if (key != null) {
+                    mergedMap.put(key, item);
+                }
+            }
+        }
+
+        return new ArrayList<>(mergedMap.values());
+    }
+
+    /**
      * 读取JSON文件为对象列表喵。
      *
-     * @param path 文件路径喵。
+     * @param path       文件路径喵。
      * @param arrayClazz 数组类喵。
-     * @param <T> 元素类型喵。
+     * @param <T>        元素类型喵。
      * @return 对象列表喵。
      */
     private <T> List<T> readList(String path, Class<?> arrayClazz) {
@@ -270,6 +373,18 @@ public class PlanetAssetRepository {
                 System.out.println("[ERROR PlanetAssetRepository] Invalid SurfaceRegionTypeDef: missing typeId");
                 valid = false;
             }
+            if (def.namePoolId != null && !def.namePoolId.isBlank() && !namePoolMap.containsKey(def.namePoolId)) {
+                System.out.println("[ERROR PlanetAssetRepository] SurfaceRegionTypeDef " + def.typeId
+                        + " references non-existent namePoolId: " + def.namePoolId);
+                valid = false;
+            }
+        }
+
+        for (NamePoolDef def : namePools) {
+            if (!def.isValid()) {
+                System.out.println("[ERROR PlanetAssetRepository] Invalid NamePoolDef: " + def.poolId);
+                valid = false;
+            }
         }
 
         for (CityStageDef def : cityStages) {
@@ -281,7 +396,8 @@ public class PlanetAssetRepository {
 
         for (CitySpecializationDef def : citySpecializations) {
             if (!def.isValid()) {
-                System.out.println("[ERROR PlanetAssetRepository] Invalid CitySpecializationDef: " + def.specializationId);
+                System.out.println(
+                        "[ERROR PlanetAssetRepository] Invalid CitySpecializationDef: " + def.specializationId);
                 valid = false;
             }
         }

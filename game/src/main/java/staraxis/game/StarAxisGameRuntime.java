@@ -11,6 +11,7 @@ import staraxis.game.entity.Entity;
 import staraxis.game.entity.EntityType;
 import staraxis.game.sim.SimulationClock;
 import staraxis.game.sim.SimulationTime;
+import staraxis.game.state.DailySettlementState;
 import staraxis.game.state.DailySettlementStateBuffer;
 import staraxis.game.state.RealTimeWorldState;
 import staraxis.game.state.RealTimeWorldStateBuffer;
@@ -25,6 +26,8 @@ import staraxis.game.command.SetPlayerTimeStepHandler;
 import staraxis.game.command.SetSystemTimeScaleCommand;
 import staraxis.game.command.SetSystemTimeScaleHandler;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 /**
@@ -64,7 +67,12 @@ public class StarAxisGameRuntime implements GameRuntime {
 
         AstroAssetRepository astroAssets = new AstroAssetRepository(new ObjectMapper());
         astroAssets.loadAll();
-        AstroGenerator astroGenerator = new AstroGenerator(astroAssets, cfg.worldSeed);
+
+        staraxis.game.planet.def.PlanetAssetRepository planetAssets = new staraxis.game.planet.def.PlanetAssetRepository(
+                new ObjectMapper());
+        planetAssets.loadAll();
+
+        AstroGenerator astroGenerator = new AstroGenerator(astroAssets, planetAssets, cfg.worldSeed);
         List<StarSystem> systems = astroGenerator.generateSystemsForMap(worldMap, cfg);
 
         AstroData astro = new AstroData(systems);
@@ -75,8 +83,7 @@ public class StarAxisGameRuntime implements GameRuntime {
     public void start() {
         publishRealTimeSnapshot();
         // 开局先发布一份“上一日结算”（占位）：settledDay=当前日-1（下限 0）
-        dailySettlementBuffer.publishForDay(Math.max(0, worldState.time.gameDatetimeDay - 1),
-                worldState.worldMap.getSectorsByCoordView().size());
+        publishDailySettlementForDay(Math.max(0, worldState.time.gameDatetimeDay - 1));
     }
 
     @Override
@@ -91,9 +98,9 @@ public class StarAxisGameRuntime implements GameRuntime {
         // Commit
         boolean dayChanged = SimulationClock.commitTick(worldState.time);
         if (dayChanged) {
-            // 跨日结算：发布“上一日已落账结果”（占位）
+            // 跨日结算：发布“上一日已落账结果”
             int settledDay = Math.max(0, worldState.time.gameDatetimeDay - 1);
-            dailySettlementBuffer.publishForDay(settledDay, worldState.worldMap.getSectorsByCoordView().size());
+            publishDailySettlementForDay(settledDay);
         }
 
         publishRealTimeSnapshot();
@@ -113,6 +120,40 @@ public class StarAxisGameRuntime implements GameRuntime {
 
     public DailySettlementStateBuffer getDailySettlementStateBufferForReadonly() {
         return dailySettlementBuffer;
+    }
+
+    private void publishDailySettlementForDay(int settledDay) {
+        DailySettlementState next = new DailySettlementState();
+        next.settledDay = settledDay;
+        next.sectorCount = worldState.worldMap.getSectorsByCoordView().size();
+
+        // 选项 A：全量每日报送低频/静态数据喵
+        HashMap<Long, DailySettlementState.PlanetSurfaceDailySnapshot> map = new HashMap<>();
+        for (StarSystem system : worldState.astro.getSystemsView()) {
+            for (PlanetBody planet : system.planets) {
+                if (planet.surface == null || planet.surface.surfaceRegions == null
+                        || planet.surface.surfaceRegions.isEmpty()) {
+                    continue;
+                }
+
+                ArrayList<DailySettlementState.SurfaceRegionDailySnapshot> regions = new ArrayList<>(
+                        planet.surface.surfaceRegions.size());
+                for (staraxis.game.planet.surface.SurfaceRegion r : planet.surface.surfaceRegions) {
+                    regions.add(new DailySettlementState.SurfaceRegionDailySnapshot(
+                            r.regionId,
+                            r.regionType,
+                            r.name,
+                            r.surfacePercentage,
+                            r.developableSpaceRatio));
+                }
+
+                map.put(planet.entityId,
+                        new DailySettlementState.PlanetSurfaceDailySnapshot(planet.entityId, List.copyOf(regions)));
+            }
+        }
+        next.planetSurfacesByPlanetId = map;
+
+        dailySettlementBuffer.publish(next);
     }
 
     private void publishRealTimeSnapshot() {

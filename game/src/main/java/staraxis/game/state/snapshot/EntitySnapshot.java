@@ -71,13 +71,31 @@ public class EntitySnapshot {
         public final String surfaceTexturePath;
 
         public StarDetails(String starTypeId, double radiusGU, double massSolar, int temperatureK,
-                           String description, String surfaceTexturePath) {
+                String description, String surfaceTexturePath) {
             this.starTypeId = starTypeId;
             this.radiusGU = radiusGU;
             this.massSolar = massSolar;
             this.temperatureK = temperatureK;
             this.description = description;
             this.surfaceTexturePath = surfaceTexturePath;
+        }
+    }
+
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public static class SurfaceRegionSnapshot {
+        public final long regionId;
+        public final String regionType;
+        public final String name;
+        public final double surfacePercentage;
+        public final double developableSpaceRatio;
+
+        public SurfaceRegionSnapshot(long regionId, String regionType, String name, double surfacePercentage,
+                double developableSpaceRatio) {
+            this.regionId = regionId;
+            this.regionType = regionType;
+            this.name = name;
+            this.surfacePercentage = surfacePercentage;
+            this.developableSpaceRatio = developableSpaceRatio;
         }
     }
 

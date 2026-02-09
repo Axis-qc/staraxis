@@ -48,41 +48,32 @@ public class SurfaceRegionTypeDef {
     }
 
     /**
-     * 获取默认显示名称喵。
+     * 获取显示名称的 i18n Key 喵。
+     */
+    public String nameKey;
+
+    /**
+     * 获取描述信息的 i18n Key 喵。
+     */
+    public String descriptionKey;
+
+    /**
+     * 随机生成名称时使用的命名池 ID 喵。
+     */
+    public String namePoolId;
+
+    /**
+     * 获取区域类型的友好显示名称（通过 i18n 或 typeId）喵。
      *
      * @return 区域类型的友好显示名称喵。
      */
     public String getDisplayName() {
-        switch (typeId) {
-            case "CONTINENT":
-                return "大陆";
-            case "OCEAN":
-                return "海洋";
-            case "ARCHIPELAGO":
-                return "群岛";
-            case "POLAR_CAP":
-                return "极地冰盖";
-            default:
-                return description != null ? description : typeId;
+        // Def 层不做翻译，避免返回 i18n key 导致展示层误用喵
+        // 若需要展示文本，应由上层通过 i18n 系统解析 nameKey 喵
+        if (description != null && !description.isBlank()) {
+            return description;
         }
-    }
-
-    /**
-     * 检查是否为大陆类型喵。
-     *
-     * @return 如果typeId为"CONTINENT"，返回true喵。
-     */
-    public boolean isContinent() {
-        return "CONTINENT".equals(typeId);
-    }
-
-    /**
-     * 检查是否为海洋类型喵。
-     *
-     * @return 如果typeId为"OCEAN"，返回true喵。
-     */
-    public boolean isOcean() {
-        return "OCEAN".equals(typeId);
+        return typeId;
     }
 
     /**
@@ -91,6 +82,6 @@ public class SurfaceRegionTypeDef {
      * @return 描述字符串喵。
      */
     public String getDescription() {
-        return description != null ? description : getDisplayName();
+        return descriptionKey != null ? descriptionKey : getDisplayName();
     }
 }

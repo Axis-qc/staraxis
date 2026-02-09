@@ -41,6 +41,20 @@ public class PlanetSurface {
     public long surfaceGenerationSeed;
 
     /**
+     * 使用生成器初始化地表区划喵。
+     *
+     * @param type 行星类型定义喵。
+     * @param repo 资产仓库喵。
+     * @param seed 生成种子喵。
+     */
+    public void initializeSurface(staraxis.game.astro.def.PlanetTypeDef type,
+            staraxis.game.planet.def.PlanetAssetRepository repo, long seed) {
+        this.surfaceGenerationSeed = seed;
+        this.surfaceRegions.clear();
+        new staraxis.game.planet.surface.SurfaceGenerator().generate(this, type, repo);
+    }
+
+    /**
      * 默认构造函数喵。
      */
     public PlanetSurface() {

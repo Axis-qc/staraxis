@@ -11,7 +11,11 @@
             "planet/Solid/Terrestrial/Terrestrial_01-512x512.png",
             "planet/Solid/Terrestrial/Terrestrial_02-512x512.png",
             "planet/Solid/Terrestrial/Terrestrial_03-512x512.png"
-        ]
+        ],
+        "surfaceRegionWeights": {
+            "CONTINENT": 0.7,
+            "OCEAN": 0.3
+        }
     },
     {
         "typeId": "ROCKY_BARREN",
@@ -27,7 +31,11 @@
             "planet/Solid/Airless/Airless_01-512x512.png",
             "planet/Solid/Cratered/Cratered_01-512x512.png",
             "planet/Solid/Lunar/Lunar_01-512x512.png"
-        ]
+        ],
+        "surfaceRegionWeights": {
+            "CONTINENT": 0.6,
+            "DESERT_WASTE": 0.4
+        }
     },
     {
         "typeId": "GAS_GIANT",
@@ -42,7 +50,8 @@
             "planet/Gaseous/Red Giant/RedGiant_01-512x512.png",
             "planet/Gaseous/Yellow Giant/YellowGiant_01-512x512.png",
             "planet/Gaseous/Green Giant/GreenGiant_01-512x512.png"
-        ]
+        ],
+        "surfaceRegionWeights": {}
     },
     {
         "typeId": "ICE_GIANT",
@@ -55,7 +64,8 @@
         "spriteCandidates": [
             "planet/Gaseous/Blue Giant/BlueGiant_02-512x512.png",
             "planet/Gaseous/Blue Giant/BlueGiant_03-512x512.png"
-        ]
+        ],
+        "surfaceRegionWeights": {}
     },
     {
         "typeId": "OCEAN_WORLD",
@@ -68,7 +78,11 @@
         "spriteCandidates": [
             "planet/Solid/Ocean/Ocean_01-512x512.png",
             "planet/Solid/Aquamarine/Aquamarine_01-512x512.png"
-        ]
+        ],
+        "surfaceRegionWeights": {
+            "OCEAN": 0.95,
+            "CONTINENT": 0.05
+        }
     },
     {
         "typeId": "LAVA_WORLD",
@@ -81,7 +95,11 @@
         "spriteCandidates": [
             "planet/Solid/Magma/Magma_01-512x512.png",
             "planet/Solid/Magma/Magma_02-512x512.png"
-        ]
+        ],
+        "surfaceRegionWeights": {
+            "LAVA_LAKE": 0.8,
+            "CONTINENT": 0.2
+        }
     },
     {
         "typeId": "FROZEN_WORLD",
@@ -96,6 +114,10 @@
             "planet/Solid/Frozen/Frozen_01-512x512.png",
             "planet/Solid/Glacial/Glacial_01-512x512.png",
             "planet/Solid/Snowy/Snowy_01-512x512.png"
-        ]
+        ],
+        "surfaceRegionWeights": {
+            "ICE_SHELF": 0.9,
+            "CONTINENT": 0.1
+        }
     }
 ]

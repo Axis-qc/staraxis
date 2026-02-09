@@ -4,6 +4,8 @@ import staraxis.game.astro.def.AstroAssetRepository;
 import staraxis.game.astro.def.OrbitPresetDef;
 import staraxis.game.astro.def.PlanetTypeDef;
 import staraxis.game.astro.def.StarTypeDef;
+import staraxis.game.planet.PlanetSurface;
+import staraxis.game.planet.def.PlanetAssetRepository;
 import staraxis.game.world.WorldGenConfig;
 import staraxis.game.world.WorldMap;
 import staraxis.game.world.WorldSector;
@@ -22,14 +24,17 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class AstroGenerator {
 
     private final AstroAssetRepository assets;
+    private final PlanetAssetRepository planetAssets;
     private final Random random;
+    private final long worldSeedHash;
     private final AtomicLong idCounter = new AtomicLong(0);
 
-    public AstroGenerator(AstroAssetRepository assets, String worldSeed) {
+    public AstroGenerator(AstroAssetRepository assets, PlanetAssetRepository planetAssets, String worldSeed) {
         this.assets = assets;
+        this.planetAssets = planetAssets;
         // 如果种子为空，使用固定默认值以保证确定性
-        long seed = (worldSeed == null || worldSeed.isBlank()) ? 0L : worldSeed.hashCode();
-        this.random = new Random(seed);
+        this.worldSeedHash = (worldSeed == null || worldSeed.isBlank()) ? 0L : worldSeed.hashCode();
+        this.random = new Random(this.worldSeedHash);
     }
 
     /**
@@ -94,9 +99,9 @@ public final class AstroGenerator {
 
         // 调试日志
         System.out.println("[DEBUG AstroGenerator] Generated star: typeId=" + type.typeId +
-                         ", description='" + type.description + "'" +
-                         ", spriteCandidates=" + type.spriteCandidates +
-                         ", selectedTexture='" + star.surfaceTexturePath + "'");
+                ", description='" + type.description + "'" +
+                ", spriteCandidates=" + type.spriteCandidates +
+                ", selectedTexture='" + star.surfaceTexturePath + "'");
         return star;
     }
 
@@ -143,6 +148,14 @@ public final class AstroGenerator {
             double pYears = Math.sqrt(Math.pow(planet.semiMajorAxisGU / staraxis.game.world.WorldConstants.AU_IN_GU, 3)
                     / primaryStar.massSolar);
             planet.orbitalPeriodDays = pYears * 365.25; // 简化换算
+
+            // 初始化行星地表组件喵
+            planet.surface = new PlanetSurface(planet.entityId);
+            planet.surfaceComponentId = planet.entityId; // 暂时让组件 ID 等于实体 ID 喵
+
+            // 方案 A：使用混合种子确保确定性，不再受生成顺序影响喵
+            long mixedSeed = staraxis.game.planet.surface.SurfaceNamingUtils.mixSeed(worldSeedHash, planet.entityId);
+            planet.surface.initializeSurface(type, planetAssets, mixedSeed);
 
             system.planets.add(planet);
 
