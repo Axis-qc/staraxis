@@ -2,7 +2,7 @@ package staraxis.webnet.command;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import staraxis.game.StarAxisGameRuntime;
-import staraxis.webnet.GameLog;
+import staraxis.webnet.core.GameLog;
 import staraxis.webnet.game.GameSessions;
 
 import java.util.Map;

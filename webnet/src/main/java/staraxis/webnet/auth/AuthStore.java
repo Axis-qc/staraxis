@@ -1,4 +1,4 @@
-package staraxis.webnet;
+package staraxis.webnet.auth;
 
 /**
  * AuthStore
@@ -163,6 +163,34 @@ public class AuthStore {
                 Account a = objectMapper.readValue(p.toFile(), Account.class);
                 if (a != null && playerId.equals(a.playerId)) {
                     a.gameId = trimmed;
+                    objectMapper.writerWithDefaultPrettyPrinter().writeValue(p.toFile(), a);
+                    return;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        throw new IllegalArgumentException("account not found by playerId");
+    }
+
+    public void setRole(String playerId, String role) throws Exception {
+        if (playerId == null || playerId.isBlank()) {
+            throw new IllegalArgumentException("invalid playerId");
+        }
+        if (role == null || role.isBlank()) {
+            throw new IllegalArgumentException("invalid role");
+        }
+        String trimmedRole = role.trim();
+        if (trimmedRole.length() > 32) {
+            throw new IllegalArgumentException("role too long");
+        }
+
+        AccountFiles.ensureDir();
+
+        for (var p : AccountFiles.listAccountFiles()) {
+            try {
+                Account a = objectMapper.readValue(p.toFile(), Account.class);
+                if (a != null && playerId.equals(a.playerId)) {
+                    a.role = trimmedRole;
                     objectMapper.writerWithDefaultPrettyPrinter().writeValue(p.toFile(), a);
                     return;
                 }

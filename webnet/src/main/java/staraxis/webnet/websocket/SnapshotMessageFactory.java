@@ -9,6 +9,9 @@ import staraxis.webnet.dto.DailySettlementStateDto;
 import staraxis.webnet.dto.RealTimeStateDto;
 import staraxis.webnet.dto.SectorCenterDto;
 import staraxis.webnet.dto.SnapshotMessageDto;
+import staraxis.webnet.dto.WorldSummaryDto;
+import staraxis.game.entity.EntityType;
+import staraxis.game.state.snapshot.EntitySnapshot;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -24,6 +27,28 @@ import java.util.stream.Collectors;
 public final class SnapshotMessageFactory {
 
     private SnapshotMessageFactory() {
+    }
+
+    /**
+     * 构建星系宏观统计简报喵。
+     */
+    public static WorldSummaryDto buildWorldSummary(StarAxisGameRuntime runtime) {
+        RealTimeWorldState rt = runtime.getRealTimeWorldStateReadonly();
+        WorldSummaryDto summary = new WorldSummaryDto();
+        summary.gameDay = rt.gameDatetimeDay;
+        summary.simulationTick = rt.simulationTick;
+        summary.entityCounts = new HashMap<>();
+        summary.nations = new HashMap<>();
+
+        List<EntitySnapshot> snapshots = rt.getEntitySnapshotsView();
+        for (EntitySnapshot s : snapshots) {
+            String typeName = s.entityType.name();
+            summary.entityCounts.put(typeName, summary.entityCounts.getOrDefault(typeName, 0) + 1);
+
+            // 这里可以未来扩展更细致的国家统计逻辑喵
+        }
+
+        return summary;
     }
 
     /**

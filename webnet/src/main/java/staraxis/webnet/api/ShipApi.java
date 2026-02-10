@@ -20,7 +20,7 @@
  * - 纹理使用判定：扫描所有分类 JSON，如果某个纹理路径已被模块引用，则标记为已使用。
  */
 
-package staraxis.webnet;
+package staraxis.webnet.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.undertow.server.HttpHandler;

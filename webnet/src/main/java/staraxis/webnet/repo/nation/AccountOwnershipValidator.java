@@ -1,7 +1,7 @@
 package staraxis.webnet.repo.nation;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import staraxis.webnet.AuthStore;
+import staraxis.webnet.auth.AuthStore;
 
 import java.io.File;
 import java.util.Map;

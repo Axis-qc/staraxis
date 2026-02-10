@@ -1,4 +1,7 @@
-package staraxis.webnet;
+package staraxis.webnet.api;
+
+import staraxis.webnet.mod.ModManager;
+import staraxis.webnet.mod.ModOrderRepository;
 
 /**
  * I18nApi

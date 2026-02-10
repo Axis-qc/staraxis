@@ -3,7 +3,7 @@ package staraxis.webnet.api.newgame;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import staraxis.game.StarAxisGameRuntime;
 import staraxis.game.world.WorldGenConfig;
-import staraxis.webnet.GameLog;
+import staraxis.webnet.core.GameLog;
 import staraxis.webnet.game.GameSessions;
 
 import java.nio.charset.StandardCharsets;

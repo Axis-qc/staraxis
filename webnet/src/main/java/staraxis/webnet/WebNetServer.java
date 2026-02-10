@@ -39,12 +39,23 @@ package staraxis.webnet;
  * - 因此本文件中对涉及阻塞操作的 handler 使用 exchange.dispatch(...) 切换到 worker 线程处理。
  */
 
+import staraxis.webnet.api.I18nApi;
+import staraxis.webnet.api.ShipApi;
+import staraxis.webnet.auth.AuthStore;
+import staraxis.webnet.core.GameLog;
+import staraxis.webnet.core.WebNetServerConfig;
+import staraxis.webnet.mod.ModManager;
+import staraxis.webnet.mod.ModMetadata;
+import staraxis.webnet.mod.ModOrder;
+import staraxis.webnet.mod.ModOrderRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import staraxis.game.StarAxisGameRuntime;
 import staraxis.webnet.game.GameSessions;
 import staraxis.webnet.websocket.SnapshotMessageFactory;
 import staraxis.webnet.command.WebCommandRegistry;
 import staraxis.webnet.command.SetSimTimeSpeedCommand;
+import staraxis.webnet.ai.WebAiWebSocketHandler;
+import staraxis.webnet.ai.WebAiAutoStarter;
 import io.undertow.Handlers;
 import io.undertow.Undertow;
 import io.undertow.server.HttpHandler;
@@ -80,6 +91,15 @@ import java.util.stream.Stream;
 public class WebNetServer {
 
     private void tickAndBroadcastSnapshots() {
+        // 低频在线保活：只要存在真实玩家 WS 连接，每 60 秒续命一次 AI 助手喵
+        if (playerConnectionCount.get() > 0) {
+            long now = System.currentTimeMillis();
+            if (now - lastLowFreqAiReportMs >= 60_000L) {
+                lastLowFreqAiReportMs = now;
+                WebAiAutoStarter.reportActivity();
+            }
+        }
+
         StarAxisGameRuntime runtime = GameSessions.getRuntime();
         if (runtime == null) {
             // 没有世界时：不主动广播，等待订阅方触发一次性错误回包
@@ -178,13 +198,17 @@ public class WebNetServer {
 
     private final Set<WebSocketChannel> channels = ConcurrentHashMap.newKeySet();
 
+    private final WebAiWebSocketHandler aiWebSocketHandler;
+
     private final Set<WebSocketChannel> snapshotSubscribers = ConcurrentHashMap.newKeySet();
 
     private final AtomicLong lastTickCostMs = new AtomicLong(0);
 
     private volatile int lastLoggedGameDay = -1;
+    private volatile long lastLowFreqAiReportMs = 0;
 
-    private final AtomicInteger connectionCount = new AtomicInteger(0);
+    private final AtomicInteger playerConnectionCount = new AtomicInteger(0);
+    private final AtomicInteger aiConnectionCount = new AtomicInteger(0);
     private final AtomicLong lastDisconnectAtMs = new AtomicLong(0);
 
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -205,28 +229,40 @@ public class WebNetServer {
         this.config = config;
 
         commandRegistry.register(new SetSimTimeSpeedCommand());
+        this.aiWebSocketHandler = new WebAiWebSocketHandler(authStore);
     }
 
     public void start() {
         GameLog.initTruncate();
         GameLog.log("WebNetServer.start host=" + config.host + " port=" + config.port);
 
+        // 初始化离线时间戳：确保如果一直没人连接，也能在 autoExitSeconds 后自动关闭喵
+        if (config.autoExitSeconds > 0) {
+            lastDisconnectAtMs.set(System.currentTimeMillis());
+        }
+
         PathHandler routes = Handlers.path();
 
         // Tick 驱动：单世界（global runtime），仅监控 tickCostMs，不做时间膨胀。
         gameTicker.scheduleAtFixedRate(this::tickAndBroadcastSnapshots, 0, 40, TimeUnit.MILLISECONDS);
 
-        routes.addPrefixPath("/ws", Handlers.websocket((WebSocketHttpExchange exchange, WebSocketChannel channel) -> {
-            channels.add(channel);
-            connectionCount.incrementAndGet();
+        // 玩家 WS 入口：使用 ExactPath 彻底隔离 AI 通道喵
+        routes.addExactPath("/ws", Handlers.websocket((WebSocketHttpExchange exchange, WebSocketChannel channel) -> {
+            // 玩家连接视为活动，尝试启动/续命 AI 喵
+            WebAiAutoStarter.ensureAiStartedIfNeeded();
 
-            System.out.println("WS connect: " + channel.getSourceAddress() + " connections=" + connectionCount.get());
+            channels.add(channel);
+            int count = playerConnectionCount.incrementAndGet();
+
+            System.out.println("WS connect [PLAYER] path=" + exchange.getRequestURI() + ": "
+                    + channel.getSourceAddress() + " players=" + count);
 
             channel.getReceiveSetter().set(new AbstractReceiveListener() {
                 @Override
                 protected void onFullTextMessage(WebSocketChannel channel, BufferedTextMessage message) {
                     String text = message.getData();
-                    System.out.println("WS recv: " + text);
+                    System.out.println("WS recv [PLAYER]: " + text);
+                    WebAiAutoStarter.reportActivity();
 
                     try {
                         @SuppressWarnings("unchecked")
@@ -254,7 +290,7 @@ public class WebNetServer {
                             return;
                         }
 
-                        // 处理游戏命令（模块化命令注册表）
+                        // 处理游戏命令
                         if (commandRegistry.supports(type)) {
                             String response = commandRegistry.handleTextMessage(text);
                             WebSockets.sendText(response, channel, null);
@@ -272,8 +308,10 @@ public class WebNetServer {
                         io.undertow.websockets.core.StreamSourceFrameChannel frameChannel) {
                     channels.remove(webSocketChannel);
                     snapshotSubscribers.remove(webSocketChannel);
-                    int left = connectionCount.decrementAndGet();
-                    System.out.println("WS close: connections=" + left);
+                    int left = playerConnectionCount.decrementAndGet();
+                    System.out.println("WS close [PLAYER]: players=" + left);
+
+                    // 只要真实玩家人数归零，立即刷新离线时间戳触发倒计时喵
                     if (left <= 0) {
                         lastDisconnectAtMs.set(System.currentTimeMillis());
                     }
@@ -282,6 +320,22 @@ public class WebNetServer {
 
             channel.resumeReceives();
             WebSockets.sendText("{\"type\":\"hello\",\"server\":\"webnet\"}", channel, null);
+        }));
+
+        // AI 专用 WS 通道喵
+        routes.addPrefixPath("/ws/ai", Handlers.websocket((exchange, channel) -> {
+            channels.add(channel);
+            int aic = aiConnectionCount.incrementAndGet();
+            System.out.println("WS connect [AI] path=" + exchange.getRequestURI() + ": "
+                    + channel.getSourceAddress() + " ai=" + aic);
+
+            channel.addCloseTask(c -> {
+                channels.remove(c);
+                int left = aiConnectionCount.decrementAndGet();
+                System.out.println("WS close [AI]: ai=" + left);
+            });
+
+            aiWebSocketHandler.onConnect(exchange, channel);
         }));
 
         // --- API Routes ---
@@ -668,6 +722,96 @@ public class WebNetServer {
             });
         });
 
+        authHandler.addExactPath("/setRole", exchange -> {
+            exchange.dispatch(() -> {
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
+                    exchange.setStatusCode(405);
+                    try {
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", "method_not_allowed")));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                    return;
+                }
+
+                try {
+                    String auth = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
+                    AuthStore.Session s = authStore.getSessionFromAuthorizationHeader(auth);
+                    if (s == null) {
+                        exchange.setStatusCode(401);
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", "unauthorized")));
+                        return;
+                    }
+
+                    AuthStore.Account adminAcc = authStore.loadAccount(s.username);
+                    String adminRole = adminAcc != null && adminAcc.role != null && !adminAcc.role.isBlank()
+                            ? adminAcc.role
+                            : "USER";
+                    if (!"ADMIN".equalsIgnoreCase(adminRole)) {
+                        exchange.setStatusCode(403);
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", "forbidden")));
+                        return;
+                    }
+
+                    exchange.startBlocking();
+                    String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                    if (body.isBlank()) {
+                        body = "{}";
+                    }
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> req = objectMapper.readValue(body, Map.class);
+                    String playerId = req.get("playerId") == null ? null : String.valueOf(req.get("playerId")).trim();
+                    String role = req.get("role") == null ? null : String.valueOf(req.get("role")).trim();
+
+                    if (playerId == null || playerId.isBlank()) {
+                        exchange.setStatusCode(400);
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", "invalid_playerId")));
+                        return;
+                    }
+                    if (role == null || role.isBlank()) {
+                        exchange.setStatusCode(400);
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", "invalid_role")));
+                        return;
+                    }
+
+                    authStore.setRole(playerId, role);
+                    exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                            "ok", true,
+                            "playerId", playerId,
+                            "role", role)));
+                } catch (IllegalArgumentException e) {
+                    exchange.setStatusCode(400);
+                    try {
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", String.valueOf(e.getMessage()))));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                } catch (Exception e) {
+                    exchange.setStatusCode(500);
+                    try {
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                                "ok", false,
+                                "error", String.valueOf(e.getMessage()))));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                }
+            });
+        });
+
         authHandler.addExactPath("/gameId", exchange -> {
             exchange.dispatch(() -> {
                 exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
@@ -742,7 +886,8 @@ public class WebNetServer {
                     ModOrder conf = modOrderRepository.load();
                     List<String> discovered = modManager.listAllModIdsDiscovered();
                     List<String> order = conf != null && conf.order != null ? conf.order : List.of();
-                    Set<String> disabledSet = conf != null && conf.disabled != null ? conf.disabled : Set.of();
+                    Set<String> disabledSet = conf != null && conf.disabled != null ? Set.of()
+                            : new java.util.HashSet<>(conf.disabled);
 
                     LinkedHashSet<String> merged = new LinkedHashSet<>();
                     for (String id : order) {
@@ -892,7 +1037,8 @@ public class WebNetServer {
 
         apiHandler.addExactPath("/status", exchange -> {
             exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-            int c = connectionCount.get();
+            int pc = playerConnectionCount.get();
+            int aic = aiConnectionCount.get();
             long last = lastDisconnectAtMs.get();
             long idleMs = last > 0 ? (System.currentTimeMillis() - last) : 0;
 
@@ -921,7 +1067,9 @@ public class WebNetServer {
             String json = "{" +
                     "\"host\":\"" + config.host + "\"," +
                     "\"port\":" + config.port + "," +
-                    "\"connections\":" + c + "," +
+                    "\"playerConnections\":" + pc + "," +
+                    "\"aiConnections\":" + aic + "," +
+                    "\"connections\":" + pc + "," + // 保持兼容性喵
                     "\"autoExitSeconds\":" + config.autoExitSeconds + "," +
                     "\"idleSeconds\":" + (idleMs / 1000) + "," +
                     "\"webUiExists\":" + webUiExists + "," +
@@ -1021,7 +1169,19 @@ public class WebNetServer {
         ShipApi shipApi = new ShipApi(objectMapper);
         apiHandler.addPrefixPath("/ship", shipApi.createHandler());
 
-        routes.addPrefixPath("/api", apiHandler);
+        HttpHandler apiWrapped = exchange -> {
+            try {
+                String rp = exchange.getRequestPath();
+                if (rp != null && rp.startsWith("/api/") && !"/api/status".equals(rp)) {
+                    WebAiAutoStarter.ensureAiStartedIfNeeded();
+                    WebAiAutoStarter.reportActivity();
+                }
+            } catch (Exception ignored) {
+            }
+            apiHandler.handleRequest(exchange);
+        };
+
+        routes.addPrefixPath("/api", apiWrapped);
 
         // --- Static Content ---
         // 游戏主界面（webui 目录）：挂在 /webui
@@ -1057,7 +1217,7 @@ public class WebNetServer {
         }
         scheduler.scheduleAtFixedRate(() -> {
             try {
-                if (connectionCount.get() > 0) {
+                if (playerConnectionCount.get() > 0) {
                     return;
                 }
                 long last = lastDisconnectAtMs.get();

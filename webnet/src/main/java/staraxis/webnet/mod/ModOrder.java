@@ -1,4 +1,4 @@
-package staraxis.webnet;
+package staraxis.webnet.mod;
 
 /**
  * ModOrder
@@ -26,4 +26,3 @@ public class ModOrder {
     public List<String> order = new ArrayList<>();
     public Set<String> disabled = new HashSet<>();
 }
-

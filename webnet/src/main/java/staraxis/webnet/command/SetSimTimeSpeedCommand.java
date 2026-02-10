@@ -1,7 +1,7 @@
 package staraxis.webnet.command;
 
 import staraxis.game.StarAxisGameRuntime;
-import staraxis.webnet.GameLog;
+import staraxis.webnet.core.GameLog;
 
 import java.util.Map;
 

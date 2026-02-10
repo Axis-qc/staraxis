@@ -1,4 +1,4 @@
-package staraxis.webnet;
+package staraxis.webnet.core;
 
 import java.io.File;
 import java.io.FileWriter;

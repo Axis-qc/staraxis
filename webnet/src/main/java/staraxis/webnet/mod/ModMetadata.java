@@ -1,4 +1,4 @@
-package staraxis.webnet;
+package staraxis.webnet.mod;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
