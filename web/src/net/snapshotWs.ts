@@ -2,7 +2,6 @@ export type SectorCenter = { q: number; r: number; x: number; y: number }
 
 export type EntityType = 'STAR' | 'PLANET' | 'SYSTEM_BARYCENTER' | 'SHIP' | 'STATION'
 
-
 export type StarDetails = {
     starTypeId: string
     radiusGU: number
@@ -38,6 +37,25 @@ export type EntitySnapshot = {
     details: StarDetails | PlanetDetails | SystemBarycenterDetails | null
 }
 
+export type SurfaceRegionSnapshot = {
+    regionId: number
+    regionType: string
+    name: string
+    surfacePercentage: number
+    developableSpaceRatio: number
+}
+
+export type PlanetSurfaceSnapshot = {
+    planetEntityId: number
+    surfaceRegions: SurfaceRegionSnapshot[]
+}
+
+export type DailySettlementState = {
+    settledDay: number
+    sectorCount: number
+    planetSurfaces: Record<string, PlanetSurfaceSnapshot>
+}
+
 export type SnapshotMessage = {
     type: 'snapshot'
     ok: boolean
@@ -51,10 +69,7 @@ export type SnapshotMessage = {
         sectorCenters: SectorCenter[]
         entities: EntitySnapshot[]
     }
-    dailySettlementState?: {
-        settledDay: number
-        sectorCount: number
-    }
+    dailySettlementState?: DailySettlementState
 }
 
 export type SnapshotWsOptions = {

@@ -209,7 +209,7 @@ function onDebugWindowHeaderPointerDown(e: PointerEvent) {
   debugDragOffset.value = { x: e.clientX - rect.left, y: e.clientY - rect.top }
 
   try {
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    ; (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
   } catch {
   }
 
@@ -229,7 +229,7 @@ function onDebugWindowHeaderPointerUp(e: PointerEvent) {
   if (!isDraggingDebugWindow.value) return
   isDraggingDebugWindow.value = false
   try {
-    ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
+    ; (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
   } catch {
   }
   e.preventDefault()
@@ -318,71 +318,44 @@ onUnmounted(() => {
 
 <template>
   <div ref="rootRef" class="in-game-root">
-    <div
-      ref="containerRef"
-      class="render-container"
-      @pointermove="hub.onCanvasPointerMove"
+    <div ref="containerRef" class="render-container" @pointermove="hub.onCanvasPointerMove"
       @pointerdown="(e) => { selection.onPointerDown(e); rightClickCommand.onPointerDown(e) }"
-      @pointermove.capture="selection.onPointerMove"
-      @pointerup.capture="selection.onPointerUp"
-      @pointercancel.capture="selection.cancelSelection"
-    ></div>
+      @pointermove.capture="selection.onPointerMove" @pointerup.capture="selection.onPointerUp"
+      @pointercancel.capture="selection.cancelSelection"></div>
 
-    <InGameSelectionListHud
-      :selected-ids="selection.selectedIds.value"
-      :entities="hub.entities.value"
-      @open="({ entityId }) => {
-        const entity = hub.entities.value.find(e => e.entityId === entityId)
-        if (entity && entity.entityType === 'PLANET') {
-          openPlanetWindow(entity)
-        } else {
-          showDevelopingHintAtCenter()
-        }
-      }"
-      @focus="({ entityId }) => {
-        // TODO: 双击聚焦视角：后续可扩展为平滑过渡、缩放自适应、锁定跟随等。
-        const r = hub.getRenderer()
-        if (!r) return
-        const p = r.getEntityWorldPosGU(entityId)
-        if (!p) return
-        r.cameraWorldPosGU.set(p.x, p.y)
-        r.applyCameraTransform()
-      }"
-    />
+    <InGameSelectionListHud :selected-ids="selection.selectedIds.value" :entities="hub.entities.value" @open="({ entityId }) => {
+      const entity = hub.entities.value.find(e => e.entityId === entityId)
+      if (entity && entity.entityType === 'PLANET') {
+        openPlanetWindow(entity)
+      } else {
+        showDevelopingHintAtCenter()
+      }
+    }" @focus="({ entityId }) => {
+      // TODO: 双击聚焦视角：后续可扩展为平滑过渡、缩放自适应、锁定跟随等。
+      const r = hub.getRenderer()
+      if (!r) return
+      const p = r.getEntityWorldPosGU(entityId)
+      if (!p) return
+      r.cameraWorldPosGU.set(p.x, p.y)
+      r.applyCameraTransform()
+    }" />
 
     <InGameTimeHud :snapshot="hub.lastSnapshot.value" :ws-client="wsClient" />
 
-    <InGamePlanetWindow
-      v-if="planetWindowOpen && planetEntity"
-      :entity="planetEntity"
-      @close="closePlanetWindow"
-    />
+    <InGamePlanetWindow v-if="planetWindowOpen && planetEntity" :entity="planetEntity"
+      :snapshot="hub.lastSnapshot.value" @close="closePlanetWindow" />
 
     <InGameSelectionRect :rect="selection.selectionRect.value" />
 
-    <InGameEscMenu
-      v-model:open="isEscMenuOpen"
-      @resume="uiBindings.onResume"
-      @save="uiBindings.onClickSave"
-      @load="uiBindings.onClickLoad"
-      @quit="uiBindings.onClickQuit"
-    />
+    <InGameEscMenu v-model:open="isEscMenuOpen" @resume="uiBindings.onResume" @save="uiBindings.onClickSave"
+      @load="uiBindings.onClickLoad" @quit="uiBindings.onClickQuit" />
 
-    <div
-      v-if="isDebugHudEnabled && isDebugWindowVisible"
-      ref="debugWindowRef"
-      class="debug-window"
-      :style="{ transform: `translate(${debugWindowPos.x}px, ${debugWindowPos.y}px)` }"
-      role="dialog"
-      aria-label="Debug Window"
-    >
-      <div
-        class="debug-window-header"
-        @pointerdown="onDebugWindowHeaderPointerDown"
-        @pointermove="onDebugWindowHeaderPointerMove"
-        @pointerup="onDebugWindowHeaderPointerUp"
-        @pointercancel="onDebugWindowHeaderPointerUp"
-      >
+    <div v-if="isDebugHudEnabled && isDebugWindowVisible" ref="debugWindowRef" class="debug-window"
+      :style="{ transform: `translate(${debugWindowPos.x}px, ${debugWindowPos.y}px)` }" role="dialog"
+      aria-label="Debug Window">
+      <div class="debug-window-header" @pointerdown="onDebugWindowHeaderPointerDown"
+        @pointermove="onDebugWindowHeaderPointerMove" @pointerup="onDebugWindowHeaderPointerUp"
+        @pointercancel="onDebugWindowHeaderPointerUp">
         <div class="debug-window-title">调试</div>
         <button class="debug-window-close" type="button" @click="toggleDebugWindow">×</button>
       </div>
@@ -402,22 +375,15 @@ onUnmounted(() => {
         <div class="perf-chart" aria-label="FPS history chart">
           <svg :width="296" :height="44" viewBox="0 0 296 44" role="img" aria-label="FPS history">
             <rect x="0" y="0" width="296" height="44" fill="transparent" />
-            <polyline
-              v-if="hub.performance.fpsHistory.value.length"
-              :points="hub.performance.fpsHistory.value
-                .map((fps, i) => {
-                  const n = hub.performance.fpsHistory.value.length
-                  const x = n <= 1 ? 0 : (i / (n - 1)) * 296
-                  const y = 44 - Math.min(44, (fps / 60) * 44)
-                  return `${x},${y}`
-                })
-                .join(' ')"
-              fill="none"
-              stroke="rgba(127,211,255,0.9)"
-              stroke-width="2"
-              stroke-linejoin="round"
-              stroke-linecap="round"
-            />
+            <polyline v-if="hub.performance.fpsHistory.value.length" :points="hub.performance.fpsHistory.value
+              .map((fps, i) => {
+                const n = hub.performance.fpsHistory.value.length
+                const x = n <= 1 ? 0 : (i / (n - 1)) * 296
+                const y = 44 - Math.min(44, (fps / 60) * 44)
+                return `${x},${y}`
+              })
+              .join(' ')" fill="none" stroke="rgba(127,211,255,0.9)" stroke-width="2" stroke-linejoin="round"
+              stroke-linecap="round" />
           </svg>
           <div class="perf-chart-caption">最近 60 秒 FPS（上限按 60 归一化）</div>
         </div>
@@ -432,11 +398,8 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <InGameOverviewPanel
-      :day-text="hub.overview.dayText.value"
-      :tick-cost-text="hub.overview.tickCostText.value"
-      :sector-count-text="hub.overview.sectorCountText.value"
-    />
+    <InGameOverviewPanel :day-text="hub.overview.dayText.value" :tick-cost-text="hub.overview.tickCostText.value"
+      :sector-count-text="hub.overview.sectorCountText.value" />
 
     <InGameDevelopmentPanel v-if="activeBottomTab === 'development'" @build="uiBindings.onBuild" />
     <InGameMilitaryPanel v-if="activeBottomTab === 'military'" @developing="uiBindings.onDeveloping" />
