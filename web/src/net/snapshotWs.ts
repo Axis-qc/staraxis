@@ -93,7 +93,9 @@ export function connectSnapshotWs(options: SnapshotWsOptions = {}): SnapshotWsCl
         if (closed) return
 
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-        const wsUrl = `${protocol}//${window.location.host}/ws`
+        // 从 localStorage 获取 token 喵
+        const token = localStorage.getItem('sa.token') || ''
+        const wsUrl = `${protocol}//${window.location.host}/ws${token ? `?token=${encodeURIComponent(token)}` : ''}`
         ws = new WebSocket(wsUrl)
 
         ws.onopen = () => {
@@ -107,6 +109,16 @@ export function connectSnapshotWs(options: SnapshotWsOptions = {}): SnapshotWsCl
         ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data)
+
+                // 响应服务端应用层心跳喵
+                if (data?.type === 'ping') {
+                    try {
+                        ws?.send(JSON.stringify({ type: 'pong' }))
+                    } catch {
+                    }
+                    return
+                }
+
                 if (data?.type === 'snapshot') {
                     options.onSnapshot?.(data)
                 }

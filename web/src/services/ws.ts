@@ -62,7 +62,9 @@ function createWsClient(path: string = '/ws'): WsClient {
 
     function wsUrl(): string {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-        return `${protocol}//${window.location.host}${path}`
+        const token = localStorage.getItem('sa.token') || ''
+        const url = `${protocol}//${window.location.host}${path}`
+        return token ? `${url}?token=${encodeURIComponent(token)}` : url
     }
 
     function connect() {
@@ -75,6 +77,18 @@ function createWsClient(path: string = '/ws'): WsClient {
             }
             ws.onmessage = (evt) => {
                 const text = String(evt.data)
+
+                // 响应服务端应用层心跳喵
+                try {
+                    const msg = JSON.parse(text)
+                    if (msg.type === 'ping') {
+                        ws?.send(JSON.stringify({ type: 'pong' }))
+                        return // 心跳包不分发给业务监听器喵
+                    }
+                } catch {
+                    // 非 JSON 消息忽略喵
+                }
+
                 for (const cb of msgListeners) cb(text)
             }
             ws.onerror = () => {
@@ -129,3 +143,13 @@ function createWsClient(path: string = '/ws'): WsClient {
 
 // Create and export a single, shared instance of the WebSocket client.
 export const wsClient = createWsClient('/ws')
+
+// 页面即将卸载时尽量主动断开，减少僵尸连接喵
+if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', () => {
+        try {
+            wsClient.disconnect()
+        } catch {
+        }
+    })
+}

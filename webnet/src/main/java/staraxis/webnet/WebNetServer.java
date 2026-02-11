@@ -4,50 +4,53 @@ package staraxis.webnet;
  * WebNetServer
  *
  * 作用：
- * - StarAxis Web 版本的本地权威服务端（HTTP + WebSocket）。
- * - 托管前端构建产物（/webui），并提供 /api/** 接口供 Vue 前端调用。
+ * - StarAxis Web 版本的本地权威服务端入口（HTTP + WebSocket）。
+ * - 本类负责 Undertow 服务器生命周期（start/stop）、路由组装与 WS 通道接入。
+ * - 具体业务 API（认证、Mods 管理、管理接口、WebUI 静态托管等）已下沉到对应模块，由本类进行挂载。
+ *
+ * 职责边界：
+ * - 负责：Undertow 启停与顶层 PathHandler 组装；/ws（玩家）与 /ws/ai（AI）WebSocket 端点挂载；tick 驱动并广播快照。
+ * - 不负责：认证/账号具体实现（AuthApi（认证HTTP路由处理）/AuthStore（会话与账号存储））；Mods 管理（ModsApi（mods路由处理）/ModManager（顺序口径））；管理接口（AdminApi（status/ping/quit/restart））；WebUI 静态资源（WebUiRoutes（/webui 与根路径跳转））。
  *
  * 路由概览：
  * - WebSocket：
- *   - GET /ws
+ *   - GET /ws（玩家 WS，承载订阅快照与命令消息）
+ *   - GET /ws/ai（AI WS，工具调用与握手协议）
  *
  * - 静态资源：
- *   - GET /webui/**    （项目根目录 webui/ 下的构建产物）
- *   - GET /            （302 跳转到 /webui/）
+ *   - GET /webui/**（由 WebUiRoutes（WebUI静态路由）托管项目根目录 webui/）
+ *   - GET /        （由 WebUiRoutes 302 跳转到 /webui/）
+ *   - GET /assets/**（静态资源直出，供前端加载）
  *
- * - API：
- *   - GET  /api/status        本地服务状态
- *   - GET  /api/ping          RTT/连通性测试
- *   - POST /api/quit          请求关闭本地服务端进程
- *   - GET  /api/i18n/**       i18n 语言包相关
- *
- * - 认证/账号（本地文件存储在 gamedata/accounts）：
- *   - POST /api/auth/register   注册（username 作为文件名）
- *   - POST /api/auth/login      登录（返回 token/playerId）
- *   - GET  /api/auth/me         获取当前会话信息
- *   - POST /api/auth/logout     注销
- *   - POST /api/auth/gameId     保存玩家游戏ID（gameId）
- *
- * - Mod 管理（本地文件存储在 gamedata/mods）：
- *   - GET  /api/mods            返回扫描到的 mods 列表 + 当前 order/disabled
- *   - POST /api/mods/order      保存 mods 顺序与禁用列表（回写 gamedata/mods/mod-order.json，保留未知字段）
+ * - API（均在 /api 前缀下）：
+ *   - AdminApi（管理接口）：
+ *     - GET  /api/status（服务状态）
+ *     - GET  /api/ping（连通性测试）
+ *     - POST /api/quit（退出进程，需 ADMIN 权限）
+ *     - POST /api/restart（重启进程，需 ADMIN 权限）
+ *   - AuthApi（认证接口）：/api/auth/**
+ *   - ModsApi（Mods 管理）：/api/mods/**
+ *   - I18nApi（语言包合并）：/api/i18n/**
+ *   - ShipApi（舰船编辑工具）：/api/ship/**
+ *   - 其它业务域 API：/api/newgame/**、/api/nation/** 等
  *
  * 重要注意事项（Undertow 阻塞 IO）：
  * - Undertow 的请求处理默认运行在 IO 线程中。
  * - 读取请求体（startBlocking/getInputStream）、文件读写（gamedata/**）、以及 JSON 序列化等都可能触发阻塞 IO。
  * - 如果在 IO 线程里做阻塞操作，会触发 UT000126 并导致请求 500。
- * - 因此本文件中对涉及阻塞操作的 handler 使用 exchange.dispatch(...) 切换到 worker 线程处理。
+ * - 因此涉及阻塞 IO 的 handler 必须使用 exchange.dispatch(...) 切换到 worker 线程处理。
  */
 
 import staraxis.webnet.api.I18nApi;
 import staraxis.webnet.api.ShipApi;
+import staraxis.webnet.auth.AuthApi;
 import staraxis.webnet.auth.AuthStore;
 import staraxis.webnet.core.GameLog;
 import staraxis.webnet.core.WebNetServerConfig;
+import staraxis.webnet.core.WsConnectionManager;
 import staraxis.webnet.mod.ModManager;
-import staraxis.webnet.mod.ModMetadata;
-import staraxis.webnet.mod.ModOrder;
 import staraxis.webnet.mod.ModOrderRepository;
+import staraxis.webnet.mod.ModsApi;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import staraxis.game.StarAxisGameRuntime;
 import staraxis.webnet.game.GameSessions;
@@ -70,39 +73,28 @@ import io.undertow.websockets.core.WebSockets;
 import io.undertow.websockets.spi.WebSocketHttpExchange;
 
 import java.io.File;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Stream;
 
 public class WebNetServer {
 
     private void tickAndBroadcastSnapshots() {
-        // 低频在线保活：只要存在真实玩家 WS 连接，每 60 秒续命一次 AI 助手喵
-        if (playerConnectionCount.get() > 0) {
-            long now = System.currentTimeMillis();
-            if (now - lastLowFreqAiReportMs >= 60_000L) {
-                lastLowFreqAiReportMs = now;
-                WebAiAutoStarter.reportActivity();
-            }
+        // 每 1 分钟执行一次连接存活检测与心跳（由 connMgr 统一负责）喵
+        long now = System.currentTimeMillis();
+        if (now - lastLowFreqWsCheckMs >= 60_000L) {
+            lastLowFreqWsCheckMs = now;
+            connMgr.sweepAndPing();
         }
 
-        StarAxisGameRuntime runtime = GameSessions.getRuntime();
+        staraxis.game.StarAxisGameRuntime runtime = staraxis.webnet.game.GameSessions.getRuntime();
         if (runtime == null) {
-            // 没有世界时：不主动广播，等待订阅方触发一次性错误回包
             return;
         }
 
@@ -110,7 +102,6 @@ public class WebNetServer {
         try {
             runtime.update(0f);
         } catch (Exception e) {
-            // 避免 tick 线程被异常打断
             return;
         } finally {
             long costMs = Math.max(0, (System.nanoTime() - t0) / 1_000_000L);
@@ -119,24 +110,8 @@ public class WebNetServer {
 
         try {
             var snapshotDto = SnapshotMessageFactory.buildSnapshotMessage(runtime, lastTickCostMs.get());
-            var rts = snapshotDto.realTimeWorldState;
-            if (rts != null) {
-                int day = rts.gameDatetimeDay;
-                if (day != lastLoggedGameDay) {
-                    lastLoggedGameDay = day;
-                    double timeScale = 1.0;
-                    double playerTimeStep = 1.0;
-                    try {
-                        timeScale = runtime.getWorldStateForSimOnly().time.timeScale;
-                        playerTimeStep = runtime.getWorldStateForSimOnly().time.playerTimeStep;
-                    } catch (Exception ignored) {
-                    }
-                    GameLog.log("day_advance day=" + day + " tick=" + rts.simulationTick + " accHours="
-                            + rts.accGameHoursInDay + " playerStepMps=" + playerTimeStep + " systemTimeScale="
-                            + timeScale);
-                }
-            }
 
+            Set<WebSocketChannel> snapshotSubscribers = connMgr.getSnapshotSubscribers();
             if (snapshotSubscribers.isEmpty()) {
                 return;
             }
@@ -188,28 +163,17 @@ public class WebNetServer {
     }
 
     private final WebNetServerConfig config;
-
     private Undertow undertow;
-
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final AuthStore authStore = new AuthStore(objectMapper);
-
     private final WebCommandRegistry commandRegistry = new WebCommandRegistry(objectMapper);
 
-    private final Set<WebSocketChannel> channels = ConcurrentHashMap.newKeySet();
-
+    private final WsConnectionManager connMgr = new WsConnectionManager();
     private final WebAiWebSocketHandler aiWebSocketHandler;
 
-    private final Set<WebSocketChannel> snapshotSubscribers = ConcurrentHashMap.newKeySet();
-
     private final AtomicLong lastTickCostMs = new AtomicLong(0);
-
     private volatile int lastLoggedGameDay = -1;
-    private volatile long lastLowFreqAiReportMs = 0;
-
-    private final AtomicInteger playerConnectionCount = new AtomicInteger(0);
-    private final AtomicInteger aiConnectionCount = new AtomicInteger(0);
-    private final AtomicLong lastDisconnectAtMs = new AtomicLong(0);
+    private volatile long lastLowFreqWsCheckMs = 0;
 
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "webnet-auto-exit");
@@ -223,11 +187,8 @@ public class WebNetServer {
         return t;
     });
 
-    private volatile boolean serverStarted;
-
     public WebNetServer(WebNetServerConfig config) {
         this.config = config;
-
         commandRegistry.register(new SetSimTimeSpeedCommand());
         this.aiWebSocketHandler = new WebAiWebSocketHandler(authStore);
     }
@@ -236,32 +197,38 @@ public class WebNetServer {
         GameLog.initTruncate();
         GameLog.log("WebNetServer.start host=" + config.host + " port=" + config.port);
 
-        // 初始化离线时间戳：确保如果一直没人连接，也能在 autoExitSeconds 后自动关闭喵
         if (config.autoExitSeconds > 0) {
-            lastDisconnectAtMs.set(System.currentTimeMillis());
+            connMgr.getLastDisconnectAtMsRef().set(System.currentTimeMillis());
         }
 
         PathHandler routes = Handlers.path();
-
-        // Tick 驱动：单世界（global runtime），仅监控 tickCostMs，不做时间膨胀。
         gameTicker.scheduleAtFixedRate(this::tickAndBroadcastSnapshots, 0, 40, TimeUnit.MILLISECONDS);
 
-        // 玩家 WS 入口：使用 ExactPath 彻底隔离 AI 通道喵
         routes.addExactPath("/ws", Handlers.websocket((WebSocketHttpExchange exchange, WebSocketChannel channel) -> {
-            // 玩家连接视为活动，尝试启动/续命 AI 喵
-            WebAiAutoStarter.ensureAiStartedIfNeeded();
+            List<String> tokenParams = exchange.getRequestParameters().get("token");
+            String token = (tokenParams == null || tokenParams.isEmpty()) ? null : tokenParams.get(0);
 
-            channels.add(channel);
-            int count = playerConnectionCount.incrementAndGet();
+            AuthStore.Session session = (token == null) ? null : authStore.getSessionByToken(token);
+            if (session == null) {
+                try {
+                    WebSockets.sendText(objectMapper.writeValueAsString(Map.of(
+                            "type", "hello",
+                            "ok", false,
+                            "error", "unauthorized")), channel, null);
+                    channel.sendClose();
+                } catch (Exception ignored) {
+                }
+                return;
+            }
 
-            System.out.println("WS connect [PLAYER] path=" + exchange.getRequestURI() + ": "
-                    + channel.getSourceAddress() + " players=" + count);
+            String playerId = session.playerId;
+            channel.setIdleTimeout(60_000L);
+            connMgr.registerPlayer(playerId, channel);
 
             channel.getReceiveSetter().set(new AbstractReceiveListener() {
                 @Override
                 protected void onFullTextMessage(WebSocketChannel channel, BufferedTextMessage message) {
                     String text = message.getData();
-                    System.out.println("WS recv [PLAYER]: " + text);
                     WebAiAutoStarter.reportActivity();
 
                     try {
@@ -271,13 +238,11 @@ public class WebNetServer {
                         String type = typeObj == null ? null : String.valueOf(typeObj);
 
                         if ("subscribeSnapshot".equals(type)) {
-                            snapshotSubscribers.add(channel);
-                            boolean has = GameSessions.hasRuntime();
-                            GameLog.log("WS subscribeSnapshot hasRuntime=" + has);
-                            if (!has) {
+                            connMgr.subscribeSnapshot(channel);
+                            if (!GameSessions.hasRuntime()) {
                                 WebSockets.sendText(
-                                        "{\"type\":\"snapshot\",\"ok\":false,\"error\":\"world_not_created\"}",
-                                        channel, null);
+                                        "{\"type\":\"snapshot\",\"ok\":false,\"error\":\"world_not_created\"}", channel,
+                                        null);
                             } else {
                                 sendSnapshotToChannel(channel);
                             }
@@ -285,79 +250,61 @@ public class WebNetServer {
                         }
 
                         if ("unsubscribeSnapshot".equals(type)) {
-                            snapshotSubscribers.remove(channel);
+                            connMgr.unsubscribeSnapshot(channel);
                             WebSockets.sendText("{\"type\":\"unsubscribed\",\"ok\":true}", channel, null);
                             return;
                         }
 
-                        // 处理游戏命令
+                        if ("pong".equals(type)) {
+                            connMgr.onPlayerPong(channel);
+                            return;
+                        }
+
                         if (commandRegistry.supports(type)) {
                             String response = commandRegistry.handleTextMessage(text);
                             WebSockets.sendText(response, channel, null);
                             return;
                         }
-
                     } catch (Exception ignored) {
                     }
-
                     WebSockets.sendText(text, channel, null);
                 }
 
                 @Override
                 protected void onClose(WebSocketChannel webSocketChannel,
                         io.undertow.websockets.core.StreamSourceFrameChannel frameChannel) {
-                    channels.remove(webSocketChannel);
-                    snapshotSubscribers.remove(webSocketChannel);
-                    int left = playerConnectionCount.decrementAndGet();
-                    System.out.println("WS close [PLAYER]: players=" + left);
-
-                    // 只要真实玩家人数归零，立即刷新离线时间戳触发倒计时喵
-                    if (left <= 0) {
-                        lastDisconnectAtMs.set(System.currentTimeMillis());
-                    }
+                    connMgr.unregisterPlayer(webSocketChannel);
                 }
             });
 
             channel.resumeReceives();
-            WebSockets.sendText("{\"type\":\"hello\",\"server\":\"webnet\"}", channel, null);
+            WebSockets.sendText(
+                    "{\"type\":\"hello\",\"ok\":true,\"server\":\"webnet\",\"playerId\":\"" + playerId + "\"}", channel,
+                    null);
         }));
 
-        // AI 专用 WS 通道喵
         routes.addPrefixPath("/ws/ai", Handlers.websocket((exchange, channel) -> {
-            channels.add(channel);
-            int aic = aiConnectionCount.incrementAndGet();
-            System.out.println("WS connect [AI] path=" + exchange.getRequestURI() + ": "
-                    + channel.getSourceAddress() + " ai=" + aic);
-
-            channel.addCloseTask(c -> {
-                channels.remove(c);
-                int left = aiConnectionCount.decrementAndGet();
-                System.out.println("WS close [AI]: ai=" + left);
-            });
-
+            connMgr.registerAi(channel);
+            channel.addCloseTask(connMgr::unregisterAi);
             aiWebSocketHandler.onConnect(exchange, channel);
         }));
 
-        // --- API Routes ---
         PathHandler apiHandler = Handlers.path();
 
-        // --- Game/Nations API ---
         apiHandler.addExactPath("/game/nations", exchange -> {
             exchange.dispatch(() -> {
                 try {
                     staraxis.webnet.api.nation.NationPresetsApi.setJsonContentType(exchange);
                     List<staraxis.game.nation.NationDef> nations = staraxis.webnet.api.nation.NationPresetsApi
                             .loadAllPresetNations(objectMapper);
-                    exchange.getResponseSender()
-                            .send(objectMapper.writeValueAsString(staraxis.webnet.api.nation.NationPresetsApi
-                                    .toResponse(nations)));
+                    exchange.getResponseSender().send(objectMapper
+                            .writeValueAsString(staraxis.webnet.api.nation.NationPresetsApi.toResponse(nations)));
                 } catch (Exception e) {
                     exchange.setStatusCode(500);
                     try {
                         exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", String.valueOf(e.getMessage()))));
+                        exchange.getResponseSender().send(objectMapper
+                                .writeValueAsString(Map.of("ok", false, "error", String.valueOf(e.getMessage()))));
                     } catch (Exception ignored) {
                         exchange.endExchange();
                     }
@@ -365,7 +312,6 @@ public class WebNetServer {
             });
         });
 
-        // --- Player Nations API ---
         apiHandler.addExactPath("/nations/players/list", exchange -> {
             exchange.dispatch(() -> {
                 try {
@@ -373,16 +319,15 @@ public class WebNetServer {
                     String username = staraxis.webnet.api.nation.PlayerNationApi.query(exchange, "username");
                     String playerId = staraxis.webnet.api.nation.PlayerNationApi.query(exchange, "playerId");
                     String json = staraxis.webnet.api.nation.PlayerNationApi.handleList(objectMapper,
-                            new staraxis.webnet.repo.nation.PlayerNationFileRepository(objectMapper),
-                            username, playerId);
+                            new staraxis.webnet.repo.nation.PlayerNationFileRepository(objectMapper), username,
+                            playerId);
                     exchange.getResponseSender().send(json);
                 } catch (Exception e) {
                     exchange.setStatusCode(400);
                     try {
                         exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", String.valueOf(e.getMessage()))));
+                        exchange.getResponseSender().send(objectMapper
+                                .writeValueAsString(Map.of("ok", false, "error", String.valueOf(e.getMessage()))));
                     } catch (Exception ignored) {
                         exchange.endExchange();
                     }
@@ -398,16 +343,15 @@ public class WebNetServer {
                     String playerId = staraxis.webnet.api.nation.PlayerNationApi.query(exchange, "playerId");
                     String nationId = staraxis.webnet.api.nation.PlayerNationApi.query(exchange, "nationId");
                     String json = staraxis.webnet.api.nation.PlayerNationApi.handleGet(objectMapper,
-                            new staraxis.webnet.repo.nation.PlayerNationFileRepository(objectMapper),
-                            username, playerId, nationId);
+                            new staraxis.webnet.repo.nation.PlayerNationFileRepository(objectMapper), username,
+                            playerId, nationId);
                     exchange.getResponseSender().send(json);
                 } catch (Exception e) {
                     exchange.setStatusCode(400);
                     try {
                         exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", String.valueOf(e.getMessage()))));
+                        exchange.getResponseSender().send(objectMapper
+                                .writeValueAsString(Map.of("ok", false, "error", String.valueOf(e.getMessage()))));
                     } catch (Exception ignored) {
                         exchange.endExchange();
                     }
@@ -421,9 +365,8 @@ public class WebNetServer {
                 if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
                     exchange.setStatusCode(405);
                     try {
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", "method_not_allowed")));
+                        exchange.getResponseSender().send(
+                                objectMapper.writeValueAsString(Map.of("ok", false, "error", "method_not_allowed")));
                     } catch (Exception ignored) {
                         exchange.endExchange();
                     }
@@ -433,16 +376,14 @@ public class WebNetServer {
                     exchange.startBlocking();
                     String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
                     String json = staraxis.webnet.api.nation.PlayerNationApi.handleSave(objectMapper,
-                            new staraxis.webnet.repo.nation.PlayerNationFileRepository(objectMapper),
-                            body);
+                            new staraxis.webnet.repo.nation.PlayerNationFileRepository(objectMapper), body);
                     exchange.getResponseSender().send(json);
                 } catch (Exception e) {
                     exchange.setStatusCode(400);
                     try {
                         exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", String.valueOf(e.getMessage()))));
+                        exchange.getResponseSender().send(objectMapper
+                                .writeValueAsString(Map.of("ok", false, "error", String.valueOf(e.getMessage()))));
                     } catch (Exception ignored) {
                         exchange.endExchange();
                     }
@@ -450,7 +391,6 @@ public class WebNetServer {
             });
         });
 
-        // --- New Game API ---
         apiHandler.addExactPath("/newgame/step1/selectNation", exchange -> {
             exchange.dispatch(() -> {
                 exchange.getResponseHeaders().put(Headers.CONTENT_TYPE,
@@ -458,9 +398,8 @@ public class WebNetServer {
                 if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
                     exchange.setStatusCode(405);
                     try {
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", "method_not_allowed")));
+                        exchange.getResponseSender().send(
+                                objectMapper.writeValueAsString(Map.of("ok", false, "error", "method_not_allowed")));
                     } catch (Exception ignored) {
                         exchange.endExchange();
                     }
@@ -478,9 +417,8 @@ public class WebNetServer {
                 } catch (Exception e) {
                     exchange.setStatusCode(400);
                     try {
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", String.valueOf(e.getMessage()))));
+                        exchange.getResponseSender().send(objectMapper
+                                .writeValueAsString(Map.of("ok", false, "error", String.valueOf(e.getMessage()))));
                     } catch (Exception ignored) {
                         exchange.endExchange();
                     }
@@ -495,9 +433,8 @@ public class WebNetServer {
                 if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
                     exchange.setStatusCode(405);
                     try {
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", "method_not_allowed")));
+                        exchange.getResponseSender().send(
+                                objectMapper.writeValueAsString(Map.of("ok", false, "error", "method_not_allowed")));
                     } catch (Exception ignored) {
                         exchange.endExchange();
                     }
@@ -515,9 +452,8 @@ public class WebNetServer {
                 } catch (Exception e) {
                     exchange.setStatusCode(400);
                     try {
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", String.valueOf(e.getMessage()))));
+                        exchange.getResponseSender().send(objectMapper
+                                .writeValueAsString(Map.of("ok", false, "error", String.valueOf(e.getMessage()))));
                     } catch (Exception ignored) {
                         exchange.endExchange();
                     }
@@ -532,9 +468,8 @@ public class WebNetServer {
                 if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
                     exchange.setStatusCode(405);
                     try {
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", "method_not_allowed")));
+                        exchange.getResponseSender().send(
+                                objectMapper.writeValueAsString(Map.of("ok", false, "error", "method_not_allowed")));
                     } catch (Exception ignored) {
                         exchange.endExchange();
                     }
@@ -552,9 +487,8 @@ public class WebNetServer {
                 } catch (Exception e) {
                     exchange.setStatusCode(400);
                     try {
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", String.valueOf(e.getMessage()))));
+                        exchange.getResponseSender().send(objectMapper
+                                .writeValueAsString(Map.of("ok", false, "error", String.valueOf(e.getMessage()))));
                     } catch (Exception ignored) {
                         exchange.endExchange();
                     }
@@ -562,591 +496,22 @@ public class WebNetServer {
             });
         });
 
-        // --- Auth API ---
-        PathHandler authHandler = Handlers.path();
+        AuthApi authApi = new AuthApi(authStore, objectMapper);
+        apiHandler.addPrefixPath("/auth", authApi.createHandler());
 
-        authHandler.addExactPath("/register", exchange -> {
-            exchange.dispatch(() -> {
-                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
-                    exchange.setStatusCode(405);
-                    try {
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", "method_not_allowed")));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                    return;
-                }
-                try {
-                    exchange.startBlocking();
-                    String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-                    if (body.isBlank()) {
-                        body = "{}";
-                    }
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> req = objectMapper.readValue(body, Map.class);
-                    String username = req.get("username") == null ? null : String.valueOf(req.get("username"));
-                    String password = req.get("password") == null ? null : String.valueOf(req.get("password"));
-
-                    AuthStore.Account a = authStore.register(username, password);
-                    exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                            "ok", true,
-                            "playerId", a.playerId)));
-                } catch (Exception e) {
-                    exchange.setStatusCode(400);
-                    try {
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", String.valueOf(e.getMessage()))));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                }
-            });
-        });
-
-        authHandler.addExactPath("/login", exchange -> {
-            exchange.dispatch(() -> {
-                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
-                    exchange.setStatusCode(405);
-                    try {
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", "method_not_allowed")));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                    return;
-                }
-                try {
-                    exchange.startBlocking();
-                    String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-                    if (body.isBlank()) {
-                        body = "{}";
-                    }
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> req = objectMapper.readValue(body, Map.class);
-                    String username = req.get("username") == null ? null : String.valueOf(req.get("username"));
-                    String password = req.get("password") == null ? null : String.valueOf(req.get("password"));
-
-                    AuthStore.Session s = authStore.login(username, password);
-                    AuthStore.Account a = authStore.loadAccount(s.username);
-                    String role = a != null && a.role != null && !a.role.isBlank() ? a.role : "USER";
-                    exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                            "ok", true,
-                            "playerId", s.playerId,
-                            "username", s.username,
-                            "role", role,
-                            "token", s.token)));
-                } catch (Exception e) {
-                    exchange.setStatusCode(401);
-                    try {
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", String.valueOf(e.getMessage()))));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                }
-            });
-        });
-
-        authHandler.addExactPath("/me", exchange -> {
-            exchange.dispatch(() -> {
-                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                try {
-                    String auth = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
-                    AuthStore.Session s = authStore.getSessionFromAuthorizationHeader(auth);
-                    if (s == null) {
-                        exchange.setStatusCode(401);
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", "unauthorized")));
-                        return;
-                    }
-                    AuthStore.Account a = authStore.loadAccount(s.username);
-                    String role = a != null && a.role != null && !a.role.isBlank() ? a.role : "USER";
-                    exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                            "ok", true,
-                            "playerId", s.playerId,
-                            "username", s.username,
-                            "gameId", a == null ? "" : (a.gameId == null ? "" : a.gameId),
-                            "role", role)));
-                } catch (Exception e) {
-                    exchange.setStatusCode(500);
-                    try {
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", String.valueOf(e.getMessage()))));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                }
-            });
-        });
-
-        authHandler.addExactPath("/logout", exchange -> {
-            exchange.dispatch(() -> {
-                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
-                    exchange.setStatusCode(405);
-                    try {
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", "method_not_allowed")));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                    return;
-                }
-                try {
-                    String auth = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
-                    AuthStore.Session s = authStore.getSessionFromAuthorizationHeader(auth);
-                    if (s != null) {
-                        authStore.logout(s.token);
-                    }
-                    exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of("ok", true)));
-                } catch (Exception e) {
-                    exchange.setStatusCode(500);
-                    try {
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", String.valueOf(e.getMessage()))));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                }
-            });
-        });
-
-        authHandler.addExactPath("/setRole", exchange -> {
-            exchange.dispatch(() -> {
-                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
-                    exchange.setStatusCode(405);
-                    try {
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", "method_not_allowed")));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                    return;
-                }
-
-                try {
-                    String auth = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
-                    AuthStore.Session s = authStore.getSessionFromAuthorizationHeader(auth);
-                    if (s == null) {
-                        exchange.setStatusCode(401);
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", "unauthorized")));
-                        return;
-                    }
-
-                    AuthStore.Account adminAcc = authStore.loadAccount(s.username);
-                    String adminRole = adminAcc != null && adminAcc.role != null && !adminAcc.role.isBlank()
-                            ? adminAcc.role
-                            : "USER";
-                    if (!"ADMIN".equalsIgnoreCase(adminRole)) {
-                        exchange.setStatusCode(403);
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", "forbidden")));
-                        return;
-                    }
-
-                    exchange.startBlocking();
-                    String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-                    if (body.isBlank()) {
-                        body = "{}";
-                    }
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> req = objectMapper.readValue(body, Map.class);
-                    String playerId = req.get("playerId") == null ? null : String.valueOf(req.get("playerId")).trim();
-                    String role = req.get("role") == null ? null : String.valueOf(req.get("role")).trim();
-
-                    if (playerId == null || playerId.isBlank()) {
-                        exchange.setStatusCode(400);
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", "invalid_playerId")));
-                        return;
-                    }
-                    if (role == null || role.isBlank()) {
-                        exchange.setStatusCode(400);
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", "invalid_role")));
-                        return;
-                    }
-
-                    authStore.setRole(playerId, role);
-                    exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                            "ok", true,
-                            "playerId", playerId,
-                            "role", role)));
-                } catch (IllegalArgumentException e) {
-                    exchange.setStatusCode(400);
-                    try {
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", String.valueOf(e.getMessage()))));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                } catch (Exception e) {
-                    exchange.setStatusCode(500);
-                    try {
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", String.valueOf(e.getMessage()))));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                }
-            });
-        });
-
-        authHandler.addExactPath("/gameId", exchange -> {
-            exchange.dispatch(() -> {
-                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
-                    exchange.setStatusCode(405);
-                    try {
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", "method_not_allowed")));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                    return;
-                }
-                try {
-                    exchange.startBlocking();
-                    String auth = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
-                    AuthStore.Session s = authStore.getSessionFromAuthorizationHeader(auth);
-                    if (s == null) {
-                        exchange.setStatusCode(401);
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", "unauthorized")));
-                        return;
-                    }
-
-                    String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-                    if (body.isBlank()) {
-                        body = "{}";
-                    }
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> req = objectMapper.readValue(body, Map.class);
-                    String gameId = req.get("gameId") == null ? "" : String.valueOf(req.get("gameId"));
-
-                    authStore.setGameId(s.playerId, gameId);
-                    exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                            "ok", true,
-                            "playerId", s.playerId,
-                            "gameId", gameId.trim())));
-                } catch (IllegalArgumentException e) {
-                    exchange.setStatusCode(400);
-                    try {
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", String.valueOf(e.getMessage()))));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                } catch (Exception e) {
-                    exchange.setStatusCode(500);
-                    try {
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", String.valueOf(e.getMessage()))));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                }
-            });
-        });
-
-        apiHandler.addPrefixPath("/auth", authHandler);
-
-        // --- Mods API ---
         ModOrderRepository modOrderRepository = new ModOrderRepository();
         ModManager modManager = new ModManager(modOrderRepository);
+        ModsApi modsApi = new ModsApi(objectMapper, modOrderRepository, modManager);
+        apiHandler.addPrefixPath("/mods", modsApi.createHandler());
 
-        apiHandler.addExactPath("/mods", exchange -> {
-            exchange.dispatch(() -> {
-                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                try {
-                    ModOrder conf = modOrderRepository.load();
-                    List<String> discovered = modManager.listAllModIdsDiscovered();
-                    List<String> order = conf != null && conf.order != null ? conf.order : List.of();
-                    Set<String> disabledSet = conf != null && conf.disabled != null ? Set.of()
-                            : new java.util.HashSet<>(conf.disabled);
+        staraxis.webnet.core.AdminApi adminApi = new staraxis.webnet.core.AdminApi(
+                config, authStore, objectMapper,
+                connMgr.getPlayerCountRef(),
+                connMgr.getAiCountRef(),
+                connMgr.getLastDisconnectAtMsRef(),
+                this::shutdownAndRestart);
+        apiHandler.addPrefixPath("/", adminApi.createHandler());
 
-                    LinkedHashSet<String> merged = new LinkedHashSet<>();
-                    for (String id : order) {
-                        if (id != null && !id.isBlank()) {
-                            merged.add(id.trim());
-                        }
-                    }
-                    for (String id : discovered) {
-                        if (id != null && !id.isBlank()) {
-                            merged.add(id.trim());
-                        }
-                    }
-                    ArrayList<String> mergedList = new ArrayList<>(merged);
-
-                    ArrayList<Map<String, Object>> mods = new ArrayList<>();
-                    for (int i = 0; i < mergedList.size(); i++) {
-                        String id = mergedList.get(i);
-                        boolean enabled = !disabledSet.contains(id);
-
-                        ModMetadata meta = new ModMetadata();
-                        File metaFile = new File("gamedata/mods/" + id + "/mod.json");
-                        if (metaFile.exists() && metaFile.isFile()) {
-                            try {
-                                meta = objectMapper.readValue(metaFile, ModMetadata.class);
-                            } catch (Exception ignored) {
-                            }
-                        }
-
-                        Map<String, Object> modData = new TreeMap<>();
-                        modData.put("id", id);
-                        modData.put("enabled", enabled);
-                        modData.put("orderIndex", i);
-                        modData.put("name", meta.name);
-                        modData.put("description", meta.description);
-                        modData.put("version", meta.version);
-                        modData.put("compatibleGameVersion", meta.compatibleGameVersion);
-                        modData.put("author", meta.author);
-                        mods.add(modData);
-                    }
-
-                    exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                            "ok", true,
-                            "mods", mods,
-                            "order", mergedList,
-                            "disabled", new ArrayList<>(disabledSet))));
-                } catch (Exception e) {
-                    exchange.setStatusCode(500);
-                    try {
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", String.valueOf(e.getMessage()))));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                }
-            });
-        });
-
-        apiHandler.addExactPath("/mods/order", exchange -> {
-            exchange.dispatch(() -> {
-                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
-                    exchange.setStatusCode(405);
-                    try {
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", "method_not_allowed")));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                    return;
-                }
-                try {
-                    exchange.startBlocking();
-                    String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-                    if (body.isBlank()) {
-                        body = "{}";
-                    }
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> req = objectMapper.readValue(body, Map.class);
-
-                    Object orderObj = req.get("order");
-                    Object disabledObj = req.get("disabled");
-
-                    ArrayList<String> newOrder = new ArrayList<>();
-                    if (orderObj instanceof List) {
-                        for (Object o : (List<?>) orderObj) {
-                            if (o == null) {
-                                continue;
-                            }
-                            String s = String.valueOf(o).trim();
-                            if (!s.isBlank()) {
-                                newOrder.add(s);
-                            }
-                        }
-                    }
-
-                    Set<String> newDisabled = new LinkedHashSet<>();
-                    if (disabledObj instanceof List) {
-                        for (Object o : (List<?>) disabledObj) {
-                            if (o == null) {
-                                continue;
-                            }
-                            String s = String.valueOf(o).trim();
-                            if (!s.isBlank()) {
-                                newDisabled.add(s);
-                            }
-                        }
-                    }
-
-                    File f = modOrderRepository.file();
-                    Map<String, Object> root = new TreeMap<>();
-                    if (f.exists() && f.isFile()) {
-                        try {
-                            @SuppressWarnings("unchecked")
-                            Map<String, Object> old = objectMapper.readValue(f, Map.class);
-                            if (old != null) {
-                                root.putAll(old);
-                            }
-                        } catch (Exception ignored) {
-                        }
-                    }
-
-                    root.put("schemaVersion", 1);
-                    root.put("order", newOrder);
-                    root.put("disabled", new ArrayList<>(newDisabled));
-
-                    if (f.getParentFile() != null) {
-                        f.getParentFile().mkdirs();
-                    }
-                    objectMapper.writerWithDefaultPrettyPrinter().writeValue(f, root);
-
-                    exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                            "ok", true)));
-                } catch (Exception e) {
-                    exchange.setStatusCode(500);
-                    try {
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
-                                "ok", false,
-                                "error", String.valueOf(e.getMessage()))));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                }
-            });
-        });
-
-        apiHandler.addExactPath("/status", exchange -> {
-            exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-            int pc = playerConnectionCount.get();
-            int aic = aiConnectionCount.get();
-            long last = lastDisconnectAtMs.get();
-            long idleMs = last > 0 ? (System.currentTimeMillis() - last) : 0;
-
-            File webUi = new File("webui");
-            boolean webUiExists = webUi.exists() && webUi.isDirectory();
-            long webUiLastModified = webUiExists ? webUi.lastModified() : 0L;
-            boolean webUiIndexExists = webUiExists && new File(webUi, "index.html").isFile();
-
-            long webUiFileCount = 0;
-            long webUiTotalBytes = 0;
-            if (webUiExists) {
-                try (Stream<Path> s = Files.walk(webUi.toPath())) {
-                    for (Path p : (Iterable<Path>) s::iterator) {
-                        if (Files.isRegularFile(p)) {
-                            webUiFileCount++;
-                            try {
-                                webUiTotalBytes += Files.size(p);
-                            } catch (IOException ignored) {
-                            }
-                        }
-                    }
-                } catch (IOException ignored) {
-                }
-            }
-
-            String json = "{" +
-                    "\"host\":\"" + config.host + "\"," +
-                    "\"port\":" + config.port + "," +
-                    "\"playerConnections\":" + pc + "," +
-                    "\"aiConnections\":" + aic + "," +
-                    "\"connections\":" + pc + "," + // 保持兼容性喵
-                    "\"autoExitSeconds\":" + config.autoExitSeconds + "," +
-                    "\"idleSeconds\":" + (idleMs / 1000) + "," +
-                    "\"webUiExists\":" + webUiExists + "," +
-                    "\"webUiIndexExists\":" + webUiIndexExists + "," +
-                    "\"webUiLastModifiedMs\":" + webUiLastModified + "," +
-                    "\"webUiFileCount\":" + webUiFileCount + "," +
-                    "\"webUiTotalBytes\":" + webUiTotalBytes +
-                    "}";
-            exchange.getResponseSender().send(json);
-        });
-
-        apiHandler.addExactPath("/ping", exchange -> {
-            exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-            exchange.getResponseSender().send("{\"serverTimeMs\":" + System.currentTimeMillis() + "}");
-        });
-
-        apiHandler.addExactPath("/quit", exchange -> {
-            exchange.dispatch(() -> {
-                System.out.println(
-                        "HTTP quit requested: " + exchange.getRequestMethod() + " " + exchange.getRequestPath());
-                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-
-                String auth = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
-                AuthStore.Session s = authStore.getSessionFromAuthorizationHeader(auth);
-                if (s == null) {
-                    exchange.setStatusCode(401);
-                    exchange.getResponseSender().send("{\"ok\":false,\"error\":\"unauthorized\"}");
-                    return;
-                }
-
-                AuthStore.Account a = authStore.loadAccount(s.username);
-                String role = a != null && a.role != null && !a.role.isBlank() ? a.role : "USER";
-                if (!"ADMIN".equalsIgnoreCase(role)) {
-                    exchange.setStatusCode(403);
-                    exchange.getResponseSender().send("{\"ok\":false,\"error\":\"forbidden\"}");
-                    return;
-                }
-
-                exchange.getResponseSender().send("{\"ok\":true}");
-                exchange.endExchange();
-                Thread t = new Thread(() -> shutdownAndExit(0), "webnet-quit");
-                t.setDaemon(false);
-                t.start();
-            });
-        });
-
-        apiHandler.addExactPath("/restart", exchange -> {
-            exchange.dispatch(() -> {
-                System.out.println(
-                        "HTTP restart requested: " + exchange.getRequestMethod() + " " + exchange.getRequestPath());
-                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-
-                String auth = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
-                AuthStore.Session s = authStore.getSessionFromAuthorizationHeader(auth);
-                if (s == null) {
-                    exchange.setStatusCode(401);
-                    exchange.getResponseSender().send("{\"ok\":false,\"error\":\"unauthorized\"}");
-                    return;
-                }
-
-                AuthStore.Account a = authStore.loadAccount(s.username);
-                String role = a != null && a.role != null && !a.role.isBlank() ? a.role : "USER";
-                if (!"ADMIN".equalsIgnoreCase(role)) {
-                    exchange.setStatusCode(403);
-                    exchange.getResponseSender().send("{\"ok\":false,\"error\":\"forbidden\"}");
-                    return;
-                }
-
-                exchange.getResponseSender().send("{\"ok\":true}");
-                exchange.endExchange();
-                Thread t = new Thread(() -> shutdownAndRestart(), "webnet-restart");
-                t.setDaemon(false);
-                t.start();
-            });
-        });
-
-        // --- i18n API ---
         PathHandler i18nHandler = Handlers.path();
         i18nHandler.addExactPath("/languages", exchange -> {
             List<String> languages = I18nApi.listAvailableLanguages();
@@ -1165,7 +530,6 @@ public class WebNetServer {
         });
         apiHandler.addPrefixPath("/i18n", i18nHandler);
 
-        // --- Ship API ---
         ShipApi shipApi = new ShipApi(objectMapper);
         apiHandler.addPrefixPath("/ship", shipApi.createHandler());
 
@@ -1182,72 +546,34 @@ public class WebNetServer {
         };
 
         routes.addPrefixPath("/api", apiWrapped);
-
-        // --- Static Content ---
-        // 游戏主界面（webui 目录）：挂在 /webui
-        routes.addPrefixPath("/webui", createGameUiHandler());
+        staraxis.webnet.core.WebUiRoutes.register(routes);
         routes.addPrefixPath("/assets", new ResourceHandler(new FileResourceManager(new File("assets"), 1024 * 1024)));
-
-        // 根路径统一跳转到 webui（不再提供 server-ui 页面）
-        routes.addExactPath("/", exchange -> {
-            exchange.setStatusCode(302);
-            exchange.getResponseHeaders().put(Headers.LOCATION, "/webui/");
-            exchange.endExchange();
-        });
-        routes.addExactPath("/index.html", exchange -> {
-            exchange.setStatusCode(302);
-            exchange.getResponseHeaders().put(Headers.LOCATION, "/webui/");
-            exchange.endExchange();
-        });
 
         undertow = Undertow.builder().addHttpListener(config.port, config.host).setHandler(routes).build();
         undertow.start();
 
-        System.out.println("WebNet HTTP listening on http://" + config.host + ":" + config.port);
-        System.out.println("WebNet WS listening on ws://" + config.host + ":" + config.port + "/ws");
-        System.out.println("WebNet status: http://" + config.host + ":" + config.port + "/api/status");
-
+        System.out.println("WebNet started on http://" + config.host + ":" + config.port);
         startAutoExitWatcher();
     }
 
     private void startAutoExitWatcher() {
         int seconds = config.autoExitSeconds;
-        if (seconds <= 0) {
+        if (seconds <= 0)
             return;
-        }
         scheduler.scheduleAtFixedRate(() -> {
             try {
-                if (playerConnectionCount.get() > 0) {
+                if (connMgr.getPlayerCount() > 0)
                     return;
-                }
-                long last = lastDisconnectAtMs.get();
-                if (last <= 0) {
+                long last = connMgr.getLastDisconnectAtMs();
+                if (last <= 0)
                     return;
-                }
-                long idleMs = System.currentTimeMillis() - last;
-                if (idleMs >= seconds * 1000L) {
-                    System.out.println("WebNet auto-exit: no connections for " + seconds + "s, shutting down.");
+                if (System.currentTimeMillis() - last >= seconds * 1000L) {
+                    System.out.println("WebNet auto-exit: idle for " + seconds + "s, shutting down.");
                     shutdownAndExit(0);
                 }
             } catch (Exception ignored) {
             }
         }, 1, 1, TimeUnit.SECONDS);
-    }
-
-    private HttpHandler createGameUiHandler() {
-        File webUi = new File("webui");
-        if (!webUi.exists() || !webUi.isDirectory()) {
-            return exchange -> {
-                exchange.setStatusCode(500);
-                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain; charset=utf-8");
-                exchange.getResponseSender().send(
-                        "Web 前端未构建：未找到目录 ./webui\n" +
-                                "请先将前端构建产物放入 webui/（例如 web 构建后复制 dist 到 webui），或检查工作目录/路径配置。\n");
-            };
-        }
-        ResourceHandler rh = new ResourceHandler(new FileResourceManager(webUi, 1024 * 1024));
-        rh.setWelcomeFiles("index.html");
-        return rh;
     }
 
     public void stop() {
@@ -1259,25 +585,16 @@ public class WebNetServer {
 
     private void shutdownAndRestart() {
         System.out.println("WebNet restart requested...");
-
-        // 先停止HTTP服务器释放端口
-        System.out.println("Stopping HTTP server to release port " + config.port + "...");
         stop();
-
-        // 短暂延迟确保端口释放
         try {
             Thread.sleep(500);
         } catch (InterruptedException ignored) {
         }
 
-        // 构建重启命令
         String javaHome = System.getProperty("java.home");
         String javaExecutable = javaHome + File.separator + "bin" + File.separator + "java";
-
-        // 获取类路径
         String classpath = System.getProperty("java.class.path");
 
-        // 构建参数
         List<String> command = new ArrayList<>();
         command.add(javaExecutable);
         command.add("-cp");
@@ -1286,46 +603,31 @@ public class WebNetServer {
         command.add("--host=" + config.host);
         command.add("--port=" + config.port);
         command.add("--autoExitSeconds=" + config.autoExitSeconds);
-        if (config.serverUiEnabled) {
+        if (config.serverUiEnabled)
             command.add("--serverUi=true");
-        }
-        if (config.gameUiUrl != null && !config.gameUiUrl.isBlank()) {
+        if (config.gameUiUrl != null && !config.gameUiUrl.isBlank())
             command.add("--gameUiUrl=" + config.gameUiUrl);
-        }
 
         try {
-            System.out.println("Starting new WebNet process...");
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.directory(new File(System.getProperty("user.dir")));
-            pb.inheritIO(); // 继承当前进程的IO
-            Process process = pb.start();
-            System.out.println("New WebNet process started (PID: " + process.pid() + ")");
-
-            // 短暂延迟确保新进程已启动
-            Thread.sleep(1000);
+            pb.inheritIO();
+            pb.start();
         } catch (Exception e) {
-            System.err.println("Failed to restart WebNet: " + e.getMessage());
-            e.printStackTrace();
-            // 即使重启失败也继续退出
+            System.err.println("Failed to restart: " + e.getMessage());
         }
-
-        // 关闭当前进程
         shutdownAndExit(0);
     }
 
     private void shutdownAndExit(int code) {
-        System.out.println("WebNet shutting down... closing ws channels=" + channels.size());
-        for (WebSocketChannel ch : channels) {
+        System.out.println("WebNet shutting down...");
+        for (WebSocketChannel ch : connMgr.getAllChannels()) {
             try {
                 WebSockets.sendClose(1000, "bye", ch, null);
-            } catch (Exception ignored) {
-            }
-            try {
                 ch.close();
             } catch (Exception ignored) {
             }
         }
-        channels.clear();
         try {
             stop();
         } catch (Exception ignored) {
@@ -1338,7 +640,6 @@ public class WebNetServer {
             scheduler.shutdownNow();
         } catch (Exception ignored) {
         }
-        System.out.println("WebNet exit(" + code + ")");
         System.exit(code);
     }
 }
