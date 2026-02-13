@@ -19,7 +19,7 @@
  * - 当前为 UI 占位，不包含实际功能逻辑。
  * - 开发模式仅用于内部调试，未来可配置化或隐藏。
  */
-import { ref } from 'vue'
+
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 

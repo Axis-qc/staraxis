@@ -3,6 +3,7 @@ import { onMounted } from 'vue'
 import { RouterView } from 'vue-router'
 import ThemePicker from './components/ThemePicker.vue'
 import DevTooltip from './components/DevTooltip.vue'
+import AiAssistantFloatingBall from './components/AiAssistantFloatingBall.vue'
 import { useDevTooltip } from './composables/useDevTooltip'
 import { wsClient } from './services/ws'
 
@@ -23,4 +24,5 @@ onMounted(() => {
     :x="tooltip.state.x"
     :y="tooltip.state.y"
   />
+  <AiAssistantFloatingBall />
 </template>

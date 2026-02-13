@@ -62,7 +62,7 @@ const isReady = ref(false)
 
 const activeTab = ref('status')
 
-function onClickTab(tab) {
+function onClickTab(tab: string) {
   const canQuit = auth.isLoggedIn && auth.role === 'ADMIN'
   if (tab === 'quit' && !canQuit) return
   activeTab.value = tab
@@ -71,12 +71,26 @@ function onClickTab(tab) {
 const showPassword = ref(false)
 
 const quitting = ref(false)
-const quitHint = ref(null)
-const quitError = ref(null)
+const quitHint = ref<string | null>(null)
+const quitError = ref<string | null>(null)
+async function quitServer() {
+  if (quitting.value) return
+  quitting.value = true
+  quitError.value = null
+  quitHint.value = null
+  try {
+    await requestQuit()
+    quitHint.value = t('mainMenu.log.quitRequested')
+  } catch (e) {
+    quitError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    quitting.value = false
+  }
+}
 
 const restarting = ref(false)
-const restartHint = ref(null)
-const restartError = ref(null)
+const restartHint = ref<string | null>(null)
+const restartError = ref<string | null>(null)
 async function restartServer() {
   if (restarting.value) return
   restarting.value = true
@@ -159,10 +173,14 @@ onMounted(() => {
           <button class="nav-btn" :class="{ active: activeTab === 'status' }" @click="onClickTab('status')">
             <span>{{ t('home.tab.status') }}</span>
           </button>
+          <button class="nav-btn" @click="router.push('/settings')">
+            <span>{{ t('home.tab.settings') }}</span>
+          </button>
           <button class="nav-btn" :class="{ active: activeTab === 'mods' }" @click="onClickTab('mods')">
             <span>{{ t('home.tab.mods') }}</span>
           </button>
-          <button v-if="auth.isLoggedIn && auth.role === 'ADMIN'" class="nav-btn" :class="{ active: activeTab === 'quit' }" @click="onClickTab('quit')">
+          <button v-if="auth.isLoggedIn && auth.role === 'ADMIN'" class="nav-btn"
+            :class="{ active: activeTab === 'quit' }" @click="onClickTab('quit')">
             <span>{{ t('home.tab.quit') }}</span>
           </button>
         </nav>
@@ -175,22 +193,19 @@ onMounted(() => {
           <div v-if="!auth.isLoggedIn" class="login-view">
             <div class="form-group">
               <label for="username">{{ t('home.login.username') }}</label>
-              <input id="username" v-model="loginForm.username" class="input" :placeholder="t('home.login.usernamePlaceholder')" />
+              <input id="username" v-model="loginForm.username" class="input"
+                :placeholder="t('home.login.usernamePlaceholder')" />
             </div>
             <div class="form-group">
               <label for="password">{{ t('home.login.password') }}</label>
-              <input
-                id="password"
-                v-model="loginForm.password"
-                :type="showPassword ? 'text' : 'password'"
-                class="input"
-                :placeholder="t('home.login.passwordPlaceholder')"
-                @keyup.enter="doLogin"
-              />
+              <input id="password" v-model="loginForm.password" :type="showPassword ? 'text' : 'password'" class="input"
+                :placeholder="t('home.login.passwordPlaceholder')" @keyup.enter="doLogin" />
             </div>
             <div class="actions">
-              <button class="sa-btn" @click="doLogin" :disabled="loginForm.loading">{{ t('home.login.actionLogin') }}</button>
-              <button class="sa-btn" @click="doRegister" :disabled="loginForm.loading">{{ t('home.login.actionRegister') }}</button>
+              <button class="sa-btn" @click="doLogin" :disabled="loginForm.loading">{{ t('home.login.actionLogin')
+                }}</button>
+              <button class="sa-btn" @click="doRegister" :disabled="loginForm.loading">{{ t('home.login.actionRegister')
+                }}</button>
             </div>
             <div v-if="loginForm.error" class="sa-tag error form-error">{{ loginForm.error }}</div>
           </div>
@@ -201,12 +216,15 @@ onMounted(() => {
                 <h2 class="tab-title">{{ t('home.tab.status') }}</h2>
                 <div class="form-group">
                   <label for="gameId">{{ t('home.login.gameId') }}</label>
-                  <input id="gameId" class="input" v-model="gameIdInput" :placeholder="t('home.login.gameIdPlaceholder')" />
+                  <input id="gameId" class="input" v-model="gameIdInput"
+                    :placeholder="t('home.login.gameIdPlaceholder')" />
                 </div>
                 <div class="actions">
-                  <button class="sa-btn" @click="saveGameId" :disabled="gameIdSaveState === 'saving'">{{ t('home.login.saveId') }}</button>
+                  <button class="sa-btn" @click="saveGameId" :disabled="gameIdSaveState === 'saving'">{{
+                    t('home.login.saveId') }}</button>
                   <button class="sa-btn primary" @click="enterGame">{{ t('home.enterGame') }}</button>
-                  <button class="sa-btn danger" @click="doLogout" :disabled="loginForm.loading">{{ t('home.login.logout') }}</button>
+                  <button class="sa-btn danger" @click="doLogout" :disabled="loginForm.loading">{{
+                    t('home.login.logout') }}</button>
                 </div>
               </section>
 
@@ -215,7 +233,8 @@ onMounted(() => {
                   <h2 class="tab-title">{{ t('home.tab.mods') }}</h2>
                   <div class="header-actions">
                     <button class="sa-btn" @click="loadMods" :disabled="modsLoading">{{ t('mods.refresh') }}</button>
-                    <button class="sa-btn primary" @click="saveModsToServer" :disabled="modsSaveState === 'saving' || modsLoading">{{ t('mods.save') }}</button>
+                    <button class="sa-btn primary" @click="saveModsToServer"
+                      :disabled="modsSaveState === 'saving' || modsLoading">{{ t('mods.save') }}</button>
                   </div>
                 </div>
 
@@ -239,11 +258,8 @@ onMounted(() => {
                     <div v-for="(m, idx) in mods" :key="m.id" class="row-group">
                       <div class="tr" role="row">
                         <div class="td enabled">
-                          <input
-                            type="checkbox"
-                            :checked="m.enabled"
-                            @change="toggleModEnabled(m.id, ($event.target as HTMLInputElement).checked)"
-                          />
+                          <input type="checkbox" :checked="m.enabled"
+                            @change="toggleModEnabled(m.id, ($event.target as HTMLInputElement).checked)" />
                         </div>
                         <div class="td name">
                           <div class="mod-name">{{ m.name }}</div>
@@ -253,31 +269,39 @@ onMounted(() => {
                           <button class="sa-btn" @click="expandedModId = expandedModId === m.id ? null : m.id">
                             {{ t('mods.action.details') }}
                           </button>
-                        <button class="sa-btn icon-btn" :disabled="idx === 0" @click="moveMod(idx, -1)">↑</button>
-                        <button class="sa-btn icon-btn" :disabled="idx === mods.length - 1" @click="moveMod(idx, 1)">↓</button>
+                          <button class="sa-btn icon-btn" :disabled="idx === 0" @click="moveMod(idx, -1)">↑</button>
+                          <button class="sa-btn icon-btn" :disabled="idx === mods.length - 1"
+                            @click="moveMod(idx, 1)">↓</button>
+                        </div>
                       </div>
-                    </div>
 
                       <div v-if="expandedModId === m.id" class="tr child" role="row">
                         <div class="td child-cell" role="cell">
-                      <div class="details-kv">
-                        <div class="k">{{ t('mods.field.id') }}</div><div class="v mono">{{ m.id }}</div>
-                        <div class="k">{{ t('mods.field.author') }}</div><div class="v">{{ m.author }}</div>
-                        <div class="k">{{ t('mods.field.version') }}</div><div class="v">{{ m.version }}</div>
-                        <div class="k">{{ t('mods.field.gameVersion') }}</div><div class="v">{{ m.compatibleGameVersion }}</div>
-                        <div class="k">{{ t('mods.field.description') }}</div><div class="v description">{{ m.description }}</div>
+                          <div class="details-kv">
+                            <div class="k">{{ t('mods.field.id') }}</div>
+                            <div class="v mono">{{ m.id }}</div>
+                            <div class="k">{{ t('mods.field.author') }}</div>
+                            <div class="v">{{ m.author }}</div>
+                            <div class="k">{{ t('mods.field.version') }}</div>
+                            <div class="v">{{ m.version }}</div>
+                            <div class="k">{{ t('mods.field.gameVersion') }}</div>
+                            <div class="v">{{ m.compatibleGameVersion }}</div>
+                            <div class="k">{{ t('mods.field.description') }}</div>
+                            <div class="v description">{{ m.description }}</div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
                     </div>
                   </div>
                 </div>
               </section>
 
-              <section v-else-if="activeTab === 'quit' && auth.isLoggedIn && auth.role === 'ADMIN'" key="quit" class="tab-section">
+              <section v-else-if="activeTab === 'quit' && auth.isLoggedIn && auth.role === 'ADMIN'" key="quit"
+                class="tab-section">
                 <div class="server-status-header">
                   <h2 class="tab-title">{{ t('home.tab.quit') }}</h2>
-                  <button class="sa-btn" @click="refreshServerStatus" :disabled="statusLoading">{{ t('home.server.refresh') }}</button>
+                  <button class="sa-btn" @click="refreshStatus">{{
+                    t('home.server.refresh') }}</button>
                 </div>
 
                 <div v-if="statusError" class="sa-tag error">{{ statusError }}</div>
@@ -313,8 +337,10 @@ onMounted(() => {
                 <div v-if="quitError" class="sa-tag error">{{ quitError }}</div>
 
                 <div class="server-actions">
-                  <button class="sa-btn danger" @click="quitServer" :disabled="quitting">{{ t('home.quit.action') }}</button>
-                  <button class="sa-btn" @click="restartServer" :disabled="restarting">{{ t('home.restart.action') }}</button>
+                  <button class="sa-btn danger" @click="quitServer" :disabled="quitting">{{ t('home.quit.action')
+                    }}</button>
+                  <button class="sa-btn" @click="restartServer" :disabled="restarting">{{ t('home.restart.action')
+                    }}</button>
                 </div>
               </section>
             </transition>
@@ -461,12 +487,12 @@ onMounted(() => {
 }
 
 .nav-btn.active::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 4px;
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
   background: var(--glow-color);
   box-shadow: 0 0 18px var(--glow-color);
 }
@@ -513,12 +539,12 @@ onMounted(() => {
 }
 
 .tab-title::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    bottom: 0;
-    width: 100%;
-    height: 2px;
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 2px;
   background: linear-gradient(to right, var(--glow-color), rgba(255, 255, 255, 0.10), transparent);
   opacity: 0.9;
 }
@@ -619,7 +645,7 @@ onMounted(() => {
   color: var(--text-color);
 }
 
-.lang-label > span {
+.lang-label>span {
   opacity: 0.9;
   font-size: 12px;
   letter-spacing: 0.6px;

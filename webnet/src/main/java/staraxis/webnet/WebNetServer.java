@@ -57,6 +57,9 @@ import staraxis.webnet.game.GameSessions;
 import staraxis.webnet.websocket.SnapshotMessageFactory;
 import staraxis.webnet.command.WebCommandRegistry;
 import staraxis.webnet.command.SetSimTimeSpeedCommand;
+import staraxis.webnet.ai.AiConfigApi;
+import staraxis.webnet.ai.AiChatApi;
+import staraxis.webnet.ai.AiUsageApi;
 import staraxis.webnet.ai.WebAiWebSocketHandler;
 import staraxis.webnet.ai.WebAiAutoStarter;
 import io.undertow.Handlers;
@@ -532,6 +535,15 @@ public class WebNetServer {
 
         ShipApi shipApi = new ShipApi(objectMapper);
         apiHandler.addPrefixPath("/ship", shipApi.createHandler());
+
+        AiConfigApi aiConfigApi = new AiConfigApi(objectMapper);
+        apiHandler.addPrefixPath("/ai/config", aiConfigApi.createHandler());
+
+        AiChatApi aiChatApi = new AiChatApi(objectMapper, authStore);
+        apiHandler.addPrefixPath("/ai/chat", aiChatApi.createHandler());
+
+        AiUsageApi aiUsageApi = new AiUsageApi(objectMapper);
+        apiHandler.addPrefixPath("/ai/usage", aiUsageApi.createHandler());
 
         HttpHandler apiWrapped = exchange -> {
             try {

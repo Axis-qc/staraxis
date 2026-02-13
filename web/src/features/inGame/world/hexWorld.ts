@@ -1,4 +1,4 @@
-import { SECTOR_SIZE_GU } from '../rendering/hexSectorGeometry'
+import { SECTOR_SIZE_GU } from '../../../rendering/hexSectorGeometry'
 
 export type SectorCoord = { q: number; r: number }
 

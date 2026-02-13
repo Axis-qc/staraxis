@@ -1,30 +1,37 @@
-# ai_system/config/config.yaml
-# StarAxis AI 助手核心配置
-
+---
+ai:
+  active_provider: "deepseek"
+  temperature: 0.7
+  max_tokens: 2048
+  providers:
+    openai:
+      base_url: "https://api.openai.com/v1"
+      api_key: "sk-..."
+      model: "gpt-3.5-turbo"
+    anthropic:
+      base_url: "https://api.anthropic.com/v1"
+      api_key: "sk-ant-..."
+      model: "claude-3-opus-20240229"
+    deepseek:
+      base_url: "https://api.deepseek.com/v1"
+      api_key: "sk-7a36cee87a2d47bd8c2d8f0d1b65c26c"
+      model: "deepseek-chat"
+    local:
+      base_url: "http://127.0.0.1:11434/v1"
+      api_key: "ollama"
+      model: "llama3"
 server:
   host: "127.0.0.1"
   port: 17890
   use_ssl: false
-  auto_start: true                # 是否随游戏后端自动启动喵
-  show_console: false             # 是否弹出控制台窗口。true: 调试模式，不保证自动退出；false: 生产模式喵
-  auto_exit: true                 # 是否启用空闲自动退出（仅在 show_console=false 时保证有效）喵
-  idle_exit_seconds: 120          # 空闲自动退出时间（秒），默认两分钟喵
-
-auth:
-  username: "ai_assistant"
-  password: "your_password_here"  # 记得先用 admin 账号注册并 setRole 为 AI_ASSISTANT 喵
-
-ai:
-  provider: "openai"              # 目前接入 OpenAI 兼容接口喵
-  model: "deepseek-chat"          # 模型名称喵
-  api_key: "sk-your-key-here"     # 直接写在这里，Python 端只读此文件喵
-  base_url: "https://api.deepseek.com/v1" 
-  temperature: 0.7
-  max_tokens: 2048
-
+  auto_start: true
+  show_console: false
+  auto_exit: true
+  idle_exit_seconds: 120
 agent:
   name: "StarAxis Assistant"
-  system_prompt: |
-    你是一个专业的太空策略游戏助手，名叫 StarAxis Assistant。
-    你可以通过调用工具来获取游戏世界的状态。
-    请基于获取到的事实数据为玩家提供战术建议。”。
+  system_prompt: "你是一个专业的太空策略游戏助手，名叫 StarAxis Assistant。\n你可以通过调用工具来获取游戏世界的状态。\n请基\
+    于获取到的事实数据为玩家提供战术建议。\n"
+auth:
+  username: "ai_assistant"
+  password: "your_password_here"

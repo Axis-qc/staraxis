@@ -3,15 +3,17 @@ main.py
 
 作用（description）：
 - StarAxis AI 助手主入口喵。
-- 启动后读取 config/config.yaml，登录 webnet，连接 /ws/ai，并进入对话循环喵。
-- 支持工具调用：snapshot.getEntity喵。
-- 支持优雅退出：捕获 SIGINT/SIGTERM，并在退出前保存上下文到 ai_system/data/context.json喵。
+- 启动后读取 config/config.yaml，初始化 LLM provider 和 HTTP API 服务器喵。
+- 可选：登录 webnet，连接 /ws/ai（用于工具调用访问游戏数据）喵。
+- 支持工具调用：snapshot.getEntity, snapshot.getLatestSummary 喵。
+- 支持优雅退出：捕获 SIGINT/SIGTERM，并在退出前保存上下文喵。
 
 使用方式（usage）：
 - 通过 ai_system/run_agent.bat 启动喵。
 
 注意事项（important_notes）：
-- 本实现为框架骨架：当前提供一个简单 REPL，后续可替换为事件驱动（订阅游戏事件）喵。
+- HTTP API 服务器默认监听 127.0.0.1:17891，供前端 AI 助手浮动球调用喵。
+- WebSocket 连接用于工具调用（获取游戏数据），HTTP 用于对话接口喵。
 """
 
 import asyncio
@@ -26,6 +28,7 @@ from .protocol.ws_client import AiWsClient
 from .brain.openai_provider import OpenAiProvider
 from .tools.snapshot_tools import get_entity, register_all_snapshot_tools
 from .tools.registry import registry
+from .api.http_server import create_server
 
 
 def _setup_logging() -> None:
@@ -71,11 +74,31 @@ async def run_agent() -> None:
     tool_names = [t["function"]["name"] for t in tools]
     logging.getLogger("ai_system").info(f"AI Assistant initialized with {len(tool_names)} tools: {', '.join(tool_names)}")
 
-    ws = AiWsClient(cfg)
-    await ws.connect()
-
+    # 初始化 LLM provider
     llm = OpenAiProvider(cfg)
+    
+    # 启动 HTTP API 服务器（供前端调用）
+    http_server = create_server(cfg, host="127.0.0.1", port=17891)
+    http_server.set_llm(llm)
+    http_runner = await http_server.start()
 
+    # 可选：连接到 WebSocket（用于工具调用获取游戏数据）
+    ws: AiWsClient = None
+    ctx: ContextStore = None
+    
+    # 判断是否启用 WebSocket 连接（用于 CLI 模式或需要工具调用的场景）
+    enable_ws = cfg.server.auto_start  # 或者其他配置项
+    
+    if enable_ws:
+        try:
+            ws = AiWsClient(cfg)
+            await ws.connect()
+            http_server.set_ws_client(ws)  # HTTP 服务器可以使用 WS 客户端进行工具调用
+            logging.getLogger("ai_system").info("WebSocket connected for tool calls")
+        except Exception as e:
+            logging.getLogger("ai_system").warning(f"Failed to connect WebSocket: {e}")
+            logging.getLogger("ai_system").warning("Running in HTTP-only mode (no game data access)")
+    
     ctx = ContextStore(Path("data/context.json"))
 
     stop_event = asyncio.Event()
@@ -93,8 +116,11 @@ async def run_agent() -> None:
     except Exception:
         pass
 
-    print("StarAxis AI Assistant started. Type 'exit' to quit. Commands: entity <id>, ask <text>")
+    print("StarAxis AI Assistant started.")
+    print(f"HTTP API: http://127.0.0.1:17891/api/chat")
+    print("Commands: entity <id> | ask <text> | exit")
 
+    # CLI 交互循环（可选）
     while not stop_event.is_set():
         try:
             line = await asyncio.get_running_loop().run_in_executor(None, input, "> ")
@@ -109,6 +135,9 @@ async def run_agent() -> None:
             break
 
         if line.startswith("entity "):
+            if not ws:
+                print("error: WebSocket not connected, cannot access game data")
+                continue
             try:
                 entity_id = int(line.split(" ", 1)[1].strip())
                 resp = await get_entity({"entityId": entity_id}, ws_client=ws)
@@ -139,13 +168,20 @@ async def run_agent() -> None:
 
         print("unknown command. use: entity <id> | ask <text> | exit")
 
+    # 清理和保存
     try:
-        ctx.save()
-        logging.getLogger("ai_system").info("context saved to data/context.json")
+        if ctx:
+            ctx.save()
+            logging.getLogger("ai_system").info("context saved to data/context.json")
     except Exception as e:
         logging.getLogger("ai_system").error(f"failed to save context: {e}")
 
-    await ws.close()
+    # 停止 HTTP 服务器
+    await http_server.stop(http_runner)
+    
+    # 关闭 WebSocket 连接
+    if ws:
+        await ws.close()
 
 
 def main() -> None:

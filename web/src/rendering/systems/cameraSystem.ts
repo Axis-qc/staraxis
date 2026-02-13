@@ -86,7 +86,7 @@ export function createCameraSystem(
         camera.updateProjectionMatrix()
     }
 
-    const applyTransform = (zoom: number, cameraWorldPosGU: THREE.Vector2) => {
+    const applyTransform = (zoom: number) => {
         camera.position.set(0, 0, 10)
         camera.lookAt(0, 0, 0)
         camera.zoom = 1 / zoom
