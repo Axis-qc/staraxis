@@ -33,6 +33,9 @@ public class Entity {
     /** 世界速度（GU/tick 或 GU/hour，具体口径后续统一）。 */
     public Vec2d velWorldGU;
 
+    /** 所属国家/文明 ID（nationId 口径，String 类型，与国家定义 ID 一致）。无归属时为 null。 */
+    public String ownerNationId;
+
     public Entity() {
     }
 }

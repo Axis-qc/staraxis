@@ -78,9 +78,12 @@ import io.undertow.websockets.spi.WebSocketHttpExchange;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import staraxis.game.world.hex.SectorCoord;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -112,16 +115,30 @@ public class WebNetServer {
         }
 
         try {
-            var snapshotDto = SnapshotMessageFactory.buildSnapshotMessage(runtime, lastTickCostMs.get());
-
             Set<WebSocketChannel> snapshotSubscribers = connMgr.getSnapshotSubscribers();
             if (snapshotSubscribers.isEmpty()) {
                 return;
             }
 
-            String json = objectMapper.writeValueAsString(snapshotDto);
             for (WebSocketChannel ch : snapshotSubscribers) {
                 if (ch != null && ch.isOpen()) {
+                    Set<SectorCoord> visible = connMgr.getVisibleSectors(ch);
+                    String nationId = null;
+                    try {
+                        String pid = connMgr.getPlayerIdByChannel(ch);
+                        if (pid != null) {
+                            nationId = runtime.getWorldStateForSimOnly().nationManager.getNationIdByPlayer(pid);
+                        }
+                    } catch (Exception ignored) {
+                    }
+                    if (nationId == null) {
+                        nationId = connMgr.getNationIdByChannel(ch);
+                    }
+
+                    var snapshotDto = SnapshotMessageFactory.buildSnapshotMessageWithNation(runtime,
+                            lastTickCostMs.get(),
+                            visible, nationId);
+                    String json = objectMapper.writeValueAsString(snapshotDto);
                     WebSockets.sendText(json, ch, null);
                 }
             }
@@ -152,8 +169,22 @@ public class WebNetServer {
         }
 
         try {
+            Set<SectorCoord> visible = connMgr.getVisibleSectors(channel);
+            String nationId = null;
+            try {
+                String pid = connMgr.getPlayerIdByChannel(channel);
+                if (pid != null) {
+                    nationId = runtime.getWorldStateForSimOnly().nationManager.getNationIdByPlayer(pid);
+                }
+            } catch (Exception ignored) {
+            }
+            if (nationId == null) {
+                nationId = connMgr.getNationIdByChannel(channel);
+            }
+
             String json = objectMapper.writeValueAsString(
-                    SnapshotMessageFactory.buildSnapshotMessage(runtime, lastTickCostMs.get()));
+                    SnapshotMessageFactory.buildSnapshotMessageWithNation(runtime, lastTickCostMs.get(), visible,
+                            nationId));
             WebSockets.sendText(json, channel, null);
         } catch (Exception e) {
             try {
@@ -258,8 +289,42 @@ public class WebNetServer {
                             return;
                         }
 
+                        if ("updateVisibleSectors".equals(type)) {
+                            List<Map<String, Integer>> sectorList = (List<Map<String, Integer>>) m.get("sectors");
+                            Set<SectorCoord> sectors = new HashSet<>();
+                            if (sectorList != null) {
+                                for (Map<String, Integer> s : sectorList) {
+                                    Number q = s.get("q");
+                                    Number r = s.get("r");
+                                    if (q != null && r != null) {
+                                        sectors.add(new SectorCoord(q.intValue(), r.intValue()));
+                                    }
+                                }
+                            }
+                            connMgr.updateVisibleSectors(channel, sectors);
+                            // 更新后立即推送一次当前视野的快照喵
+                            sendSnapshotToChannel(channel);
+                            return;
+                        }
+
                         if ("pong".equals(type)) {
                             connMgr.onPlayerPong(channel);
+                            return;
+                        }
+
+                        if ("setNationId".equals(type)) {
+                            Object nationIdObj = m.get("nationId");
+                            String nationId = nationIdObj == null ? null : String.valueOf(nationIdObj).trim();
+                            if (nationId != null && !nationId.isEmpty()) {
+                                connMgr.setPlayerNationId(playerId, nationId);
+                                WebSockets.sendText(
+                                        "{\"type\":\"nationIdSet\",\"ok\":true,\"nationId\":\"" + nationId + "\"}",
+                                        channel, null);
+                            } else {
+                                WebSockets.sendText(
+                                        "{\"type\":\"nationIdSet\",\"ok\":false,\"error\":\"invalid_nation_id\"}",
+                                        channel, null);
+                            }
                             return;
                         }
 

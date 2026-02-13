@@ -36,10 +36,14 @@ public final class WorldGenerator {
                 if (HexMath.distance(origin, c) <= radius) {
                     Vec2d center = WorldHexLayout.sectorCenterWorld2D_GU(c);
                     WorldSector s = new WorldSector(c, center);
+                    s.ownerNationId = cfg.playerNationId; // 设置星区所属国家ID
                     sectors.put(c, s);
                 }
             }
         }
+
+        // 调试日志：记录生成的星区数量喵
+        System.out.println("[WorldGenerator] Generated " + sectors.size() + " sectors for radius=" + radius + ", playerNationId=" + cfg.playerNationId);
 
         WorldMap worldMap = new WorldMap(radius, cfg.playerNationId, sectors);
 

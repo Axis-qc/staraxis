@@ -6,7 +6,7 @@
  * - 作为 game -> webnet/web 的数据契约的一部分，必须保持向后兼容与可演进。
  *
  * 提供的接口 API：
- * - 公共字段：designId、ownerNationId、hpHull、componentModuleIds。
+ * - 公共字段：designId、ownerNationId（String）、hpHull、componentModuleIds。
  *
  * 使用方式：
  * - 构建 EntitySnapshot 时，当 entityType = SHIP，details 赋值为 ShipDetails 实例。
@@ -29,8 +29,8 @@ public class ShipDetails {
     /** 舰船来源蓝图 ID（ShipDesign.designId）。 */
     public final String designId;
 
-    /** 所属国家/文明 ID（nationId 口径）。 */
-    public final long ownerNationId;
+    /** 所属国家/文明 ID（nationId 口径，String 类型，与国家定义 ID 一致）。 */
+    public final String ownerNationId;
 
     /** 船体耐久（当前口径 0~1）。 */
     public final double hpHull;
@@ -38,7 +38,7 @@ public class ShipDetails {
     /** 已装配组件的 moduleId 列表（最小展示信息）。 */
     public final List<String> componentModuleIds;
 
-    public ShipDetails(String designId, long ownerNationId, double hpHull, List<String> componentModuleIds) {
+    public ShipDetails(String designId, String ownerNationId, double hpHull, List<String> componentModuleIds) {
         this.designId = designId;
         this.ownerNationId = ownerNationId;
         this.hpHull = hpHull;

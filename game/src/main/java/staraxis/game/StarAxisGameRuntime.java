@@ -95,6 +95,9 @@ public class StarAxisGameRuntime implements GameRuntime {
         commandBus.executeCommands(worldState, dtGameHours);
         // TODO: 各系统使用 dtGameHours 推进
 
+        // 更新所有国家的可见性状态（基于当前世界状态）
+        worldState.visibilitySystem.updateAllNationsVisibility();
+
         // Commit
         boolean dayChanged = SimulationClock.commitTick(worldState.time);
         if (dayChanged) {
@@ -164,9 +167,14 @@ public class StarAxisGameRuntime implements GameRuntime {
         s.accGameHoursInDay = worldState.time.accGameHoursInDay;
         s.worldRadius = worldState.worldMap.radius;
 
+        int sectorCount = 0;
         for (WorldSector sector : worldState.worldMap.getSectorsView()) {
             s.putSectorCenter(sector.coord, sector.centerWorldGU);
+            sectorCount++;
         }
+        // 调试日志：记录添加到快照的星区数量喵
+        // System.out.println("[StarAxisGameRuntime] Added " + sectorCount + " sectors
+        // to realtime snapshot");
 
         for (StarSystem system : worldState.astro.getSystemsView()) {
             // 1. 创建并注册重心实体
@@ -177,6 +185,10 @@ public class StarAxisGameRuntime implements GameRuntime {
             barycenter.parentEntityId = 0;
             barycenter.sectorCoord = system.sectorCoord;
             barycenter.posWorldGU = system.centerWorldGU;
+
+            // 权威注册到 WorldState 喵
+            worldState.registerEntity(barycenter);
+
             s.putEntity(barycenter);
             s.putEntitySnapshot(new EntitySnapshot(
                     barycenter.entityId,
@@ -193,6 +205,10 @@ public class StarAxisGameRuntime implements GameRuntime {
                 star.parentEntityId = system.barycenterEntityId; // 单星系统也挂在重心下
                 star.sectorCoord = system.sectorCoord;
                 star.posWorldGU = system.centerWorldGU; // 单星系统：恒星位置=重心位置
+
+                // 权威注册到 WorldState 喵
+                worldState.registerEntity(star);
+
                 s.putEntity(star);
                 s.putEntitySnapshot(new EntitySnapshot(
                         star.entityId,
@@ -202,12 +218,20 @@ public class StarAxisGameRuntime implements GameRuntime {
                         star.sectorCoord,
                         star.posWorldGU,
                         new EntitySnapshot.StarDetails(star.starTypeId, star.radiusGU, star.massSolar,
-                                star.temperatureK, star.description, star.surfaceTexturePath)));
+                                star.temperatureK, star.description, star.surfaceTexturePath, star.ownerNationId)));
             }
 
             // 3. 注册行星实体
             for (PlanetBody planet : system.planets) {
-                // 行星 posWorldGU 由前端根据轨道计算，这里不填充
+                // 修正：补全行星的 systemId/parentEntityId/sectorCoord/posWorldGU，确保能通过星区过滤并正确渲染喵
+                planet.systemId = system.systemId;
+                planet.parentEntityId = system.barycenterEntityId;
+                planet.sectorCoord = system.sectorCoord;
+                planet.posWorldGU = system.centerWorldGU;
+
+                // 权威注册到 WorldState 喵
+                worldState.registerEntity(planet);
+
                 s.putEntity(planet);
 
                 s.putEntitySnapshot(new EntitySnapshot(
@@ -221,7 +245,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                                 planet.planetTypeId,
                                 planet.radiusGU,
                                 planet.rotationPeriodHours,
-                                planet.surfaceTexturePath,
+                                planet.surfaceTexturePath, planet.ownerNationId,
                                 planet.orbitCenterEntityId,
                                 planet.semiMajorAxisGU,
                                 planet.eccentricity,

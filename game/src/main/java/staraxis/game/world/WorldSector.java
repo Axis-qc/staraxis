@@ -12,6 +12,11 @@ public class WorldSector {
     public final Vec2d centerWorldGU;
 
     /**
+     * 该星区内持有的实体 ID 列表。
+     */
+    public final java.util.List<Long> entityIds = new java.util.ArrayList<>();
+
+    /**
      * 预留：该星区归属/势力占位（可为空）。
      */
     public String ownerNationId;

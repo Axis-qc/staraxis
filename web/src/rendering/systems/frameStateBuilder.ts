@@ -15,6 +15,7 @@
 import * as THREE from 'three'
 import type { EntitySnapshot, SnapshotMessage } from '../../net/snapshotWs'
 import { computeLodState, type LodState, type LodOptions } from '../subsystems/lodSystem'
+import type { VisibilityStateManager } from './visibilityState'
 
 export type FrameState = {
     snapshot: SnapshotMessage | null
@@ -24,12 +25,15 @@ export type FrameState = {
     cullingAabb: { minX: number; maxX: number; minY: number; maxY: number }
     lod: LodState
     totalDays: number
+    visibilityManager: VisibilityStateManager | null
 }
 
 export type FrameStateBuilder = {
     build: (snapshot: SnapshotMessage | null) => FrameState
     updateSectorCenters: (centers: { q: number; r: number; x: number; y: number }[]) => void
     updateEntities: (entities: EntitySnapshot[]) => void
+    removeEntities: (entityIds: number[]) => void
+    removeSectors: (sectorKeys: string[]) => void
     setSelectedIds: (ids: number[]) => void
 }
 
@@ -37,18 +41,27 @@ export function createFrameStateBuilder(
     container: HTMLDivElement,
     cameraWorldPosGU: THREE.Vector2,
     zoom: { value: number },
-    lodOptions?: LodOptions
+    lodOptions?: LodOptions,
+    visibilityManager?: VisibilityStateManager
 ): FrameStateBuilder {
     let sectorCenters: { q: number; r: number; x: number; y: number }[] = []
     const entitiesById = new Map<number, EntitySnapshot>()
     let selectedIds = new Set<number>()
+    const visibilityMgr = visibilityManager || null
 
     const updateSectorCenters = (centers: { q: number; r: number; x: number; y: number }[]) => {
-        sectorCenters = centers
+        // 增量更新星区中心喵
+        for (const c of centers) {
+            const key = `${c.q},${c.r}`
+            const existing = sectorCenters.find(sc => sc.q === c.q && sc.r === c.r)
+            if (!existing) {
+                sectorCenters.push(c)
+            }
+        }
     }
 
     const updateEntities = (entities: EntitySnapshot[]) => {
-        entitiesById.clear()
+        // 增量更新实体喵
         for (const e of entities) {
             entitiesById.set(e.entityId, e)
         }
@@ -56,6 +69,17 @@ export function createFrameStateBuilder(
 
     const setSelectedIds = (ids: number[]) => {
         selectedIds = new Set(ids)
+    }
+
+    const removeEntities = (ids: number[]) => {
+        for (const id of ids) {
+            entitiesById.delete(id)
+        }
+    }
+
+    const removeSectors = (keys: string[]) => {
+        const keySet = new Set(keys)
+        sectorCenters = sectorCenters.filter(sc => !keySet.has(`${sc.q},${sc.r}`))
     }
 
     const build = (snapshot: SnapshotMessage | null): FrameState => {
@@ -91,6 +115,7 @@ export function createFrameStateBuilder(
             cullingAabb,
             lod,
             totalDays,
+            visibilityManager: visibilityMgr,
         }
     }
 
@@ -98,6 +123,8 @@ export function createFrameStateBuilder(
         build,
         updateSectorCenters,
         updateEntities,
+        removeEntities,
+        removeSectors,
         setSelectedIds,
     }
 }

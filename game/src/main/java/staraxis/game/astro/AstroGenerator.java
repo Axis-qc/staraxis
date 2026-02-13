@@ -47,7 +47,7 @@ public final class AstroGenerator {
 
         for (WorldSector sector : worldMap.getSectorsView()) {
             if (random.nextDouble() < systemSpawnChance) {
-                systems.add(generateSystemForSector(sector));
+                systems.add(generateSystemForSector(sector, config.playerNationId));
             }
         }
         return systems;
@@ -56,7 +56,7 @@ public final class AstroGenerator {
     /**
      * 为单个星区生成一个恒星系。
      */
-    private StarSystem generateSystemForSector(WorldSector sector) {
+    private StarSystem generateSystemForSector(WorldSector sector, String playerNationId) {
         StarSystem system = new StarSystem();
         system.systemId = idCounter.incrementAndGet();
         system.barycenterEntityId = idCounter.incrementAndGet(); // 预留重心实体ID
@@ -65,11 +65,11 @@ public final class AstroGenerator {
         system.centerWorldGU = sector.centerWorldGU;
 
         // 生成主星（第一版只支持单星）
-        StarBody primaryStar = generateStar(system);
+        StarBody primaryStar = generateStar(system, playerNationId);
         system.stars.add(primaryStar);
 
         // 生成行星
-        generatePlanetsForSystem(system, primaryStar);
+        generatePlanetsForSystem(system, primaryStar, playerNationId);
 
         return system;
     }
@@ -77,7 +77,7 @@ public final class AstroGenerator {
     /**
      * 生成一颗随机恒星。
      */
-    private StarBody generateStar(StarSystem system) {
+    private StarBody generateStar(StarSystem system, String playerNationId) {
         StarTypeDef type = weightedRandom(assets.getStarTypes(), t -> t.weight);
 
         StarBody star = new StarBody();
@@ -87,6 +87,7 @@ public final class AstroGenerator {
         star.massSolar = randomDouble(type.massSolarRange.get(0), type.massSolarRange.get(1));
         star.temperatureK = randomInt(type.temperatureKRange.get(0), type.temperatureKRange.get(1));
         star.description = type.description;
+        star.ownerNationId = playerNationId; // 设置所属国家ID
 
         // 从 spriteCandidates 中确定性选择纹理
         if (type.spriteCandidates != null && !type.spriteCandidates.isEmpty()) {
@@ -108,7 +109,7 @@ public final class AstroGenerator {
     /**
      * 为恒星系生成一系列行星。
      */
-    private void generatePlanetsForSystem(StarSystem system, StarBody primaryStar) {
+    private void generatePlanetsForSystem(StarSystem system, StarBody primaryStar, String playerNationId) {
         OrbitPresetDef preset = assets.getOrbitPreset();
         if (preset == null) {
             return;
@@ -135,6 +136,8 @@ public final class AstroGenerator {
             } else {
                 planet.surfaceTexturePath = null;
             }
+
+            planet.ownerNationId = playerNationId; // 设置所属国家ID
 
             // 直接填充轨道字段到 PlanetBody
             planet.orbitCenterEntityId = primaryStar.entityId;

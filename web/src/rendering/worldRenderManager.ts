@@ -33,6 +33,7 @@ import { GridRenderer } from './subsystems/gridRenderer'
 import { HexOutlineRenderer } from './subsystems/hexOutlineRenderer'
 import type { LodState, LodOptions } from './subsystems/lodSystem'
 import { createInputSystem } from '../input/inputSystem'
+import { VisibilityStateManager } from './systems/visibilityState'
 
 // 重新导出类型供外部使用
 export type { LodState, LodOptions } from './subsystems/lodSystem'
@@ -46,9 +47,14 @@ export type WorldRenderer = {
     cameraWorldPosGU: THREE.Vector2
     setZoom: (z: number) => void
     applyCameraTransform: () => void
+    getCullingAabbGU: () => { minX: number; maxX: number; minY: number; maxY: number }
     setSelectedEntityIds: (ids: number[]) => void
     updateFromSnapshot: (snapshot: SnapshotMessage) => void
+    removeEntitiesFromCache: (entityIds: number[]) => void
+    removeSectorsFromCache: (sectorKeys: string[]) => void
     getEntityWorldPosGU: (entityId: number) => { x: number; y: number } | null
+    setCurrentNationId: (nationId: string | null) => void
+    onCameraChanged: (cb: () => void) => () => void
     dispose: () => void
 }
 
@@ -92,6 +98,7 @@ export function createWorldRenderManager(
     // 状态
     const zoom = { value: 1 }
     const cameraWorldPosGU = new THREE.Vector2(0, 0)
+    const visibilityManager = new VisibilityStateManager()
 
     // 初始化相机系统
     const cameraSystem = createCameraSystem(container)
@@ -118,7 +125,7 @@ export function createWorldRenderManager(
     }
 
     // 初始化帧状态构建器
-    const frameBuilder = createFrameStateBuilder(container, cameraWorldPosGU, zoom, options.lod)
+    const frameBuilder = createFrameStateBuilder(container, cameraWorldPosGU, zoom, options.lod, visibilityManager)
 
     // 初始化渲染子系统
     const starRenderer = new StarRenderer()
@@ -133,14 +140,27 @@ export function createWorldRenderManager(
     // 初始化输入系统
     const inputSystem = createInputSystem(canvas)
 
+    // 缓存当前剔除范围（cullingAabb），供订阅星区与其它系统复用喵
+    let currentCullingAabb = { minX: 0, maxX: 0, minY: 0, maxY: 0 }
+
+    // 相机变化监听喵
+    const cameraChangeListeners = new Set<() => void>()
+    const onCameraChanged = (cb: () => void) => {
+        cameraChangeListeners.add(cb)
+        return () => cameraChangeListeners.delete(cb)
+    }
+
     // 相机控制动作
     const applyCameraTransform = () => {
         cameraSystem.applyTransform(zoom.value, cameraWorldPosGU)
         // 触发重建以更新LOD
         const frame = frameBuilder.build(null)
+        currentCullingAabb = frame.cullingAabb
         for (const s of subsystems) {
             s.update(ctx, frame)
         }
+        // 通知外部相机已变化喵
+        for (const cb of cameraChangeListeners) cb()
     }
 
     const setZoom = (z: number) => {
@@ -256,6 +276,14 @@ export function createWorldRenderManager(
     const updateFromSnapshot = (snapshot: SnapshotMessage) => {
         if (!snapshot.ok || !snapshot.realTimeWorldState) return
 
+        // 更新可见性状态
+        const currentTime = Date.now()
+        visibilityManager.updateFromSnapshot(
+            snapshot.realTimeWorldState.entities ?? [],
+            snapshot.realTimeWorldState.sectorCenters ?? [],
+            currentTime
+        )
+
         frameBuilder.updateSectorCenters(snapshot.realTimeWorldState.sectorCenters ?? [])
         frameBuilder.updateEntities(snapshot.realTimeWorldState.entities ?? [])
         entityQuery.updateSnapshot(snapshot)
@@ -268,6 +296,15 @@ export function createWorldRenderManager(
     }
 
     const getEntityWorldPosGU = entityQuery.getEntityWorldPosGU
+
+    const removeEntitiesFromCache = (entityIds: number[]) => {
+        frameBuilder.removeEntities(entityIds)
+        // 实体查询系统不需要 hub，它自己维护了快照状态喵
+    }
+
+    const removeSectorsFromCache = (sectorKeys: string[]) => {
+        frameBuilder.removeSectors(sectorKeys)
+    }
 
     const dispose = () => {
         resizeObserver.disconnect()
@@ -288,14 +325,30 @@ export function createWorldRenderManager(
         cameraSystem.dispose()
     }
 
+    const getCullingAabbGU = () => currentCullingAabb
+
+    const setCurrentNationId = (nationId: string | null) => {
+        visibilityManager.setCurrentNationId(nationId)
+        // 国家变更后需要重新构建帧状态
+        const frame = frameBuilder.build(null)
+        for (const s of subsystems) {
+            s.update(ctx, frame)
+        }
+    }
+
     return {
         zoom,
         cameraWorldPosGU,
         setZoom,
         applyCameraTransform,
+        getCullingAabbGU,
         setSelectedEntityIds,
         updateFromSnapshot,
+        removeEntitiesFromCache,
+        removeSectorsFromCache,
         getEntityWorldPosGU,
+        setCurrentNationId,
+        onCameraChanged,
         dispose,
     }
 }

@@ -140,6 +140,14 @@ public final class NewGameApi {
         GameLog.log("NewGameApi.step3Confirm begin username=" + username + " playerId=" + playerId);
 
         StarAxisGameRuntime runtime = StarAxisGameRuntime.newGame(cfg);
+
+        // 确保国家已注册并绑定玩家喵
+        var nm = runtime.getWorldStateForSimOnly().nationManager;
+        if (!nm.hasNation(d.nationId)) {
+            nm.registerNation(d.nationId);
+        }
+        nm.assignPlayerToNation(playerId, d.nationId);
+
         runtime.start();
 
         // 单世界：覆盖当前运行时

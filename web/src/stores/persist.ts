@@ -29,11 +29,12 @@ export function persistAuthSessionStorage({ store }: PiniaPluginContext) {
 
     // 2. 订阅 store 变化，并保存到 sessionStorage
     store.$subscribe((_mutation, state) => {
-        // 只保存核心认证信息，避免写入不必要或瞬态的数据
+        // 保存核心认证信息和游戏状态数据喵
         const stateToPersist = {
             username: state.username,
             playerId: state.playerId,
             token: state.token,
+            selectedNationId: state.selectedNationId, // 保存玩家选择的国家ID喵
         }
         sessionStorage.setItem(store.$id, JSON.stringify(stateToPersist))
     })

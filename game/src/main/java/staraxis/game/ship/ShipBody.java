@@ -6,7 +6,7 @@
  * - 持有舰船的运行时状态：蓝图引用、装配组件实例、归属信息、基础运动状态等。
  *
  * 提供的接口 API：
- * - 公共字段：designId、ownerNationId、components、hpHull、power、fuel。
+ * - 公共字段：designId、components、hpHull、power、fuel；ownerNationId 继承自 Entity。
  *
  * 使用方式：
  * - 世界生成/生产：根据 ShipDesign 生成 ShipBody，并将 moduleIds 实例化为 ShipComponent 列表。
@@ -34,8 +34,6 @@ public class ShipBody extends Entity {
     /** 舰船来源蓝图 ID（ShipDesign.designId）。 */
     public String designId;
 
-    /** 所属国家/文明 ID（nationId 口径，当前用 long，占位）。 */
-    public long ownerNationId;
 
     /** 已装配组件实例列表。 */
     public List<ShipComponent> components = new ArrayList<>();

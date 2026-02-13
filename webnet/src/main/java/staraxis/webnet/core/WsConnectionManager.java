@@ -3,6 +3,7 @@ package staraxis.webnet.core;
 import io.undertow.websockets.core.WebSocketChannel;
 import io.undertow.websockets.core.WebSockets;
 import staraxis.webnet.ai.WebAiAutoStarter;
+import staraxis.game.world.hex.SectorCoord;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -22,10 +23,27 @@ public class WsConnectionManager {
     private final Set<WebSocketChannel> allChannels = ConcurrentHashMap.newKeySet();
     private final Set<WebSocketChannel> snapshotSubscribers = ConcurrentHashMap.newKeySet();
 
+    private final ConcurrentHashMap<WebSocketChannel, Set<SectorCoord>> visibleSectorsByChannel = new ConcurrentHashMap<>();
+
     // playerId -> Channel (实现一号一连) 喵
     private final ConcurrentHashMap<String, WebSocketChannel> playerSessions = new ConcurrentHashMap<>();
     // Channel -> playerId (方便断开时快速查找) 喵
     private final ConcurrentHashMap<WebSocketChannel, String> channelToPlayerId = new ConcurrentHashMap<>();
+
+    /**
+     * 获取通道对应的玩家ID喵。
+     *
+     * @param channel WebSocket通道
+     * @return playerId，如果未绑定则返回 null
+     */
+    public String getPlayerIdByChannel(WebSocketChannel channel) {
+        return channelToPlayerId.get(channel);
+    }
+
+    // playerId -> nationId（玩家所属国家）喵
+    private final ConcurrentHashMap<String, String> playerToNationId = new ConcurrentHashMap<>();
+    // Channel -> nationId（方便快速查找）喵
+    private final ConcurrentHashMap<WebSocketChannel, String> channelToNationId = new ConcurrentHashMap<>();
 
     private final AtomicInteger playerConnectionCount = new AtomicInteger(0);
     private final AtomicInteger aiConnectionCount = new AtomicInteger(0);
@@ -90,10 +108,13 @@ public class WsConnectionManager {
 
     private void cleanupChannel(WebSocketChannel channel) {
         snapshotSubscribers.remove(channel);
+        visibleSectorsByChannel.remove(channel);
         playerLastPongMs.remove(channel);
+        channelToNationId.remove(channel);
         String pid = channelToPlayerId.remove(channel);
         if (pid != null) {
             playerSessions.remove(pid, channel);
+            playerToNationId.remove(pid);
         }
     }
 
@@ -120,6 +141,22 @@ public class WsConnectionManager {
 
     public void unsubscribeSnapshot(WebSocketChannel channel) {
         snapshotSubscribers.remove(channel);
+    }
+
+    public void updateVisibleSectors(WebSocketChannel channel, Set<SectorCoord> visibleSectors) {
+        if (channel == null) {
+            return;
+        }
+
+        if (visibleSectors == null || visibleSectors.isEmpty()) {
+            visibleSectorsByChannel.remove(channel);
+        } else {
+            visibleSectorsByChannel.put(channel, visibleSectors);
+        }
+    }
+
+    public Set<SectorCoord> getVisibleSectors(WebSocketChannel channel) {
+        return visibleSectorsByChannel.get(channel);
     }
 
     /**
@@ -199,5 +236,54 @@ public class WsConnectionManager {
 
     public AtomicLong getLastDisconnectAtMsRef() {
         return lastDisconnectAtMs;
+    }
+
+    /**
+     * 设置玩家所属国家ID喵。
+     *
+     * @param playerId 玩家ID
+     * @param nationId 国家ID
+     */
+    public void setPlayerNationId(String playerId, String nationId) {
+        if (playerId == null || nationId == null)
+            return;
+        playerToNationId.put(playerId, nationId);
+        WebSocketChannel channel = playerSessions.get(playerId);
+        if (channel != null) {
+            channelToNationId.put(channel, nationId);
+        }
+    }
+
+    /**
+     * 获取玩家所属国家ID喵。
+     *
+     * @param playerId 玩家ID
+     * @return 国家ID，如果未设置则返回 null
+     */
+    public String getPlayerNationId(String playerId) {
+        return playerToNationId.get(playerId);
+    }
+
+    /**
+     * 获取通道对应的国家ID喵。
+     *
+     * @param channel WebSocket通道
+     * @return 国家ID，如果未设置则返回 null
+     */
+    public String getNationIdByChannel(WebSocketChannel channel) {
+        return channelToNationId.get(channel);
+    }
+
+    /**
+     * 清除玩家的国家ID关联喵（玩家断开连接时调用）喵。
+     *
+     * @param playerId 玩家ID
+     */
+    public void clearPlayerNationId(String playerId) {
+        playerToNationId.remove(playerId);
+        WebSocketChannel channel = playerSessions.get(playerId);
+        if (channel != null) {
+            channelToNationId.remove(channel);
+        }
     }
 }

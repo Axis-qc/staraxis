@@ -22,21 +22,25 @@ public class SnapshotMessageDto {
 
     public final DailySettlementStateDto dailySettlementState;
 
+    /** 玩家绑定的国家ID（用于前端显示与同步）。 */
+    public final String playerNationId;
+
     public SnapshotMessageDto(boolean ok, String error, Long tickCostMs, RealTimeStateDto realTimeWorldState,
-            DailySettlementStateDto dailySettlementState) {
+            DailySettlementStateDto dailySettlementState, String playerNationId) {
         this.ok = ok;
         this.error = error;
         this.tickCostMs = tickCostMs;
         this.realTimeWorldState = realTimeWorldState;
         this.dailySettlementState = dailySettlementState;
+        this.playerNationId = playerNationId;
     }
 
     public static SnapshotMessageDto forSuccess(long tickCostMs, RealTimeStateDto realTimeWorldState,
-            DailySettlementStateDto dailySettlementState) {
-        return new SnapshotMessageDto(true, null, tickCostMs, realTimeWorldState, dailySettlementState);
+            DailySettlementStateDto dailySettlementState, String playerNationId) {
+        return new SnapshotMessageDto(true, null, tickCostMs, realTimeWorldState, dailySettlementState, playerNationId);
     }
 
     public static SnapshotMessageDto forError(String error) {
-        return new SnapshotMessageDto(false, error, null, null, null);
+        return new SnapshotMessageDto(false, error, null, null, null, null);
     }
 }

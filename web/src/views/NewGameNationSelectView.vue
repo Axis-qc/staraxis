@@ -150,11 +150,13 @@ async function refreshAll() {
 function choosePreset(nationId: string) {
   selectedNationSource.value = 'preset'
   selectedNationId.value = nationId
+  auth.setSelectedNationId(nationId)
 }
 
 function choosePlayer(nationId: string) {
   selectedNationSource.value = 'player'
   selectedNationId.value = nationId
+  auth.setSelectedNationId(nationId)
 }
 
 async function handleNextStep() {
@@ -224,6 +226,9 @@ async function createSamplePlayerNation() {
 
 onMounted(() => {
   refreshAll()
+  if (auth.selectedNationId) {
+    selectedNationId.value = auth.selectedNationId
+  }
   // 触发入场动画
   setTimeout(() => {
     entered.value = true

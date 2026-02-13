@@ -69,15 +69,18 @@ public class EntitySnapshot {
         public final int temperatureK;
         public final String description;
         public final String surfaceTexturePath;
+        /** 所属国家/文明 ID（nationId 口径，String 类型，与国家定义 ID 一致）。无归属时为 null。 */
+        public final String ownerNationId;
 
         public StarDetails(String starTypeId, double radiusGU, double massSolar, int temperatureK,
-                String description, String surfaceTexturePath) {
+                String description, String surfaceTexturePath, String ownerNationId) {
             this.starTypeId = starTypeId;
             this.radiusGU = radiusGU;
             this.massSolar = massSolar;
             this.temperatureK = temperatureK;
             this.description = description;
             this.surfaceTexturePath = surfaceTexturePath;
+            this.ownerNationId = ownerNationId;
         }
     }
 
@@ -105,6 +108,8 @@ public class EntitySnapshot {
         public final double radiusGU;
         public final double rotationPeriodHours;
         public final String surfaceTexturePath;
+        /** 所属国家/文明 ID（nationId 口径，String 类型，与国家定义 ID 一致）。无归属时为 null。 */
+        public final String ownerNationId;
 
         public final long orbitCenterEntityId;
         public final double semiMajorAxisGU;
@@ -115,7 +120,7 @@ public class EntitySnapshot {
         public final double meanAnomalyDegAtEpoch;
 
         public PlanetDetails(String planetTypeId, double radiusGU, double rotationPeriodHours,
-                String surfaceTexturePath,
+                String surfaceTexturePath, String ownerNationId,
                 long orbitCenterEntityId,
                 double semiMajorAxisGU,
                 double eccentricity,
@@ -127,6 +132,7 @@ public class EntitySnapshot {
             this.radiusGU = radiusGU;
             this.rotationPeriodHours = rotationPeriodHours;
             this.surfaceTexturePath = surfaceTexturePath;
+            this.ownerNationId = ownerNationId;
 
             this.orbitCenterEntityId = orbitCenterEntityId;
             this.semiMajorAxisGU = semiMajorAxisGU;

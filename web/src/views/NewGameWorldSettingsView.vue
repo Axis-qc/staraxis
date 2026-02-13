@@ -27,6 +27,7 @@ const auth = useAuthStore()
 const username = computed(() => auth.username)
 const playerId = computed(() => auth.playerId)
 const newGameDraftId = computed(() => auth.username)
+const selectedNationId = computed(() => auth.selectedNationId || '')  // 玩家选择的国家ID
 
 const loading = ref(false)
 const errorMsg = ref('')
@@ -63,6 +64,11 @@ async function handleStartGame() {
     errorMsg.value = 'not_logged_in'
     return
   }
+  // 检查是否选择了国家喵
+  if (!selectedNationId.value) {
+    errorMsg.value = '请先选择国家'
+    return
+  }
 
   loading.value = true
   errorMsg.value = ''
@@ -71,6 +77,7 @@ async function handleStartGame() {
       worldSeed: worldSeed.value,
       worldRadius: worldRadius.value,
       galaxyShape: galaxyShape.value,
+      playerNationId: selectedNationId.value,
     }
 
     const resp2 = await apiPostJson<{ ok: boolean; error?: string }>('/api/newgame/step2/worldSettings', {
@@ -78,6 +85,7 @@ async function handleStartGame() {
       playerId: playerId.value,
       newGameDraftId: newGameDraftId.value,
       worldGenConfig,
+      playerNationId: selectedNationId.value,
     })
 
     if (!resp2.ok) {

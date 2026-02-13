@@ -7,44 +7,37 @@
  *
  * 本视图负责：
  * - 初始化并承载渲染画布（`createWorldRenderManager`）。
- * - 建立与后端的快照 WebSocket 连接（`connectSnapshotWs`），接收权威世界快照用于渲染与 UI 展示。
- * - 提供游戏内 HUD/UI：右侧总览、底部主控制栏、ESC 菜单。
- * - 在 DEV 环境提供可拖拽调试浮窗（`O` 键开关），展示缩放倍率/镜头中心/鼠标世界坐标/世界状态摘要等。
+ * - 建立与后端的快照 WebSocket 连接（`connectSnapshotWs`）。
+ * - 提供游戏内 HUD/UI 的顶层布局编排。
+ * - 协调视野订阅（`useVisibleSectors`）、调试窗口（`useInGameDebugWindow`）与弹窗管理（`useInGameWindows`）。
  *
  * 说明：
- * - 本视图不实现任何会改变游戏结果的权威逻辑；仅消费后端推送快照进行渲染与展示。
- * - 游戏内 UI 数据聚合通过 `useInGameDataHub()` 统一处理与分发，避免页面组件中散落数据拼装逻辑。
+ * - 本视图作为“编排层”，不实现具体权威逻辑，主要负责初始化核心组件并挂载 UI。
+ * - 核心交互与状态管理逻辑已下沉至专用的 composables，保持视图组件精简喵。
  *
  * @usage
  * - 通过 Vue Router 进入（路由 `/in-game`）。
- * - 创建 renderer 后调用 `hub.setRenderer(renderer)`，在 WS 收到快照后调用 `hub.setLastSnapshot(snapshot)`。
+ * - 初始化渲染器与 WS 客户端后，由 `useVisibleSectors` 自动处理视野星区上报。
  * - 将画布 pointermove 事件绑定到 `hub.onCanvasPointerMove`，用于计算鼠标世界坐标（GU）。
  *
  * @provides
  * - **渲染承载**：全屏渲染容器（WebGL/Three）。
- * - **UI 面板**：总览、底部主控制栏、分类面板（开发/军事/科技/内政/外交）。
- * - **ESC 菜单**：返回游戏/保存/加载/退出。
- * - **调试浮窗（DEV）**：可拖拽、居中打开、限制不出屏幕、跟随主题色。
+ * - **UI 编排**：HUD 布局（时间、总览、底栏）与业务面板切换。
+ * - **窗口系统**：ESC 菜单、行星详情窗口、可拖拽调试浮窗（DEV）。
  *
  * @api
- * - WebSocket：由 `connectSnapshotWs` 连接（具体 WS 地址与协议由该模块内部实现）。
+ * - WebSocket：由 `connectSnapshotWs` 连接，并通过 `useVisibleSectors` 实现按需订阅。
  *
  * @resources
- * - `../rendering/worldRenderManager`：世界渲染管理器（重构入口）。
- * - `../net/snapshotWs`：快照 WS 客户端。
- * - `../composables/useInGameDataHub`：UI/渲染所需数据聚合与派发。
- * - `../composables/useAstroAssets`：恒星/行星贴图资源路径。
- * - `../composables/useDevTooltip`：开发中提示。
- * - `../components/inGame/*`：游戏内 UI 组件。
- * - 全局主题变量：`ui.css/theme.css/controls.css`。
+ * - `../rendering/worldRenderManager`：渲染系统入口。
+ * - `../features/inGame/composables/useVisibleSectors`：视野计算、按需订阅与缓存清理。
+ * - `../features/inGame/composables/useInGameDebugWindow`：调试窗口交互与性能监控开关。
+ * - `../features/inGame/composables/useInGameWindows`：UI 弹窗（ESC、行星窗口）状态管理。
+ * - `../features/inGame/composables/useInGameDataHub`：实时数据聚合与派发。
  *
  * @potential_issues
- * - **性能**：渲染与调试显示可能产生额外开销（调试浮窗数据更新更频繁）。
- * - **快捷键冲突**：`Esc` 打开菜单、`O` 打开调试窗；输入框聚焦时会忽略快捷键。
- * - **布局/交互**：浮窗拖拽受屏幕边界限制；面板叠层需要正确的 z-index。
- * - **全屏拦截右键**：屏蔽浏览器默认菜单，后续接入自定义右键菜单。
- * - **禁用文本选中/拖拽选框复制**：避免误操作。
- * - **浏览器级“返回”无法 100% 禁止**：监听 popstate，把历史栈拉回，尽量降低误触后退造成的跳页。
+ * - **性能**：大量实体渲染时的同步压力，已通过按需推送与增量更新缓解喵。
+ * - **输入拦截**：需确保 UI 面板打开时正确拦截底层相机操作。
  */
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -58,8 +51,8 @@ import InGameTechPanel from '../features/inGame/panels/InGameTechPanel.vue'
 import InGameMilitaryPanel from '../features/inGame/panels/InGameMilitaryPanel.vue'
 import InGameDomesticPanel from '../features/inGame/panels/InGameDomesticPanel.vue'
 import InGameDiplomacyPanel from '../features/inGame/panels/InGameDiplomacyPanel.vue'
-import { connectSnapshotWs } from '../net/snapshotWs'
-import { createWorldRenderManager } from '../rendering/worldRenderManager'
+import { connectSnapshotWs, type SnapshotWsClient } from '../net/snapshotWs'
+import { createWorldRenderManager, type WorldRenderer } from '../rendering/worldRenderManager'
 import { useInGameDataHub } from '../features/inGame/composables/useInGameDataHub'
 import { useInGameInputController } from '../features/inGame/input/useInGameInputController'
 import { useInGameUiInputBindings } from '../features/inGame/input/useInGameUiInputBindings'
@@ -70,13 +63,15 @@ import InGameTimeHud from '../features/inGame/components/InGameTimeHud.vue'
 import InGameSelectionListHud from '../features/inGame/components/InGameSelectionListHud.vue'
 import InGamePlanetWindow from '../features/inGame/components/InGamePlanetWindow.vue'
 import { useRtsRightClickCommand } from '../features/inGame/commands/useRtsRightClickCommand'
+import { useVisibleSectors } from '../features/inGame/composables/useVisibleSectors'
+import { useInGameDebugWindow } from '../features/inGame/composables/useInGameDebugWindow'
+import { useInGameWindows } from '../features/inGame/composables/useInGameWindows'
+
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
 const { getSpritePath } = useAstroAssets()
-
 const devTooltip = useDevTooltip()
-
-const isEscMenuOpen = ref(false)
 
 function showDevelopingHintAtCenter() {
   devTooltip.show(
@@ -90,71 +85,95 @@ function showDevelopingHintAtCenter() {
 
 const rootRef = ref<HTMLDivElement | null>(null)
 const containerRef = ref<HTMLDivElement | null>(null)
-
-const hub = useInGameDataHub()
-
-const wsClient = ref<ReturnType<typeof connectSnapshotWs> | null>(null)
-
-const isDebugHudEnabled = import.meta.env.DEV
-
-const isDebugWindowVisible = ref(false)
-const debugWindowPos = ref({ x: 0, y: 0 })
 const debugWindowRef = ref<HTMLDivElement | null>(null)
 
-const isDraggingDebugWindow = ref(false)
-const debugDragOffset = ref({ x: 0, y: 0 })
+const hub = useInGameDataHub()
+const wsClient = ref<SnapshotWsClient | null>(null)
+const renderer = ref<WorldRenderer | null>(null)
+const auth = useAuthStore()
 
-const planetWindowOpen = ref(false)
-const planetEntity = ref<any>(null)
-
-function openPlanetWindow(entity: any) {
-  planetEntity.value = entity
-  planetWindowOpen.value = true
-}
-
-function closePlanetWindow() {
-  planetWindowOpen.value = false
-  planetEntity.value = null
-}
+let lastSnapshotLogTime = 0
+let isFirstSnapshotLog = true
 
 const activeBottomTab = ref<InGameBottomTab | null>(null)
 
+// --- 逻辑下沉集成 --- //
+const {
+  isEscMenuOpen, planetWindowOpen, planetEntity,
+  openPlanetWindow, closePlanetWindow, toggleEscMenu
+} = useInGameWindows()
 
+const {
+  isDebugHudEnabled, isDebugWindowVisible, debugWindowPos,
+  toggleDebugWindow, onDebugWindowHeaderPointerDown,
+  onDebugWindowHeaderPointerMove, onDebugWindowHeaderPointerUp
+} = useInGameDebugWindow(hub)
+
+// RTS 选择系统喵
 const selection = useRtsSelection({
   getEntities: () => {
     const r = hub.getRenderer()
     if (!r) return []
-
     const entities = hub.entities.value
     const out: Array<{ id: number; type: 'STAR' | 'PLANET'; worldPosGU: { x: number; y: number } }> = []
-
     for (const e of entities) {
       const p = r.getEntityWorldPosGU(e.entityId)
       if (!p) continue
-
       if (e.entityType === 'STAR' || e.entityType === 'PLANET') {
         out.push({ id: e.entityId, type: e.entityType, worldPosGU: p })
       }
     }
-
     return out
   },
   worldToClient: (world) => {
     const el = containerRef.value
     const r = hub.getRenderer()
     if (!el || !r) return { x: 0, y: 0 }
-
     const rect = el.getBoundingClientRect()
     const cx = rect.left + rect.width / 2
     const cy = rect.top + rect.height / 2
-
     const sx = cx + (world.x - r.cameraWorldPosGU.x) / r.zoom.value
     const sy = cy - (world.y - r.cameraWorldPosGU.y) / r.zoom.value
-
     return { x: sx, y: sy }
   },
 })
 
+// 视野订阅与分区加载管理喵
+const visibleSectors = useVisibleSectors(
+  renderer,
+  wsClient,
+  hub.entities,
+  selection.selectedIds
+)
+
+// 监听渲染器实例的变化，绑定事件驱动的视野更新喵
+watch(
+  renderer,
+  (newR) => {
+    visibleSectors.handleRendererChange(newR)
+  },
+  { immediate: true }
+)
+
+// 监听 WS 和渲染器就绪状态，同步国家 ID 并触发首次视野上报喵
+watch(
+  [wsClient, renderer],
+  ([ws, r]) => {
+    if (ws && r) {
+      const nationId = auth.selectedNationId
+      if (nationId) {
+        ws.setNationId(nationId)
+        if ((r as any).setCurrentNationId) {
+          (r as any).setCurrentNationId(nationId)
+        }
+      }
+      // 这里的首次强制上报由 handleRendererChange 内部处理喵
+    }
+  },
+  { immediate: true }
+)
+
+// 右键命令系统喵
 const rightClickCommand = useRtsRightClickCommand({
   getRenderer: () => hub.getRenderer(),
   getSelectedIds: () => selection.selectedIds.value,
@@ -164,6 +183,7 @@ const rightClickCommand = useRtsRightClickCommand({
   },
 })
 
+// 同步渲染器选中状态喵
 watch(
   () => selection.selectedIds.value,
   (ids) => {
@@ -179,78 +199,13 @@ function onContextMenu(e: MouseEvent) {
 function onPopState() {
   try {
     history.pushState({ saLock: true }, '', location.href)
-  } catch {
-  }
-}
-
-function getClampedDebugWindowPos(next: { x: number; y: number }, size: { w: number; h: number }) {
-  const margin = 8
-  const maxX = Math.max(margin, window.innerWidth - size.w - margin)
-  const maxY = Math.max(margin, window.innerHeight - size.h - margin)
-  return {
-    x: Math.min(maxX, Math.max(margin, next.x)),
-    y: Math.min(maxY, Math.max(margin, next.y)),
-  }
-}
-
-function centerDebugWindow(size: { w: number; h: number }) {
-  const x = (window.innerWidth - size.w) / 2
-  const y = (window.innerHeight - size.h) / 2
-  debugWindowPos.value = getClampedDebugWindowPos({ x, y }, size)
-}
-
-function onDebugWindowHeaderPointerDown(e: PointerEvent) {
-  if (!isDebugWindowVisible.value) return
-  const el = debugWindowRef.value
-  if (!el) return
-
-  isDraggingDebugWindow.value = true
-  const rect = el.getBoundingClientRect()
-  debugDragOffset.value = { x: e.clientX - rect.left, y: e.clientY - rect.top }
-
-  try {
-    ; (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-  } catch {
-  }
-
-  e.preventDefault()
-}
-
-function onDebugWindowHeaderPointerMove(e: PointerEvent) {
-  if (!isDraggingDebugWindow.value) return
-
-  const next = { x: e.clientX - debugDragOffset.value.x, y: e.clientY - debugDragOffset.value.y }
-  debugWindowPos.value = getClampedDebugWindowPos(next, DEBUG_WINDOW_SIZE)
-
-  e.preventDefault()
-}
-
-function onDebugWindowHeaderPointerUp(e: PointerEvent) {
-  if (!isDraggingDebugWindow.value) return
-  isDraggingDebugWindow.value = false
-  try {
-    ; (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
-  } catch {
-  }
-  e.preventDefault()
-}
-
-const DEBUG_WINDOW_SIZE = { w: 320, h: 220 }
-
-function toggleDebugWindow() {
-  if (!isDebugHudEnabled) return
-  const next = !isDebugWindowVisible.value
-  isDebugWindowVisible.value = next
-  hub.setPerformanceTracking(next)
-  if (next) {
-    centerDebugWindow(DEBUG_WINDOW_SIZE)
-  }
+  } catch { }
 }
 
 function dispatch(action: GameAction) {
   switch (action.type) {
     case 'ToggleEscMenu':
-      isEscMenuOpen.value = !isEscMenuOpen.value
+      toggleEscMenu()
       return
     case 'ToggleDebugWindow':
       toggleDebugWindow()
@@ -280,20 +235,42 @@ onMounted(() => {
 
   try {
     history.pushState({ saLock: true }, '', location.href)
-  } catch {
-  }
+  } catch { }
   window.addEventListener('popstate', onPopState)
   inputController.attach()
 
   const container = containerRef.value
   if (container) {
     const r = createWorldRenderManager(container, { minZoom: 0.1, maxZoom: 2_000_000, getSpritePath })
+    renderer.value = r
     hub.setRenderer(r)
   }
 
   wsClient.value = connectSnapshotWs({
     reconnectDelayMs: 3000,
     onSnapshot: (s) => {
+      const now = Date.now()
+      if (isFirstSnapshotLog || now - lastSnapshotLogTime >= 60000) {
+        const ok = !!s.ok
+        const hasRt = !!s.realTimeWorldState
+        const sectorCentersCount = s.realTimeWorldState?.sectorCenters?.length ?? -1
+        const entities = s.realTimeWorldState?.entities ?? []
+        const entitiesCount = entities.length
+
+        // 专门统计行星数据喵
+        const planets = entities.filter(e => e.entityType === 'PLANET')
+        const planetsWithDetails = planets.filter(p => p.details !== null)
+
+        console.log(
+          `[Snapshot Debug] first=${isFirstSnapshotLog} ok=${ok} sectors=${sectorCentersCount} entities=${entitiesCount} planets=${planets.length}(withDetails:${planetsWithDetails.length}) 喵`,
+        )
+        if (planets.length > 0 && planetsWithDetails.length === 0) {
+          console.error('[Snapshot Debug] Warning: Planets exist but all details are NULL! 喵')
+        }
+        isFirstSnapshotLog = false
+        lastSnapshotLogTime = now
+      }
+
       hub.setLastSnapshot(s)
       hub.getRenderer()?.updateFromSnapshot(s)
     },
@@ -313,6 +290,7 @@ onUnmounted(() => {
 
   hub.getRenderer()?.dispose()
   hub.setRenderer(null)
+  renderer.value = null
 })
 </script>
 
@@ -331,7 +309,6 @@ onUnmounted(() => {
         showDevelopingHintAtCenter()
       }
     }" @focus="({ entityId }) => {
-      // TODO: 双击聚焦视角：后续可扩展为平滑过渡、缩放自适应、锁定跟随等。
       const r = hub.getRenderer()
       if (!r) return
       const p = r.getEntityWorldPosGU(entityId)
@@ -353,7 +330,7 @@ onUnmounted(() => {
     <div v-if="isDebugHudEnabled && isDebugWindowVisible" ref="debugWindowRef" class="debug-window"
       :style="{ transform: `translate(${debugWindowPos.x}px, ${debugWindowPos.y}px)` }" role="dialog"
       aria-label="Debug Window">
-      <div class="debug-window-header" @pointerdown="onDebugWindowHeaderPointerDown"
+      <div class="debug-window-header" @pointerdown="(e) => onDebugWindowHeaderPointerDown(e, debugWindowRef)"
         @pointermove="onDebugWindowHeaderPointerMove" @pointerup="onDebugWindowHeaderPointerUp"
         @pointercancel="onDebugWindowHeaderPointerUp">
         <div class="debug-window-title">调试</div>
@@ -394,6 +371,10 @@ onUnmounted(() => {
         <div class="kv">
           <div class="k">鼠标位置(GU)</div>
           <div class="v">{{ hub.debug.mouseWorldText }}</div>
+        </div>
+        <div class="kv">
+          <div class="k">国家ID</div>
+          <div class="v">{{ auth.selectedNationId || '未设置' }}</div>
         </div>
       </div>
     </div>

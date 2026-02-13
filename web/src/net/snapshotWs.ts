@@ -81,6 +81,8 @@ export type SnapshotWsOptions = {
 export type SnapshotWsClient = {
     close: () => void
     send: (data: any) => void
+    updateVisibleSectors: (sectors: { q: number; r: number }[]) => void
+    setNationId: (nationId: string) => void
 }
 
 export function connectSnapshotWs(options: SnapshotWsOptions = {}): SnapshotWsClient {
@@ -154,11 +156,17 @@ export function connectSnapshotWs(options: SnapshotWsOptions = {}): SnapshotWsCl
             ws = null
             options.onStatus?.({ connected: false })
         },
-        send: (data: any) => {
+        updateVisibleSectors: (sectors: { q: number; r: number }[]) => {
             try {
-                ws?.send(typeof data === 'string' ? data : JSON.stringify(data))
+                ws?.send(JSON.stringify({ type: 'updateVisibleSectors', sectors }))
             } catch {
             }
         },
+        setNationId: (nationId: string) => {
+            try {
+                ws?.send(JSON.stringify({ type: 'setNationId', nationId }))
+            } catch {
+            }
+        }
     }
 }

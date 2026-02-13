@@ -262,3 +262,6 @@ specs/
 *.bin
 *.jar
 !gradle/wrapper/gradle-wrapper.jar
+
+## OpenCode configuration (local only)
+opencode.json
