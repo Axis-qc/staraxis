@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
-import staraxis.webnet.core.GameLog;
 
 import java.io.InputStream;
 import java.net.HttpURLConnection;
@@ -22,15 +21,15 @@ import java.util.Map;
  *
  * 响应格式：
  * {
- *   "ok": true,
- *   "usage": {
- *     "session_prompt_tokens": 5000,
- *     "session_completion_tokens": 2000,
- *     "session_total_tokens": 7000,
- *     "request_count": 10,
- *     "tool_call_count": 5,
- *     "avg_tokens_per_request": 700
- *   }
+ * "ok": true,
+ * "usage": {
+ * "session_prompt_tokens": 5000,
+ * "session_completion_tokens": 2000,
+ * "session_total_tokens": 7000,
+ * "request_count": 10,
+ * "tool_call_count": 5,
+ * "avg_tokens_per_request": 700
+ * }
  * }
  */
 public class AiUsageApi {
@@ -64,29 +63,27 @@ public class AiUsageApi {
                     if (!isAiPortOpen()) {
                         exchange.setStatusCode(503);
                         sendJson(exchange, Map.of(
-                            "ok", false, 
-                            "error", "AI system not available",
-                            "usage", Map.of(
-                                "session_prompt_tokens", 0,
-                                "session_completion_tokens", 0,
-                                "session_total_tokens", 0,
-                                "request_count", 0,
-                                "tool_call_count", 0,
-                                "avg_tokens_per_request", 0
-                            )
-                        ));
+                                "ok", false,
+                                "error", "AI system not available",
+                                "usage", Map.of(
+                                        "session_prompt_tokens", 0,
+                                        "session_completion_tokens", 0,
+                                        "session_total_tokens", 0,
+                                        "request_count", 0,
+                                        "tool_call_count", 0,
+                                        "avg_tokens_per_request", 0)));
                         return;
                     }
 
                     // 从 AI 系统获取统计
                     String aiUrl = "http://" + aiHost + ":" + aiPort + "/api/usage";
                     String response = fetchFromAiSystem(aiUrl);
-                    
+
                     exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
                     exchange.getResponseSender().send(response);
-                    
+
                 } catch (Exception e) {
-                    GameLog.log("AI usage error: " + e.getMessage());
+                    staraxis.webnet.core.WebNetLog.log("AI usage error: " + e.getMessage());
                     exchange.setStatusCode(500);
                     try {
                         sendJson(exchange, Map.of("ok", false, "error", e.getMessage()));
@@ -97,7 +94,7 @@ public class AiUsageApi {
             });
         };
     }
-    
+
     /**
      * 检查 AI HTTP 服务器端口是否已开放
      */
@@ -121,17 +118,17 @@ public class AiUsageApi {
         try {
             int status = conn.getResponseCode();
             InputStream is = (status >= 200 && status < 300) ? conn.getInputStream() : conn.getErrorStream();
-            
+
             if (is == null) {
                 throw new Exception("AI system returned empty response with status: " + status);
             }
 
             String response = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-            
+
             if (status < 200 || status >= 300) {
                 throw new Exception("AI system error (" + status + "): " + response);
             }
-            
+
             return response;
         } finally {
             conn.disconnect();

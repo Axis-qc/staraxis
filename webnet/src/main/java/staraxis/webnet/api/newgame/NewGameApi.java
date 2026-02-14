@@ -3,7 +3,6 @@ package staraxis.webnet.api.newgame;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import staraxis.game.StarAxisGameRuntime;
 import staraxis.game.world.WorldGenConfig;
-import staraxis.webnet.core.GameLog;
 import staraxis.webnet.game.GameSessions;
 
 import java.nio.charset.StandardCharsets;
@@ -115,7 +114,30 @@ public final class NewGameApi {
 
         // 接入 game 世界生成（当前为同步生成 + webnet 内存会话存储）
         WorldGenConfig cfg = new WorldGenConfig();
-        cfg.playerNationId = d.nationId;
+        // 注入玩家国家定义喵
+        staraxis.game.nation.NationDef nationDef = new staraxis.game.nation.NationDef();
+        nationDef.id = d.nationId;
+        // name/description 目前由前端/预设决定：若草稿未携带则回退为 nationId 喵
+        Object nationName = d.worldGenConfig.get("nationName");
+        nationDef.name = nationName == null ? d.nationId : String.valueOf(nationName);
+        Object nationDesc = d.worldGenConfig.get("nationDescription");
+        nationDef.description = nationDesc == null ? "" : String.valueOf(nationDesc);
+
+        // 出生点策略（新游戏）：preset/random 喵
+        Object spawnMode = d.worldGenConfig.get("spawnMode");
+        if (spawnMode != null && !String.valueOf(spawnMode).isBlank()) {
+            String m = String.valueOf(spawnMode).trim();
+            if (staraxis.game.nation.NationDef.SpawnStrategy.MODE_PRESET.equals(m)
+                    || staraxis.game.nation.NationDef.SpawnStrategy.MODE_RANDOM.equals(m)) {
+                nationDef.spawnStrategy.mode = m;
+            }
+        }
+        Object spawnPresetId = d.worldGenConfig.get("spawnPresetId");
+        if (spawnPresetId != null && !String.valueOf(spawnPresetId).isBlank()) {
+            nationDef.spawnStrategy.presetSystemId = String.valueOf(spawnPresetId).trim();
+        }
+
+        cfg.playerNationDef = nationDef;
 
         Object radius = d.worldGenConfig.get("worldRadius");
         if (radius instanceof Number) {
@@ -136,8 +158,9 @@ public final class NewGameApi {
         Object shape = d.worldGenConfig.get("galaxyShape");
         cfg.galaxyShape = shape == null ? null : String.valueOf(shape);
 
-        GameLog.initTruncate();
-        GameLog.log("NewGameApi.step3Confirm begin username=" + username + " playerId=" + playerId);
+        staraxis.webnet.core.WebNetLog.initTruncate();
+        staraxis.webnet.core.WebNetLog
+                .log("NewGameApi.step3Confirm begin username=" + username + " playerId=" + playerId);
 
         StarAxisGameRuntime runtime = StarAxisGameRuntime.newGame(cfg);
 
@@ -152,7 +175,7 @@ public final class NewGameApi {
 
         // 单世界：覆盖当前运行时
         GameSessions.setRuntime(runtime);
-        GameLog.log("NewGameApi.step3Confirm setRuntime ok worldRadius=" + cfg.worldRadius);
+        staraxis.webnet.core.WebNetLog.log("NewGameApi.step3Confirm setRuntime ok worldRadius=" + cfg.worldRadius);
 
         return Map.of(
                 "ok", true,

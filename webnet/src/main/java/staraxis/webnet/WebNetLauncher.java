@@ -33,7 +33,7 @@ public class WebNetLauncher {
         server.start();
 
         String url = "http://" + cfg.host + ":" + cfg.port + "/webui/";
-        System.out.println("WebNet started: " + url);
+        staraxis.webnet.core.WebNetLog.log("WebNet started: " + url);
 
         try {
             if (Desktop.isDesktopSupported()) {

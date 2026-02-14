@@ -5,7 +5,6 @@ import io.undertow.Handlers;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
-import staraxis.webnet.core.GameLog;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -104,7 +103,7 @@ public class ModsApi {
                         "order", mergedList,
                         "disabled", new ArrayList<>(disabledSet))));
             } catch (Exception e) {
-                GameLog.log("mods_list_failed: " + String.valueOf(e));
+                staraxis.webnet.core.WebNetLog.log("mods_list_failed: " + String.valueOf(e));
                 exchange.setStatusCode(500);
                 try {
                     exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
@@ -191,12 +190,13 @@ public class ModsApi {
                 }
                 objectMapper.writerWithDefaultPrettyPrinter().writeValue(f, root);
 
-                GameLog.log("mods_order_saved orderSize=" + newOrder.size() + " disabledSize=" + newDisabled.size());
+                staraxis.webnet.core.WebNetLog
+                        .log("mods_order_saved orderSize=" + newOrder.size() + " disabledSize=" + newDisabled.size());
 
                 exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
                         "ok", true)));
             } catch (Exception e) {
-                GameLog.log("mods_order_save_failed: " + String.valueOf(e));
+                staraxis.webnet.core.WebNetLog.log("mods_order_save_failed: " + String.valueOf(e));
                 exchange.setStatusCode(500);
                 try {
                     exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(

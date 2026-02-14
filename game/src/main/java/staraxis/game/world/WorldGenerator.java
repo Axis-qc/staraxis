@@ -36,16 +36,18 @@ public final class WorldGenerator {
                 if (HexMath.distance(origin, c) <= radius) {
                     Vec2d center = WorldHexLayout.sectorCenterWorld2D_GU(c);
                     WorldSector s = new WorldSector(c, center);
-                    s.ownerNationId = cfg.playerNationId; // 设置星区所属国家ID
+                    s.ownerNationId = cfg.playerNationDef == null ? null : cfg.playerNationDef.id; // 设置星区所属国家ID
                     sectors.put(c, s);
                 }
             }
         }
 
         // 调试日志：记录生成的星区数量喵
-        System.out.println("[WorldGenerator] Generated " + sectors.size() + " sectors for radius=" + radius + ", playerNationId=" + cfg.playerNationId);
+        staraxis.game.log.GameLog.logThrottled("worldgen_sector_count",
+                "[WorldGenerator] Generated " + sectors.size() + " sectors for radius=" + radius
+                        + ", playerNationId=" + (cfg.playerNationDef == null ? null : cfg.playerNationDef.id));
 
-        WorldMap worldMap = new WorldMap(radius, cfg.playerNationId, sectors);
+        WorldMap worldMap = new WorldMap(radius, cfg.playerNationDef == null ? null : cfg.playerNationDef.id, sectors);
 
         // 预留：国家占位逻辑（当前仅占位入口，不做算法）
         // - 未来：可以根据 cfg.playerNationId / 多国家列表做出生点分配

@@ -9,7 +9,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import staraxis.game.StarAxisGameRuntime;
 import staraxis.game.state.snapshot.EntitySnapshot;
 import staraxis.webnet.auth.AuthStore;
-import staraxis.webnet.core.GameLog;
 import staraxis.webnet.game.GameSessions;
 
 import java.util.HashMap;
@@ -70,7 +69,8 @@ public class WebAiWebSocketHandler extends AbstractReceiveListener {
             // 将玩家 session 附加到 channel，供后续工具调用使用
             channel.setAttribute("playerSession", session);
 
-            GameLog.log("AI WS Handshake [SUCCESS]: user=" + session.username + " playerId=" + session.playerId + " role=" + role);
+            staraxis.webnet.core.WebNetLog.log("AI WS Handshake [SUCCESS]: user=" + session.username + " playerId="
+                    + session.playerId + " role=" + role);
 
             channel.getReceiveSetter().set(this);
             channel.resumeReceives();
@@ -85,7 +85,7 @@ public class WebAiWebSocketHandler extends AbstractReceiveListener {
                     "}";
             WebSockets.sendText(hello, channel, null);
         } catch (Exception e) {
-            GameLog.log("AI WS connect failed: " + e.getMessage());
+            staraxis.webnet.core.WebNetLog.log("AI WS connect failed: " + e.getMessage());
             try {
                 WebSockets.sendText("{\"type\":\"ai.hello\",\"ok\":false,\"error\":\"internal_error\"}", channel, null);
             } catch (Exception ignored) {
@@ -179,7 +179,7 @@ public class WebAiWebSocketHandler extends AbstractReceiveListener {
         // 1. 获取玩家视野范围
         // 2. 检查 entityId 是否在玩家视野内
         // 3. 如果不在视野内，返回权限错误
-        
+
         // 临时实现：允许访问（后续需要接入实际的视野系统）
         List<EntitySnapshot> snapshots = runtime.getRealTimeWorldStateReadonly()
                 .getEntitySnapshotsView();
@@ -199,7 +199,7 @@ public class WebAiWebSocketHandler extends AbstractReceiveListener {
             // 权限检查：这里应该检查玩家是否有权限查看该实体
             // 比如：是否是自己的舰船、是否在传感器范围内、是否是友方单位等
             boolean hasPermission = checkEntityPermission(target, session);
-            
+
             if (!hasPermission) {
                 response.put("ok", false);
                 response.put("error", "no_permission");
@@ -223,7 +223,7 @@ public class WebAiWebSocketHandler extends AbstractReceiveListener {
         // 1. 只返回玩家已探索/已知的区域信息
         // 2. 只返回玩家有权限查看的势力信息
         // 3. 隐藏敌方未暴露的情报
-        
+
         // 临时实现：返回完整概览（后续需要接入实际的视野系统）
         response.put("ok", true);
         response.put("result", staraxis.webnet.websocket.SnapshotMessageFactory.buildWorldSummary(runtime));

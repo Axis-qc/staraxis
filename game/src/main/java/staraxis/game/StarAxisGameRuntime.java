@@ -76,7 +76,88 @@ public class StarAxisGameRuntime implements GameRuntime {
         List<StarSystem> systems = astroGenerator.generateSystemsForMap(worldMap, cfg);
 
         AstroData astro = new AstroData(systems);
-        return new StarAxisGameRuntime(new WorldState(time, worldMap, astro));
+        WorldState ws = new WorldState(time, worldMap, astro);
+
+        // 初始化玩家国家并绑定出生点喵
+        if (cfg.playerNationDef != null && cfg.playerNationDef.id != null && !cfg.playerNationDef.id.isBlank()) {
+            String nationId = cfg.playerNationDef.id;
+            if (!ws.nationManager.hasNation(nationId)) {
+                ws.nationManager.registerNation(nationId);
+            }
+            var ns = ws.nationManager.getNationState(nationId);
+            if (ns != null) {
+                ns.name = cfg.playerNationDef.name;
+                ns.governmentId = cfg.playerNationDef.governmentId;
+            }
+
+            long spawnSystemId = 0;
+            String mode = cfg.playerNationDef.spawnStrategy == null ? null : cfg.playerNationDef.spawnStrategy.mode;
+            if (mode == null || mode.isBlank()) {
+                mode = staraxis.game.nation.NationDef.SpawnStrategy.MODE_RANDOM;
+            }
+
+            if (staraxis.game.nation.NationDef.SpawnStrategy.MODE_PRESET.equals(mode)) {
+                String presetId = cfg.playerNationDef.spawnStrategy == null ? null
+                        : cfg.playerNationDef.spawnStrategy.presetSystemId;
+                if (presetId != null && !presetId.isBlank()) {
+                    Long sid = astroGenerator.getPresetToSystemIdMap().get(presetId);
+                    if (sid != null) {
+                        spawnSystemId = sid;
+                    }
+                }
+            }
+
+            if (spawnSystemId == 0) {
+                // random：从未归属星系中确定性选择一个喵
+                java.util.ArrayList<StarSystem> candidates = new java.util.ArrayList<>();
+                for (StarSystem sys : systems) {
+                    if (sys == null) {
+                        continue;
+                    }
+                    boolean owned = false;
+                    for (StarBody star : sys.stars) {
+                        if (star != null && star.ownerNationId != null && !star.ownerNationId.isBlank()) {
+                            owned = true;
+                            break;
+                        }
+                    }
+                    if (!owned) {
+                        for (PlanetBody planet : sys.planets) {
+                            if (planet != null && planet.ownerNationId != null && !planet.ownerNationId.isBlank()) {
+                                owned = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (!owned) {
+                        candidates.add(sys);
+                    }
+                }
+
+                if (!candidates.isEmpty()) {
+                    long mixed = astroGenerator.getWorldSeedHash() ^ (long) nationId.hashCode();
+                    java.util.Random rr = new java.util.Random(mixed);
+                    spawnSystemId = candidates.get(rr.nextInt(candidates.size())).systemId;
+                }
+            }
+
+            if (ns != null) {
+                ns.spawnSystemEntityId = spawnSystemId;
+            }
+
+            // 将出生星系内的天体归属到该国，避免被中途加入选中喵
+            if (spawnSystemId != 0) {
+                for (StarSystem sys : systems) {
+                    if (sys == null || sys.systemId != spawnSystemId) {
+                        continue;
+                    }
+                    sys.assignOwnership(nationId);
+                    break;
+                }
+            }
+        }
+
+        return new StarAxisGameRuntime(ws);
     }
 
     @Override
@@ -170,6 +251,7 @@ public class StarAxisGameRuntime implements GameRuntime {
         int sectorCount = 0;
         for (WorldSector sector : worldState.worldMap.getSectorsView()) {
             s.putSectorCenter(sector.coord, sector.centerWorldGU);
+            s.putSectorOwnerNationId(sector.coord, sector.ownerNationId);
             sectorCount++;
         }
         // 调试日志：记录添加到快照的星区数量喵

@@ -4,6 +4,8 @@ import staraxis.game.astro.def.AstroAssetRepository;
 import staraxis.game.astro.def.OrbitPresetDef;
 import staraxis.game.astro.def.PlanetTypeDef;
 import staraxis.game.astro.def.StarTypeDef;
+import staraxis.game.astro.def.PresetStarSystemDef;
+import staraxis.game.astro.def.PresetStarSystemRepository;
 import staraxis.game.planet.PlanetSurface;
 import staraxis.game.planet.def.PlanetAssetRepository;
 import staraxis.game.world.WorldGenConfig;
@@ -29,6 +31,9 @@ public final class AstroGenerator {
     private final long worldSeedHash;
     private final AtomicLong idCounter = new AtomicLong(0);
 
+    /** 记录预设 ID 到生成出的系统实体 ID 的映射喵。 */
+    private final java.util.Map<String, Long> presetToSystemId = new java.util.HashMap<>();
+
     public AstroGenerator(AstroAssetRepository assets, PlanetAssetRepository planetAssets, String worldSeed) {
         this.assets = assets;
         this.planetAssets = planetAssets;
@@ -37,20 +42,252 @@ public final class AstroGenerator {
         this.random = new Random(this.worldSeedHash);
     }
 
+    public long getWorldSeedHash() {
+        return worldSeedHash;
+    }
+
+    /**
+     * 获取预设 ID 到系统实体 ID 的映射喵。
+     */
+    public java.util.Map<String, Long> getPresetToSystemIdMap() {
+        return java.util.Collections.unmodifiableMap(presetToSystemId);
+    }
+
     /**
      * 为整个世界地图生成所有星系。
      */
     public List<StarSystem> generateSystemsForMap(WorldMap worldMap, WorldGenConfig config) {
         List<StarSystem> systems = new ArrayList<>();
-        // 按 50% 概率在每个星区生成一个恒星系
-        double systemSpawnChance = 0.5;
 
-        for (WorldSector sector : worldMap.getSectorsView()) {
-            if (random.nextDouble() < systemSpawnChance) {
-                systems.add(generateSystemForSector(sector, config.playerNationId));
+        // 预设星系：固定坐标不受 seed 影响，随机坐标随 seed 变化喵
+        PresetStarSystemRepository presetRepo = new PresetStarSystemRepository(
+                new com.fasterxml.jackson.databind.ObjectMapper());
+        presetRepo.loadAll();
+
+        java.util.Set<String> occupied = new java.util.HashSet<>();
+
+        // 1) 先放置固定坐标预设喵
+        for (PresetStarSystemDef preset : presetRepo.getPresets()) {
+            if (preset == null || preset.position == null || preset.system == null)
+                continue;
+            if (!"fixedSector".equals(preset.position.mode))
+                continue;
+            if (preset.position.q == null || preset.position.r == null)
+                continue;
+
+            WorldSector sector = worldMap
+                    .getSector(new staraxis.game.world.hex.SectorCoord(preset.position.q, preset.position.r));
+            if (sector == null)
+                continue;
+            String key = preset.position.q + "," + preset.position.r;
+            if (occupied.contains(key))
+                continue;
+
+            StarSystem sys = generateSystemForPreset(sector, preset,
+                    config.playerNationDef == null ? null : config.playerNationDef.id);
+            systems.add(sys);
+            occupied.add(key);
+            if (preset.presetId != null) {
+                presetToSystemId.put(preset.presetId, sys.systemId);
             }
         }
+
+        // 2) 再放置随机坐标预设（按 seed + presetId 确定性选点）喵
+        java.util.List<WorldSector> allSectors = new java.util.ArrayList<>();
+        for (WorldSector s : worldMap.getSectorsView())
+            allSectors.add(s);
+
+        for (PresetStarSystemDef preset : presetRepo.getPresets()) {
+            if (preset == null || preset.position == null || preset.system == null)
+                continue;
+            if (!"randomSector".equals(preset.position.mode))
+                continue;
+            if (preset.presetId == null || preset.presetId.isBlank())
+                continue;
+
+            // 构造确定性随机源喵
+            long mix = worldSeedHash ^ (long) preset.presetId.hashCode();
+            Random rr = new Random(mix);
+
+            // 候选集合：按 randomRadius 限制到中心附近，否则全图喵
+            java.util.List<WorldSector> candidates = new java.util.ArrayList<>();
+            Integer rad = preset.position.randomRadius;
+            if (rad != null && rad > 0) {
+                for (WorldSector s : allSectors) {
+                    int q = s.coord.q();
+                    int r = s.coord.r();
+                    if (Math.abs(q) <= rad && Math.abs(r) <= rad && Math.abs(q + r) <= rad) {
+                        candidates.add(s);
+                    }
+                }
+            } else {
+                candidates.addAll(allSectors);
+            }
+            if (candidates.isEmpty())
+                continue;
+
+            // 反复尝试选未占用星区喵
+            for (int attempt = 0; attempt < Math.min(32, candidates.size()); attempt++) {
+                WorldSector sector = candidates.get(rr.nextInt(candidates.size()));
+                String key = sector.coord.q() + "," + sector.coord.r();
+                if (occupied.contains(key))
+                    continue;
+                StarSystem sys = generateSystemForPreset(sector, preset,
+                        config.playerNationDef == null ? null : config.playerNationDef.id);
+                systems.add(sys);
+                occupied.add(key);
+                if (preset.presetId != null) {
+                    presetToSystemId.put(preset.presetId, sys.systemId);
+                }
+                break;
+            }
+        }
+
+        // 3) 最后对剩余星区按概率生成随机星系喵
+        double systemSpawnChance = 0.5;
+        for (WorldSector sector : worldMap.getSectorsView()) {
+            String key = sector.coord.q() + "," + sector.coord.r();
+            if (occupied.contains(key)) {
+                continue;
+            }
+            if (random.nextDouble() < systemSpawnChance) {
+                systems.add(generateSystemForSector(sector,
+                        config.playerNationDef == null ? null : config.playerNationDef.id));
+            }
+        }
+
         return systems;
+    }
+
+    /**
+     * 根据预设定义生成恒星系喵。
+     */
+    private StarSystem generateSystemForPreset(WorldSector sector, PresetStarSystemDef def, String playerNationId) {
+        StarSystem system = new StarSystem();
+        system.systemId = idCounter.incrementAndGet();
+        system.barycenterEntityId = idCounter.incrementAndGet();
+        system.sectorCoord = sector.coord;
+        system.centerWorldGU = sector.centerWorldGU;
+
+        // 1. 生成恒星喵
+        for (PresetStarSystemDef.StarDef sDef : def.system.stars) {
+            StarBody star = generateStarFromDef(sDef, playerNationId);
+            star.systemId = system.systemId;
+            star.parentEntityId = system.barycenterEntityId;
+            star.sectorCoord = system.sectorCoord;
+            star.posWorldGU = system.centerWorldGU;
+            system.stars.add(star);
+        }
+
+        // 如果预设没给星，补一颗随机的喵
+        if (system.stars.isEmpty()) {
+            StarBody primaryStar = generateStar(system, playerNationId);
+            system.stars.add(primaryStar);
+        }
+
+        // 2. 生成行星喵
+        StarBody primary = system.stars.get(0);
+        for (PresetStarSystemDef.PlanetDef pDef : def.system.planets) {
+            PlanetBody planet = generatePlanetFromDef(pDef, primary, playerNationId);
+            planet.systemId = system.systemId;
+            planet.parentEntityId = system.barycenterEntityId;
+            planet.sectorCoord = system.sectorCoord;
+            planet.posWorldGU = system.centerWorldGU;
+            system.planets.add(planet);
+        }
+
+        return system;
+    }
+
+    private StarBody generateStarFromDef(PresetStarSystemDef.StarDef sDef, String playerNationId) {
+        StarTypeDef type = assets.getStarTypes().stream()
+                .filter(t -> t.typeId != null && t.typeId.equals(sDef.starTypeId))
+                .findFirst()
+                .orElse(null);
+        if (type == null) {
+            type = weightedRandom(assets.getStarTypes(), t -> t.weight);
+        }
+
+        StarBody star = new StarBody();
+        star.entityId = idCounter.incrementAndGet();
+        star.starTypeId = type.typeId;
+        star.radiusGU = sDef.radiusGU != null ? sDef.radiusGU
+                : randomDouble(type.radiusGURange.get(0), type.radiusGURange.get(1));
+        star.massSolar = sDef.massSolar != null ? sDef.massSolar
+                : randomDouble(type.massSolarRange.get(0), type.massSolarRange.get(1));
+        star.temperatureK = sDef.temperatureK != null ? sDef.temperatureK
+                : randomInt(type.temperatureKRange.get(0), type.temperatureKRange.get(1));
+        star.description = type.description;
+        star.ownerNationId = sDef.ownerNationId != null ? sDef.ownerNationId : playerNationId;
+
+        if (sDef.surfaceTexturePath != null) {
+            star.surfaceTexturePath = sDef.surfaceTexturePath;
+        } else if (type.spriteCandidates != null && !type.spriteCandidates.isEmpty()) {
+            int idx = random.nextInt(type.spriteCandidates.size());
+            star.surfaceTexturePath = type.spriteCandidates.get(idx);
+        }
+
+        return star;
+    }
+
+    private PlanetBody generatePlanetFromDef(PresetStarSystemDef.PlanetDef pDef, StarBody primary,
+            String playerNationId) {
+        PlanetTypeDef type = assets.getPlanetTypes().stream()
+                .filter(t -> t.typeId != null && t.typeId.equals(pDef.planetTypeId))
+                .findFirst()
+                .orElse(null);
+        OrbitPresetDef orbitPreset = assets.getOrbitPreset();
+
+        PlanetBody planet = new PlanetBody();
+        planet.entityId = idCounter.incrementAndGet();
+        planet.planetTypeId = type != null ? type.typeId : "rocky_terran";
+
+        double baseRadius = type != null ? randomDouble(type.radiusGURange.get(0), type.radiusGURange.get(1)) : 400;
+        planet.radiusGU = pDef.radiusGU != null ? pDef.radiusGU : baseRadius;
+
+        double baseRot = orbitPreset != null
+                ? randomDouble(orbitPreset.rotationPeriodHoursRange.get(0), orbitPreset.rotationPeriodHoursRange.get(1))
+                : 24;
+        planet.rotationPeriodHours = pDef.rotationPeriodHours != null ? pDef.rotationPeriodHours : baseRot;
+
+        if (pDef.surfaceTexturePath != null) {
+            planet.surfaceTexturePath = pDef.surfaceTexturePath;
+        } else if (type != null && type.spriteCandidates != null && !type.spriteCandidates.isEmpty()) {
+            int idx = random.nextInt(type.spriteCandidates.size());
+            planet.surfaceTexturePath = type.spriteCandidates.get(idx);
+        }
+
+        planet.ownerNationId = pDef.ownerNationId != null ? pDef.ownerNationId : playerNationId;
+        planet.orbitCenterEntityId = primary.entityId;
+
+        if (pDef.orbit != null) {
+            planet.semiMajorAxisGU = pDef.orbit.semiMajorAxisGU != null ? pDef.orbit.semiMajorAxisGU : 20000;
+            planet.eccentricity = pDef.orbit.eccentricity != null ? pDef.orbit.eccentricity : 0;
+            planet.inclinationDeg = pDef.orbit.inclinationDeg != null ? pDef.orbit.inclinationDeg : 0;
+            planet.periapsisArgDeg = pDef.orbit.periapsisArgDeg != null ? pDef.orbit.periapsisArgDeg
+                    : randomDouble(0, 360);
+            planet.meanAnomalyDegAtEpoch = pDef.orbit.meanAnomalyDegAtEpoch != null ? pDef.orbit.meanAnomalyDegAtEpoch
+                    : randomDouble(0, 360);
+        } else {
+            planet.semiMajorAxisGU = 30000;
+            planet.eccentricity = 0;
+            planet.inclinationDeg = 0;
+            planet.periapsisArgDeg = randomDouble(0, 360);
+            planet.meanAnomalyDegAtEpoch = randomDouble(0, 360);
+        }
+
+        double pYears = Math.sqrt(
+                Math.pow(planet.semiMajorAxisGU / staraxis.game.world.WorldConstants.AU_IN_GU, 3) / primary.massSolar);
+        planet.orbitalPeriodDays = pYears * 365.25;
+
+        planet.surface = new staraxis.game.planet.PlanetSurface(planet.entityId);
+        planet.surfaceComponentId = planet.entityId;
+        long mixedSeed = staraxis.game.planet.surface.SurfaceNamingUtils.mixSeed(worldSeedHash, planet.entityId);
+        if (type != null) {
+            planet.surface.initializeSurface(type, planetAssets, mixedSeed);
+        }
+
+        return planet;
     }
 
     /**
@@ -99,10 +336,11 @@ public final class AstroGenerator {
         }
 
         // 调试日志
-        System.out.println("[DEBUG AstroGenerator] Generated star: typeId=" + type.typeId +
-                ", description='" + type.description + "'" +
-                ", spriteCandidates=" + type.spriteCandidates +
-                ", selectedTexture='" + star.surfaceTexturePath + "'");
+        staraxis.game.log.GameLog.logThrottled("astro_gen_star",
+                "[DEBUG AstroGenerator] Generated star: typeId=" + type.typeId +
+                        ", description='" + type.description + "'" +
+                        ", spriteCandidates=" + type.spriteCandidates +
+                        ", selectedTexture='" + star.surfaceTexturePath + "'");
         return star;
     }
 

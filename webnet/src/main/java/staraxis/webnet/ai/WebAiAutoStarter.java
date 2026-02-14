@@ -1,7 +1,5 @@
 package staraxis.webnet.ai;
 
-import staraxis.webnet.core.GameLog;
-
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -95,10 +93,11 @@ public class WebAiAutoStarter {
                     startIdleChecker();
                 }
 
-                GameLog.log("AI Assistant triggered (showConsole=" + runningShowConsole + ", autoExit="
-                        + runningAutoExit + ", idle=" + cfg.idleExitSeconds + "s) successfully喵.");
+                staraxis.webnet.core.WebNetLog
+                        .log("AI Assistant triggered (showConsole=" + runningShowConsole + ", autoExit="
+                                + runningAutoExit + ", idle=" + cfg.idleExitSeconds + "s) successfully喵.");
             } catch (Exception e) {
-                GameLog.log("AI AutoStart failed: " + e.getMessage() + "喵.");
+                staraxis.webnet.core.WebNetLog.log("AI AutoStart failed: " + e.getMessage() + "喵.");
             }
         }
     }
@@ -114,7 +113,8 @@ public class WebAiAutoStarter {
                     }
                     long idleMs = System.currentTimeMillis() - lastActivityAtMs;
                     if (idleMs > runningIdleTimeoutMs) {
-                        GameLog.log("AI Assistant idle for " + (idleMs / 1000) + "s, stopping...喵");
+                        staraxis.webnet.core.WebNetLog
+                                .log("AI Assistant idle for " + (idleMs / 1000) + "s, stopping...喵");
                         stopProcess();
                         break;
                     }
@@ -132,7 +132,7 @@ public class WebAiAutoStarter {
             if (aiProcess != null) {
                 if (aiProcess.isAlive()) {
                     if (runningShowConsole) {
-                        GameLog.log(
+                        staraxis.webnet.core.WebNetLog.log(
                                 "Notice: AI was in show_console mode, automatic exit might not kill the actual window喵.");
                     }
                     aiProcess.destroy();

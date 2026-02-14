@@ -2,7 +2,6 @@ package staraxis.webnet.command;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import staraxis.game.StarAxisGameRuntime;
-import staraxis.webnet.core.GameLog;
 import staraxis.webnet.game.GameSessions;
 
 import java.util.Map;
@@ -122,7 +121,7 @@ public class WebCommandRegistry {
             return handler.handle(m, runtime);
         } catch (Exception e) {
             try {
-                GameLog.log("WebCommandRegistry.handleTextMessage failed: " + String.valueOf(e));
+                staraxis.webnet.core.WebNetLog.log("WebCommandRegistry.handleTextMessage failed: " + String.valueOf(e));
             } catch (Exception ignored) {
             }
             return "{\"type\":\"command_response\",\"ok\":false,\"error\":\"command_failed\"}";

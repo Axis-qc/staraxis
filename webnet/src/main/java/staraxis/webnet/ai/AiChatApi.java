@@ -5,7 +5,6 @@ import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 import staraxis.webnet.auth.AuthStore;
-import staraxis.webnet.core.GameLog;
 
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -34,26 +33,27 @@ import java.util.Map;
  * POST /api/ai/chat
  * Header: Authorization: Bearer <player_token>
  * {
- *   "messages": [
- *     {"role": "user", "content": "你好"}
- *   ],
- *   "context": {
- *     "playerId": "...",
- *     "playerToken": "..."  // 玩家 token，AI 系统用它进行 WebSocket 认证
- *   },
- *   "show_thinking": true
+ * "messages": [
+ * {"role": "user", "content": "你好"}
+ * ],
+ * "context": {
+ * "playerId": "...",
+ * "playerToken": "..." // 玩家 token，AI 系统用它进行 WebSocket 认证
+ * },
+ * "show_thinking": true
  * }
  *
  * 响应格式：
  * {
- *   "ok": true,
- *   "message": "AI回复内容",
- *   "thinking": [...],
- *   "usage": {"prompt_tokens": 200, "completion_tokens": 100, "total_tokens": 300},
- *   "tool_calls_count": 1,
- *   "total_duration_ms": 2500,
- *   "provider": "openai",
- *   "model": "gpt-4"
+ * "ok": true,
+ * "message": "AI回复内容",
+ * "thinking": [...],
+ * "usage": {"prompt_tokens": 200, "completion_tokens": 100, "total_tokens":
+ * 300},
+ * "tool_calls_count": 1,
+ * "total_duration_ms": 2500,
+ * "provider": "openai",
+ * "model": "gpt-4"
  * }
  */
 public class AiChatApi {
@@ -91,7 +91,7 @@ public class AiChatApi {
                             && !exchange.getRequestHeaders().get("Authorization").isEmpty()
                                     ? exchange.getRequestHeaders().get("Authorization").get(0)
                                     : null;
-                    
+
                     AuthStore.Session session = authStore.getSessionFromAuthorizationHeader(auth);
                     if (session == null) {
                         exchange.setStatusCode(401);
@@ -99,26 +99,29 @@ public class AiChatApi {
                         return;
                     }
 
-                    GameLog.log("AI Chat: player=" + session.username + " playerId=" + session.playerId);
+                    staraxis.webnet.core.WebNetLog
+                            .log("AI Chat: player=" + session.username + " playerId=" + session.playerId);
 
                     // 2. 确保 AI 系统已启动
                     WebAiAutoStarter.ensureAiStartedIfNeeded();
-                    
+
                     // 3. 等待 AI HTTP 服务器就绪
                     if (!waitForAiReady()) {
-                        GameLog.log("AI system failed to start within " + MAX_STARTUP_WAIT_MS + "ms");
+                        staraxis.webnet.core.WebNetLog
+                                .log("AI system failed to start within " + MAX_STARTUP_WAIT_MS + "ms");
                         exchange.setStatusCode(503);
-                        sendJson(exchange, Map.of("ok", false, "error", "AI system is starting, please try again later"));
+                        sendJson(exchange,
+                                Map.of("ok", false, "error", "AI system is starting, please try again later"));
                         return;
                     }
-                    
+
                     exchange.startBlocking();
                     String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-                    
+
                     // 4. 解析请求以验证格式
                     @SuppressWarnings("unchecked")
                     Map<String, Object> req = objectMapper.readValue(body, Map.class);
-                    
+
                     if (!req.containsKey("messages")) {
                         exchange.setStatusCode(400);
                         sendJson(exchange, Map.of("ok", false, "error", "messages is required"));
@@ -127,23 +130,24 @@ public class AiChatApi {
 
                     // 5. 更新 context 中的 playerToken，确保使用当前登录玩家的 token
                     @SuppressWarnings("unchecked")
-                    Map<String, Object> context = (Map<String, Object>) req.computeIfAbsent("context", k -> new java.util.HashMap<>());
+                    Map<String, Object> context = (Map<String, Object>) req.computeIfAbsent("context",
+                            k -> new java.util.HashMap<>());
                     context.put("playerToken", auth); // 传递完整的 Authorization header
                     context.put("playerId", session.playerId);
                     context.put("username", session.username);
-                    
+
                     // 重新序列化请求体
                     String modifiedBody = objectMapper.writeValueAsString(req);
 
                     // 6. 转发到 AI 系统 HTTP 服务器
                     String aiUrl = "http://" + aiHost + ":" + aiPort + "/api/chat";
                     String response = forwardToAiSystem(aiUrl, modifiedBody);
-                    
+
                     exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
                     exchange.getResponseSender().send(response);
-                    
+
                 } catch (Exception e) {
-                    GameLog.log("AI chat error: " + e.getMessage());
+                    staraxis.webnet.core.WebNetLog.log("AI chat error: " + e.getMessage());
                     exchange.setStatusCode(500);
                     try {
                         sendJson(exchange, Map.of("ok", false, "error", e.getMessage()));
@@ -154,21 +158,21 @@ public class AiChatApi {
             });
         };
     }
-    
+
     /**
      * 等待 AI HTTP 服务器就绪
      */
     private boolean waitForAiReady() {
         long startTime = System.currentTimeMillis();
         long deadline = startTime + MAX_STARTUP_WAIT_MS;
-        
+
         while (System.currentTimeMillis() < deadline) {
             if (isAiPortOpen()) {
                 long elapsed = System.currentTimeMillis() - startTime;
-                GameLog.log("AI HTTP server is ready after " + elapsed + "ms");
+                staraxis.webnet.core.WebNetLog.log("AI HTTP server is ready after " + elapsed + "ms");
                 return true;
             }
-            
+
             try {
                 Thread.sleep(500);
             } catch (InterruptedException e) {
@@ -176,10 +180,10 @@ public class AiChatApi {
                 return false;
             }
         }
-        
+
         return false;
     }
-    
+
     /**
      * 检查 AI HTTP 服务器端口是否已开放
      */
@@ -209,17 +213,17 @@ public class AiChatApi {
 
             int status = conn.getResponseCode();
             InputStream is = (status >= 200 && status < 300) ? conn.getInputStream() : conn.getErrorStream();
-            
+
             if (is == null) {
                 throw new Exception("AI system returned empty response with status: " + status);
             }
 
             String response = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-            
+
             if (status < 200 || status >= 300) {
                 throw new Exception("AI system error (" + status + "): " + response);
             }
-            
+
             return response;
         } finally {
             conn.disconnect();

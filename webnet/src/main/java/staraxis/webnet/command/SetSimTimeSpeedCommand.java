@@ -1,7 +1,6 @@
 package staraxis.webnet.command;
 
 import staraxis.game.StarAxisGameRuntime;
-import staraxis.webnet.core.GameLog;
 
 import java.util.Map;
 
@@ -76,7 +75,7 @@ public class SetSimTimeSpeedCommand implements WebCommandHandler {
 
             runtime.getCommandBusForSimOnly().submit(new staraxis.game.command.SetPlayerTimeStepCommand(mps));
 
-            GameLog.log("cmd setSimTimeSpeed queued mps=" + mps + " beforeStep=" + currentStep);
+            staraxis.webnet.core.WebNetLog.log("cmd setSimTimeSpeed queued mps=" + mps + " beforeStep=" + currentStep);
 
             return "{\"type\":\"command_response\",\"ok\":true,\"command\":\"setSimTimeSpeed\",\"minutesPerSecond\":"
                     + mps

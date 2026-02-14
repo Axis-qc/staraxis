@@ -194,13 +194,12 @@ public final class SnapshotMessageFactory {
         if (shouldLogEntityStats) {
             hasLoggedEntityStatsOnce = true;
             lastLogTimeMs = logNow;
-            System.out.println(
+            staraxis.webnet.core.WebNetLog.logThrottled("snapshot_entity_stats",
                     "[SnapshotMessageFactory] entityStats all=" + String.valueOf(allTypeCounts)
                             + " filtered=" + String.valueOf(filteredTypeCounts)
                             + " filterSectors="
                             + (filterSectors == null ? "null" : String.valueOf(filterSectors.size()))
-                            + " nationId=" + nationId
-                            + " 喵");
+                            + " nationId=" + nationId);
         }
 
         RealTimeStateDto realTime = new RealTimeStateDto(
@@ -209,6 +208,7 @@ public final class SnapshotMessageFactory {
                 rt.accGameHoursInDay,
                 rt.worldRadius,
                 sectorCenters,
+                rt.getSectorOwnerNationIdByCoordView(),
                 filteredSnapshots);
 
         // 3. 转换日结算状态（含低频地表数据）喵

@@ -23,9 +23,9 @@ public class WorldGenConfig {
     public String galaxyShape;
 
     /**
-     * playerNationId：玩家选择的国家 id（预留国家/势力入口）。
+     * playerNationDef：玩家选择/自定义的国家定义。
      */
-    public String playerNationId;
+    public staraxis.game.nation.NationDef playerNationDef;
 
     public WorldGenConfig() {
     }

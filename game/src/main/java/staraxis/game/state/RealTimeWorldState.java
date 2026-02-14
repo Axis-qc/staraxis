@@ -38,6 +38,9 @@ public class RealTimeWorldState {
     /** 星区中心点缓存（sectorCoord -> centerWorldGU）。 */
     private final Map<SectorCoord, Vec2d> sectorCentersWorldGU = new LinkedHashMap<>();
 
+    /** 星区归属缓存（"q,r" -> ownerNationId）。 */
+    private final Map<String, String> sectorOwnerNationIdByCoord = new LinkedHashMap<>();
+
     private final List<EntitySnapshot> entitySnapshots = new ArrayList<>();
 
     public RealTimeWorldState() {
@@ -55,6 +58,7 @@ public class RealTimeWorldState {
         entityIdsBySector.clear();
         entityIdsBySystem.clear();
         sectorCentersWorldGU.clear();
+        sectorOwnerNationIdByCoord.clear();
         entitySnapshots.clear();
     }
 
@@ -82,6 +86,16 @@ public class RealTimeWorldState {
         sectorCentersWorldGU.put(coord, centerWorldGU);
     }
 
+    /**
+     * 模拟层填充：写入一个星区归属。
+     */
+    public void putSectorOwnerNationId(SectorCoord coord, String ownerNationId) {
+        if (coord == null) {
+            return;
+        }
+        sectorOwnerNationIdByCoord.put(coord.q() + "," + coord.r(), ownerNationId);
+    }
+
     // --- 只读视图 --- //
 
     public Map<Long, Entity> getEntitiesByIdView() {
@@ -98,6 +112,10 @@ public class RealTimeWorldState {
 
     public Map<SectorCoord, Vec2d> getSectorCentersWorldGUView() {
         return Collections.unmodifiableMap(sectorCentersWorldGU);
+    }
+
+    public Map<String, String> getSectorOwnerNationIdByCoordView() {
+        return Collections.unmodifiableMap(sectorOwnerNationIdByCoord);
     }
 
     public List<EntitySnapshot> getEntitySnapshotsView() {

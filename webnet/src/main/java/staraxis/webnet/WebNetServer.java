@@ -45,7 +45,6 @@ import staraxis.webnet.api.I18nApi;
 import staraxis.webnet.api.ShipApi;
 import staraxis.webnet.auth.AuthApi;
 import staraxis.webnet.auth.AuthStore;
-import staraxis.webnet.core.GameLog;
 import staraxis.webnet.core.WebNetServerConfig;
 import staraxis.webnet.core.WsConnectionManager;
 import staraxis.webnet.mod.ModManager;
@@ -144,7 +143,8 @@ public class WebNetServer {
             }
         } catch (Exception e) {
             try {
-                GameLog.log("tickAndBroadcastSnapshots snapshot_build_failed: " + String.valueOf(e));
+                staraxis.webnet.core.WebNetLog
+                        .log("tickAndBroadcastSnapshots snapshot_build_failed: " + String.valueOf(e));
             } catch (Exception ignored) {
             }
         }
@@ -188,7 +188,8 @@ public class WebNetServer {
             WebSockets.sendText(json, channel, null);
         } catch (Exception e) {
             try {
-                GameLog.log("sendSnapshotToChannel snapshot_build_failed: " + String.valueOf(e));
+                staraxis.webnet.core.WebNetLog.logThrottled("snapshot_build_failed",
+                        "sendSnapshotToChannel snapshot_build_failed: " + String.valueOf(e));
             } catch (Exception ignored) {
             }
             WebSockets.sendText("{\"type\":\"snapshot\",\"ok\":false,\"error\":\"snapshot_build_failed\"}",
@@ -228,8 +229,16 @@ public class WebNetServer {
     }
 
     public void start() {
-        GameLog.initTruncate();
-        GameLog.log("WebNetServer.start host=" + config.host + " port=" + config.port);
+        // 进程启动时，统一初始化并截断双模块日志喵！
+        staraxis.webnet.core.WebNetLog.initTruncate();
+        // game 模块日志也在进程启动时截断喵！
+        staraxis.game.log.GameLog.initTruncate();
+
+        staraxis.webnet.core.WebNetLog.log("WebNetServer.start host=" + config.host + " port=" + config.port);
+        staraxis.webnet.core.WebNetLog.log(
+                "Logging Policy: [webnet.log] & [game.log] truncated on process start. Frequent logs throttled to 1min/entry喵.");
+        staraxis.webnet.core.WebNetLog.log(
+                "Connection Policy: Silent connect/disconnect. Only critical errors (heartbeat timeout, kick) will be logged喵.");
 
         if (config.autoExitSeconds > 0) {
             connMgr.getLastDisconnectAtMsRef().set(System.currentTimeMillis());
@@ -459,6 +468,70 @@ public class WebNetServer {
             });
         });
 
+        apiHandler.addExactPath("/join-game/available-spawns", exchange -> {
+            exchange.dispatch(() -> {
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE,
+                        staraxis.webnet.api.newgame.NewGameApi.jsonContentType());
+                if (!"GET".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
+                    exchange.setStatusCode(405);
+                    try {
+                        exchange.getResponseSender().send(
+                                objectMapper.writeValueAsString(Map.of("ok", false, "error", "method_not_allowed")));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                    return;
+                }
+                try {
+                    staraxis.webnet.api.joingame.JoinGameApi.setJsonContentType(exchange);
+                    Map<String, Object> resp = staraxis.webnet.api.joingame.JoinGameApi.handleAvailableSpawns();
+                    exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
+                } catch (Exception e) {
+                    exchange.setStatusCode(400);
+                    try {
+                        exchange.getResponseSender().send(objectMapper
+                                .writeValueAsString(Map.of("ok", false, "error", String.valueOf(e.getMessage()))));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                }
+            });
+        });
+
+        apiHandler.addExactPath("/join-game/confirm-spawn", exchange -> {
+            exchange.dispatch(() -> {
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE,
+                        staraxis.webnet.api.newgame.NewGameApi.jsonContentType());
+                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
+                    exchange.setStatusCode(405);
+                    try {
+                        exchange.getResponseSender().send(
+                                objectMapper.writeValueAsString(Map.of("ok", false, "error", "method_not_allowed")));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                    return;
+                }
+                try {
+                    exchange.startBlocking();
+                    String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                    Map<String, Object> req = staraxis.webnet.api.newgame.NewGameApi.parseBodyToMap(objectMapper, body);
+                    staraxis.webnet.api.joingame.JoinGameApi.setJsonContentType(exchange);
+                    Map<String, Object> resp = staraxis.webnet.api.joingame.JoinGameApi.handleConfirmSpawn(objectMapper,
+                            req);
+                    exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
+                } catch (Exception e) {
+                    exchange.setStatusCode(400);
+                    try {
+                        exchange.getResponseSender().send(objectMapper
+                                .writeValueAsString(Map.of("ok", false, "error", String.valueOf(e.getMessage()))));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                }
+            });
+        });
+
         apiHandler.addExactPath("/newgame/step1/selectNation", exchange -> {
             exchange.dispatch(() -> {
                 exchange.getResponseHeaders().put(Headers.CONTENT_TYPE,
@@ -629,7 +702,7 @@ public class WebNetServer {
         undertow = Undertow.builder().addHttpListener(config.port, config.host).setHandler(routes).build();
         undertow.start();
 
-        System.out.println("WebNet started on http://" + config.host + ":" + config.port);
+        staraxis.webnet.core.WebNetLog.log("WebNet started on http://" + config.host + ":" + config.port);
         startAutoExitWatcher();
     }
 
@@ -645,7 +718,7 @@ public class WebNetServer {
                 if (last <= 0)
                     return;
                 if (System.currentTimeMillis() - last >= seconds * 1000L) {
-                    System.out.println("WebNet auto-exit: idle for " + seconds + "s, shutting down.");
+                    staraxis.webnet.core.WebNetLog.log("WebNet auto-exit: idle for " + seconds + "s, shutting down.");
                     shutdownAndExit(0);
                 }
             } catch (Exception ignored) {
@@ -661,7 +734,7 @@ public class WebNetServer {
     }
 
     private void shutdownAndRestart() {
-        System.out.println("WebNet restart requested...");
+        staraxis.webnet.core.WebNetLog.log("WebNet restart requested...");
         stop();
         try {
             Thread.sleep(500);
@@ -691,13 +764,13 @@ public class WebNetServer {
             pb.inheritIO();
             pb.start();
         } catch (Exception e) {
-            System.err.println("Failed to restart: " + e.getMessage());
+            staraxis.webnet.core.WebNetLog.log("Failed to restart: " + e.getMessage());
         }
         shutdownAndExit(0);
     }
 
     private void shutdownAndExit(int code) {
-        System.out.println("WebNet shutting down...");
+        staraxis.webnet.core.WebNetLog.log("WebNet shutting down...");
         for (WebSocketChannel ch : connMgr.getAllChannels()) {
             try {
                 WebSockets.sendClose(1000, "bye", ch, null);

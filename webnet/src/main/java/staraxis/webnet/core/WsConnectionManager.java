@@ -69,7 +69,8 @@ public class WsConnectionManager {
         // 1. 挤号逻辑：如果该 ID 已有连接，强制关闭旧的喵
         WebSocketChannel oldChannel = playerSessions.get(playerId);
         if (oldChannel != null && oldChannel != channel) {
-            System.out.println("ConnMgr: Player " + playerId + " reconnected, kicking old session.");
+            WebNetLog.logThrottled("conn_kick_" + playerId,
+                    "ConnMgr: Player " + playerId + " reconnected, kicking old session.");
             try {
                 WebSockets.sendText("{\"type\":\"kick\",\"reason\":\"new_login\"}", oldChannel, null);
                 oldChannel.close();
@@ -85,9 +86,7 @@ public class WsConnectionManager {
         allChannels.add(channel);
         playerLastPongMs.put(channel, System.currentTimeMillis());
 
-        int count = playerConnectionCount.incrementAndGet();
-        System.out.println("ConnMgr: Player [" + playerId + "] connected, total=" + count);
-
+        playerConnectionCount.incrementAndGet();
         WebAiAutoStarter.ensureAiStartedIfNeeded();
     }
 
@@ -97,10 +96,9 @@ public class WsConnectionManager {
     public void unregisterPlayer(WebSocketChannel channel) {
         if (allChannels.remove(channel)) {
             cleanupChannel(channel);
-            int left = playerConnectionCount.decrementAndGet();
-            System.out.println("ConnMgr: Player disconnected, remaining=" + left);
+            playerConnectionCount.decrementAndGet();
 
-            if (left <= 0) {
+            if (playerConnectionCount.get() <= 0) {
                 lastDisconnectAtMs.set(System.currentTimeMillis());
             }
         }
@@ -120,14 +118,12 @@ public class WsConnectionManager {
 
     public void registerAi(WebSocketChannel channel) {
         allChannels.add(channel);
-        int count = aiConnectionCount.incrementAndGet();
-        System.out.println("ConnMgr: AI connected, total=" + count);
+        aiConnectionCount.incrementAndGet();
     }
 
     public void unregisterAi(WebSocketChannel channel) {
         if (allChannels.remove(channel)) {
-            int left = aiConnectionCount.decrementAndGet();
-            System.out.println("ConnMgr: AI disconnected, remaining=" + left);
+            aiConnectionCount.decrementAndGet();
         }
     }
 

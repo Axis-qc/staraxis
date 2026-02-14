@@ -5,7 +5,6 @@ import io.undertow.Handlers;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
-import staraxis.webnet.core.GameLog;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -61,10 +60,10 @@ public class AuthApi {
                 String pass = String.valueOf(req.get("password"));
 
                 authStore.register(user, pass);
-                GameLog.log("auth_register user=" + user);
+                staraxis.webnet.core.WebNetLog.log("auth_register user=" + user);
                 sendOk(exchange, Map.of("ok", true, "username", user));
             } catch (Exception e) {
-                GameLog.log("auth_register_failed: " + e.getMessage());
+                staraxis.webnet.core.WebNetLog.log("auth_register_failed: " + e.getMessage());
                 sendError(exchange, 400, e.getMessage());
             }
         });
@@ -84,10 +83,10 @@ public class AuthApi {
                 String pass = String.valueOf(req.get("password"));
 
                 AuthStore.Session s = authStore.login(user, pass);
-                GameLog.log("auth_login user=" + user + " playerId=" + s.playerId);
+                staraxis.webnet.core.WebNetLog.log("auth_login user=" + user + " playerId=" + s.playerId);
                 sendOk(exchange, Map.of("ok", true, "token", s.token, "playerId", s.playerId));
             } catch (Exception e) {
-                GameLog.log("auth_login_failed: " + e.getMessage());
+                staraxis.webnet.core.WebNetLog.log("auth_login_failed: " + e.getMessage());
                 sendError(exchange, 401, e.getMessage());
             }
         });
@@ -145,10 +144,10 @@ public class AuthApi {
                 String gameId = req.get("gameId") == null ? "" : String.valueOf(req.get("gameId"));
 
                 authStore.setGameId(s.playerId, gameId);
-                GameLog.log("auth_set_gameid playerId=" + s.playerId + " gameId=" + gameId);
+                staraxis.webnet.core.WebNetLog.log("auth_set_gameid playerId=" + s.playerId + " gameId=" + gameId);
                 sendOk(exchange, Map.of("ok", true, "playerId", s.playerId, "gameId", gameId.trim()));
             } catch (Exception e) {
-                GameLog.log("auth_set_gameid_failed: " + e.getMessage());
+                staraxis.webnet.core.WebNetLog.log("auth_set_gameid_failed: " + e.getMessage());
                 sendError(exchange, 400, e.getMessage());
             }
         });

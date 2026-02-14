@@ -50,6 +50,15 @@ public class NationState {
     /** 国家是否处于活跃状态（true=正常，false=灭亡/休眠）。 */
     public boolean active = true;
 
+    /** 国家名称（从 NationDef 同步的纯文本）。 */
+    public String name;
+
+    /** 政体引用 ID（从 NationDef 同步）。 */
+    public String governmentId;
+
+    /** 出生星系实体 ID（权威绑定结果）。 */
+    public long spawnSystemEntityId;
+
     /**
      * 构造函数：创建指定ID的国家运行时状态。
      *

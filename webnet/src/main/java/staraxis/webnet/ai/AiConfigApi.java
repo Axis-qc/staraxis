@@ -5,7 +5,6 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
-import staraxis.webnet.core.GameLog;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -110,7 +109,8 @@ public class AiConfigApi {
                 // 写回 YAML 喵
                 yamlMapper.writeValue(configFile, currentConfig);
 
-                GameLog.log("AI configuration updated (provider=" + providerId + ") and saved to config.yaml");
+                staraxis.webnet.core.WebNetLog
+                        .log("AI configuration updated (provider=" + providerId + ") and saved to config.yaml");
 
                 exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json");
                 exchange.getResponseSender().send("{\"ok\":true}");

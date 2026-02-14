@@ -1,0 +1,74 @@
+{
+    "schemaVersion": 1,
+    "presets": [
+        {
+            "presetId": "home_system_fixed",
+            "position": {
+                "mode": "fixedSector",
+                "q": 0,
+                "r": 0
+            },
+            "system": {
+                "stars": [
+                    {
+                        "starTypeId": "M_MAIN_SEQUENCE",
+                        "massSolar": 0.2,
+                        "radiusGU": 6000,
+                        "temperatureK": 3200,
+                        "surfaceTexturePath": "star/star_red01.png"
+                    }
+                ],
+                "planets": [
+                    {
+                        "planetTypeId": "rocky_terran",
+                        "radiusGU": 400,
+                        "rotationPeriodHours": 24,
+                        "surfaceTexturePath": null,
+                        "orbit": {
+                            "semiMajorAxisGU": 25000,
+                            "eccentricity": 0.01,
+                            "inclinationDeg": 0.0,
+                            "periapsisArgDeg": 10.0,
+                            "meanAnomalyDegAtEpoch": 120.0
+                        }
+                    },
+                    {
+                        "planetTypeId": "rocky_desert",
+                        "radiusGU": 360,
+                        "rotationPeriodHours": 30,
+                        "surfaceTexturePath": null,
+                        "orbit": {
+                            "semiMajorAxisGU": 42000,
+                            "eccentricity": 0.02,
+                            "inclinationDeg": 1.0,
+                            "periapsisArgDeg": 210.0,
+                            "meanAnomalyDegAtEpoch": 60.0
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "presetId": "mystery_system_random",
+            "position": {
+                "mode": "randomSector",
+                "randomRadius": 6
+            },
+            "system": {
+                "stars": [
+                    {
+                        "starTypeId": "G_MAIN_SEQUENCE"
+                    }
+                ],
+                "planets": [
+                    {
+                        "planetTypeId": "gas_giant",
+                        "orbit": {
+                            "semiMajorAxisGU": 60000
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

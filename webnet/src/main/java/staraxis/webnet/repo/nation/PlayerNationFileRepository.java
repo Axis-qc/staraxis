@@ -142,8 +142,8 @@ public class PlayerNationFileRepository {
         NationDef n = d.nation;
         return Map.of(
                 "id", n.id,
-                "nameKey", n.nameKey == null ? "" : n.nameKey,
-                "descriptionKey", n.descriptionKey == null ? "" : n.descriptionKey,
+                "name", n.name == null ? "" : n.name,
+                "description", n.description == null ? "" : n.description,
                 "governmentId", n.governmentId == null ? "" : n.governmentId,
                 "speciesIds", n.speciesIds == null ? List.of() : n.speciesIds,
                 "startingTechIds", n.startingTechIds == null ? List.of() : n.startingTechIds);

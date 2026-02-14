@@ -29,4 +29,31 @@ public class StarSystem {
 
     /** 属于该系统的行星实体列表。 */
     public final List<PlanetBody> planets = new ArrayList<>();
+
+    /** 恒星系所属国家ID（权威归属口径）。 */
+    public String ownerNationId;
+
+    /**
+     * 权威分配系统归属。
+     * 作用：同步设置系统、重心、所有恒星及行星的 ownerNationId（所属国家ID），确保一致性喵！
+     *
+     * @param nationId 国家唯一标识
+     */
+    public void assignOwnership(String nationId) {
+        this.ownerNationId = nationId;
+        if (stars != null) {
+            for (StarBody star : stars) {
+                if (star != null) {
+                    star.ownerNationId = nationId;
+                }
+            }
+        }
+        if (planets != null) {
+            for (PlanetBody planet : planets) {
+                if (planet != null) {
+                    planet.ownerNationId = nationId;
+                }
+            }
+        }
+    }
 }

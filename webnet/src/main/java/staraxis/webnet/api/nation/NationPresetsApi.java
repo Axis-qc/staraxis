@@ -88,8 +88,8 @@ public final class NationPresetsApi {
                 }
                 Map<String, Object> item = new LinkedHashMap<>();
                 item.put("id", n.id);
-                item.put("nameKey", n.nameKey == null ? "" : n.nameKey);
-                item.put("descriptionKey", n.descriptionKey == null ? "" : n.descriptionKey);
+                item.put("name", n.name == null ? "" : n.name);
+                item.put("description", n.description == null ? "" : n.description);
                 item.put("governmentId", n.governmentId == null ? "" : n.governmentId);
                 item.put("speciesIds", n.speciesIds == null ? List.of() : n.speciesIds);
                 item.put("startingTechIds", n.startingTechIds == null ? List.of() : n.startingTechIds);

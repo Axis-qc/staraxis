@@ -120,8 +120,8 @@ public class AdminApi {
 
     private void handleRestart(HttpServerExchange exchange) {
         exchange.dispatch(() -> {
-            System.out.println(
-                    "HTTP restart requested: " + exchange.getRequestMethod() + " " + exchange.getRequestPath());
+            WebNetLog.logThrottled("admin_restart", "HTTP restart requested: " + exchange.getRequestMethod() + " "
+                    + exchange.getRequestPath());
             exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
 
             String auth = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
@@ -157,7 +157,8 @@ public class AdminApi {
 
     private void handleQuit(HttpServerExchange exchange) {
         exchange.dispatch(() -> {
-            System.out.println("HTTP quit requested: " + exchange.getRequestMethod() + " " + exchange.getRequestPath());
+            WebNetLog.logThrottled("admin_quit", "HTTP quit requested: " + exchange.getRequestMethod() + " "
+                    + exchange.getRequestPath());
             exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
 
             String auth = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
@@ -185,7 +186,7 @@ public class AdminApi {
                     Thread.sleep(500);
                 } catch (InterruptedException ignored) {
                 }
-                System.out.println("WebNetServer exiting by HTTP quit...");
+                WebNetLog.logThrottled("admin_quit_exit", "WebNetServer exiting by HTTP quit...");
                 System.exit(0);
             }).start();
         });
