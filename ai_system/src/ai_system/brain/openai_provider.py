@@ -336,8 +336,31 @@ class OpenAiProvider:
                     )
                     step.tool_calls.append(tool_info)
                     
-                    # 将工具执行结果反馈给模型喵
+                    # 保护措施：对工具返回内容做统一限流与截断，防止 Token 爆炸喵
+                    # 设定硬上限：8000 字符（约 2000-4000 tokens）喵
+                    MAX_TOOL_CONTENT_CHARS = 8000
                     tool_content = json.dumps(result, ensure_ascii=False)
+                    
+                    if len(tool_content) > MAX_TOOL_CONTENT_CHARS:
+                        # 尝试提取关键信息作为摘要喵
+                        summary = {"ok": result.get("ok", True), "truncated": True}
+                        if isinstance(result, dict):
+                            if "total" in result: summary["total"] = result["total"]
+                            if "items" in result and isinstance(result["items"], list):
+                                # 仅保留前 3 个项目的关键 ID 喵
+                                summary["items_count"] = len(result["items"])
+                                summary["sample_items"] = [
+                                    {"id": item.get("entityId"), "type": item.get("entityType")} 
+                                    for item in result["items"][:3]
+                                ]
+                        
+                        tool_content = json.dumps({
+                            "error": "result_too_large_truncated",
+                            "summary": summary,
+                            "hint": "结果由于体积过大已被系统自动截断喵。请使用分页参数(limit/offset)或更精确的搜索条件再次查询喵。"
+                        }, ensure_ascii=False)
+                        logger.warning(f"Tool {function_name} result truncated (original size: {len(json.dumps(result))} bytes)")
+
                     messages.append({
                         "tool_call_id": call_id,
                         "role": "tool",

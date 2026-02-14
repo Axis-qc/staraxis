@@ -679,6 +679,8 @@ public class WebNetServer {
 
         AiChatApi aiChatApi = new AiChatApi(objectMapper, authStore);
         apiHandler.addPrefixPath("/ai/chat", aiChatApi.createHandler());
+        apiHandler.addPrefixPath("/ai/history", aiChatApi.createHistoryHandler());
+        apiHandler.addPrefixPath("/ai/history/clear", aiChatApi.createClearHistoryHandler());
 
         AiUsageApi aiUsageApi = new AiUsageApi(objectMapper);
         apiHandler.addPrefixPath("/ai/usage", aiUsageApi.createHandler());
@@ -740,6 +742,308 @@ public class WebNetServer {
             });
         });
 
+        // --- Snapshot Query API (AI / Tools) ---
+
+        apiHandler.addExactPath("/snapshot/meta", exchange -> {
+            exchange.dispatch(() -> {
+                try {
+                    String auth = exchange.getRequestHeaders().get("Authorization") != null
+                            && !exchange.getRequestHeaders().get("Authorization").isEmpty()
+                                    ? exchange.getRequestHeaders().get("Authorization").get(0)
+                                    : null;
+
+                    AuthStore.Session session = authStore.getSessionFromAuthorizationHeader(auth);
+                    if (session == null) {
+                        exchange.setStatusCode(401);
+                        exchange.endExchange();
+                        return;
+                    }
+
+                    StarAxisGameRuntime runtime = GameSessions.getRuntime();
+                    if (runtime == null) {
+                        exchange.setStatusCode(503);
+                        exchange.endExchange();
+                        return;
+                    }
+
+                    String nationId = runtime.getWorldStateForSimOnly().nationManager
+                            .getNationIdByPlayer(session.playerId);
+                    if (nationId == null) {
+                        nationId = connMgr.getPlayerNationId(session.playerId);
+                    }
+
+                    var rt = runtime.getRealTimeWorldStateReadonly();
+
+                    java.util.Map<String, Integer> ownedEntityCounts = new java.util.HashMap<>();
+                    if (nationId != null && !nationId.isBlank()) {
+                        for (var s : rt.getEntitySnapshotsView()) {
+                            String owner = null;
+                            try {
+                                owner = SnapshotMessageFactory.extractOwnerNationId(s);
+                            } catch (Exception ignored) {
+                            }
+                            if (nationId.equals(owner)) {
+                                String tn = s.entityType == null ? "null" : s.entityType.name();
+                                ownedEntityCounts.put(tn, ownedEntityCounts.getOrDefault(tn, 0) + 1);
+                            }
+                        }
+                    }
+
+                    java.util.Map<String, Object> resp = new java.util.LinkedHashMap<>();
+                    resp.put("ok", true);
+                    resp.put("nationId", nationId);
+                    resp.put("simulationTick", rt.simulationTick);
+                    resp.put("gameDatetimeDay", rt.gameDatetimeDay);
+                    resp.put("accGameHoursInDay", rt.accGameHoursInDay);
+                    resp.put("worldRadius", rt.worldRadius);
+                    resp.put("ownedEntityCounts", ownedEntityCounts);
+
+                    exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                    exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
+
+                } catch (Exception e) {
+                    exchange.setStatusCode(500);
+                    exchange.endExchange();
+                }
+            });
+        });
+
+        apiHandler.addExactPath("/snapshot/entity", exchange -> {
+            exchange.dispatch(() -> {
+                try {
+                    String idStr = exchange.getQueryParameters().get("id") != null
+                            ? exchange.getQueryParameters().get("id").peekFirst()
+                            : null;
+                    if (idStr == null || idStr.isBlank()) {
+                        exchange.setStatusCode(400);
+                        exchange.endExchange();
+                        return;
+                    }
+
+                    long entityId = Long.parseLong(idStr);
+
+                    String auth = exchange.getRequestHeaders().get("Authorization") != null
+                            && !exchange.getRequestHeaders().get("Authorization").isEmpty()
+                                    ? exchange.getRequestHeaders().get("Authorization").get(0)
+                                    : null;
+
+                    AuthStore.Session session = authStore.getSessionFromAuthorizationHeader(auth);
+                    if (session == null) {
+                        exchange.setStatusCode(401);
+                        exchange.endExchange();
+                        return;
+                    }
+
+                    StarAxisGameRuntime runtime = GameSessions.getRuntime();
+                    if (runtime == null) {
+                        exchange.setStatusCode(503);
+                        exchange.endExchange();
+                        return;
+                    }
+
+                    String nationId = runtime.getWorldStateForSimOnly().nationManager
+                            .getNationIdByPlayer(session.playerId);
+                    if (nationId == null) {
+                        nationId = connMgr.getPlayerNationId(session.playerId);
+                    }
+
+                    staraxis.game.state.snapshot.EntitySnapshot found = null;
+                    for (var s : runtime.getRealTimeWorldStateReadonly().getEntitySnapshotsView()) {
+                        if (s != null && s.entityId == entityId) {
+                            found = s;
+                            break;
+                        }
+                    }
+
+                    if (found == null) {
+                        exchange.setStatusCode(404);
+                        exchange.endExchange();
+                        return;
+                    }
+
+                    // 权限：本国实体放行；非本国只允许天体（后续可接 visibilitySystem）喵
+                    String owner = null;
+                    try {
+                        owner = SnapshotMessageFactory.extractOwnerNationId(found);
+                    } catch (Exception ignored) {
+                    }
+                    boolean owned = nationId != null && !nationId.isBlank() && nationId.equals(owner);
+                    boolean isNatural = found.entityType == staraxis.game.entity.EntityType.STAR
+                            || found.entityType == staraxis.game.entity.EntityType.PLANET
+                            || found.entityType == staraxis.game.entity.EntityType.SYSTEM_BARYCENTER;
+
+                    if (!owned && !isNatural) {
+                        exchange.setStatusCode(403);
+                        exchange.endExchange();
+                        return;
+                    }
+
+                    exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                    exchange.getResponseSender().send(objectMapper.writeValueAsString(java.util.Map.of(
+                            "ok", true,
+                            "entity", found)));
+
+                } catch (Exception e) {
+                    exchange.setStatusCode(500);
+                    exchange.endExchange();
+                }
+            });
+        });
+
+        apiHandler.addExactPath("/snapshot/owned/search", exchange -> {
+            exchange.dispatch(() -> {
+                try {
+                    String auth = exchange.getRequestHeaders().get("Authorization") != null
+                            && !exchange.getRequestHeaders().get("Authorization").isEmpty()
+                                    ? exchange.getRequestHeaders().get("Authorization").get(0)
+                                    : null;
+
+                    AuthStore.Session session = authStore.getSessionFromAuthorizationHeader(auth);
+                    if (session == null) {
+                        exchange.setStatusCode(401);
+                        exchange.endExchange();
+                        return;
+                    }
+
+                    StarAxisGameRuntime runtime = GameSessions.getRuntime();
+                    if (runtime == null) {
+                        exchange.setStatusCode(503);
+                        exchange.endExchange();
+                        return;
+                    }
+
+                    String nationId = runtime.getWorldStateForSimOnly().nationManager
+                            .getNationIdByPlayer(session.playerId);
+                    if (nationId == null) {
+                        nationId = connMgr.getPlayerNationId(session.playerId);
+                    }
+
+                    if (nationId == null || nationId.isBlank()) {
+                        exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(java.util.Map.of(
+                                "ok", true,
+                                "total", 0,
+                                "items", java.util.List.of())));
+                        return;
+                    }
+
+                    String entityType = exchange.getQueryParameters().get("entityType") != null
+                            ? exchange.getQueryParameters().get("entityType").peekFirst()
+                            : null;
+                    String text = exchange.getQueryParameters().get("text") != null
+                            ? exchange.getQueryParameters().get("text").peekFirst()
+                            : null;
+                    String sectorQStr = exchange.getQueryParameters().get("sectorQ") != null
+                            ? exchange.getQueryParameters().get("sectorQ").peekFirst()
+                            : null;
+                    String sectorRStr = exchange.getQueryParameters().get("sectorR") != null
+                            ? exchange.getQueryParameters().get("sectorR").peekFirst()
+                            : null;
+
+                    int limit = 50;
+                    int offset = 0;
+                    try {
+                        if (exchange.getQueryParameters().get("limit") != null) {
+                            limit = Integer.parseInt(exchange.getQueryParameters().get("limit").peekFirst());
+                        }
+                        if (exchange.getQueryParameters().get("offset") != null) {
+                            offset = Integer.parseInt(exchange.getQueryParameters().get("offset").peekFirst());
+                        }
+                    } catch (Exception ignored) {
+                    }
+                    if (limit < 1)
+                        limit = 1;
+                    if (limit > 200)
+                        limit = 200;
+                    if (offset < 0)
+                        offset = 0;
+
+                    Integer sectorQ = null;
+                    Integer sectorR = null;
+                    try {
+                        if (sectorQStr != null && sectorRStr != null) {
+                            sectorQ = Integer.parseInt(sectorQStr);
+                            sectorR = Integer.parseInt(sectorRStr);
+                        }
+                    } catch (Exception ignored) {
+                    }
+
+                    final String nationIdFinal = nationId;
+                    final String textLower = text == null ? null : text.toLowerCase();
+                    final String typeLower = entityType == null ? null : entityType.toLowerCase();
+
+                    java.util.ArrayList<staraxis.game.state.snapshot.EntitySnapshot> matches = new java.util.ArrayList<>();
+
+                    for (var s : runtime.getRealTimeWorldStateReadonly().getEntitySnapshotsView()) {
+                        if (s == null) {
+                            continue;
+                        }
+
+                        String owner = null;
+                        try {
+                            owner = SnapshotMessageFactory.extractOwnerNationId(s);
+                        } catch (Exception ignored) {
+                        }
+                        if (!nationIdFinal.equals(owner)) {
+                            continue;
+                        }
+
+                        if (typeLower != null && s.entityType != null
+                                && !s.entityType.name().toLowerCase().equals(typeLower)) {
+                            continue;
+                        }
+
+                        if (sectorQ != null && sectorR != null) {
+                            if (s.sectorCoord == null || s.sectorCoord.q() != sectorQ || s.sectorCoord.r() != sectorR) {
+                                continue;
+                            }
+                        }
+
+                        if (textLower != null && !textLower.isBlank()) {
+                            boolean ok = false;
+                            if (String.valueOf(s.entityId).contains(textLower)) {
+                                ok = true;
+                            } else if (s.details != null) {
+                                try {
+                                    String detailsJson = objectMapper.writeValueAsString(s.details).toLowerCase();
+                                    if (detailsJson.contains(textLower)) {
+                                        ok = true;
+                                    }
+                                } catch (Exception ignored) {
+                                }
+                            }
+                            if (!ok) {
+                                continue;
+                            }
+                        }
+
+                        matches.add(s);
+                    }
+
+                    int total = matches.size();
+
+                    java.util.List<staraxis.game.state.snapshot.EntitySnapshot> paged = matches;
+                    if (offset > 0 || limit < matches.size()) {
+                        int from = Math.min(offset, matches.size());
+                        int to = Math.min(from + limit, matches.size());
+                        paged = matches.subList(from, to);
+                    }
+
+                    java.util.Map<String, Object> resp = new java.util.LinkedHashMap<>();
+                    resp.put("ok", true);
+                    resp.put("total", total);
+                    resp.put("items", paged);
+
+                    exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                    exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
+
+                } catch (Exception e) {
+                    exchange.setStatusCode(500);
+                    exchange.endExchange();
+                }
+            });
+        });
+
         HttpHandler apiWrapped = exchange -> {
             try {
                 String rp = exchange.getRequestPath();
@@ -760,6 +1064,23 @@ public class WebNetServer {
         undertow.start();
 
         staraxis.webnet.core.WebNetLog.log("WebNet started on http://" + config.host + ":" + config.port);
+
+        // 如果开启了 AI 预启动，则立即触发喵
+        if (config.aiPrestart) {
+            staraxis.webnet.core.WebNetLog.log("AI Prestart enabled, triggering assistant...");
+            WebAiAutoStarter.ensureAiStartedIfNeeded();
+
+            // 异步探测 AI 是否就绪喵
+            scheduler.schedule(() -> {
+                try (java.net.Socket socket = new java.net.Socket()) {
+                    socket.connect(new java.net.InetSocketAddress("127.0.0.1", 17891), 1000);
+                    staraxis.webnet.core.WebNetLog.log("AI Preheat Check: Success (Port 17891 is listening) 喵!");
+                } catch (Exception e) {
+                    staraxis.webnet.core.WebNetLog.log("AI Preheat Check: Not ready yet or failed (Port 17891) 喵.");
+                }
+            }, 10, java.util.concurrent.TimeUnit.SECONDS);
+        }
+
         startAutoExitWatcher();
     }
 

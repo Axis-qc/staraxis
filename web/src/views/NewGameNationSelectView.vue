@@ -22,11 +22,15 @@ import { useAuthStore } from '../stores/auth'
 
 type NationItem = {
   id: string
-  nameKey: string
-  descriptionKey: string
+  name: string
+  description: string
   governmentId: string
   speciesIds: string[]
   startingTechIds: string[]
+  spawnStrategy?: {
+    mode: string
+    presetSystemId?: string | null
+  }
 }
 
 type PlayerNationDesignDto = {
@@ -106,7 +110,13 @@ async function loadPresetNations() {
   if (!data.ok) {
     throw new Error(data.error || 'preset_nations_failed')
   }
-  presetNations.value = Array.isArray(data.nations) ? data.nations : []
+
+  // 兼容后端 NationDef（国家定义）字段：name/description 为纯文本喵
+  presetNations.value = (Array.isArray(data.nations) ? data.nations : []).map((n) => ({
+    ...n,
+    name: (n as any).name ?? '',
+    description: (n as any).description ?? '',
+  }))
 }
 
 async function loadPlayerNationIds() {
@@ -199,8 +209,8 @@ async function createSamplePlayerNation() {
     playerId: playerId.value,
     nation: {
       id: nationId,
-      nameKey: `nation.${nationId}.name`,
-      descriptionKey: `nation.${nationId}.desc`,
+      name: `Custom Nation ${nationId}`,
+      description: '玩家自定义国家样例',
       governmentId: 'gov_republic',
       speciesIds: ['species_human'],
       startingTechIds: ['tech_basic_mining_1'],
@@ -280,7 +290,7 @@ onMounted(() => {
               <button v-for="n in presetNations" :key="n.id" class="list-item"
                 :class="{ selected: selectedNationSource === 'preset' && selectedNationId === n.id }"
                 @click="choosePreset(n.id)">
-                <div class="item-title">{{ t(n.nameKey) || n.id }}</div>
+                <div class="item-title">{{ n.name || n.id }}</div>
                 <div class="item-sub">{{ n.id }}</div>
               </button>
             </div>
@@ -302,7 +312,7 @@ onMounted(() => {
                 :class="{ selected: selectedNationSource === 'player' && selectedNationId === id }"
                 @click="choosePlayer(id)">
                 <div class="item-title">
-                  {{ playerNations[id] ? (t(playerNations[id].nation.nameKey) || id) : id }}
+                  {{ playerNations[id] ? (playerNations[id].nation.name || id) : id }}
                 </div>
                 <div class="item-sub">{{ id }}</div>
               </button>
@@ -316,14 +326,23 @@ onMounted(() => {
 
         <section class="card card-right nation-detail">
           <div class="detail-content" v-if="selectedNation">
-            <h3 class="detail-title">{{ t(selectedNation.nameKey) || selectedNation.id }}</h3>
+            <h3 class="detail-title">{{ selectedNation.name || selectedNation.id }}</h3>
             <div class="detail-row">
               <span class="detail-label">id</span>
               <span class="detail-value">{{ selectedNation.id }}</span>
             </div>
+            <div class="detail-row" v-if="selectedNation.description">
+              <span class="detail-label">description</span>
+              <span class="detail-value">{{ selectedNation.description }}</span>
+            </div>
             <div class="detail-row">
               <span class="detail-label">governmentId</span>
               <span class="detail-value">{{ selectedNation.governmentId }}</span>
+            </div>
+            <div class="detail-row" v-if="selectedNation.spawnStrategy">
+              <span class="detail-label">spawnStrategy</span>
+              <span class="detail-value">{{ selectedNation.spawnStrategy.mode }} ({{
+                selectedNation.spawnStrategy.presetSystemId || 'N/A' }})</span>
             </div>
             <div class="detail-row">
               <span class="detail-label">speciesIds</span>

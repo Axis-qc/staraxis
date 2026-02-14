@@ -87,13 +87,91 @@ const messages = ref<Message[]>([
 
 const inputText = ref('')
 const isLoading = ref(false)
-const sessionId = ref(generateSessionId())
+const sessionId = ref('')
 
 // 玩家认证信息
 const playerToken = ref(localStorage.getItem('sa.token') || '')
-// 玩家名称与ID，后续可用于界面展示喵
-// const playerUsername = ref('')
-// const playerId = ref('')
+
+function getPlayerIdFromAuthSession(): string {
+    try {
+        const raw = sessionStorage.getItem('auth')
+        if (!raw) return ''
+        const parsed = JSON.parse(raw)
+        return typeof parsed?.playerId === 'string' ? parsed.playerId : ''
+    } catch {
+        return ''
+    }
+}
+
+function sessionStorageSessionKey(playerId: string): string {
+    return `sa_ai_session_${playerId}`
+}
+
+async function loadAiHistory(): Promise<void> {
+    const token = localStorage.getItem('sa.token') || ''
+    playerToken.value = token
+
+    const playerId = getPlayerIdFromAuthSession()
+    if (!playerId) return
+
+    // 复用同一玩家上次会话 ID，刷新不丢失喵
+    const key = sessionStorageSessionKey(playerId)
+    const saved = localStorage.getItem(key)
+    if (saved && saved.startsWith('sess_')) {
+        sessionId.value = saved
+    } else {
+        sessionId.value = generateSessionId()
+        localStorage.setItem(key, sessionId.value)
+    }
+
+    if (!playerToken.value || !sessionId.value) return
+
+    const resp = await fetch(`/api/ai/history?sessionId=${encodeURIComponent(sessionId.value)}`, {
+        method: 'GET',
+        headers: {
+            Authorization: `Bearer ${playerToken.value}`,
+        },
+    })
+    if (!resp.ok) return
+    const data = await resp.json().catch(() => null)
+    if (!data?.ok || !Array.isArray(data.messages) || data.messages.length === 0) return
+
+    // 只恢复用户/助手消息，避免把 thinking/tool 回灌导致 token 爆炸喵
+    const restored: Message[] = data.messages
+        .filter((m: any) => m && (m.role === 'user' || m.role === 'assistant'))
+        .map((m: any, idx: number) => ({
+            role: m.role,
+            text: m.text ?? m.content ?? '',
+            id: m.id ?? `history_${idx}`,
+            usage: m.usage,
+            thinking: m.thinking,
+            showThinking: false,
+        }))
+
+    if (restored.length > 0) {
+        messages.value = restored
+    }
+}
+
+async function clearAiHistory(): Promise<void> {
+    const playerId = getPlayerIdFromAuthSession()
+    if (!playerId || !sessionId.value || !playerToken.value) return
+
+    const resp = await fetch('/api/ai/history/clear', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${playerToken.value}`,
+        },
+        body: JSON.stringify({ sessionId: sessionId.value }),
+    })
+
+    if (!resp.ok) return
+
+    messages.value = [
+        { role: 'assistant', text: '历史已清空喵！请问有什么可以帮您的喵？', id: 'welcome' },
+    ]
+}
 
 // Token 统计
 const sessionUsage = ref<SessionUsage>({
@@ -549,8 +627,9 @@ onMounted(() => {
         panelSize.value = savedSize
     }
 
-    // 加载玩家token
+    // 加载玩家token并恢复同一玩家上次对话喵
     playerToken.value = localStorage.getItem('sa.token') || ''
+    loadAiHistory()
 
     window.addEventListener('resize', onResize)
     window.addEventListener('mousemove', onGlobalMouseMove)
@@ -593,6 +672,9 @@ onBeforeUnmount(() => {
                     @pointerup="onPointerUp">
                     <div class="panel-title">STARAXIS AI</div>
                     <div class="header-actions">
+                        <button class="clear-btn" @click.prevent="clearAiHistory" title="清空对话历史">
+                            <span class="clear-icon">🗑️</span>
+                        </button>
                         <button class="usage-btn" @click.prevent="showUsagePanel = !showUsagePanel" title="Token 统计">
                             <span class="token-icon">T</span>
                             <span class="token-count">{{ sessionUsage.total_tokens || 0 }}</span>
@@ -663,7 +745,7 @@ onBeforeUnmount(() => {
                                                         {{ step.type === 'reasoning' ? '💭 推理' : '🔧 工具调用' }}
                                                     </span>
                                                     <span class="step-duration">{{ formatDuration(step.duration_ms)
-                                                        }}</span>
+                                                    }}</span>
                                                 </div>
                                                 <div class="step-content">{{ step.content }}</div>
                                                 <div v-if="step.tool_calls && step.tool_calls.length > 0"
@@ -679,7 +761,7 @@ onBeforeUnmount(() => {
                                                             }}
                                                         </div>
                                                         <div class="tool-duration">耗时: {{ formatDuration(tc.duration_ms)
-                                                            }}</div>
+                                                        }}</div>
                                                     </div>
                                                 </div>
                                                 <div v-if="step.usage" class="step-usage">
@@ -895,6 +977,30 @@ onBeforeUnmount(() => {
     display: flex;
     align-items: center;
     gap: 8px;
+}
+
+.clear-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 12px;
+    padding: 4px 10px;
+    color: #fff;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+}
+
+.clear-btn:hover {
+    background: rgba(239, 68, 68, 0.3);
+    border-color: rgba(239, 68, 68, 0.5);
+}
+
+.clear-icon {
+    font-size: 14px;
 }
 
 .usage-btn {

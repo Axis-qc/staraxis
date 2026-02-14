@@ -2,14 +2,18 @@
     "schemaVersion": 1,
     "nation": {
         "id": "human_empire",
-        "nameKey": "nation.human_empire.name",
-        "descriptionKey": "nation.human_empire.desc",
+        "name": "Human Empire",
+        "description": "A centralized imperial human polity.",
         "governmentId": "gov_empire",
         "speciesIds": [
             "species_human"
         ],
         "startingTechIds": [
             "tech_basic_mining_1"
-        ]
+        ],
+        "spawnStrategy": {
+            "mode": "random",
+            "presetSystemId": null
+        }
     }
 }

@@ -256,7 +256,7 @@ public final class SnapshotMessageFactory {
      * @param snapshot 实体快照
      * @return 国家ID，如果无法提取则返回 null
      */
-    private static String extractOwnerNationId(EntitySnapshot snapshot) {
+    public static String extractOwnerNationId(EntitySnapshot snapshot) {
         if (snapshot.details == null) {
             return null;
         }

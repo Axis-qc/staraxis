@@ -24,11 +24,13 @@ public class WebNetLauncher {
         String host = getArgOrDefault(args, "--host", "127.0.0.1");
         int port = parseIntOrDefault(getArgOrDefault(args, "--port", null), 17890);
         int autoExitSeconds = parseIntOrDefault(getArgOrDefault(args, "--autoExitSeconds", null), 60);
+        boolean aiPrestart = "true".equalsIgnoreCase(getArgOrDefault(args, "--aiPrestart", "true"));
 
         boolean serverUiEnabled = "true".equalsIgnoreCase(getArgOrDefault(args, "--serverUi", "true"));
         String gameUiUrl = getArgOrDefault(args, "--gameUiUrl", "http://127.0.0.1:5173/");
 
-        WebNetServerConfig cfg = new WebNetServerConfig(host, port, autoExitSeconds, serverUiEnabled, gameUiUrl);
+        WebNetServerConfig cfg = new WebNetServerConfig(host, port, autoExitSeconds, aiPrestart, serverUiEnabled,
+                gameUiUrl);
         WebNetServer server = new WebNetServer(cfg);
         server.start();
 

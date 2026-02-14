@@ -32,7 +32,9 @@ api/http_server.py
 import asyncio
 import json
 import logging
+import time
 from typing import Dict, Any, List, Optional
+from pathlib import Path
 from aiohttp import web
 import aiohttp_cors
 import websockets
@@ -45,6 +47,18 @@ from ..protocol.ws_client import AiWsClient
 
 logger = logging.getLogger("ai_system.api")
 
+# 强化路径定位：自动寻找项目根目录下的 gamedata/ai_chat 喵
+def _resolve_history_root() -> Path:
+    # 尝试基于当前文件位置向上查找喵
+    current_file = Path(__file__).resolve()
+    # 从 ai_system/src/ai_system/api/http_server.py 向上退 4 级到达项目根目录喵
+    root = current_file.parents[4]
+    target = root / "gamedata" / "ai_chat"
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+HISTORY_ROOT = _resolve_history_root()
+logger.info(f"AI History path resolved to: {HISTORY_ROOT}")
 
 class AiHttpServer:
     """AI HTTP API 服务器"""
@@ -55,6 +69,9 @@ class AiHttpServer:
         self.port = port
         self.app = web.Application()
         self.llm: OpenAiProvider = None
+        self.ws_client: AiWsClient = None
+        # 确保历史目录存在喵
+        HISTORY_ROOT.mkdir(parents=True, exist_ok=True)
         self._setup_routes()
         
     def _setup_routes(self):
@@ -62,6 +79,8 @@ class AiHttpServer:
         self.app.router.add_post("/api/chat", self.handle_chat)
         self.app.router.add_get("/api/health", self.handle_health)
         self.app.router.add_get("/api/usage", self.handle_usage)
+        self.app.router.add_get("/api/history", self.handle_get_history)
+        self.app.router.add_post("/api/history/clear", self.handle_clear_history)
         
         cors = aiohttp_cors.setup(self.app, defaults={
             "*": aiohttp_cors.ResourceOptions(
@@ -78,7 +97,83 @@ class AiHttpServer:
     def set_llm(self, llm: OpenAiProvider):
         """设置 LLM provider"""
         self.llm = llm
+
+    def set_ws_client(self, ws_client: AiWsClient):
+        """设置 WebSocket 客户端喵"""
+        self.ws_client = ws_client
     
+    def _get_history_file(self, player_id: str, session_id: str) -> Path:
+        """获取历史记录文件路径喵"""
+        # 移除非法字符，确保文件名安全喵
+        safe_pid = "".join(c for c in player_id if c.isalnum() or c in ('-', '_'))
+        safe_sid = "".join(c for c in session_id if c.isalnum() or c in ('-', '_'))
+        return HISTORY_ROOT / f"chat_{safe_pid}_{safe_sid}.json"
+
+    def _load_history(self, player_id: str, session_id: str) -> List[Dict[str, Any]]:
+        """从文件加载对话历史喵"""
+        path = self._get_history_file(player_id, session_id)
+        if path.exists():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                msgs = data.get("messages", [])
+                logger.info(f"Loaded {len(msgs)} history messages for {player_id}/{session_id}喵.")
+                return msgs
+            except Exception as e:
+                logger.error(f"Failed to load history for {player_id}/{session_id}: {e}喵.")
+        return []
+
+    def _save_history(self, player_id: str, session_id: str, new_messages: List[Dict[str, Any]]):
+        """追加并保存对话历史到文件喵"""
+        path = self._get_history_file(player_id, session_id)
+        try:
+            # 1. 先读取旧历史喵
+            existing = self._load_history(player_id, session_id)
+            
+            # 2. 合并新对话（避免重复保存）喵
+            # 这里简单处理：仅追加不在旧历史里的新消息喵
+            # 或者由前端全量传过来时，我们只取最后的新内容追加喵
+            # 方案优化：直接把当前传入的完整上下文（messages）作为新基准合并喵
+            combined = list(existing)
+            existing_ids = {m.get("id") for m in existing if m.get("id")}
+            
+            for m in new_messages:
+                mid = m.get("id")
+                if not mid or mid not in existing_ids:
+                    combined.append(m)
+            
+            # 3. 限制长度（保留最近 200 条）并写入喵
+            final_list = combined[-200:]
+            path.write_text(json.dumps({"messages": final_list}, ensure_ascii=False, indent=2), encoding="utf-8")
+            logger.info(f"Saved {len(final_list)} messages to {path.name}喵.")
+        except Exception as e:
+            logger.error(f"Failed to save history for {player_id}/{session_id}: {e}喵.")
+
+    async def handle_get_history(self, request: web.Request) -> web.Response:
+        """获取特定玩家/会话的历史记录喵"""
+        player_id = request.query.get("playerId")
+        session_id = request.query.get("sessionId")
+        if not player_id or not session_id:
+            return web.json_response({"ok": False, "error": "playerId and sessionId required"}, status=400)
+        
+        history = self._load_history(player_id, session_id)
+        return web.json_response({"ok": True, "messages": history})
+
+    async def handle_clear_history(self, request: web.Request) -> web.Response:
+        """清空特定玩家/会话的历史记录喵"""
+        try:
+            body = await request.json()
+            player_id = body.get("playerId")
+            session_id = body.get("sessionId")
+            if not player_id or not session_id:
+                return web.json_response({"ok": False, "error": "playerId and sessionId required"}, status=400)
+            
+            path = self._get_history_file(player_id, session_id)
+            if path.exists():
+                path.unlink()
+            return web.json_response({"ok": True})
+        except Exception as e:
+            return web.json_response({"ok": False, "error": str(e)}, status=500)
+
     async def handle_health(self, request: web.Request) -> web.Response:
         """健康检查接口"""
         return web.json_response({
@@ -125,24 +220,31 @@ class AiHttpServer:
                     "error": "messages is required"
                 }, status=400)
             
-            # 提取玩家 token
+            # 提取元数据喵
             player_token = context.get("playerToken")
             player_id = context.get("playerId")
+            session_id = context.get("sessionId", "default")
             username = context.get("username")
             
-            if not player_token:
-                logger.warning("No player token provided, AI will have limited access")
+            if not player_token or not player_id:
+                logger.warning("No player identity provided, history will not be saved")
             else:
-                logger.info(f"AI Chat for player: {username} ({player_id})")
+                logger.info(f"AI Chat for player: {username} ({player_id}) session={session_id}")
             
-            # 确保有系统提示词
+            # 整理发送给 LLM 的完整消息列表喵
+            final_messages = []
+            
+            # 1. 注入系统提示词喵
             has_system = any(m.get("role") == "system" for m in messages)
             if not has_system:
                 system_prompt = self.config.agent.system_prompt
                 if context:
                     context_info = self._format_context(context)
                     system_prompt += f"\n\n当前游戏上下文：\n{context_info}"
-                messages.insert(0, {"role": "system", "content": system_prompt})
+                final_messages.append({"role": "system", "content": system_prompt})
+            
+            # 2. 合并当前传入的消息喵
+            final_messages.extend(messages)
             
             # 创建带有玩家 token 的 WebSocket 客户端
             ws_client = None
@@ -151,17 +253,29 @@ class AiHttpServer:
                     ws_client = await self._create_ws_client_with_token(player_token)
                 except Exception as e:
                     logger.error(f"Failed to create WS client with player token: {e}")
-                    # 继续执行，只是没有游戏数据访问权限
             
             try:
-                # 调用 LLM 生成回复
+                # 调用 LLM 生成回复喵
                 result: ChatResult = await self.llm.chat_with_tools(
-                    messages, 
+                    final_messages, 
                     registry, 
                     ws_client=ws_client,
                     context=context
                 )
                 
+                # 持久化：保存最新历史记录到文件喵
+                if player_id:
+                    # 我们从前端传来的 messages 中提取最新对话喵
+                    # 前端传来的 messages 已经包含了历史，我们只需要把最新的助手回复追加进去喵
+                    full_history = list(messages)
+                    full_history.append({
+                        "role": "assistant",
+                        "text": result.content,
+                        "id": "ai_" + str(int(time.time() * 1000)),
+                        "usage": result.total_usage.to_dict()
+                    })
+                    self._save_history(player_id, session_id, full_history)
+
                 response_data = {
                     "ok": True,
                     "message": result.content,

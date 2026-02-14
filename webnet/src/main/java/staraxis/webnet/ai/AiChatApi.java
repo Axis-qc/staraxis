@@ -61,7 +61,7 @@ public class AiChatApi {
     private final AuthStore authStore;
     private final String aiHost;
     private final int aiPort;
-    private static final int MAX_STARTUP_WAIT_MS = 30000;
+    private static final int MAX_STARTUP_WAIT_MS = 60000;
     private static final int CONNECT_TIMEOUT_MS = 5000;
     private static final int READ_TIMEOUT_MS = 120000;
 
@@ -141,13 +141,117 @@ public class AiChatApi {
 
                     // 6. 转发到 AI 系统 HTTP 服务器
                     String aiUrl = "http://" + aiHost + ":" + aiPort + "/api/chat";
-                    String response = forwardToAiSystem(aiUrl, modifiedBody);
+                    String response = forwardToAiSystem(aiUrl, "POST", modifiedBody);
 
                     exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
                     exchange.getResponseSender().send(response);
 
                 } catch (Exception e) {
                     staraxis.webnet.core.WebNetLog.log("AI chat error: " + e.getMessage());
+                    exchange.setStatusCode(500);
+                    try {
+                        sendJson(exchange, Map.of("ok", false, "error", e.getMessage()));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                }
+            });
+        };
+    }
+
+    public HttpHandler createHistoryHandler() {
+        return exchange -> {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
+                exchange.setStatusCode(405);
+                sendJson(exchange, Map.of("ok", false, "error", "method_not_allowed"));
+                return;
+            }
+
+            exchange.dispatch(() -> {
+                try {
+                    String auth = exchange.getRequestHeaders().get("Authorization") != null
+                            && !exchange.getRequestHeaders().get("Authorization").isEmpty()
+                                    ? exchange.getRequestHeaders().get("Authorization").get(0)
+                                    : null;
+
+                    AuthStore.Session session = authStore.getSessionFromAuthorizationHeader(auth);
+                    if (session == null) {
+                        exchange.setStatusCode(401);
+                        sendJson(exchange, Map.of("ok", false, "error", "unauthorized"));
+                        return;
+                    }
+
+                    String sessionId = exchange.getQueryParameters().get("sessionId") != null
+                            ? exchange.getQueryParameters().get("sessionId").peekFirst()
+                            : "default";
+
+                    WebAiAutoStarter.ensureAiStartedIfNeeded();
+                    if (!waitForAiReady()) {
+                        exchange.setStatusCode(503);
+                        sendJson(exchange, Map.of("ok", false, "error", "AI system starting"));
+                        return;
+                    }
+
+                    String aiUrl = "http://" + aiHost + ":" + aiPort + "/api/history?playerId=" + session.playerId
+                            + "&sessionId=" + sessionId;
+                    String response = forwardToAiSystem(aiUrl, "GET", null);
+
+                    exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                    exchange.getResponseSender().send(response);
+                } catch (Exception e) {
+                    exchange.setStatusCode(500);
+                    try {
+                        sendJson(exchange, Map.of("ok", false, "error", e.getMessage()));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                }
+            });
+        };
+    }
+
+    public HttpHandler createClearHistoryHandler() {
+        return exchange -> {
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
+                exchange.setStatusCode(405);
+                sendJson(exchange, Map.of("ok", false, "error", "method_not_allowed"));
+                return;
+            }
+
+            exchange.dispatch(() -> {
+                try {
+                    String auth = exchange.getRequestHeaders().get("Authorization") != null
+                            && !exchange.getRequestHeaders().get("Authorization").isEmpty()
+                                    ? exchange.getRequestHeaders().get("Authorization").get(0)
+                                    : null;
+
+                    AuthStore.Session session = authStore.getSessionFromAuthorizationHeader(auth);
+                    if (session == null) {
+                        exchange.setStatusCode(401);
+                        sendJson(exchange, Map.of("ok", false, "error", "unauthorized"));
+                        return;
+                    }
+
+                    exchange.startBlocking();
+                    String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> req = objectMapper.readValue(body, Map.class);
+                    String sessionId = req.get("sessionId") != null ? String.valueOf(req.get("sessionId")) : "default";
+
+                    WebAiAutoStarter.ensureAiStartedIfNeeded();
+                    if (!waitForAiReady()) {
+                        exchange.setStatusCode(503);
+                        sendJson(exchange, Map.of("ok", false, "error", "AI system starting"));
+                        return;
+                    }
+
+                    Map<String, String> forwardReq = Map.of("playerId", session.playerId, "sessionId", sessionId);
+                    String aiUrl = "http://" + aiHost + ":" + aiPort + "/api/history/clear";
+                    String response = forwardToAiSystem(aiUrl, "POST", objectMapper.writeValueAsString(forwardReq));
+
+                    exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                    exchange.getResponseSender().send(response);
+                } catch (Exception e) {
                     exchange.setStatusCode(500);
                     try {
                         sendJson(exchange, Map.of("ok", false, "error", e.getMessage()));
@@ -196,21 +300,23 @@ public class AiChatApi {
         }
     }
 
-    private String forwardToAiSystem(String aiUrl, String requestBody) throws Exception {
-        URL url = new URL(aiUrl);
+    private String forwardToAiSystem(String aiUrl, String method, String requestBody) throws Exception {
+        URL url = java.net.URI.create(aiUrl).toURL();
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setRequestMethod("POST");
+        conn.setRequestMethod(method);
         conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
         conn.setRequestProperty("Accept", "application/json");
-        conn.setDoOutput(true);
         conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
         conn.setReadTimeout(READ_TIMEOUT_MS);
 
-        try {
+        if (requestBody != null && ("POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method))) {
+            conn.setDoOutput(true);
             try (OutputStream os = conn.getOutputStream()) {
                 os.write(requestBody.getBytes(StandardCharsets.UTF_8));
             }
+        }
 
+        try {
             int status = conn.getResponseCode();
             InputStream is = (status >= 200 && status < 300) ? conn.getInputStream() : conn.getErrorStream();
 

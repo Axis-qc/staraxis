@@ -2,14 +2,18 @@
     "schemaVersion": 1,
     "nation": {
         "id": "human_republic",
-        "nameKey": "nation.human_republic.name",
-        "descriptionKey": "nation.human_republic.desc",
+        "name": "Human Republic",
+        "description": "A representative republic of humans.",
         "governmentId": "gov_republic",
         "speciesIds": [
             "species_human"
         ],
         "startingTechIds": [
             "tech_basic_mining_1"
-        ]
+        ],
+        "spawnStrategy": {
+            "mode": "random",
+            "presetSystemId": null
+        }
     }
 }

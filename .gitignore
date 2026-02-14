@@ -257,6 +257,7 @@ ai_system/data/
 .windsurf/
 specs/
 .claude/
+token_report.txt
 .github/
 **/build/
 *.bin
