@@ -24,6 +24,71 @@ import java.util.*;
 public class SurfaceGenerator {
 
     /**
+     * 生成次级地貌（SubSurfaceFeature）列表喵。
+     * 根据区域定义中的次级地貌配置生成地貌，确保百分比总和为1.0喵。
+     *
+     * @param regionDef 地表区域类型定义喵。
+     * @param rng       随机数生成器喵。
+     * @return 次级地貌列表喵。
+     */
+    private List<SubSurfaceFeature> generateSubSurfaceFeatures(SurfaceRegionTypeDef regionDef, Random rng) {
+        List<SubSurfaceFeature> features = new ArrayList<>();
+
+        // 如果没有配置次级地貌，创建默认地貌喵
+        if (regionDef.subFeatures == null || regionDef.subFeatures.length == 0) {
+            SubSurfaceFeature defaultFeature = new SubSurfaceFeature();
+            defaultFeature.featureType = "PLAINS"; // 默认地貌类型为平原喵
+            defaultFeature.percentageOfRegion = 1.0;
+            defaultFeature.resourceTendencies = new HashMap<>();
+            features.add(defaultFeature);
+            return features;
+        }
+
+        // 为每个地貌类型生成占比权重喵
+        double totalWeight = 0.0;
+        double[] weights = new double[regionDef.subFeatures.length];
+
+        for (int i = 0; i < regionDef.subFeatures.length; i++) {
+            SurfaceRegionTypeDef.SubFeatureDef subDef = regionDef.subFeatures[i];
+            if (subDef.percentageRange != null && subDef.percentageRange.length >= 2) {
+                double min = subDef.percentageRange[0];
+                double max = subDef.percentageRange[1];
+                // 确定性随机生成初始权重喵
+                weights[i] = min + rng.nextDouble() * (max - min);
+            } else {
+                // 默认范围 0.1 - 0.3 喵
+                weights[i] = 0.1 + rng.nextDouble() * 0.2;
+            }
+            totalWeight += weights[i];
+        }
+
+        // 归一化百分比，确保总和严格等于 1.0 喵
+        if (totalWeight > 0) {
+            for (int i = 0; i < weights.length; i++) {
+                weights[i] /= totalWeight;
+            }
+        } else {
+            // 防御性处理：如果总权重为0，平分比例喵
+            for (int i = 0; i < weights.length; i++) {
+                weights[i] = 1.0 / weights.length;
+            }
+        }
+
+        // 创建次级地貌对象并赋值喵
+        for (int i = 0; i < regionDef.subFeatures.length; i++) {
+            SurfaceRegionTypeDef.SubFeatureDef subDef = regionDef.subFeatures[i];
+            SubSurfaceFeature feature = new SubSurfaceFeature();
+            feature.featureType = subDef.featureTypeId;
+            feature.percentageOfRegion = weights[i];
+            feature.resourceTendencies = subDef.resourceTendencies != null ? new HashMap<>(subDef.resourceTendencies)
+                    : new HashMap<>();
+            features.add(feature);
+        }
+
+        return features;
+    }
+
+    /**
      * 为指定行星表面生成区划喵。
      *
      * @param surface 行星表面组件喵。
@@ -102,6 +167,9 @@ public class SurfaceGenerator {
             } else {
                 region.developableSpaceRatio = 0.5; // 默认 50% 可开发喵
             }
+
+            // 生成次级地貌（SubSurfaceFeature）喵
+            region.subFeatures = generateSubSurfaceFeatures(regionDef, rng);
 
             surface.addSurfaceRegion(region);
         }

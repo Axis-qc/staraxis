@@ -1,0 +1,430 @@
+[
+    {
+        "resourceId": "MINERAL",
+        "displayName": "矿产",
+        "description": "各种矿物和金属资源，提供采矿生产力喵。",
+        "productionCategory": "MINING",
+        "isLandmark": false,
+        "productionPowerRange": [10, 50],
+        "attractivenessBonusRange": [0, 0],
+        "discoveryWeight": 0.25,
+        "developmentTimeDays": 30,
+        "developmentCosts": [
+            {
+                "resourceId": "BASIC_MATERIALS",
+                "amount": 500,
+                "description": "采矿设备和基础设施所需的基础材料喵"
+            },
+            {
+                "resourceId": "ENERGY",
+                "amount": 300,
+                "description": "采矿设备运行所需的能源喵"
+            }
+        ],
+        "iconPath": "ui/icons/resources/mineral.png",
+        "colorHex": "#F5A623",
+        "sizeTiers": [
+            {
+                "tierId": "SMALL",
+                "displayName": "小型矿脉",
+                "productionMultiplier": 0.5,
+                "attractivenessMultiplier": 0.8,
+                "weight": 0.4,
+                "discoveryDifficulty": 0.8
+            },
+            {
+                "tierId": "MEDIUM",
+                "displayName": "中型矿脉",
+                "productionMultiplier": 1.0,
+                "attractivenessMultiplier": 1.0,
+                "weight": 0.35,
+                "discoveryDifficulty": 1.0
+            },
+            {
+                "tierId": "LARGE",
+                "displayName": "大型矿脉",
+                "productionMultiplier": 1.8,
+                "attractivenessMultiplier": 1.2,
+                "weight": 0.2,
+                "discoveryDifficulty": 1.3
+            },
+            {
+                "tierId": "RICH",
+                "displayName": "富矿脉",
+                "productionMultiplier": 3.0,
+                "attractivenessMultiplier": 1.5,
+                "weight": 0.05,
+                "discoveryDifficulty": 1.8
+            }
+        ]
+    },
+    {
+        "resourceId": "AGRICULTURE",
+        "displayName": "农业",
+        "description": "肥沃的土地，适合农业生产，提供农业生产力喵。",
+        "productionCategory": "FARMING",
+        "isLandmark": false,
+        "productionPowerRange": [8, 40],
+        "attractivenessBonusRange": [0, 0],
+        "discoveryWeight": 0.20,
+        "developmentTimeDays": 25,
+        "developmentCosts": [
+            {
+                "resourceId": "BASIC_MATERIALS",
+                "amount": 300,
+                "description": "农业设备和基础设施所需的基础材料喵"
+            },
+            {
+                "resourceId": "WATER",
+                "amount": 200,
+                "description": "灌溉系统所需的水资源喵"
+            },
+            {
+                "resourceId": "ORGANIC_MATERIALS",
+                "amount": 150,
+                "description": "土壤改良和肥料所需的有机材料喵"
+            }
+        ],
+        "iconPath": "ui/icons/resources/agriculture.png",
+        "colorHex": "#7ED321",
+        "sizeTiers": [
+            {
+                "tierId": "SMALL",
+                "displayName": "小块农田",
+                "productionMultiplier": 0.6,
+                "attractivenessMultiplier": 0.9,
+                "weight": 0.45,
+                "discoveryDifficulty": 0.7
+            },
+            {
+                "tierId": "MEDIUM",
+                "displayName": "中型农田",
+                "productionMultiplier": 1.0,
+                "attractivenessMultiplier": 1.0,
+                "weight": 0.35,
+                "discoveryDifficulty": 1.0
+            },
+            {
+                "tierId": "LARGE",
+                "displayName": "大型农田",
+                "productionMultiplier": 1.7,
+                "attractivenessMultiplier": 1.3,
+                "weight": 0.15,
+                "discoveryDifficulty": 1.2
+            },
+            {
+                "tierId": "RICH",
+                "displayName": "沃土平原",
+                "productionMultiplier": 2.5,
+                "attractivenessMultiplier": 1.6,
+                "weight": 0.05,
+                "discoveryDifficulty": 1.5
+            }
+        ]
+    },
+    {
+        "resourceId": "FISHERY",
+        "displayName": "渔业",
+        "description": "丰富的渔业资源，提供渔业生产力喵。",
+        "productionCategory": "FARMING",
+        "isLandmark": false,
+        "productionPowerRange": [6, 30],
+        "attractivenessBonusRange": [0, 0],
+        "discoveryWeight": 0.15,
+        "developmentTimeDays": 20,
+        "developmentCosts": [
+            {
+                "resourceId": "BASIC_MATERIALS",
+                "amount": 250,
+                "description": "渔船和渔具所需的基础材料喵"
+            },
+            {
+                "resourceId": "ORGANIC_MATERIALS",
+                "amount": 100,
+                "description": "渔业养殖所需的有机材料喵"
+            }
+        ],
+        "iconPath": "ui/icons/resources/fishery.png",
+        "colorHex": "#4A90E2",
+        "sizeTiers": [
+            {
+                "tierId": "SMALL",
+                "displayName": "小型渔场",
+                "productionMultiplier": 0.7,
+                "attractivenessMultiplier": 0.9,
+                "weight": 0.5,
+                "discoveryDifficulty": 0.6
+            },
+            {
+                "tierId": "MEDIUM",
+                "displayName": "中型渔场",
+                "productionMultiplier": 1.0,
+                "attractivenessMultiplier": 1.0,
+                "weight": 0.35,
+                "discoveryDifficulty": 0.9
+            },
+            {
+                "tierId": "LARGE",
+                "displayName": "大型渔场",
+                "productionMultiplier": 1.5,
+                "attractivenessMultiplier": 1.2,
+                "weight": 0.12,
+                "discoveryDifficulty": 1.1
+            },
+            {
+                "tierId": "RICH",
+                "displayName": "富饶渔场",
+                "productionMultiplier": 2.2,
+                "attractivenessMultiplier": 1.5,
+                "weight": 0.03,
+                "discoveryDifficulty": 1.4
+            }
+        ]
+    },
+    {
+        "resourceId": "FOREST",
+        "displayName": "林业",
+        "description": "茂密的森林，提供林业资源和生态环境喵。",
+        "productionCategory": "FARMING",
+        "isLandmark": false,
+        "productionPowerRange": [5, 25],
+        "attractivenessBonusRange": [5, 15],
+        "discoveryWeight": 0.12,
+        "developmentTimeDays": 15,
+        "developmentCosts": [
+            {
+                "resourceId": "BASIC_MATERIALS",
+                "amount": 200,
+                "description": "林业设备和基础设施所需的基础材料喵"
+            },
+            {
+                "resourceId": "ORGANIC_MATERIALS",
+                "amount": 80,
+                "description": "林业管理所需的有机材料喵"
+            }
+        ],
+        "iconPath": "ui/icons/resources/forest.png",
+        "colorHex": "#417505",
+        "sizeTiers": [
+            {
+                "tierId": "SMALL",
+                "displayName": "小片森林",
+                "productionMultiplier": 0.8,
+                "attractivenessMultiplier": 0.9,
+                "weight": 0.55,
+                "discoveryDifficulty": 0.5
+            },
+            {
+                "tierId": "MEDIUM",
+                "displayName": "中型森林",
+                "productionMultiplier": 1.0,
+                "attractivenessMultiplier": 1.0,
+                "weight": 0.3,
+                "discoveryDifficulty": 0.8
+            },
+            {
+                "tierId": "LARGE",
+                "displayName": "大型森林",
+                "productionMultiplier": 1.4,
+                "attractivenessMultiplier": 1.3,
+                "weight": 0.12,
+                "discoveryDifficulty": 1.0
+            },
+            {
+                "tierId": "RICH",
+                "displayName": "原始森林",
+                "productionMultiplier": 1.9,
+                "attractivenessMultiplier": 1.7,
+                "weight": 0.03,
+                "discoveryDifficulty": 1.3
+            }
+        ]
+    },
+    {
+        "resourceId": "ENERGY_SOURCE",
+        "displayName": "能源",
+        "description": "地热、风能、太阳能等能源资源，提供能源生产力喵。",
+        "productionCategory": "ENERGY",
+        "isLandmark": false,
+        "productionPowerRange": [12, 60],
+        "attractivenessBonusRange": [0, 0],
+        "discoveryWeight": 0.10,
+        "developmentTimeDays": 35,
+        "developmentCosts": [
+            {
+                "resourceId": "BASIC_MATERIALS",
+                "amount": 800,
+                "description": "能源设备所需的基础材料喵"
+            },
+            {
+                "resourceId": "ADVANCED_COMPONENTS",
+                "amount": 200,
+                "description": "高级能源设备组件喵"
+            },
+            {
+                "resourceId": "RARE_ELEMENTS",
+                "amount": 50,
+                "description": "能源设备所需的稀有元素喵"
+            }
+        ],
+        "iconPath": "ui/icons/resources/energy.png",
+        "colorHex": "#F8E71C",
+        "sizeTiers": [
+            {
+                "tierId": "SMALL",
+                "displayName": "小型能源点",
+                "productionMultiplier": 0.6,
+                "attractivenessMultiplier": 0.7,
+                "weight": 0.5,
+                "discoveryDifficulty": 1.0
+            },
+            {
+                "tierId": "MEDIUM",
+                "displayName": "中型能源点",
+                "productionMultiplier": 1.0,
+                "attractivenessMultiplier": 1.0,
+                "weight": 0.35,
+                "discoveryDifficulty": 1.3
+            },
+            {
+                "tierId": "LARGE",
+                "displayName": "大型能源点",
+                "productionMultiplier": 1.9,
+                "attractivenessMultiplier": 1.1,
+                "weight": 0.13,
+                "discoveryDifficulty": 1.6
+            },
+            {
+                "tierId": "RICH",
+                "displayName": "丰富能源点",
+                "productionMultiplier": 3.2,
+                "attractivenessMultiplier": 1.3,
+                "weight": 0.02,
+                "discoveryDifficulty": 2.0
+            }
+        ]
+    },
+    {
+        "resourceId": "LANDSCAPE",
+        "displayName": "景观",
+        "description": "美丽的自然景观，提供吸引力加成，但不提供生产力喵。",
+        "productionCategory": null,
+        "isLandmark": true,
+        "productionPowerRange": [0, 0],
+        "attractivenessBonusRange": [10, 30],
+        "discoveryWeight": 0.08,
+        "developmentTimeDays": 10,
+        "developmentCosts": [
+            {
+                "resourceId": "BASIC_MATERIALS",
+                "amount": 100,
+                "description": "景观保护和基础设施所需的基础材料喵"
+            },
+            {
+                "resourceId": "ORGANIC_MATERIALS",
+                "amount": 50,
+                "description": "景观美化和维护所需的有机材料喵"
+            }
+        ],
+        "iconPath": "ui/icons/resources/landscape.png",
+        "colorHex": "#BD10E0",
+        "sizeTiers": [
+            {
+                "tierId": "SMALL",
+                "displayName": "小景点",
+                "productionMultiplier": 1.0,
+                "attractivenessMultiplier": 0.7,
+                "weight": 0.6,
+                "discoveryDifficulty": 0.4
+            },
+            {
+                "tierId": "MEDIUM",
+                "displayName": "中景点",
+                "productionMultiplier": 1.0,
+                "attractivenessMultiplier": 1.0,
+                "weight": 0.3,
+                "discoveryDifficulty": 0.7
+            },
+            {
+                "tierId": "LARGE",
+                "displayName": "大景点",
+                "productionMultiplier": 1.0,
+                "attractivenessMultiplier": 1.5,
+                "weight": 0.08,
+                "discoveryDifficulty": 1.0
+            },
+            {
+                "tierId": "RICH",
+                "displayName": "绝景",
+                "productionMultiplier": 1.0,
+                "attractivenessMultiplier": 2.5,
+                "weight": 0.02,
+                "discoveryDifficulty": 1.5
+            }
+        ]
+    },
+    {
+        "resourceId": "RESEARCH_SITE",
+        "displayName": "科研点",
+        "description": "特殊地质或生物特征，提供科研生产力喵。",
+        "productionCategory": "RESEARCH",
+        "isLandmark": false,
+        "productionPowerRange": [8, 35],
+        "attractivenessBonusRange": [3, 10],
+        "discoveryWeight": 0.05,
+        "developmentTimeDays": 40,
+        "developmentCosts": [
+            {
+                "resourceId": "BASIC_MATERIALS",
+                "amount": 400,
+                "description": "科研设备所需的基础材料喵"
+            },
+            {
+                "resourceId": "ADVANCED_COMPONENTS",
+                "amount": 300,
+                "description": "高级科研设备组件喵"
+            },
+            {
+                "resourceId": "RESEARCH_DATA",
+                "amount": 100,
+                "description": "科研研究和分析所需的数据喵"
+            }
+        ],
+        "iconPath": "ui/icons/resources/research.png",
+        "colorHex": "#9013FE",
+        "sizeTiers": [
+            {
+                "tierId": "SMALL",
+                "displayName": "小型科研点",
+                "productionMultiplier": 0.7,
+                "attractivenessMultiplier": 0.8,
+                "weight": 0.6,
+                "discoveryDifficulty": 1.2
+            },
+            {
+                "tierId": "MEDIUM",
+                "displayName": "中型科研点",
+                "productionMultiplier": 1.0,
+                "attractivenessMultiplier": 1.0,
+                "weight": 0.3,
+                "discoveryDifficulty": 1.5
+            },
+            {
+                "tierId": "LARGE",
+                "displayName": "大型科研点",
+                "productionMultiplier": 1.6,
+                "attractivenessMultiplier": 1.4,
+                "weight": 0.08,
+                "discoveryDifficulty": 1.8
+            },
+            {
+                "tierId": "RICH",
+                "displayName": "重大科研点",
+                "productionMultiplier": 2.4,
+                "attractivenessMultiplier": 1.9,
+                "weight": 0.02,
+                "discoveryDifficulty": 2.2
+            }
+        ]
+    }
+]

@@ -163,8 +163,8 @@ public class WebAiAutoStarter {
             File logFile = new File("gamedata/logs/ai_system.log");
             if (!logFile.getParentFile().exists())
                 logFile.getParentFile().mkdirs();
-            pb.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile));
-            pb.redirectError(ProcessBuilder.Redirect.appendTo(logFile));
+            pb.redirectOutput(ProcessBuilder.Redirect.to(logFile));
+            pb.redirectError(ProcessBuilder.Redirect.to(logFile));
         }
         pb.directory(new File("ai_system"));
         aiProcess = pb.start();

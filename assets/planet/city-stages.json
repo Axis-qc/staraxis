@@ -1,0 +1,136 @@
+[
+    {
+        "stageId": "OUTPOST",
+        "displayName": "前哨殖民地",
+        "description": "最初的前哨站，提供基本的居住和研究设施喵。",
+        "cityScale": 1,
+        "housingFactor": 0.8,
+        "upgradePopulationThreshold": 5000,
+        "upgradeTimeDays": 30,
+        "upgradeCosts": [
+            {
+                "resourceId": "BASIC_MATERIALS",
+                "amount": 1000,
+                "oneTime": true
+            },
+            {
+                "resourceId": "ENERGY",
+                "amount": 500,
+                "oneTime": true
+            }
+        ],
+        "baseAttractivenessBonus": 0.1,
+        "resourceDiscoveryBonus": 0.05
+    },
+    {
+        "stageId": "SETTLEMENT",
+        "displayName": "定居点",
+        "description": "稳定发展的定居点，拥有初步的基础设施和社区服务喵。",
+        "cityScale": 2,
+        "housingFactor": 0.9,
+        "upgradePopulationThreshold": 25000,
+        "upgradeTimeDays": 60,
+        "upgradeCosts": [
+            {
+                "resourceId": "BASIC_MATERIALS",
+                "amount": 5000,
+                "oneTime": true
+            },
+            {
+                "resourceId": "ENERGY",
+                "amount": 2000,
+                "oneTime": true
+            },
+            {
+                "resourceId": "ADVANCED_COMPONENTS",
+                "amount": 500,
+                "oneTime": true
+            }
+        ],
+        "baseAttractivenessBonus": 0.2,
+        "resourceDiscoveryBonus": 0.10
+    },
+    {
+        "stageId": "TOWN",
+        "displayName": "城镇",
+        "description": "成熟的城镇，具备完整的公共服务和工商业设施喵。",
+        "cityScale": 3,
+        "housingFactor": 1.0,
+        "upgradePopulationThreshold": 100000,
+        "upgradeTimeDays": 90,
+        "upgradeCosts": [
+            {
+                "resourceId": "BASIC_MATERIALS",
+                "amount": 15000,
+                "oneTime": true
+            },
+            {
+                "resourceId": "ENERGY",
+                "amount": 8000,
+                "oneTime": true
+            },
+            {
+                "resourceId": "ADVANCED_COMPONENTS",
+                "amount": 2000,
+                "oneTime": true
+            },
+            {
+                "resourceId": "RARE_ELEMENTS",
+                "amount": 500,
+                "oneTime": true
+            }
+        ],
+        "baseAttractivenessBonus": 0.3,
+        "resourceDiscoveryBonus": 0.15
+    },
+    {
+        "stageId": "CITY",
+        "displayName": "城市",
+        "description": "繁荣的城市，区域经济中心，拥有完善的基础设施和丰富的文化生活喵。",
+        "cityScale": 4,
+        "housingFactor": 1.1,
+        "upgradePopulationThreshold": 500000,
+        "upgradeTimeDays": 120,
+        "upgradeCosts": [
+            {
+                "resourceId": "BASIC_MATERIALS",
+                "amount": 50000,
+                "oneTime": true
+            },
+            {
+                "resourceId": "ENERGY",
+                "amount": 25000,
+                "oneTime": true
+            },
+            {
+                "resourceId": "ADVANCED_COMPONENTS",
+                "amount": 8000,
+                "oneTime": true
+            },
+            {
+                "resourceId": "RARE_ELEMENTS",
+                "amount": 2000,
+                "oneTime": true
+            },
+            {
+                "resourceId": "EXOTIC_MATERIALS",
+                "amount": 500,
+                "oneTime": true
+            }
+        ],
+        "baseAttractivenessBonus": 0.4,
+        "resourceDiscoveryBonus": 0.20
+    },
+    {
+        "stageId": "MEGALOPOLIS",
+        "displayName": "巨型都市",
+        "description": "行星级别的巨型都市，人口密集，经济繁荣，科技先进喵。",
+        "cityScale": 5,
+        "housingFactor": 1.2,
+        "upgradePopulationThreshold": 0,
+        "upgradeTimeDays": 0,
+        "upgradeCosts": [],
+        "baseAttractivenessBonus": 0.5,
+        "resourceDiscoveryBonus": 0.25
+    }
+]

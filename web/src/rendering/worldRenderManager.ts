@@ -61,6 +61,8 @@ export type WorldRenderer = {
 export type WorldRendererOptions = {
     minZoom?: number
     maxZoom?: number
+    initialCameraPos?: { x: number; y: number }
+    initialZoom?: number
     getSpritePath?: (typeId: string) => string | undefined
     lod?: LodOptions
 }
@@ -99,6 +101,14 @@ export function createWorldRenderManager(
     const zoom = { value: 1 }
     const cameraWorldPosGU = new THREE.Vector2(0, 0)
     const visibilityManager = new VisibilityStateManager()
+
+    // 应用初始相机状态（若提供）喵
+    if (typeof options.initialZoom === 'number' && Number.isFinite(options.initialZoom)) {
+        zoom.value = Math.max(minZoom, Math.min(maxZoom, options.initialZoom))
+    }
+    if (options.initialCameraPos && Number.isFinite(options.initialCameraPos.x) && Number.isFinite(options.initialCameraPos.y)) {
+        cameraWorldPosGU.set(options.initialCameraPos.x, options.initialCameraPos.y)
+    }
 
     // 初始化相机系统
     const cameraSystem = createCameraSystem(container)

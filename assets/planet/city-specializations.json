@@ -1,0 +1,219 @@
+[
+    {
+        "specializationId": "RESEARCH",
+        "displayName": "科研专精",
+        "description": "专注于科学研究和技术发展，生产效率获得科研加成喵。",
+        "productionAllocationWeights": {
+            "RESEARCH": 0.6,
+            "ADMINISTRATION": 0.2,
+            "INDUSTRY": 0.1,
+            "ENERGY": 0.1
+        },
+        "efficiencyBonuses": {
+            "RESEARCH": 1.3,
+            "ADMINISTRATION": 1.1
+        },
+        "resetCosts": [
+            {
+                "resourceId": "RESEARCH_DATA",
+                "amount": 1000,
+                "description": "重新培训科研人员所需的数据资源喵"
+            },
+            {
+                "resourceId": "ENERGY",
+                "amount": 500,
+                "description": "设施转换所需的能源喵"
+            }
+        ],
+        "iconPath": "ui/icons/city/specialization_research.png",
+        "colorHex": "#4A90E2",
+        "isDefault": false,
+        "category": "INTELLECTUAL"
+    },
+    {
+        "specializationId": "MINING",
+        "displayName": "采矿专精",
+        "description": "专注于矿产资源开采和加工，采矿效率大幅提升喵。",
+        "productionAllocationWeights": {
+            "MINING": 0.7,
+            "INDUSTRY": 0.2,
+            "ENERGY": 0.1
+        },
+        "efficiencyBonuses": {
+            "MINING": 1.4,
+            "INDUSTRY": 1.1
+        },
+        "resetCosts": [
+            {
+                "resourceId": "BASIC_MATERIALS",
+                "amount": 1500,
+                "description": "设备调整和重新配置所需的基础材料喵"
+            },
+            {
+                "resourceId": "ENERGY",
+                "amount": 800,
+                "description": "重工业设备重新配置所需的能源喵"
+            }
+        ],
+        "iconPath": "ui/icons/city/specialization_mining.png",
+        "colorHex": "#F5A623",
+        "isDefault": false,
+        "category": "INDUSTRIAL"
+    },
+    {
+        "specializationId": "INDUSTRY",
+        "displayName": "工业专精",
+        "description": "专注于制造业和工业生产，工业产能显著增强喵。",
+        "productionAllocationWeights": {
+            "INDUSTRY": 0.7,
+            "MINING": 0.2,
+            "ENERGY": 0.1
+        },
+        "efficiencyBonuses": {
+            "INDUSTRY": 1.4,
+            "MINING": 1.1
+        },
+        "resetCosts": [
+            {
+                "resourceId": "BASIC_MATERIALS",
+                "amount": 2000,
+                "description": "生产线调整所需的基础材料喵"
+            },
+            {
+                "resourceId": "ENERGY",
+                "amount": 1000,
+                "description": "工业设备重新配置所需的能源喵"
+            }
+        ],
+        "iconPath": "ui/icons/city/specialization_industry.png",
+        "colorHex": "#D0021B",
+        "isDefault": false,
+        "category": "INDUSTRIAL"
+    },
+    {
+        "specializationId": "FARMING",
+        "displayName": "农业专精",
+        "description": "专注于农业生产和食品加工，农业效率大幅提升喵。",
+        "productionAllocationWeights": {
+            "FARMING": 0.7,
+            "INDUSTRY": 0.2,
+            "RESEARCH": 0.1
+        },
+        "efficiencyBonuses": {
+            "FARMING": 1.4,
+            "RESEARCH": 1.05
+        },
+        "resetCosts": [
+            {
+                "resourceId": "ORGANIC_MATERIALS",
+                "amount": 1200,
+                "description": "农业设施调整所需的有机材料喵"
+            },
+            {
+                "resourceId": "WATER",
+                "amount": 500,
+                "description": "灌溉系统调整所需的水资源喵"
+            }
+        ],
+        "iconPath": "ui/icons/city/specialization_farming.png",
+        "colorHex": "#7ED321",
+        "isDefault": false,
+        "category": "AGRICULTURAL"
+    },
+    {
+        "specializationId": "ADMINISTRATION",
+        "displayName": "行政专精",
+        "description": "专注于管理和行政服务，提升整体效率和稳定性喵。",
+        "productionAllocationWeights": {
+            "ADMINISTRATION": 0.6,
+            "RESEARCH": 0.2,
+            "INDUSTRY": 0.1,
+            "ENERGY": 0.1
+        },
+        "efficiencyBonuses": {
+            "ADMINISTRATION": 1.3,
+            "ALL": 1.05
+        },
+        "resetCosts": [
+            {
+                "resourceId": "CREDITS",
+                "amount": 5000,
+                "description": "行政人员重新培训和组织调整所需的资金喵"
+            },
+            {
+                "resourceId": "RESEARCH_DATA",
+                "amount": 300,
+                "description": "管理流程优化所需的研究数据喵"
+            }
+        ],
+        "iconPath": "ui/icons/city/specialization_admin.png",
+        "colorHex": "#9013FE",
+        "isDefault": true,
+        "category": "SERVICES"
+    },
+    {
+        "specializationId": "MILITARY",
+        "displayName": "军工专精",
+        "description": "专注于军事生产和防御设施建设，军工产能显著增强喵。",
+        "productionAllocationWeights": {
+            "MILITARY": 0.7,
+            "INDUSTRY": 0.2,
+            "RESEARCH": 0.1
+        },
+        "efficiencyBonuses": {
+            "MILITARY": 1.5,
+            "INDUSTRY": 1.1
+        },
+        "resetCosts": [
+            {
+                "resourceId": "BASIC_MATERIALS",
+                "amount": 2500,
+                "description": "军工设备调整所需的基础材料喵"
+            },
+            {
+                "resourceId": "ENERGY",
+                "amount": 1200,
+                "description": "军工设备重新配置所需的能源喵"
+            },
+            {
+                "resourceId": "RARE_ELEMENTS",
+                "amount": 200,
+                "description": "高级军工设备所需的稀有元素喵"
+            }
+        ],
+        "iconPath": "ui/icons/city/specialization_military.png",
+        "colorHex": "#8B572A",
+        "isDefault": false,
+        "category": "MILITARY"
+    },
+    {
+        "specializationId": "ENERGY",
+        "displayName": "能源专精",
+        "description": "专注于能源生产和供应，能源效率大幅提升喵。",
+        "productionAllocationWeights": {
+            "ENERGY": 0.7,
+            "INDUSTRY": 0.2,
+            "RESEARCH": 0.1
+        },
+        "efficiencyBonuses": {
+            "ENERGY": 1.4,
+            "ALL": 1.05
+        },
+        "resetCosts": [
+            {
+                "resourceId": "BASIC_MATERIALS",
+                "amount": 1800,
+                "description": "能源设施调整所需的基础材料喵"
+            },
+            {
+                "resourceId": "RARE_ELEMENTS",
+                "amount": 150,
+                "description": "高级能源设备所需的稀有元素喵"
+            }
+        ],
+        "iconPath": "ui/icons/city/specialization_energy.png",
+        "colorHex": "#F8E71C",
+        "isDefault": false,
+        "category": "INFRASTRUCTURE"
+    }
+]

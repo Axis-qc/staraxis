@@ -222,6 +222,7 @@ class OpenAiProvider:
         messages: List[Dict[str, Any]], 
         registry, 
         ws_client,
+        context: Optional[Dict[str, Any]] = None,
         on_thinking_update: Optional[Callable[[ThinkingStep], None]] = None
     ) -> ChatResult:
         """
@@ -231,6 +232,7 @@ class OpenAiProvider:
             messages: 消息历史
             registry: 工具注册表
             ws_client: WebSocket 客户端（用于工具调用）
+            context: 外部上下文（包含 playerToken, currentPath 等）喵
             on_thinking_update: 思考过程更新回调
             
         Returns:
@@ -317,11 +319,12 @@ class OpenAiProvider:
                 self.token_tracker.record_tool_call()
                 
                 try:
-                    # 分发执行工具，传入 ws_client 喵
+                    # 分发执行工具，传入 ws_client 和 context 喵
                     result = await registry.dispatch_tool(
                         function_name, 
                         function_args, 
-                        ws_client=ws_client
+                        ws_client=ws_client,
+                        context=context
                     )
                     tool_duration = int((time.time() - tool_start) * 1000)
                     

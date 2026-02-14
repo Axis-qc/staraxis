@@ -145,13 +145,26 @@ public class StarAxisGameRuntime implements GameRuntime {
                 ns.spawnSystemEntityId = spawnSystemId;
             }
 
-            // 将出生星系内的天体归属到该国，避免被中途加入选中喵
+            // 将出生星系内的天体归属到该国，并确定性选择首都行星喵
             if (spawnSystemId != 0) {
                 for (StarSystem sys : systems) {
                     if (sys == null || sys.systemId != spawnSystemId) {
                         continue;
                     }
                     sys.assignOwnership(nationId);
+
+                    // 确定性选择首都行星：选择星系内 entityId 最小的行星喵
+                    if (ns != null && !sys.planets.isEmpty()) {
+                        PlanetBody capital = null;
+                        for (PlanetBody p : sys.planets) {
+                            if (capital == null || p.entityId < capital.entityId) {
+                                capital = p;
+                            }
+                        }
+                        if (capital != null) {
+                            ns.capitalPlanetEntityId = capital.entityId;
+                        }
+                    }
                     break;
                 }
             }
@@ -316,6 +329,15 @@ public class StarAxisGameRuntime implements GameRuntime {
 
                 s.putEntity(planet);
 
+                // 确定性判断是否为首都喵
+                boolean isCapital = false;
+                if (planet.ownerNationId != null) {
+                    var ns = worldState.nationManager.getNationState(planet.ownerNationId);
+                    if (ns != null && ns.capitalPlanetEntityId == planet.entityId) {
+                        isCapital = true;
+                    }
+                }
+
                 s.putEntitySnapshot(new EntitySnapshot(
                         planet.entityId,
                         planet.entityType,
@@ -328,6 +350,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                                 planet.radiusGU,
                                 planet.rotationPeriodHours,
                                 planet.surfaceTexturePath, planet.ownerNationId,
+                                isCapital,
                                 planet.orbitCenterEntityId,
                                 planet.semiMajorAxisGU,
                                 planet.eccentricity,

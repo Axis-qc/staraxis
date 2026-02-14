@@ -683,6 +683,63 @@ public class WebNetServer {
         AiUsageApi aiUsageApi = new AiUsageApi(objectMapper);
         apiHandler.addPrefixPath("/ai/usage", aiUsageApi.createHandler());
 
+        apiHandler.addExactPath("/snapshot/latest", exchange -> {
+            exchange.dispatch(() -> {
+                try {
+                    // 1. 验证身份喵
+                    String auth = exchange.getRequestHeaders().get("Authorization") != null
+                            && !exchange.getRequestHeaders().get("Authorization").isEmpty()
+                                    ? exchange.getRequestHeaders().get("Authorization").get(0)
+                                    : null;
+
+                    AuthStore.Session session = authStore.getSessionFromAuthorizationHeader(auth);
+                    if (session == null) {
+                        exchange.setStatusCode(401);
+                        exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                        exchange.getResponseSender()
+                                .send(objectMapper.writeValueAsString(Map.of("ok", false, "error", "unauthorized")));
+                        return;
+                    }
+
+                    // 2. 获取运行时喵
+                    StarAxisGameRuntime runtime = GameSessions.getRuntime();
+                    if (runtime == null) {
+                        exchange.setStatusCode(503);
+                        exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                        exchange.getResponseSender().send(
+                                objectMapper.writeValueAsString(Map.of("ok", false, "error", "world_not_created")));
+                        return;
+                    }
+
+                    // 3. 确定国家ID喵（优先从权威映射拿，其次从 connMgr 缓存拿）
+                    String nationId = runtime.getWorldStateForSimOnly().nationManager
+                            .getNationIdByPlayer(session.playerId);
+                    if (nationId == null) {
+                        nationId = connMgr.getPlayerNationId(session.playerId);
+                    }
+
+                    // 4. 构建全量可见快照（无视 visibleSectors 限制，因为 AI 需要全局视野）喵
+                    // 注意：由于 AI 工具调用通常不需要前端可见星区过滤，这里传 null 表示不过滤星区，
+                    // SnapshotMessageFactory 会自动根据 nationId 包含本国所有实体喵。
+                    var snapshotDto = SnapshotMessageFactory.buildSnapshotMessageWithNation(
+                            runtime, lastTickCostMs.get(), null, nationId);
+
+                    exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                    exchange.getResponseSender().send(objectMapper.writeValueAsString(snapshotDto));
+
+                } catch (Exception e) {
+                    exchange.setStatusCode(500);
+                    try {
+                        exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                        exchange.getResponseSender()
+                                .send(objectMapper.writeValueAsString(Map.of("ok", false, "error", e.getMessage())));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                }
+            });
+        });
+
         HttpHandler apiWrapped = exchange -> {
             try {
                 String rp = exchange.getRequestPath();

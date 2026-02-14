@@ -16,6 +16,8 @@ export type PlanetDetails = {
     radiusGU: number
     rotationPeriodHours: number
     surfaceTexturePath: string | null
+    ownerNationId: string | null
+    isCapital: boolean
     orbitCenterEntityId: number
     semiMajorAxisGU: number
     eccentricity: number
@@ -155,6 +157,12 @@ export function connectSnapshotWs(options: SnapshotWsOptions = {}): SnapshotWsCl
             }
             ws = null
             options.onStatus?.({ connected: false })
+        },
+        send: (data: any) => {
+            try {
+                ws?.send(typeof data === 'string' ? data : JSON.stringify(data))
+            } catch {
+            }
         },
         updateVisibleSectors: (sectors: { q: number; r: number }[]) => {
             try {

@@ -111,6 +111,9 @@ public class EntitySnapshot {
         /** 所属国家/文明 ID（nationId 口径，String 类型，与国家定义 ID 一致）。无归属时为 null。 */
         public final String ownerNationId;
 
+        /** 是否为所属国家的首都星球喵。 */
+        public final boolean isCapital;
+
         public final long orbitCenterEntityId;
         public final double semiMajorAxisGU;
         public final double eccentricity;
@@ -120,7 +123,7 @@ public class EntitySnapshot {
         public final double meanAnomalyDegAtEpoch;
 
         public PlanetDetails(String planetTypeId, double radiusGU, double rotationPeriodHours,
-                String surfaceTexturePath, String ownerNationId,
+                String surfaceTexturePath, String ownerNationId, boolean isCapital,
                 long orbitCenterEntityId,
                 double semiMajorAxisGU,
                 double eccentricity,
@@ -133,6 +136,7 @@ public class EntitySnapshot {
             this.rotationPeriodHours = rotationPeriodHours;
             this.surfaceTexturePath = surfaceTexturePath;
             this.ownerNationId = ownerNationId;
+            this.isCapital = isCapital;
 
             this.orbitCenterEntityId = orbitCenterEntityId;
             this.semiMajorAxisGU = semiMajorAxisGU;

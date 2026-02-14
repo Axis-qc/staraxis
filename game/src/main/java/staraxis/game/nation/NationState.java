@@ -59,6 +59,9 @@ public class NationState {
     /** 出生星系实体 ID（权威绑定结果）。 */
     public long spawnSystemEntityId;
 
+    /** 首都行星实体 ID（权威绑定结果）。 */
+    public long capitalPlanetEntityId;
+
     /**
      * 构造函数：创建指定ID的国家运行时状态。
      *

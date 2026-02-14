@@ -166,6 +166,19 @@ public final class JoinGameApi {
                 ns.name = nationId;
             }
             ns.spawnSystemEntityId = target.systemId;
+
+            // 确定性选择首都行星：选择星系内 entityId 最小的行星作为初始首都喵
+            if (!target.planets.isEmpty()) {
+                PlanetBody capital = null;
+                for (PlanetBody p : target.planets) {
+                    if (capital == null || p.entityId < capital.entityId) {
+                        capital = p;
+                    }
+                }
+                if (capital != null) {
+                    ns.capitalPlanetEntityId = capital.entityId;
+                }
+            }
         }
 
         // 占用：系统级 owner + 系统内天体 owner 全量落账喵

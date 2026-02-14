@@ -12,7 +12,9 @@
  */
 
 import { computed, onBeforeUnmount, onMounted, ref, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
 
+const route = useRoute()
 const isAiEnabled = ref(localStorage.getItem('sa_settings_ai_enabled') !== 'false')
 
 // 监听存储变化
@@ -48,9 +50,9 @@ type ThinkingStep = {
     usage?: TokenUsage
     duration_ms: number
 }
-type Message = { 
+type Message = {
     role: 'user' | 'assistant' | 'thinking'
-    text: string 
+    text: string
     id?: string
     thinking?: ThinkingStep[]
     usage?: TokenUsage
@@ -89,8 +91,9 @@ const sessionId = ref(generateSessionId())
 
 // 玩家认证信息
 const playerToken = ref(localStorage.getItem('sa.token') || '')
-const playerUsername = ref('')
-const playerId = ref('')
+// 玩家名称与ID，后续可用于界面展示喵
+// const playerUsername = ref('')
+// const playerId = ref('')
 
 // Token 统计
 const sessionUsage = ref<SessionUsage>({
@@ -248,7 +251,7 @@ function onPointerUp(e: PointerEvent) {
 function onResizeHandleDown(e: PointerEvent) {
     e.stopPropagation()
     e.preventDefault()
-    
+
     const target = e.currentTarget as HTMLElement
     if (!target) return
 
@@ -265,10 +268,10 @@ function onResizeHandleDown(e: PointerEvent) {
 
 function onResizeHandleMove(e: PointerEvent) {
     if (!isResizing.value) return
-    
+
     const dx = e.clientX - resizeStart.value.x
     const dy = e.clientY - resizeStart.value.y
-    
+
     const newWidth = clamp(
         resizeStart.value.width + dx,
         MIN_PANEL_WIDTH,
@@ -279,7 +282,7 @@ function onResizeHandleMove(e: PointerEvent) {
         MIN_PANEL_HEIGHT,
         Math.min(MAX_PANEL_HEIGHT, window.innerHeight - pos.value.y - 16)
     )
-    
+
     panelSize.value = { width: newWidth, height: newHeight }
     isPanelSizeDirty.value = true
 }
@@ -348,14 +351,14 @@ async function send() {
     }
     playerToken.value = token
 
-    const userMsg: Message = { 
-        role: 'user', 
+    const userMsg: Message = {
+        role: 'user',
         text,
         id: 'user_' + Date.now()
     }
     messages.value.push(userMsg)
     inputText.value = ''
-    
+
     await sendToAi()
 }
 
@@ -365,16 +368,16 @@ async function send() {
 async function sendToAi(retryCount = 0) {
     const MAX_RETRIES = 3
     const RETRY_DELAY_MS = 2000
-    
+
     const thinkingId = 'thinking_' + Date.now()
-    messages.value.push({ 
-        role: 'thinking', 
+    messages.value.push({
+        role: 'thinking',
         text: retryCount > 0 ? `AI 正在启动喵，请稍候... (${retryCount}/${MAX_RETRIES})` : '正在思考喵...',
         id: thinkingId
     })
-    
+
     isLoading.value = true
-    
+
     try {
         const history = messages.value
             .filter(m => m.role !== 'thinking')
@@ -383,47 +386,48 @@ async function sendToAi(retryCount = 0) {
                 role: m.role,
                 content: m.text
             }))
-        
+
         // 调用 API，传递玩家token
         const response = await fetch('/api/ai/chat', {
             method: 'POST',
-            headers: { 
+            headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${playerToken.value}`
             },
             body: JSON.stringify({
                 messages: history,
-                context: { 
+                context: {
                     sessionId: sessionId.value,
-                    playerToken: playerToken.value  // 传递玩家token给AI系统
+                    playerToken: playerToken.value,  // 传递玩家token给AI系统
+                    currentPath: route.fullPath      // 当前页面路径（Vue Router）喵
                 },
                 show_thinking: true
             })
         })
-        
+
         const thinkingIndex = messages.value.findIndex(m => m.id === thinkingId)
         if (thinkingIndex !== -1) {
             messages.value.splice(thinkingIndex, 1)
         }
-        
+
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
-            
+
             if (response.status === 401) {
                 throw new Error('登录已过期，请重新登录')
             }
-            
+
             const errorMsg = errorData.error || ''
             if ((errorMsg.includes('starting') || errorMsg.includes('Connection refused') || response.status === 503) && retryCount < MAX_RETRIES) {
                 await delay(RETRY_DELAY_MS)
                 return sendToAi(retryCount + 1)
             }
-            
+
             throw new Error(errorData.error || `HTTP ${response.status}`)
         }
-        
+
         const data = await response.json()
-        
+
         if (data.ok) {
             if (data.usage) {
                 sessionUsage.value.total_prompt += data.usage.prompt_tokens || 0
@@ -434,7 +438,7 @@ async function sendToAi(retryCount = 0) {
             if (data.tool_calls_count) {
                 sessionUsage.value.tool_call_count += data.tool_calls_count
             }
-            
+
             messages.value.push({
                 role: 'assistant',
                 text: data.message,
@@ -446,19 +450,19 @@ async function sendToAi(retryCount = 0) {
         } else {
             throw new Error(data.error || 'AI 返回错误')
         }
-        
+
     } catch (e) {
         const thinkingIndex = messages.value.findIndex(m => m.id === thinkingId)
         if (thinkingIndex !== -1) {
             messages.value.splice(thinkingIndex, 1)
         }
-        
+
         const errorMsg = e instanceof Error ? e.message : String(e)
         if ((errorMsg.includes('Connection refused') || errorMsg.includes('Failed to fetch')) && retryCount < MAX_RETRIES) {
             await delay(RETRY_DELAY_MS)
             return sendToAi(retryCount + 1)
         }
-        
+
         messages.value.push({
             role: 'assistant',
             text: `抱歉，发生了错误喵: ${errorMsg}`,
@@ -514,12 +518,12 @@ const rootStyle = computed(() => {
 
 function onResize() {
     pos.value = clampToViewport(pos.value)
-    
+
     const vw = window.innerWidth
     const vh = window.innerHeight
     const maxW = Math.min(MAX_PANEL_WIDTH, vw - pos.value.x - 16)
     const maxH = Math.min(MAX_PANEL_HEIGHT, vh - pos.value.y - 16)
-    
+
     if (panelSize.value.width > maxW || panelSize.value.height > maxH) {
         panelSize.value = {
             width: Math.min(panelSize.value.width, maxW),
@@ -539,15 +543,15 @@ onMounted(() => {
             y: window.innerHeight - ballSize - 32,
         })
     }
-    
+
     const savedSize = loadPanelSize()
     if (savedSize) {
         panelSize.value = savedSize
     }
-    
+
     // 加载玩家token
     playerToken.value = localStorage.getItem('sa.token') || ''
-    
+
     window.addEventListener('resize', onResize)
     window.addEventListener('mousemove', onGlobalMouseMove)
     window.addEventListener('storage', syncEnabledState)
@@ -563,7 +567,7 @@ onBeforeUnmount(() => {
     window.removeEventListener('resize', onResize)
     window.removeEventListener('mousemove', onGlobalMouseMove)
     window.removeEventListener('storage', syncEnabledState)
-    
+
     if (isPanelSizeDirty.value) {
         savePanelSize()
     }
@@ -612,15 +616,18 @@ onBeforeUnmount(() => {
                             </div>
                             <div class="usage-item">
                                 <div class="usage-value">{{ sessionUsage.total_tokens }}</div>
-                                <div class="usage-label">总计</div>
+                                <div class="usage-label">总消耗</div>
                             </div>
-                            <div class="usage-item">
-                                <div class="usage-value">{{ sessionUsage.request_count }}</div>
-                                <div class="usage-label">请求数</div>
+                        </div>
+
+                        <div class="usage-meta">
+                            <div class="usage-meta-item">
+                                <div class="usage-meta-value">{{ sessionUsage.request_count }}</div>
+                                <div class="usage-meta-label">请求数</div>
                             </div>
-                            <div class="usage-item">
-                                <div class="usage-value">{{ sessionUsage.tool_call_count }}</div>
-                                <div class="usage-label">工具调用</div>
+                            <div class="usage-meta-item">
+                                <div class="usage-meta-value">{{ sessionUsage.tool_call_count }}</div>
+                                <div class="usage-meta-label">工具调用</div>
                             </div>
                         </div>
                     </div>
@@ -632,6 +639,14 @@ onBeforeUnmount(() => {
                         <div v-for="(m, idx) in messages" :key="m.id || idx" class="msg" :class="m.role">
                             <div class="bubble">
                                 <div class="msg-text">{{ m.text }}</div>
+
+                                <!-- 单次消息 Token 消耗详情喵 -->
+                                <div v-if="m.role === 'assistant' && m.usage" class="msg-usage-tag">
+                                    <span class="usage-pill prompt">入: {{ m.usage.prompt_tokens }}</span>
+                                    <span class="usage-pill completion">出: {{ m.usage.completion_tokens }}</span>
+                                    <span class="usage-pill total">计: {{ m.usage.total_tokens }}</span>
+                                </div>
+
                                 <!-- 思考过程 -->
                                 <div v-if="m.thinking && m.thinking.length > 0" class="thinking-section">
                                     <button class="thinking-toggle" @click="toggleThinking(m)">
@@ -647,21 +662,30 @@ onBeforeUnmount(() => {
                                                     <span class="step-type" :class="step.type">
                                                         {{ step.type === 'reasoning' ? '💭 推理' : '🔧 工具调用' }}
                                                     </span>
-                                                    <span class="step-duration">{{ formatDuration(step.duration_ms) }}</span>
+                                                    <span class="step-duration">{{ formatDuration(step.duration_ms)
+                                                        }}</span>
                                                 </div>
                                                 <div class="step-content">{{ step.content }}</div>
-                                                <div v-if="step.tool_calls && step.tool_calls.length > 0" class="tool-calls">
-                                                    <div v-for="(tc, tcidx) in step.tool_calls" :key="tcidx" class="tool-call">
+                                                <div v-if="step.tool_calls && step.tool_calls.length > 0"
+                                                    class="tool-calls">
+                                                    <div v-for="(tc, tcidx) in step.tool_calls" :key="tcidx"
+                                                        class="tool-call">
                                                         <div class="tool-name">{{ formatToolName(tc.name) }}</div>
-                                                        <div class="tool-args">参数: {{ JSON.stringify(tc.arguments) }}</div>
-                                                        <div class="tool-result" v-if="tc.result">
-                                                            结果: {{ typeof tc.result === 'object' ? JSON.stringify(tc.result).slice(0, 100) + '...' : tc.result }}
+                                                        <div class="tool-args">参数: {{ JSON.stringify(tc.arguments) }}
                                                         </div>
-                                                        <div class="tool-duration">耗时: {{ formatDuration(tc.duration_ms) }}</div>
+                                                        <div class="tool-result" v-if="tc.result">
+                                                            结果: {{ typeof tc.result === 'object' ?
+                                                                JSON.stringify(tc.result).slice(0, 100) + '...' : tc.result
+                                                            }}
+                                                        </div>
+                                                        <div class="tool-duration">耗时: {{ formatDuration(tc.duration_ms)
+                                                            }}</div>
                                                     </div>
                                                 </div>
                                                 <div v-if="step.usage" class="step-usage">
-                                                    Tokens: {{ step.usage.prompt_tokens }} 输入 + {{ step.usage.completion_tokens }} 输出 = {{ step.usage.total_tokens }} 总计
+                                                    Tokens: {{ step.usage.prompt_tokens }} 输入 + {{
+                                                        step.usage.completion_tokens }} 输出 = {{ step.usage.total_tokens }}
+                                                    总计
                                                 </div>
                                             </div>
                                         </div>
@@ -674,34 +698,18 @@ onBeforeUnmount(() => {
 
                 <!-- 输入框 -->
                 <footer class="panel-footer">
-                    <input 
-                        ref="inputRef" 
-                        v-model="inputText" 
-                        class="msg-input" 
-                        type="text"
-                        :placeholder="isLoading ? 'AI 正在思考喵...' : (playerToken ? '在此输入回复内容喵...' : '请先登录后再使用喵...')" 
-                        @keyup.enter="send"
-                        :disabled="isLoading || !playerToken"
-                    />
-                    <button 
-                        class="send-btn" 
-                        type="button" 
-                        @click="send"
-                        :disabled="isLoading || !inputText.trim() || !playerToken"
-                    >
+                    <input ref="inputRef" v-model="inputText" class="msg-input" type="text"
+                        :placeholder="isLoading ? 'AI 正在思考喵...' : (playerToken ? '在此输入回复内容喵...' : '请先登录后再使用喵...')"
+                        @keyup.enter="send" :disabled="isLoading || !playerToken" />
+                    <button class="send-btn" type="button" @click="send"
+                        :disabled="isLoading || !inputText.trim() || !playerToken">
                         {{ isLoading ? '...' : '发送' }}
                     </button>
                 </footer>
 
                 <!-- 大小调节手柄 -->
-                <div 
-                    class="resize-handle" 
-                    @pointerdown="onResizeHandleDown"
-                    @pointermove="onResizeHandleMove"
-                    @pointerup="onResizeHandleUp"
-                    @pointercancel="onResizeHandleUp"
-                    title="拖拽调节窗口大小"
-                >
+                <div class="resize-handle" @pointerdown="onResizeHandleDown" @pointermove="onResizeHandleMove"
+                    @pointerup="onResizeHandleUp" @pointercancel="onResizeHandleUp" title="拖拽调节窗口大小">
                     <div class="resize-icon">
                         <span></span>
                         <span></span>
@@ -781,8 +789,17 @@ onBeforeUnmount(() => {
 }
 
 @keyframes pulse {
-    0%, 100% { transform: scale(1); opacity: 0.3; }
-    50% { transform: scale(1.2); opacity: 0.5; }
+
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 0.3;
+    }
+
+    50% {
+        transform: scale(1.2);
+        opacity: 0.5;
+    }
 }
 
 /* AI 面板 */
@@ -813,11 +830,11 @@ onBeforeUnmount(() => {
     box-shadow: 0 30px 60px rgba(0, 0, 0, 0.8);
 }
 
-.ai-panel > * {
+.ai-panel>* {
     flex-shrink: 0;
 }
 
-.ai-panel > .panel-body {
+.ai-panel>.panel-body {
     flex: 1;
     flex-shrink: 1;
     min-height: 0;
@@ -838,6 +855,7 @@ onBeforeUnmount(() => {
         opacity: 0;
         clip-path: circle(0% at var(--origin-x) var(--origin-y));
     }
+
     100% {
         transform: scale(1);
         opacity: 1;
@@ -970,8 +988,8 @@ onBeforeUnmount(() => {
 
 .usage-grid {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 4px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
 }
 
 .usage-item {
@@ -1084,6 +1102,74 @@ onBeforeUnmount(() => {
 }
 
 /* Thinking Section */
+.msg-usage-tag {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+.usage-pill {
+    font-size: 10px;
+    line-height: 1;
+    padding: 4px 6px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.75);
+    font-family: monospace;
+}
+
+.usage-pill.prompt {
+    color: rgba(34, 211, 238, 0.95);
+    border-color: rgba(34, 211, 238, 0.35);
+    background: rgba(34, 211, 238, 0.08);
+}
+
+.usage-pill.completion {
+    color: rgba(168, 85, 247, 0.95);
+    border-color: rgba(168, 85, 247, 0.35);
+    background: rgba(168, 85, 247, 0.08);
+}
+
+.usage-pill.total {
+    color: rgba(255, 255, 255, 0.9);
+    border-color: rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.usage-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.usage-meta-item {
+    flex: 1;
+    text-align: center;
+    padding: 6px 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.usage-meta-value {
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.85);
+    line-height: 1.2;
+}
+
+.usage-meta-label {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.45);
+    margin-top: 2px;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
 .thinking-section {
     margin-top: 8px;
     padding-top: 8px;
@@ -1307,13 +1393,11 @@ onBeforeUnmount(() => {
     bottom: 4px;
     width: 12px;
     height: 12px;
-    background: linear-gradient(
-        135deg,
-        transparent 40%,
-        rgba(168, 85, 247, 0.6) 45%,
-        rgba(168, 85, 247, 0.6) 55%,
-        transparent 60%
-    );
+    background: linear-gradient(135deg,
+            transparent 40%,
+            rgba(168, 85, 247, 0.6) 45%,
+            rgba(168, 85, 247, 0.6) 55%,
+            transparent 60%);
     pointer-events: none;
 }
 
@@ -1333,17 +1417,20 @@ onBeforeUnmount(() => {
     border-radius: 1px;
 }
 
-.resize-icon span:nth-child(1) { transform: translateX(4px); }
-.resize-icon span:nth-child(2) { transform: translateX(2px); }
+.resize-icon span:nth-child(1) {
+    transform: translateX(4px);
+}
+
+.resize-icon span:nth-child(2) {
+    transform: translateX(2px);
+}
 
 .resize-handle:hover::before {
-    background: linear-gradient(
-        135deg,
-        transparent 40%,
-        rgba(168, 85, 247, 1) 45%,
-        rgba(168, 85, 247, 1) 55%,
-        transparent 60%
-    );
+    background: linear-gradient(135deg,
+            transparent 40%,
+            rgba(168, 85, 247, 1) 45%,
+            rgba(168, 85, 247, 1) 55%,
+            transparent 60%);
 }
 
 .resize-handle:hover .resize-icon {
@@ -1351,13 +1438,11 @@ onBeforeUnmount(() => {
 }
 
 .ai-panel.is-resizing .resize-handle::before {
-    background: linear-gradient(
-        135deg,
-        transparent 40%,
-        var(--sa-accent2, #22d3ee) 45%,
-        var(--sa-accent2, #22d3ee) 55%,
-        transparent 60%
-    );
+    background: linear-gradient(135deg,
+            transparent 40%,
+            var(--sa-accent2, #22d3ee) 45%,
+            var(--sa-accent2, #22d3ee) 55%,
+            transparent 60%);
 }
 
 /* 响应式布局适配 */

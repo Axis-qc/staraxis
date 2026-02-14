@@ -158,7 +158,8 @@ class AiHttpServer:
                 result: ChatResult = await self.llm.chat_with_tools(
                     messages, 
                     registry, 
-                    ws_client=ws_client
+                    ws_client=ws_client,
+                    context=context
                 )
                 
                 response_data = {

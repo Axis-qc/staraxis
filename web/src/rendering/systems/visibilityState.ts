@@ -140,7 +140,7 @@ export class VisibilityStateManager {
    * 计算实体可见性级别
    */
   private calculateEntityVisibility(
-    entity: EntitySnapshot,
+    _entity: EntitySnapshot,
     ownerNationId?: string
   ): VisibilityLevel {
     // 如果没有设置当前国家，则所有实体完全可见（兼容模式）
@@ -283,19 +283,6 @@ export class VisibilityStateManager {
     return `q:${q},r:${r}`
   }
 
-  /**
-   * 从键解析坐标
-   */
-  private keyToCoord(key: SectorCoordKey): { q: number; r: number } | null {
-    try {
-      const parts = key.split(',')
-      const q = parseInt(parts[0].split(':')[1])
-      const r = parseInt(parts[1].split(':')[1])
-      return { q, r }
-    } catch {
-      return null
-    }
-  }
 
   /**
    * 获取所有可见实体ID

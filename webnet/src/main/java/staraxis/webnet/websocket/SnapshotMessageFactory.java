@@ -158,27 +158,34 @@ public final class SnapshotMessageFactory {
 
         if (filterSectors != null && !filterSectors.isEmpty()) {
             for (EntitySnapshot s : allSnapshots) {
-                // 星区过滤：只包含可见星区内的实体喵。
-                if (!filterSectors.contains(s.sectorCoord)) {
-                    continue;
-                }
+                // 本国实体强制推送：ownerNationId == nationId 时无视星区订阅与战争迷雾过滤喵
+                String ownerNationId = extractOwnerNationId(s);
+                boolean isOwnedByCurrentNation = nationId != null && !nationId.isBlank()
+                        && ownerNationId != null && ownerNationId.equals(nationId);
 
-                // 国家视野过滤：公共天体不受视野限制；非天体实体必须对该 nationId 完全可见才下发喵。
-                boolean isNaturalBody = s.entityType == EntityType.STAR
-                        || s.entityType == EntityType.PLANET
-                        || s.entityType == EntityType.SYSTEM_BARYCENTER;
-
-                if (!isNaturalBody) {
-                    // 未绑定国家：不下发任何非天体实体喵。
-                    if (nationId == null || nationId.isBlank()) {
+                if (!isOwnedByCurrentNation) {
+                    // 星区过滤：只包含可见星区内的实体喵。
+                    if (!filterSectors.contains(s.sectorCoord)) {
                         continue;
                     }
 
-                    staraxis.game.entity.Entity e = runtime.getWorldStateForSimOnly().entitiesById.get(s.entityId);
-                    String vis = runtime.getWorldStateForSimOnly().visibilitySystem.computeEntityVisibility(e,
-                            nationId);
-                    if (!"FULL".equals(vis)) {
-                        continue;
+                    // 国家视野过滤：公共天体不受视野限制；非天体实体必须对该 nationId 完全可见才下发喵。
+                    boolean isNaturalBody = s.entityType == EntityType.STAR
+                            || s.entityType == EntityType.PLANET
+                            || s.entityType == EntityType.SYSTEM_BARYCENTER;
+
+                    if (!isNaturalBody) {
+                        // 未绑定国家：不下发任何非天体实体喵。
+                        if (nationId == null || nationId.isBlank()) {
+                            continue;
+                        }
+
+                        staraxis.game.entity.Entity e = runtime.getWorldStateForSimOnly().entitiesById.get(s.entityId);
+                        String vis = runtime.getWorldStateForSimOnly().visibilitySystem.computeEntityVisibility(e,
+                                nationId);
+                        if (!"FULL".equals(vis)) {
+                            continue;
+                        }
                     }
                 }
 

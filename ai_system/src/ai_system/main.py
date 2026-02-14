@@ -26,7 +26,7 @@ from typing import Any, Dict
 from .config.loader import load_config
 from .protocol.ws_client import AiWsClient
 from .brain.openai_provider import OpenAiProvider
-from .tools.snapshot_tools import get_entity, register_all_snapshot_tools
+from .tools.snapshot_tools import register_all_snapshot_tools, get_latest_snapshot
 from .tools.registry import registry
 from .api.http_server import create_server
 
@@ -135,12 +135,14 @@ async def run_agent() -> None:
             break
 
         if line.startswith("entity "):
+            print("warning: entity command is deprecated. Using get_latest_snapshot instead.")
             if not ws:
-                print("error: WebSocket not connected, cannot access game data")
+                print("error: WebSocket not connected")
                 continue
             try:
-                entity_id = int(line.split(" ", 1)[1].strip())
-                resp = await get_entity({"entityId": entity_id}, ws_client=ws)
+                # 模拟一个 context 喵
+                mock_ctx = {"playerToken": f"Bearer {ws.token}"} if ws.token else {}
+                resp = await get_latest_snapshot({}, ws_client=ws, context=mock_ctx)
                 print(json.dumps(resp, ensure_ascii=False, indent=2))
             except Exception as e:
                 print(f"error: {e}")

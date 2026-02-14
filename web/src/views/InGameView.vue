@@ -40,6 +40,7 @@
  * - **输入拦截**：需确保 UI 面板打开时正确拦截底层相机操作。
  */
 import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import { useAstroAssets } from '../composables/useAstroAssets'
 import { useDevTooltip } from '../composables/useDevTooltip'
@@ -66,6 +67,7 @@ import { useRtsRightClickCommand } from '../features/inGame/commands/useRtsRight
 import { useVisibleSectors } from '../features/inGame/composables/useVisibleSectors'
 import { useInGameDebugWindow } from '../features/inGame/composables/useInGameDebugWindow'
 import { useInGameWindows } from '../features/inGame/composables/useInGameWindows'
+import { createCameraStatePersister, loadPersistedCameraState } from '../features/inGame/composables/useCameraPersist'
 
 import { useAuthStore } from '../stores/auth'
 
@@ -91,11 +93,19 @@ const hub = useInGameDataHub()
 const wsClient = ref<SnapshotWsClient | null>(null)
 const renderer = ref<WorldRenderer | null>(null)
 const auth = useAuthStore()
+const { playerId } = storeToRefs(auth)
+
+// 镜头状态持久化（sessionStorage）喵
+const cameraPersister = createCameraStatePersister(renderer, playerId)
 
 let lastSnapshotLogTime = 0
 let isFirstSnapshotLog = true
 
 const activeBottomTab = ref<InGameBottomTab | null>(null)
+
+// 标记是否需要执行初始首都聚焦（如果没有缓存镜头状态）喵
+let needsInitialFocusOnCapital = false
+let hasAppliedInitialCapitalFocus = false
 
 // --- 逻辑下沉集成 --- //
 const {
@@ -241,9 +251,20 @@ onMounted(() => {
 
   const container = containerRef.value
   if (container) {
-    const r = createWorldRenderManager(container, { minZoom: 0.1, maxZoom: 2_000_000, getSpritePath })
+    const persisted = loadPersistedCameraState(playerId.value)
+    needsInitialFocusOnCapital = !persisted
+    const r = createWorldRenderManager(container, {
+      minZoom: 0.1,
+      maxZoom: 2_000_000,
+      getSpritePath,
+      initialCameraPos: persisted?.cameraWorldPosGU,
+      initialZoom: persisted?.zoom,
+    })
     renderer.value = r
     hub.setRenderer(r)
+
+    cameraPersister.attach()
+    cameraPersister.schedulePersist()
   }
 
   wsClient.value = connectSnapshotWs({
@@ -252,7 +273,6 @@ onMounted(() => {
       const now = Date.now()
       if (isFirstSnapshotLog || now - lastSnapshotLogTime >= 60000) {
         const ok = !!s.ok
-        const hasRt = !!s.realTimeWorldState
         const sectorCentersCount = s.realTimeWorldState?.sectorCenters?.length ?? -1
         const entities = s.realTimeWorldState?.entities ?? []
         const entitiesCount = entities.length
@@ -273,6 +293,29 @@ onMounted(() => {
 
       hub.setLastSnapshot(s)
       hub.getRenderer()?.updateFromSnapshot(s)
+
+      // 若本会话没有镜头缓存，则扫描本国实体列表找到首都行星并做一次初始聚焦喵
+      if (!hasAppliedInitialCapitalFocus && needsInitialFocusOnCapital) {
+        const r = hub.getRenderer()
+        const entities = s.realTimeWorldState?.entities ?? []
+        const nationId = auth.selectedNationId
+
+        if (r && nationId) {
+          const capitalPlanet = entities.find((e) => {
+            if (e.entityType !== 'PLANET') return false
+            const d: any = e.details
+            return d && d.ownerNationId === nationId && d.isCapital === true
+          })
+
+          if (capitalPlanet && capitalPlanet.posWorldGU) {
+            r.cameraWorldPosGU.set(capitalPlanet.posWorldGU.x, capitalPlanet.posWorldGU.y)
+            r.applyCameraTransform()
+            hasAppliedInitialCapitalFocus = true
+            needsInitialFocusOnCapital = false
+            cameraPersister.schedulePersist()
+          }
+        }
+      }
     },
   })
 })
@@ -287,6 +330,8 @@ onUnmounted(() => {
 
   wsClient.value?.close()
   wsClient.value = null
+
+  cameraPersister.detach()
 
   hub.getRenderer()?.dispose()
   hub.setRenderer(null)

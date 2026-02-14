@@ -52,7 +52,6 @@ export function createFrameStateBuilder(
     const updateSectorCenters = (centers: { q: number; r: number; x: number; y: number }[]) => {
         // 增量更新星区中心喵
         for (const c of centers) {
-            const key = `${c.q},${c.r}`
             const existing = sectorCenters.find(sc => sc.q === c.q && sc.r === c.r)
             if (!existing) {
                 sectorCenters.push(c)

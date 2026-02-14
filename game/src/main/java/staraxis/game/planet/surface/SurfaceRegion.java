@@ -34,25 +34,71 @@ public class SurfaceRegion {
     /** 本区域城市ID列表喵。 */
     public List<Long> cityIds;
 
+    /** 已开发空间比例（0-1），当前已开发空间占本区域总面积的比例喵。 */
+    public double developedSpaceRatio;
+
     /**
      * 默认构造函数喵。
      */
     public SurfaceRegion() {
         // 默认值
         this.developableSpaceRatio = 0.0;
+        this.subFeatures = new java.util.ArrayList<>();
+        this.cityIds = new java.util.ArrayList<>();
+    }
+
+    /**
+     * 计算并更新本区域已开发的城市占用空间比例喵。
+     * 基于城市规模和行星大小加成计算喵。
+     *
+     * @param surface 行星表面组件，用于获取城市数据喵。
+     * @return 已开发空间占本区域总面积的比例喵。
+     */
+    public double calculateDevelopedSpaceRatio(staraxis.game.planet.PlanetSurface surface) {
+        if (surface == null || cityIds.isEmpty()) {
+            this.developedSpaceRatio = 0.0;
+            return 0.0;
+        }
+
+        double totalScale = 0;
+        for (Long cityId : cityIds) {
+            staraxis.game.planet.city.City city = surface.getCity(cityId);
+            if (city != null) {
+                // 根据文档：totalDevelopmentScale = Σ(city_i.scale * planetSizeModifier) 喵
+                totalScale += city.cityScale * surface.planetSizeModifier;
+            }
+        }
+
+        // 直接使用 (城市规模 * 行星大小修正) 的和作为已开发空间比例基础喵
+        // developedSpaceRatio = Σ(cityScale * planetSizeModifier) / surfacePercentage 喵
+        this.developedSpaceRatio = totalScale / surfacePercentage;
+
+        // 限制最大值为 1.0 喵
+        if (this.developedSpaceRatio > 1.0) {
+            this.developedSpaceRatio = 1.0;
+        }
+
+        return this.developedSpaceRatio;
+    }
+
+    /**
+     * 获取缓存的已开发空间比例喵。
+     * 注意：必须先调用 calculateDevelopedSpaceRatio(surface) 更新缓存喵。
+     *
+     * @return 已开发空间占本区域总面积的比例喵。
+     */
+    public double getDevelopedSpaceRatio() {
+        return developedSpaceRatio;
     }
 
     /**
      * 计算本区域已开发的城市占用空间比例喵。
-     * 基于城市规模和行星大小加成计算喵。
+     * 兼容性占位符，默认返回缓存值喵。
      *
      * @return 已开发空间占本区域总面积的比例喵。
      */
     public double calculateDevelopedSpaceRatio() {
-        // TODO: 实现基于城市规模和行星大小加成的计算喵
-        // 根据文档：totalDevelopmentScale = Σ(city_i.scale * planetSizeModifier)
-        // 然后转换为占用本区域的比例喵
-        return 0.0;
+        return developedSpaceRatio;
     }
 
     /**

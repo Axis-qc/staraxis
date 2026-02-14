@@ -99,6 +99,12 @@ public class PlanetSurface {
             city.isPlanetaryCapital = true;
         }
 
+        // 将城市ID添加到所属区域的cityIds列表中喵
+        SurfaceRegion region = getSurfaceRegion(city.regionId);
+        if (region != null && !region.cityIds.contains(city.cityId)) {
+            region.cityIds.add(city.cityId);
+        }
+
         // 更新总开发规模喵
         updateTotalDevelopmentScale();
     }
@@ -237,6 +243,18 @@ public class PlanetSurface {
         totalDevelopmentScale = cities.stream()
                 .mapToDouble(c -> c.cityScale * planetSizeModifier)
                 .sum();
+
+        // 更新各区域的开发比例喵
+        updateRegionDevelopedSpaceRatios();
+    }
+
+    /**
+     * 更新所有地表区域的已开发空间比例喵。
+     */
+    public void updateRegionDevelopedSpaceRatios() {
+        for (SurfaceRegion region : surfaceRegions) {
+            region.calculateDevelopedSpaceRatio(this);
+        }
     }
 
     /**
