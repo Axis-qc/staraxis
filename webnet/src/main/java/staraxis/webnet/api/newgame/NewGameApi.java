@@ -158,6 +158,17 @@ public final class NewGameApi {
         Object shape = d.worldGenConfig.get("galaxyShape");
         cfg.galaxyShape = shape == null ? null : String.valueOf(shape);
 
+        Object worldType = d.worldGenConfig.get("worldType");
+        if (worldType != null && !String.valueOf(worldType).isBlank()) {
+            try {
+                cfg.worldType = staraxis.game.world.WorldType.valueOf(String.valueOf(worldType).trim());
+            } catch (Exception ignored) {
+                cfg.worldType = staraxis.game.world.WorldType.SINGLE_PLAYER;
+            }
+        } else {
+            cfg.worldType = staraxis.game.world.WorldType.SINGLE_PLAYER;
+        }
+
         staraxis.webnet.core.WebNetLog.initTruncate();
         staraxis.webnet.core.WebNetLog
                 .log("NewGameApi.step3Confirm begin username=" + username + " playerId=" + playerId);

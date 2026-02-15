@@ -21,7 +21,7 @@
  * - **时间显示**：右上角显示游戏时间字符串。
  * 
  */
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import type { SnapshotMessage, SnapshotWsClient } from '../../../net/snapshotWs'
 
 const props = defineProps<{ snapshot: SnapshotMessage | null; wsClient?: SnapshotWsClient | null }>()
@@ -42,9 +42,17 @@ const SPEED_OPTIONS = [
 
 type SpeedOption = (typeof SPEED_OPTIONS)[number]
 
-const speedIndex = ref<number>(Math.max(0, SPEED_OPTIONS.indexOf(1.0)))
+// 移除本地维护的 speedIndex ref，改为基于快照同步的 computed 索引喵
+const currentGsprs = computed(() => props.snapshot?.realTimeWorldState?.gameSecondsPerRealSecond ?? 1.0)
 
-function getSpeedLabel(s: SpeedOption) {
+const speedIndex = computed(() => {
+  const current = currentGsprs.value
+  // 寻找最接近的档位索引，默认 0 档喵
+  const idx = SPEED_OPTIONS.findIndex(s => Math.abs(s - current) < 0.1)
+  return idx === -1 ? 0 : idx
+})
+
+function getSpeedLabel(s: number) {
   if (s === 1) return '1s/s'
   if (s === 60) return '1m/s'
   if (s === 300) return '5m/s'
@@ -66,14 +74,12 @@ function sendSimTimeSpeed(gameSecondsPerRealSecond: SpeedOption) {
 
 function onClickSpeedPrev() {
   const prevIndex = (speedIndex.value - 1 + SPEED_OPTIONS.length) % SPEED_OPTIONS.length
-  speedIndex.value = prevIndex
   const prevScale = SPEED_OPTIONS[prevIndex]
   if (prevScale != null) sendSimTimeSpeed(prevScale)
 }
 
 function onClickSpeedNext() {
   const nextIndex = (speedIndex.value + 1) % SPEED_OPTIONS.length
-  speedIndex.value = nextIndex
   const nextScale = SPEED_OPTIONS[nextIndex]
   if (nextScale != null) sendSimTimeSpeed(nextScale)
 }

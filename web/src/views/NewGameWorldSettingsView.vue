@@ -44,6 +44,9 @@ const worldRadius = ref(12)
 type GalaxyShape = 'doubleSpiral' | 'tripleSpiral' | 'quadSpiral' | 'circle' | 'ellipse' | 'irregular'
 const galaxyShape = ref<GalaxyShape>('doubleSpiral')
 
+type WorldType = 'SINGLE_PLAYER' | 'MULTI_PLAYER' | 'SERVER'
+const worldType = ref<WorldType>('SINGLE_PLAYER')
+
 async function apiPostJson<T>(url: string, body: unknown): Promise<T> {
   const resp = await fetch(url, {
     method: 'POST',
@@ -77,6 +80,7 @@ async function handleStartGame() {
       worldSeed: worldSeed.value,
       worldRadius: worldRadius.value,
       galaxyShape: galaxyShape.value,
+      worldType: worldType.value,
       playerNationId: selectedNationId.value,
     }
 
@@ -138,6 +142,15 @@ async function handleStartGame() {
           <label class="field">
             <span class="label">{{ t('newGame.worldSettings.worldRadius') }}</span>
             <input class="input" type="number" v-model.number="worldRadius" min="1" max="512" />
+          </label>
+
+          <label class="field">
+            <span class="label">世界类型</span>
+            <select class="input" v-model="worldType">
+              <option value="SINGLE_PLAYER">单人世界</option>
+              <option value="MULTI_PLAYER">多人世界</option>
+              <option value="SERVER">服务器世界</option>
+            </select>
           </label>
 
           <label class="field">
