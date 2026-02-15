@@ -1,3 +1,5 @@
+import { wsClient as sharedWsClient } from '../services/ws'
+
 export type SectorCenter = { q: number; r: number; x: number; y: number }
 
 export type EntityType = 'STAR' | 'PLANET' | 'SYSTEM_BARYCENTER' | 'SHIP' | 'STATION'
@@ -88,93 +90,55 @@ export type SnapshotWsClient = {
 }
 
 export function connectSnapshotWs(options: SnapshotWsOptions = {}): SnapshotWsClient {
-    const reconnectDelayMs = options.reconnectDelayMs ?? 3000
+    const unsubs: Array<() => void> = []
 
-    let ws: WebSocket | null = null
-    let closed = false
+    const applyStatus = () => {
+        const s = sharedWsClient.getState()
+        options.onStatus?.({ connected: s === 'connected' })
+    }
 
-    const connect = () => {
-        if (closed) return
+    // 连接状态同步喵
+    unsubs.push(sharedWsClient.onStateChange(() => applyStatus()))
 
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-        // 从 localStorage 获取 token 喵
-        const token = localStorage.getItem('sa.token') || ''
-        const wsUrl = `${protocol}//${window.location.host}/ws${token ? `?token=${encodeURIComponent(token)}` : ''}`
-        ws = new WebSocket(wsUrl)
-
-        ws.onopen = () => {
-            options.onStatus?.({ connected: true })
+    // 订阅 snapshot 消息喵
+    if (options.onSnapshot) {
+        unsubs.push(sharedWsClient.onMessage((text) => {
             try {
-                ws?.send(JSON.stringify({ type: 'subscribeSnapshot' }))
-            } catch {
-            }
-        }
-
-        ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data)
-
-                // 响应服务端应用层心跳喵
-                if (data?.type === 'ping') {
-                    try {
-                        ws?.send(JSON.stringify({ type: 'pong' }))
-                    } catch {
-                    }
-                    return
-                }
-
+                const data = JSON.parse(text)
                 if (data?.type === 'snapshot') {
                     options.onSnapshot?.(data)
                 }
             } catch {
             }
-        }
-
-        ws.onclose = () => {
-            options.onStatus?.({ connected: false })
-            ws = null
-            if (!closed) {
-                setTimeout(connect, reconnectDelayMs)
-            }
-        }
-
-        ws.onerror = () => {
-            try {
-                ws?.close()
-            } catch {
-            }
-        }
+        }))
     }
 
-    connect()
+    // 触发连接与订阅喵
+    sharedWsClient.connect()
+    applyStatus()
 
     return {
         close: () => {
-            closed = true
-            try {
-                ws?.close()
-            } catch {
+            // 这里只解绑监听，不主动断开全局 WS，避免影响其他模块喵
+            for (const u of unsubs) {
+                try {
+                    u()
+                } catch {
+                }
             }
-            ws = null
             options.onStatus?.({ connected: false })
         },
         send: (data: any) => {
             try {
-                ws?.send(typeof data === 'string' ? data : JSON.stringify(data))
+                sharedWsClient.sendText(typeof data === 'string' ? data : JSON.stringify(data))
             } catch {
             }
         },
         updateVisibleSectors: (sectors: { q: number; r: number }[]) => {
-            try {
-                ws?.send(JSON.stringify({ type: 'updateVisibleSectors', sectors }))
-            } catch {
-            }
+            sharedWsClient.updateVisibleSectors(sectors)
         },
         setNationId: (nationId: string) => {
-            try {
-                ws?.send(JSON.stringify({ type: 'setNationId', nationId }))
-            } catch {
-            }
+            sharedWsClient.setNationId(nationId)
         }
     }
 }

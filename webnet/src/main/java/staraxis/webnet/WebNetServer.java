@@ -41,48 +41,26 @@ package staraxis.webnet;
  * - 因此涉及阻塞 IO 的 handler 必须使用 exchange.dispatch(...) 切换到 worker 线程处理。
  */
 
-import staraxis.webnet.api.I18nApi;
-import staraxis.webnet.api.ShipApi;
-import staraxis.webnet.auth.AuthApi;
 import staraxis.webnet.auth.AuthStore;
 import staraxis.webnet.core.WebNetServerConfig;
 import staraxis.webnet.core.WsConnectionManager;
-import staraxis.webnet.mod.ModManager;
-import staraxis.webnet.mod.ModOrderRepository;
-import staraxis.webnet.mod.ModsApi;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import staraxis.game.StarAxisGameRuntime;
-import staraxis.webnet.game.GameSessions;
-import staraxis.webnet.websocket.SnapshotMessageFactory;
 import staraxis.webnet.command.WebCommandRegistry;
 import staraxis.webnet.command.SetSimTimeSpeedCommand;
-import staraxis.webnet.ai.AiConfigApi;
-import staraxis.webnet.ai.AiChatApi;
-import staraxis.webnet.ai.AiUsageApi;
 import staraxis.webnet.ai.WebAiWebSocketHandler;
 import staraxis.webnet.ai.WebAiAutoStarter;
+import staraxis.webnet.websocket.WebPlayerWebSocketHandler;
 import io.undertow.Handlers;
 import io.undertow.Undertow;
-import io.undertow.server.HttpHandler;
 import io.undertow.server.handlers.PathHandler;
 import io.undertow.server.handlers.resource.FileResourceManager;
 import io.undertow.server.handlers.resource.ResourceHandler;
-import io.undertow.util.Headers;
-import io.undertow.websockets.core.AbstractReceiveListener;
-import io.undertow.websockets.core.BufferedTextMessage;
 import io.undertow.websockets.core.WebSocketChannel;
 import io.undertow.websockets.core.WebSockets;
-import io.undertow.websockets.spi.WebSocketHttpExchange;
 
 import java.io.File;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import staraxis.game.world.hex.SectorCoord;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -91,110 +69,21 @@ import java.util.concurrent.atomic.AtomicLong;
 public class WebNetServer {
 
     private void tickAndBroadcastSnapshots() {
-        // 每 1 分钟执行一次连接存活检测与心跳（由 connMgr 统一负责）喵
+        // 每 30 秒执行一次连接存活检测与心跳（由 connMgr 统一负责）喵
         long now = System.currentTimeMillis();
-        if (now - lastLowFreqWsCheckMs >= 60_000L) {
+        if (now - lastLowFreqWsCheckMs >= 30_000L) {
             lastLowFreqWsCheckMs = now;
             connMgr.sweepAndPing();
         }
 
-        staraxis.game.StarAxisGameRuntime runtime = staraxis.webnet.game.GameSessions.getRuntime();
-        if (runtime == null) {
-            return;
+        // 每 1 分钟打印一次连接详情到 webnet.log 便于排查挤号/僵尸连接喵
+        if (now - lastLowFreqConnLogMs >= 60_000L) {
+            lastLowFreqConnLogMs = now;
+            connMgr.logActiveConnections();
         }
 
-        long t0 = System.nanoTime();
-        try {
-            runtime.update(0f);
-        } catch (Exception e) {
-            return;
-        } finally {
-            long costMs = Math.max(0, (System.nanoTime() - t0) / 1_000_000L);
-            lastTickCostMs.set(costMs);
-        }
-
-        try {
-            Set<WebSocketChannel> snapshotSubscribers = connMgr.getSnapshotSubscribers();
-            if (snapshotSubscribers.isEmpty()) {
-                return;
-            }
-
-            for (WebSocketChannel ch : snapshotSubscribers) {
-                if (ch != null && ch.isOpen()) {
-                    Set<SectorCoord> visible = connMgr.getVisibleSectors(ch);
-                    String nationId = null;
-                    try {
-                        String pid = connMgr.getPlayerIdByChannel(ch);
-                        if (pid != null) {
-                            nationId = runtime.getWorldStateForSimOnly().nationManager.getNationIdByPlayer(pid);
-                        }
-                    } catch (Exception ignored) {
-                    }
-                    if (nationId == null) {
-                        nationId = connMgr.getNationIdByChannel(ch);
-                    }
-
-                    var snapshotDto = SnapshotMessageFactory.buildSnapshotMessageWithNation(runtime,
-                            lastTickCostMs.get(),
-                            visible, nationId);
-                    String json = objectMapper.writeValueAsString(snapshotDto);
-                    WebSockets.sendText(json, ch, null);
-                }
-            }
-        } catch (Exception e) {
-            try {
-                staraxis.webnet.core.WebNetLog
-                        .log("tickAndBroadcastSnapshots snapshot_build_failed: " + String.valueOf(e));
-            } catch (Exception ignored) {
-            }
-        }
-    }
-
-    private void sendSnapshotToChannel(WebSocketChannel channel) {
-        if (channel == null || !channel.isOpen()) {
-            return;
-        }
-
-        StarAxisGameRuntime runtime = GameSessions.getRuntime();
-        if (runtime == null) {
-            try {
-                WebSockets.sendText(
-                        objectMapper.writeValueAsString(SnapshotMessageFactory.buildWorldNotCreatedMessage()),
-                        channel, null);
-            } catch (Exception e) {
-                WebSockets.sendText("{\"type\":\"snapshot\",\"ok\":false,\"error\":\"world_not_created\"}",
-                        channel, null);
-            }
-            return;
-        }
-
-        try {
-            Set<SectorCoord> visible = connMgr.getVisibleSectors(channel);
-            String nationId = null;
-            try {
-                String pid = connMgr.getPlayerIdByChannel(channel);
-                if (pid != null) {
-                    nationId = runtime.getWorldStateForSimOnly().nationManager.getNationIdByPlayer(pid);
-                }
-            } catch (Exception ignored) {
-            }
-            if (nationId == null) {
-                nationId = connMgr.getNationIdByChannel(channel);
-            }
-
-            String json = objectMapper.writeValueAsString(
-                    SnapshotMessageFactory.buildSnapshotMessageWithNation(runtime, lastTickCostMs.get(), visible,
-                            nationId));
-            WebSockets.sendText(json, channel, null);
-        } catch (Exception e) {
-            try {
-                staraxis.webnet.core.WebNetLog.logThrottled("snapshot_build_failed",
-                        "sendSnapshotToChannel snapshot_build_failed: " + String.valueOf(e));
-            } catch (Exception ignored) {
-            }
-            WebSockets.sendText("{\"type\":\"snapshot\",\"ok\":false,\"error\":\"snapshot_build_failed\"}",
-                    channel, null);
-        }
+        // tick + 广播细节下沉到 SnapshotBroadcaster 喵
+        snapshotBroadcaster.tickAndBroadcast();
     }
 
     private final WebNetServerConfig config;
@@ -204,11 +93,13 @@ public class WebNetServer {
     private final WebCommandRegistry commandRegistry = new WebCommandRegistry(objectMapper);
 
     private final WsConnectionManager connMgr = new WsConnectionManager();
+    private final WebPlayerWebSocketHandler playerWebSocketHandler;
     private final WebAiWebSocketHandler aiWebSocketHandler;
+    private final staraxis.webnet.websocket.SnapshotBroadcaster snapshotBroadcaster;
 
     private final AtomicLong lastTickCostMs = new AtomicLong(0);
-    private volatile int lastLoggedGameDay = -1;
     private volatile long lastLowFreqWsCheckMs = 0;
+    private volatile long lastLowFreqConnLogMs = 0;
 
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "webnet-auto-exit");
@@ -225,7 +116,10 @@ public class WebNetServer {
     public WebNetServer(WebNetServerConfig config) {
         this.config = config;
         commandRegistry.register(new SetSimTimeSpeedCommand());
-        this.aiWebSocketHandler = new WebAiWebSocketHandler(authStore);
+        this.playerWebSocketHandler = new WebPlayerWebSocketHandler(objectMapper, authStore, connMgr, commandRegistry);
+        this.aiWebSocketHandler = new WebAiWebSocketHandler(authStore, connMgr);
+        this.snapshotBroadcaster = new staraxis.webnet.websocket.SnapshotBroadcaster(objectMapper, connMgr,
+                lastTickCostMs);
     }
 
     public void start() {
@@ -247,816 +141,30 @@ public class WebNetServer {
         PathHandler routes = Handlers.path();
         gameTicker.scheduleAtFixedRate(this::tickAndBroadcastSnapshots, 0, 40, TimeUnit.MILLISECONDS);
 
-        routes.addExactPath("/ws", Handlers.websocket((WebSocketHttpExchange exchange, WebSocketChannel channel) -> {
-            List<String> tokenParams = exchange.getRequestParameters().get("token");
-            String token = (tokenParams == null || tokenParams.isEmpty()) ? null : tokenParams.get(0);
-
-            AuthStore.Session session = (token == null) ? null : authStore.getSessionByToken(token);
-            if (session == null) {
-                try {
-                    WebSockets.sendText(objectMapper.writeValueAsString(Map.of(
-                            "type", "hello",
-                            "ok", false,
-                            "error", "unauthorized")), channel, null);
-                    channel.sendClose();
-                } catch (Exception ignored) {
-                }
-                return;
-            }
-
-            String playerId = session.playerId;
-            channel.setIdleTimeout(60_000L);
-            connMgr.registerPlayer(playerId, channel);
-
-            channel.getReceiveSetter().set(new AbstractReceiveListener() {
-                @Override
-                protected void onFullTextMessage(WebSocketChannel channel, BufferedTextMessage message) {
-                    String text = message.getData();
-                    WebAiAutoStarter.reportActivity();
-
-                    try {
-                        @SuppressWarnings("unchecked")
-                        Map<String, Object> m = objectMapper.readValue(text, Map.class);
-                        Object typeObj = m.get("type");
-                        String type = typeObj == null ? null : String.valueOf(typeObj);
-
-                        if ("subscribeSnapshot".equals(type)) {
-                            connMgr.subscribeSnapshot(channel);
-                            if (!GameSessions.hasRuntime()) {
-                                WebSockets.sendText(
-                                        "{\"type\":\"snapshot\",\"ok\":false,\"error\":\"world_not_created\"}", channel,
-                                        null);
-                            } else {
-                                sendSnapshotToChannel(channel);
-                            }
-                            return;
-                        }
-
-                        if ("unsubscribeSnapshot".equals(type)) {
-                            connMgr.unsubscribeSnapshot(channel);
-                            WebSockets.sendText("{\"type\":\"unsubscribed\",\"ok\":true}", channel, null);
-                            return;
-                        }
-
-                        if ("updateVisibleSectors".equals(type)) {
-                            List<Map<String, Integer>> sectorList = (List<Map<String, Integer>>) m.get("sectors");
-                            Set<SectorCoord> sectors = new HashSet<>();
-                            if (sectorList != null) {
-                                for (Map<String, Integer> s : sectorList) {
-                                    Number q = s.get("q");
-                                    Number r = s.get("r");
-                                    if (q != null && r != null) {
-                                        sectors.add(new SectorCoord(q.intValue(), r.intValue()));
-                                    }
-                                }
-                            }
-                            connMgr.updateVisibleSectors(channel, sectors);
-                            // 更新后立即推送一次当前视野的快照喵
-                            sendSnapshotToChannel(channel);
-                            return;
-                        }
-
-                        if ("pong".equals(type)) {
-                            connMgr.onPlayerPong(channel);
-                            return;
-                        }
-
-                        if ("setNationId".equals(type)) {
-                            Object nationIdObj = m.get("nationId");
-                            String nationId = nationIdObj == null ? null : String.valueOf(nationIdObj).trim();
-                            if (nationId != null && !nationId.isEmpty()) {
-                                connMgr.setPlayerNationId(playerId, nationId);
-                                WebSockets.sendText(
-                                        "{\"type\":\"nationIdSet\",\"ok\":true,\"nationId\":\"" + nationId + "\"}",
-                                        channel, null);
-                            } else {
-                                WebSockets.sendText(
-                                        "{\"type\":\"nationIdSet\",\"ok\":false,\"error\":\"invalid_nation_id\"}",
-                                        channel, null);
-                            }
-                            return;
-                        }
-
-                        if (commandRegistry.supports(type)) {
-                            String response = commandRegistry.handleTextMessage(text);
-                            WebSockets.sendText(response, channel, null);
-                            return;
-                        }
-                    } catch (Exception ignored) {
-                    }
-                    WebSockets.sendText(text, channel, null);
-                }
-
-                @Override
-                protected void onClose(WebSocketChannel webSocketChannel,
-                        io.undertow.websockets.core.StreamSourceFrameChannel frameChannel) {
-                    connMgr.unregisterPlayer(webSocketChannel);
-                }
-            });
-
-            channel.resumeReceives();
-            WebSockets.sendText(
-                    "{\"type\":\"hello\",\"ok\":true,\"server\":\"webnet\",\"playerId\":\"" + playerId + "\"}", channel,
-                    null);
-        }));
+        routes.addExactPath("/ws", Handlers.websocket(playerWebSocketHandler::onConnect));
 
         routes.addPrefixPath("/ws/ai", Handlers.websocket((exchange, channel) -> {
-            connMgr.registerAi(channel);
-            channel.addCloseTask(connMgr::unregisterAi);
+            // AI WS 的鉴权与 playerId 绑定在 WebAiWebSocketHandler.onConnect 内完成喵
             aiWebSocketHandler.onConnect(exchange, channel);
+
+            // 关闭时若已绑定 playerId，则注销 AI 连接喵
+            channel.addCloseTask(connMgr::unregisterAi);
         }));
 
-        PathHandler apiHandler = Handlers.path();
+        staraxis.webnet.core.AdminApi.AdminActions adminActions = this::shutdownAndRestart;
 
-        apiHandler.addExactPath("/game/nations", exchange -> {
-            exchange.dispatch(() -> {
-                try {
-                    staraxis.webnet.api.nation.NationPresetsApi.setJsonContentType(exchange);
-                    List<staraxis.game.nation.NationDef> nations = staraxis.webnet.api.nation.NationPresetsApi
-                            .loadAllPresetNations(objectMapper);
-                    exchange.getResponseSender().send(objectMapper
-                            .writeValueAsString(staraxis.webnet.api.nation.NationPresetsApi.toResponse(nations)));
-                } catch (Exception e) {
-                    exchange.setStatusCode(500);
-                    try {
-                        exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                        exchange.getResponseSender().send(objectMapper
-                                .writeValueAsString(Map.of("ok", false, "error", String.valueOf(e.getMessage()))));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                }
-            });
-        });
-
-        apiHandler.addExactPath("/nations/players/list", exchange -> {
-            exchange.dispatch(() -> {
-                try {
-                    staraxis.webnet.api.nation.PlayerNationApi.setJsonContentType(exchange);
-                    String username = staraxis.webnet.api.nation.PlayerNationApi.query(exchange, "username");
-                    String playerId = staraxis.webnet.api.nation.PlayerNationApi.query(exchange, "playerId");
-                    String json = staraxis.webnet.api.nation.PlayerNationApi.handleList(objectMapper,
-                            new staraxis.webnet.repo.nation.PlayerNationFileRepository(objectMapper), username,
-                            playerId);
-                    exchange.getResponseSender().send(json);
-                } catch (Exception e) {
-                    exchange.setStatusCode(400);
-                    try {
-                        exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                        exchange.getResponseSender().send(objectMapper
-                                .writeValueAsString(Map.of("ok", false, "error", String.valueOf(e.getMessage()))));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                }
-            });
-        });
-
-        apiHandler.addExactPath("/nations/players/get", exchange -> {
-            exchange.dispatch(() -> {
-                try {
-                    staraxis.webnet.api.nation.PlayerNationApi.setJsonContentType(exchange);
-                    String username = staraxis.webnet.api.nation.PlayerNationApi.query(exchange, "username");
-                    String playerId = staraxis.webnet.api.nation.PlayerNationApi.query(exchange, "playerId");
-                    String nationId = staraxis.webnet.api.nation.PlayerNationApi.query(exchange, "nationId");
-                    String json = staraxis.webnet.api.nation.PlayerNationApi.handleGet(objectMapper,
-                            new staraxis.webnet.repo.nation.PlayerNationFileRepository(objectMapper), username,
-                            playerId, nationId);
-                    exchange.getResponseSender().send(json);
-                } catch (Exception e) {
-                    exchange.setStatusCode(400);
-                    try {
-                        exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                        exchange.getResponseSender().send(objectMapper
-                                .writeValueAsString(Map.of("ok", false, "error", String.valueOf(e.getMessage()))));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                }
-            });
-        });
-
-        apiHandler.addExactPath("/nations/players/save", exchange -> {
-            exchange.dispatch(() -> {
-                staraxis.webnet.api.nation.PlayerNationApi.setJsonContentType(exchange);
-                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
-                    exchange.setStatusCode(405);
-                    try {
-                        exchange.getResponseSender().send(
-                                objectMapper.writeValueAsString(Map.of("ok", false, "error", "method_not_allowed")));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                    return;
-                }
-                try {
-                    exchange.startBlocking();
-                    String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-                    String json = staraxis.webnet.api.nation.PlayerNationApi.handleSave(objectMapper,
-                            new staraxis.webnet.repo.nation.PlayerNationFileRepository(objectMapper), body);
-                    exchange.getResponseSender().send(json);
-                } catch (Exception e) {
-                    exchange.setStatusCode(400);
-                    try {
-                        exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                        exchange.getResponseSender().send(objectMapper
-                                .writeValueAsString(Map.of("ok", false, "error", String.valueOf(e.getMessage()))));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                }
-            });
-        });
-
-        apiHandler.addExactPath("/join-game/available-spawns", exchange -> {
-            exchange.dispatch(() -> {
-                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE,
-                        staraxis.webnet.api.newgame.NewGameApi.jsonContentType());
-                if (!"GET".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
-                    exchange.setStatusCode(405);
-                    try {
-                        exchange.getResponseSender().send(
-                                objectMapper.writeValueAsString(Map.of("ok", false, "error", "method_not_allowed")));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                    return;
-                }
-                try {
-                    staraxis.webnet.api.joingame.JoinGameApi.setJsonContentType(exchange);
-                    Map<String, Object> resp = staraxis.webnet.api.joingame.JoinGameApi.handleAvailableSpawns();
-                    exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
-                } catch (Exception e) {
-                    exchange.setStatusCode(400);
-                    try {
-                        exchange.getResponseSender().send(objectMapper
-                                .writeValueAsString(Map.of("ok", false, "error", String.valueOf(e.getMessage()))));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                }
-            });
-        });
-
-        apiHandler.addExactPath("/join-game/confirm-spawn", exchange -> {
-            exchange.dispatch(() -> {
-                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE,
-                        staraxis.webnet.api.newgame.NewGameApi.jsonContentType());
-                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
-                    exchange.setStatusCode(405);
-                    try {
-                        exchange.getResponseSender().send(
-                                objectMapper.writeValueAsString(Map.of("ok", false, "error", "method_not_allowed")));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                    return;
-                }
-                try {
-                    exchange.startBlocking();
-                    String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-                    Map<String, Object> req = staraxis.webnet.api.newgame.NewGameApi.parseBodyToMap(objectMapper, body);
-                    staraxis.webnet.api.joingame.JoinGameApi.setJsonContentType(exchange);
-                    Map<String, Object> resp = staraxis.webnet.api.joingame.JoinGameApi.handleConfirmSpawn(objectMapper,
-                            req);
-                    exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
-                } catch (Exception e) {
-                    exchange.setStatusCode(400);
-                    try {
-                        exchange.getResponseSender().send(objectMapper
-                                .writeValueAsString(Map.of("ok", false, "error", String.valueOf(e.getMessage()))));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                }
-            });
-        });
-
-        apiHandler.addExactPath("/newgame/step1/selectNation", exchange -> {
-            exchange.dispatch(() -> {
-                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE,
-                        staraxis.webnet.api.newgame.NewGameApi.jsonContentType());
-                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
-                    exchange.setStatusCode(405);
-                    try {
-                        exchange.getResponseSender().send(
-                                objectMapper.writeValueAsString(Map.of("ok", false, "error", "method_not_allowed")));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                    return;
-                }
-                try {
-                    exchange.startBlocking();
-                    String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-                    Map<String, Object> req = staraxis.webnet.api.newgame.NewGameApi.parseBodyToMap(objectMapper, body);
-                    staraxis.webnet.api.newgame.NewGameDraftRepository repo = new staraxis.webnet.api.newgame.NewGameDraftRepository(
-                            objectMapper);
-                    Map<String, Object> resp = staraxis.webnet.api.newgame.NewGameApi.step1SelectNation(objectMapper,
-                            repo, req);
-                    exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
-                } catch (Exception e) {
-                    exchange.setStatusCode(400);
-                    try {
-                        exchange.getResponseSender().send(objectMapper
-                                .writeValueAsString(Map.of("ok", false, "error", String.valueOf(e.getMessage()))));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                }
-            });
-        });
-
-        apiHandler.addExactPath("/newgame/step2/worldSettings", exchange -> {
-            exchange.dispatch(() -> {
-                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE,
-                        staraxis.webnet.api.newgame.NewGameApi.jsonContentType());
-                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
-                    exchange.setStatusCode(405);
-                    try {
-                        exchange.getResponseSender().send(
-                                objectMapper.writeValueAsString(Map.of("ok", false, "error", "method_not_allowed")));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                    return;
-                }
-                try {
-                    exchange.startBlocking();
-                    String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-                    Map<String, Object> req = staraxis.webnet.api.newgame.NewGameApi.parseBodyToMap(objectMapper, body);
-                    staraxis.webnet.api.newgame.NewGameDraftRepository repo = new staraxis.webnet.api.newgame.NewGameDraftRepository(
-                            objectMapper);
-                    Map<String, Object> resp = staraxis.webnet.api.newgame.NewGameApi.step2WorldSettings(objectMapper,
-                            repo, req);
-                    exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
-                } catch (Exception e) {
-                    exchange.setStatusCode(400);
-                    try {
-                        exchange.getResponseSender().send(objectMapper
-                                .writeValueAsString(Map.of("ok", false, "error", String.valueOf(e.getMessage()))));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                }
-            });
-        });
-
-        apiHandler.addExactPath("/newgame/step3/confirm", exchange -> {
-            exchange.dispatch(() -> {
-                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE,
-                        staraxis.webnet.api.newgame.NewGameApi.jsonContentType());
-                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
-                    exchange.setStatusCode(405);
-                    try {
-                        exchange.getResponseSender().send(
-                                objectMapper.writeValueAsString(Map.of("ok", false, "error", "method_not_allowed")));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                    return;
-                }
-                try {
-                    exchange.startBlocking();
-                    String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-                    Map<String, Object> req = staraxis.webnet.api.newgame.NewGameApi.parseBodyToMap(objectMapper, body);
-                    staraxis.webnet.api.newgame.NewGameDraftRepository repo = new staraxis.webnet.api.newgame.NewGameDraftRepository(
-                            objectMapper);
-                    Map<String, Object> resp = staraxis.webnet.api.newgame.NewGameApi.step3Confirm(objectMapper, repo,
-                            req);
-                    exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
-                } catch (Exception e) {
-                    exchange.setStatusCode(400);
-                    try {
-                        exchange.getResponseSender().send(objectMapper
-                                .writeValueAsString(Map.of("ok", false, "error", String.valueOf(e.getMessage()))));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                }
-            });
-        });
-
-        AuthApi authApi = new AuthApi(authStore, objectMapper);
-        apiHandler.addPrefixPath("/auth", authApi.createHandler());
-
-        ModOrderRepository modOrderRepository = new ModOrderRepository();
-        ModManager modManager = new ModManager(modOrderRepository);
-        ModsApi modsApi = new ModsApi(objectMapper, modOrderRepository, modManager);
-        apiHandler.addPrefixPath("/mods", modsApi.createHandler());
-
-        staraxis.webnet.core.AdminApi adminApi = new staraxis.webnet.core.AdminApi(
-                config, authStore, objectMapper,
+        PathHandler apiRoot = staraxis.webnet.api.ApiRoutes.createApiHandler(
+                objectMapper,
+                authStore,
+                connMgr,
+                config,
                 connMgr.getPlayerCountRef(),
                 connMgr.getAiCountRef(),
                 connMgr.getLastDisconnectAtMsRef(),
-                this::shutdownAndRestart);
-        apiHandler.addPrefixPath("/", adminApi.createHandler());
+                adminActions,
+                () -> lastTickCostMs.get());
 
-        PathHandler i18nHandler = Handlers.path();
-        i18nHandler.addExactPath("/languages", exchange -> {
-            List<String> languages = I18nApi.listAvailableLanguages();
-            exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-            exchange.getResponseSender().send(objectMapper.writeValueAsString(languages));
-        });
-        i18nHandler.addPrefixPath("/", exchange -> {
-            String lang = exchange.getRelativePath().substring(1);
-            if (lang.contains("/") || lang.contains(".")) {
-                exchange.setStatusCode(404).endExchange();
-                return;
-            }
-            Map<String, String> strings = I18nApi.loadMergedStrings(lang);
-            exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-            exchange.getResponseSender().send(objectMapper.writeValueAsString(strings));
-        });
-        apiHandler.addPrefixPath("/i18n", i18nHandler);
-
-        ShipApi shipApi = new ShipApi(objectMapper);
-        apiHandler.addPrefixPath("/ship", shipApi.createHandler());
-
-        AiConfigApi aiConfigApi = new AiConfigApi(objectMapper);
-        apiHandler.addPrefixPath("/ai/config", aiConfigApi.createHandler());
-
-        AiChatApi aiChatApi = new AiChatApi(objectMapper, authStore);
-        apiHandler.addPrefixPath("/ai/chat", aiChatApi.createHandler());
-        apiHandler.addPrefixPath("/ai/history", aiChatApi.createHistoryHandler());
-        apiHandler.addPrefixPath("/ai/history/clear", aiChatApi.createClearHistoryHandler());
-
-        AiUsageApi aiUsageApi = new AiUsageApi(objectMapper);
-        apiHandler.addPrefixPath("/ai/usage", aiUsageApi.createHandler());
-
-        apiHandler.addExactPath("/snapshot/latest", exchange -> {
-            exchange.dispatch(() -> {
-                try {
-                    // 1. 验证身份喵
-                    String auth = exchange.getRequestHeaders().get("Authorization") != null
-                            && !exchange.getRequestHeaders().get("Authorization").isEmpty()
-                                    ? exchange.getRequestHeaders().get("Authorization").get(0)
-                                    : null;
-
-                    AuthStore.Session session = authStore.getSessionFromAuthorizationHeader(auth);
-                    if (session == null) {
-                        exchange.setStatusCode(401);
-                        exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                        exchange.getResponseSender()
-                                .send(objectMapper.writeValueAsString(Map.of("ok", false, "error", "unauthorized")));
-                        return;
-                    }
-
-                    // 2. 获取运行时喵
-                    StarAxisGameRuntime runtime = GameSessions.getRuntime();
-                    if (runtime == null) {
-                        exchange.setStatusCode(503);
-                        exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                        exchange.getResponseSender().send(
-                                objectMapper.writeValueAsString(Map.of("ok", false, "error", "world_not_created")));
-                        return;
-                    }
-
-                    // 3. 确定国家ID喵（优先从权威映射拿，其次从 connMgr 缓存拿）
-                    String nationId = runtime.getWorldStateForSimOnly().nationManager
-                            .getNationIdByPlayer(session.playerId);
-                    if (nationId == null) {
-                        nationId = connMgr.getPlayerNationId(session.playerId);
-                    }
-
-                    // 4. 构建全量可见快照（无视 visibleSectors 限制，因为 AI 需要全局视野）喵
-                    // 注意：由于 AI 工具调用通常不需要前端可见星区过滤，这里传 null 表示不过滤星区，
-                    // SnapshotMessageFactory 会自动根据 nationId 包含本国所有实体喵。
-                    var snapshotDto = SnapshotMessageFactory.buildSnapshotMessageWithNation(
-                            runtime, lastTickCostMs.get(), null, nationId);
-
-                    exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                    exchange.getResponseSender().send(objectMapper.writeValueAsString(snapshotDto));
-
-                } catch (Exception e) {
-                    exchange.setStatusCode(500);
-                    try {
-                        exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                        exchange.getResponseSender()
-                                .send(objectMapper.writeValueAsString(Map.of("ok", false, "error", e.getMessage())));
-                    } catch (Exception ignored) {
-                        exchange.endExchange();
-                    }
-                }
-            });
-        });
-
-        // --- Snapshot Query API (AI / Tools) ---
-
-        apiHandler.addExactPath("/snapshot/meta", exchange -> {
-            exchange.dispatch(() -> {
-                try {
-                    String auth = exchange.getRequestHeaders().get("Authorization") != null
-                            && !exchange.getRequestHeaders().get("Authorization").isEmpty()
-                                    ? exchange.getRequestHeaders().get("Authorization").get(0)
-                                    : null;
-
-                    AuthStore.Session session = authStore.getSessionFromAuthorizationHeader(auth);
-                    if (session == null) {
-                        exchange.setStatusCode(401);
-                        exchange.endExchange();
-                        return;
-                    }
-
-                    StarAxisGameRuntime runtime = GameSessions.getRuntime();
-                    if (runtime == null) {
-                        exchange.setStatusCode(503);
-                        exchange.endExchange();
-                        return;
-                    }
-
-                    String nationId = runtime.getWorldStateForSimOnly().nationManager
-                            .getNationIdByPlayer(session.playerId);
-                    if (nationId == null) {
-                        nationId = connMgr.getPlayerNationId(session.playerId);
-                    }
-
-                    var rt = runtime.getRealTimeWorldStateReadonly();
-
-                    java.util.Map<String, Integer> ownedEntityCounts = new java.util.HashMap<>();
-                    if (nationId != null && !nationId.isBlank()) {
-                        for (var s : rt.getEntitySnapshotsView()) {
-                            String owner = null;
-                            try {
-                                owner = SnapshotMessageFactory.extractOwnerNationId(s);
-                            } catch (Exception ignored) {
-                            }
-                            if (nationId.equals(owner)) {
-                                String tn = s.entityType == null ? "null" : s.entityType.name();
-                                ownedEntityCounts.put(tn, ownedEntityCounts.getOrDefault(tn, 0) + 1);
-                            }
-                        }
-                    }
-
-                    java.util.Map<String, Object> resp = new java.util.LinkedHashMap<>();
-                    resp.put("ok", true);
-                    resp.put("nationId", nationId);
-                    resp.put("simulationTick", rt.simulationTick);
-                    resp.put("gameDatetimeDay", rt.gameDatetimeDay);
-                    resp.put("accGameHoursInDay", rt.accGameHoursInDay);
-                    resp.put("worldRadius", rt.worldRadius);
-                    resp.put("ownedEntityCounts", ownedEntityCounts);
-
-                    exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                    exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
-
-                } catch (Exception e) {
-                    exchange.setStatusCode(500);
-                    exchange.endExchange();
-                }
-            });
-        });
-
-        apiHandler.addExactPath("/snapshot/entity", exchange -> {
-            exchange.dispatch(() -> {
-                try {
-                    String idStr = exchange.getQueryParameters().get("id") != null
-                            ? exchange.getQueryParameters().get("id").peekFirst()
-                            : null;
-                    if (idStr == null || idStr.isBlank()) {
-                        exchange.setStatusCode(400);
-                        exchange.endExchange();
-                        return;
-                    }
-
-                    long entityId = Long.parseLong(idStr);
-
-                    String auth = exchange.getRequestHeaders().get("Authorization") != null
-                            && !exchange.getRequestHeaders().get("Authorization").isEmpty()
-                                    ? exchange.getRequestHeaders().get("Authorization").get(0)
-                                    : null;
-
-                    AuthStore.Session session = authStore.getSessionFromAuthorizationHeader(auth);
-                    if (session == null) {
-                        exchange.setStatusCode(401);
-                        exchange.endExchange();
-                        return;
-                    }
-
-                    StarAxisGameRuntime runtime = GameSessions.getRuntime();
-                    if (runtime == null) {
-                        exchange.setStatusCode(503);
-                        exchange.endExchange();
-                        return;
-                    }
-
-                    String nationId = runtime.getWorldStateForSimOnly().nationManager
-                            .getNationIdByPlayer(session.playerId);
-                    if (nationId == null) {
-                        nationId = connMgr.getPlayerNationId(session.playerId);
-                    }
-
-                    staraxis.game.state.snapshot.EntitySnapshot found = null;
-                    for (var s : runtime.getRealTimeWorldStateReadonly().getEntitySnapshotsView()) {
-                        if (s != null && s.entityId == entityId) {
-                            found = s;
-                            break;
-                        }
-                    }
-
-                    if (found == null) {
-                        exchange.setStatusCode(404);
-                        exchange.endExchange();
-                        return;
-                    }
-
-                    // 权限：本国实体放行；非本国只允许天体（后续可接 visibilitySystem）喵
-                    String owner = null;
-                    try {
-                        owner = SnapshotMessageFactory.extractOwnerNationId(found);
-                    } catch (Exception ignored) {
-                    }
-                    boolean owned = nationId != null && !nationId.isBlank() && nationId.equals(owner);
-                    boolean isNatural = found.entityType == staraxis.game.entity.EntityType.STAR
-                            || found.entityType == staraxis.game.entity.EntityType.PLANET
-                            || found.entityType == staraxis.game.entity.EntityType.SYSTEM_BARYCENTER;
-
-                    if (!owned && !isNatural) {
-                        exchange.setStatusCode(403);
-                        exchange.endExchange();
-                        return;
-                    }
-
-                    exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                    exchange.getResponseSender().send(objectMapper.writeValueAsString(java.util.Map.of(
-                            "ok", true,
-                            "entity", found)));
-
-                } catch (Exception e) {
-                    exchange.setStatusCode(500);
-                    exchange.endExchange();
-                }
-            });
-        });
-
-        apiHandler.addExactPath("/snapshot/owned/search", exchange -> {
-            exchange.dispatch(() -> {
-                try {
-                    String auth = exchange.getRequestHeaders().get("Authorization") != null
-                            && !exchange.getRequestHeaders().get("Authorization").isEmpty()
-                                    ? exchange.getRequestHeaders().get("Authorization").get(0)
-                                    : null;
-
-                    AuthStore.Session session = authStore.getSessionFromAuthorizationHeader(auth);
-                    if (session == null) {
-                        exchange.setStatusCode(401);
-                        exchange.endExchange();
-                        return;
-                    }
-
-                    StarAxisGameRuntime runtime = GameSessions.getRuntime();
-                    if (runtime == null) {
-                        exchange.setStatusCode(503);
-                        exchange.endExchange();
-                        return;
-                    }
-
-                    String nationId = runtime.getWorldStateForSimOnly().nationManager
-                            .getNationIdByPlayer(session.playerId);
-                    if (nationId == null) {
-                        nationId = connMgr.getPlayerNationId(session.playerId);
-                    }
-
-                    if (nationId == null || nationId.isBlank()) {
-                        exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                        exchange.getResponseSender().send(objectMapper.writeValueAsString(java.util.Map.of(
-                                "ok", true,
-                                "total", 0,
-                                "items", java.util.List.of())));
-                        return;
-                    }
-
-                    String entityType = exchange.getQueryParameters().get("entityType") != null
-                            ? exchange.getQueryParameters().get("entityType").peekFirst()
-                            : null;
-                    String text = exchange.getQueryParameters().get("text") != null
-                            ? exchange.getQueryParameters().get("text").peekFirst()
-                            : null;
-                    String sectorQStr = exchange.getQueryParameters().get("sectorQ") != null
-                            ? exchange.getQueryParameters().get("sectorQ").peekFirst()
-                            : null;
-                    String sectorRStr = exchange.getQueryParameters().get("sectorR") != null
-                            ? exchange.getQueryParameters().get("sectorR").peekFirst()
-                            : null;
-
-                    int limit = 50;
-                    int offset = 0;
-                    try {
-                        if (exchange.getQueryParameters().get("limit") != null) {
-                            limit = Integer.parseInt(exchange.getQueryParameters().get("limit").peekFirst());
-                        }
-                        if (exchange.getQueryParameters().get("offset") != null) {
-                            offset = Integer.parseInt(exchange.getQueryParameters().get("offset").peekFirst());
-                        }
-                    } catch (Exception ignored) {
-                    }
-                    if (limit < 1)
-                        limit = 1;
-                    if (limit > 200)
-                        limit = 200;
-                    if (offset < 0)
-                        offset = 0;
-
-                    Integer sectorQ = null;
-                    Integer sectorR = null;
-                    try {
-                        if (sectorQStr != null && sectorRStr != null) {
-                            sectorQ = Integer.parseInt(sectorQStr);
-                            sectorR = Integer.parseInt(sectorRStr);
-                        }
-                    } catch (Exception ignored) {
-                    }
-
-                    final String nationIdFinal = nationId;
-                    final String textLower = text == null ? null : text.toLowerCase();
-                    final String typeLower = entityType == null ? null : entityType.toLowerCase();
-
-                    java.util.ArrayList<staraxis.game.state.snapshot.EntitySnapshot> matches = new java.util.ArrayList<>();
-
-                    for (var s : runtime.getRealTimeWorldStateReadonly().getEntitySnapshotsView()) {
-                        if (s == null) {
-                            continue;
-                        }
-
-                        String owner = null;
-                        try {
-                            owner = SnapshotMessageFactory.extractOwnerNationId(s);
-                        } catch (Exception ignored) {
-                        }
-                        if (!nationIdFinal.equals(owner)) {
-                            continue;
-                        }
-
-                        if (typeLower != null && s.entityType != null
-                                && !s.entityType.name().toLowerCase().equals(typeLower)) {
-                            continue;
-                        }
-
-                        if (sectorQ != null && sectorR != null) {
-                            if (s.sectorCoord == null || s.sectorCoord.q() != sectorQ || s.sectorCoord.r() != sectorR) {
-                                continue;
-                            }
-                        }
-
-                        if (textLower != null && !textLower.isBlank()) {
-                            boolean ok = false;
-                            if (String.valueOf(s.entityId).contains(textLower)) {
-                                ok = true;
-                            } else if (s.details != null) {
-                                try {
-                                    String detailsJson = objectMapper.writeValueAsString(s.details).toLowerCase();
-                                    if (detailsJson.contains(textLower)) {
-                                        ok = true;
-                                    }
-                                } catch (Exception ignored) {
-                                }
-                            }
-                            if (!ok) {
-                                continue;
-                            }
-                        }
-
-                        matches.add(s);
-                    }
-
-                    int total = matches.size();
-
-                    java.util.List<staraxis.game.state.snapshot.EntitySnapshot> paged = matches;
-                    if (offset > 0 || limit < matches.size()) {
-                        int from = Math.min(offset, matches.size());
-                        int to = Math.min(from + limit, matches.size());
-                        paged = matches.subList(from, to);
-                    }
-
-                    java.util.Map<String, Object> resp = new java.util.LinkedHashMap<>();
-                    resp.put("ok", true);
-                    resp.put("total", total);
-                    resp.put("items", paged);
-
-                    exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-                    exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
-
-                } catch (Exception e) {
-                    exchange.setStatusCode(500);
-                    exchange.endExchange();
-                }
-            });
-        });
-
-        HttpHandler apiWrapped = exchange -> {
-            try {
-                String rp = exchange.getRequestPath();
-                if (rp != null && rp.startsWith("/api/") && !"/api/status".equals(rp)) {
-                    WebAiAutoStarter.ensureAiStartedIfNeeded();
-                    WebAiAutoStarter.reportActivity();
-                }
-            } catch (Exception ignored) {
-            }
-            apiHandler.handleRequest(exchange);
-        };
-
-        routes.addPrefixPath("/api", apiWrapped);
+        routes.addPrefixPath("/api", apiRoot);
         staraxis.webnet.core.WebUiRoutes.register(routes);
         routes.addPrefixPath("/assets", new ResourceHandler(new FileResourceManager(new File("assets"), 1024 * 1024)));
 

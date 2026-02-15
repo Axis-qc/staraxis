@@ -1,0 +1,22 @@
+{
+  "messages": [
+    {
+      "role": "assistant",
+      "content": "AI 助手已就绪喵！请问有什么可以帮您的喵？"
+    },
+    {
+      "role": "user",
+      "content": "我有什么东西"
+    },
+    {
+      "role": "assistant",
+      "text": "达到最大决策轮次，请尝试简化问题喵。",
+      "id": "ai_1771135408003",
+      "usage": {
+        "prompt_tokens": 10611,
+        "completion_tokens": 344,
+        "total_tokens": 10955
+      }
+    }
+  ]
+}

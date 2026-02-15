@@ -40,10 +40,12 @@ import java.util.Map;
 public class WebAiWebSocketHandler extends AbstractReceiveListener {
 
     private final AuthStore authStore;
+    private final staraxis.webnet.core.WsConnectionManager connMgr;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public WebAiWebSocketHandler(AuthStore authStore) {
+    public WebAiWebSocketHandler(AuthStore authStore, staraxis.webnet.core.WsConnectionManager connMgr) {
         this.authStore = authStore;
+        this.connMgr = connMgr;
     }
 
     public void onConnect(WebSocketHttpExchange exchange, WebSocketChannel channel) {
@@ -60,6 +62,12 @@ public class WebAiWebSocketHandler extends AbstractReceiveListener {
                 } catch (Exception ignored) {
                 }
                 return;
+            }
+
+            // 在 WsConnectionManager 中注册并绑定 playerId，同时生成 connectionId 喵
+            String connectionId = null;
+            if (connMgr != null) {
+                connectionId = connMgr.registerAiForPlayer(session.playerId, channel);
             }
 
             AuthStore.Account a = authStore.loadAccount(session.username);
@@ -80,6 +88,7 @@ public class WebAiWebSocketHandler extends AbstractReceiveListener {
                     "\"ok\":true," +
                     "\"username\":\"" + session.username + "\"," +
                     "\"playerId\":\"" + session.playerId + "\"," +
+                    "\"connectionId\":\"" + (connectionId == null ? "" : connectionId) + "\"," +
                     "\"role\":\"" + role + "\"," +
                     "\"capabilities\":" + capabilities +
                     "}";

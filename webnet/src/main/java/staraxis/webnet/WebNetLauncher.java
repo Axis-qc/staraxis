@@ -17,17 +17,26 @@ package staraxis.webnet;
 import staraxis.webnet.core.WebNetServerConfig;
 import java.awt.Desktop;
 import java.net.URI;
+import java.io.File;
+import java.io.FileInputStream;
 
 public class WebNetLauncher {
 
     public static void main(String[] args) {
-        String host = getArgOrDefault(args, "--host", "127.0.0.1");
-        int port = parseIntOrDefault(getArgOrDefault(args, "--port", null), 17890);
-        int autoExitSeconds = parseIntOrDefault(getArgOrDefault(args, "--autoExitSeconds", null), 60);
-        boolean aiPrestart = "true".equalsIgnoreCase(getArgOrDefault(args, "--aiPrestart", "true"));
+        java.util.Properties props = loadWebNetProperties();
 
-        boolean serverUiEnabled = "true".equalsIgnoreCase(getArgOrDefault(args, "--serverUi", "true"));
-        String gameUiUrl = getArgOrDefault(args, "--gameUiUrl", "http://127.0.0.1:5173/");
+        String host = getArgOrDefault(args, "--host", props.getProperty("host", "127.0.0.1"));
+        int port = parseIntOrDefault(getArgOrDefault(args, "--port", null),
+                parseIntOrDefault(props.getProperty("port"), 17890));
+        int autoExitSeconds = parseIntOrDefault(getArgOrDefault(args, "--autoExitSeconds", null),
+                parseIntOrDefault(props.getProperty("autoExitSeconds"), 60));
+        boolean aiPrestart = "true".equalsIgnoreCase(
+                getArgOrDefault(args, "--aiPrestart", props.getProperty("aiPrestart", "true")));
+
+        boolean serverUiEnabled = "true".equalsIgnoreCase(
+                getArgOrDefault(args, "--serverUi", props.getProperty("serverUi", "true")));
+        String gameUiUrl = getArgOrDefault(args, "--gameUiUrl",
+                props.getProperty("gameUiUrl", "http://127.0.0.1:5173/"));
 
         WebNetServerConfig cfg = new WebNetServerConfig(host, port, autoExitSeconds, aiPrestart, serverUiEnabled,
                 gameUiUrl);
@@ -69,5 +78,25 @@ public class WebNetLauncher {
         } catch (Exception e) {
             return def;
         }
+    }
+
+    /**
+     * 加载 webnet 配置文件喵。
+     * 优先级由调用方保证：命令行参数 > 配置文件 > 代码默认值喵。
+     *
+     * 默认路径：webnet/config/webnet.properties（相对进程工作目录）喵。
+     */
+    private static java.util.Properties loadWebNetProperties() {
+        java.util.Properties props = new java.util.Properties();
+        File f = new File("webnet/config/webnet.properties");
+        if (!f.exists() || !f.isFile()) {
+            return props;
+        }
+        try (FileInputStream fis = new FileInputStream(f)) {
+            props.load(fis);
+        } catch (Exception e) {
+            staraxis.webnet.core.WebNetLog.log("Failed to load webnet.properties: " + e.getMessage());
+        }
+        return props;
     }
 }

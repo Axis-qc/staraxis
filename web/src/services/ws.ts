@@ -43,6 +43,10 @@ export type WsClient = {
     connect: () => void
     disconnect: () => void
     sendText: (text: string) => void
+    updateVisibleSectors: (sectors: { q: number; r: number }[]) => void
+    setNationId: (nationId: string) => void
+    subscribeSnapshot: () => void
+    unsubscribeSnapshot: () => void
     onStateChange: (cb: (s: WsState) => void) => () => void
     onMessage: (cb: (msg: string) => void) => () => void
     onError: (cb: (err: string) => void) => () => void
@@ -74,16 +78,38 @@ function createWsClient(path: string = '/ws'): WsClient {
             ws = new WebSocket(wsUrl())
             ws.onopen = () => {
                 notifyState('connected')
+                // 连接成功后自动发送订阅快照请求喵
+                subscribeSnapshot()
             }
             ws.onmessage = (evt) => {
                 const text = String(evt.data)
 
-                // 响应服务端应用层心跳喵
                 try {
                     const msg = JSON.parse(text)
+                    // 响应服务端应用层心跳喵
                     if (msg.type === 'ping') {
                         ws?.send(JSON.stringify({ type: 'pong' }))
                         return // 心跳包不分发给业务监听器喵
+                    }
+
+                    // 处理挤号/被踢消息喵
+                    if (msg.type === 'kick') {
+                        console.warn('[WS] Kicked from server:', msg.reason)
+                        const reasonMap: Record<string, string> = {
+                            'new_login': '账号在别处登录，当前连接已断开喵！',
+                            'player_disconnected': '玩家连接已断开，AI 会话同步结束喵！'
+                        }
+                        const alertMsg = reasonMap[msg.reason as string] || '您的账号已从服务器断开喵！'
+
+                        // 延迟弹窗避免干扰正常刷新喵
+                        setTimeout(() => {
+                            if (state === 'connected') {
+                                alert(alertMsg)
+                            }
+                        }, 100)
+
+                        disconnect()
+                        return
                     }
                 } catch {
                     // 非 JSON 消息忽略喵
@@ -120,12 +146,44 @@ function createWsClient(path: string = '/ws'): WsClient {
         ws.send(text)
     }
 
+    /**
+     * 订阅快照推送喵
+     */
+    function subscribeSnapshot() {
+        sendText(JSON.stringify({ type: 'subscribeSnapshot' }))
+    }
+
+    /**
+     * 取消订阅快照推送喵
+     */
+    function unsubscribeSnapshot() {
+        sendText(JSON.stringify({ type: 'unsubscribeSnapshot' }))
+    }
+
+    /**
+     * 更新可见星区喵
+     */
+    function updateVisibleSectors(sectors: { q: number; r: number }[]) {
+        sendText(JSON.stringify({ type: 'updateVisibleSectors', sectors }))
+    }
+
+    /**
+     * 设置玩家所属国家 ID 喵
+     */
+    function setNationId(nationId: string) {
+        sendText(JSON.stringify({ type: 'setNationId', nationId }))
+    }
+
     return {
         getState: () => state,
         getUrl: wsUrl,
         connect,
         disconnect,
         sendText,
+        updateVisibleSectors,
+        setNationId,
+        subscribeSnapshot,
+        unsubscribeSnapshot,
         onStateChange: (cb) => {
             stateListeners.add(cb)
             return () => stateListeners.delete(cb)
@@ -144,12 +202,22 @@ function createWsClient(path: string = '/ws'): WsClient {
 // Create and export a single, shared instance of the WebSocket client.
 export const wsClient = createWsClient('/ws')
 
-// 页面即将卸载时尽量主动断开，减少僵尸连接喵
+// 账户连接同步管理器喵
 if (typeof window !== 'undefined') {
     window.addEventListener('beforeunload', () => {
         try {
             wsClient.disconnect()
         } catch {
+        }
+    })
+
+    // 监听 storage 事件，当 token 或 auth 变更时自动重连喵
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'sa.token' || e.key === 'auth') {
+            console.log(`[WS] Account context changed (${e.key}), resetting connection喵`)
+            wsClient.disconnect()
+            // 延迟一会重连，确保新 token 已写入喵
+            setTimeout(() => wsClient.connect(), 500)
         }
     })
 }

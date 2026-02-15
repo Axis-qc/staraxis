@@ -91,31 +91,37 @@ const sessionId = ref('')
 
 // 玩家认证信息
 const playerToken = ref(localStorage.getItem('sa.token') || '')
+const playerId = ref('')
 
 function getPlayerIdFromAuthSession(): string {
     try {
         const raw = sessionStorage.getItem('auth')
         if (!raw) return ''
         const parsed = JSON.parse(raw)
-        return typeof parsed?.playerId === 'string' ? parsed.playerId : ''
+        const id = typeof parsed?.playerId === 'string' ? parsed.playerId : ''
+        playerId.value = id
+        return id
     } catch {
         return ''
     }
 }
 
-function sessionStorageSessionKey(playerId: string): string {
-    return `sa_ai_session_${playerId}`
+function sessionStorageSessionKey(pid: string): string {
+    return `sa_ai_session_${pid}`
 }
 
 async function loadAiHistory(): Promise<void> {
     const token = localStorage.getItem('sa.token') || ''
     playerToken.value = token
 
-    const playerId = getPlayerIdFromAuthSession()
-    if (!playerId) return
+    const pid = getPlayerIdFromAuthSession()
+    if (!pid) {
+        console.warn('[AI] No playerId found, delay history loading喵')
+        return
+    }
 
     // 复用同一玩家上次会话 ID，刷新不丢失喵
-    const key = sessionStorageSessionKey(playerId)
+    const key = sessionStorageSessionKey(pid)
     const saved = localStorage.getItem(key)
     if (saved && saved.startsWith('sess_')) {
         sessionId.value = saved
@@ -126,7 +132,7 @@ async function loadAiHistory(): Promise<void> {
 
     if (!playerToken.value || !sessionId.value) return
 
-    const resp = await fetch(`/api/ai/history?sessionId=${encodeURIComponent(sessionId.value)}`, {
+    const resp = await fetch(`/api/ai/history?playerId=${encodeURIComponent(pid)}&sessionId=${encodeURIComponent(sessionId.value)}`, {
         method: 'GET',
         headers: {
             Authorization: `Bearer ${playerToken.value}`,
@@ -163,7 +169,7 @@ async function clearAiHistory(): Promise<void> {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${playerToken.value}`,
         },
-        body: JSON.stringify({ sessionId: sessionId.value }),
+        body: JSON.stringify({ playerId, sessionId: sessionId.value }),
     })
 
     if (!resp.ok) return
@@ -627,19 +633,46 @@ onMounted(() => {
         panelSize.value = savedSize
     }
 
-    // 加载玩家token并恢复同一玩家上次对话喵
+    // 初始化时加载玩家 token/playerId 并恢复同一玩家上次对话喵
     playerToken.value = localStorage.getItem('sa.token') || ''
+    getPlayerIdFromAuthSession()
     loadAiHistory()
+
+    // 监听账号切换：token/auth 变化时自动切换 sessionId 并重拉历史喵
+    const onStorage = (e: StorageEvent) => {
+        if (e.key === 'sa.token' || e.key === 'auth') {
+            // 先同步 token/playerId 喵
+            playerToken.value = localStorage.getItem('sa.token') || ''
+            const newPid = getPlayerIdFromAuthSession()
+
+            // 账号切换时清空当前消息列表到欢迎语，避免串号喵
+            messages.value = [
+                { role: 'assistant', text: 'AI 助手已就绪喵！请问有什么可以帮您的喵？', id: 'welcome' },
+            ]
+
+            // 强制重置 sessionId 并重新拉取新账号历史喵
+            sessionId.value = ''
+            if (newPid) {
+                loadAiHistory()
+            }
+        }
+    }
 
     window.addEventListener('resize', onResize)
     window.addEventListener('mousemove', onGlobalMouseMove)
     window.addEventListener('storage', syncEnabledState)
+    window.addEventListener('storage', onStorage)
+
     const timer = setInterval(() => {
         syncEnabledState()
         // 定期同步token
         playerToken.value = localStorage.getItem('sa.token') || ''
     }, 1000)
-    onBeforeUnmount(() => clearInterval(timer))
+
+    onBeforeUnmount(() => {
+        clearInterval(timer)
+        window.removeEventListener('storage', onStorage)
+    })
 })
 
 onBeforeUnmount(() => {

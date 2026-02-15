@@ -116,7 +116,7 @@ class AiHttpServer:
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
                 msgs = data.get("messages", [])
-                logger.info(f"Loaded {len(msgs)} history messages for {player_id}/{session_id}喵.")
+                logger.info(f"Loaded {len(msgs)} history messages for {player_id}/{session_id} from {path}喵.")
                 return msgs
             except Exception as e:
                 logger.error(f"Failed to load history for {player_id}/{session_id}: {e}喵.")
@@ -144,7 +144,7 @@ class AiHttpServer:
             # 3. 限制长度（保留最近 200 条）并写入喵
             final_list = combined[-200:]
             path.write_text(json.dumps({"messages": final_list}, ensure_ascii=False, indent=2), encoding="utf-8")
-            logger.info(f"Saved {len(final_list)} messages to {path.name}喵.")
+            logger.info(f"Saved {len(final_list)} messages to {path}喵.")
         except Exception as e:
             logger.error(f"Failed to save history for {player_id}/{session_id}: {e}喵.")
 
@@ -152,6 +152,11 @@ class AiHttpServer:
         """获取特定玩家/会话的历史记录喵"""
         player_id = request.query.get("playerId")
         session_id = request.query.get("sessionId")
+
+        # sessionId 容错：空或仅空白时回退到 default，避免生成尾随下划线文件名喵
+        if session_id is not None and session_id.strip() == "":
+            session_id = "default"
+
         if not player_id or not session_id:
             return web.json_response({"ok": False, "error": "playerId and sessionId required"}, status=400)
         
@@ -223,7 +228,12 @@ class AiHttpServer:
             # 提取元数据喵
             player_token = context.get("playerToken")
             player_id = context.get("playerId")
-            session_id = context.get("sessionId", "default")
+            session_id = context.get("sessionId")
+            
+            # sessionId 容错：空或仅空白时回退到 default，避免保存为非法文件名喵
+            if not session_id or session_id.strip() == "":
+                session_id = "default"
+                
             username = context.get("username")
             
             if not player_token or not player_id:

@@ -4,6 +4,9 @@ import java.io.FileWriter;
 import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -24,6 +27,17 @@ public final class WebNetLog {
     private static volatile PrintWriter out;
 
     private static volatile boolean inited;
+
+    /** 可读时间格式化器喵。 */
+    private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
+            .withZone(ZoneId.systemDefault());
+
+    /**
+     * 将毫秒时间戳格式化为可读时间喵。
+     */
+    private static String fmtTs(long ms) {
+        return TS.format(Instant.ofEpochMilli(ms));
+    }
 
     /** 频率限制用：key -> 上次打印时间戳（毫秒）喵。 */
     private static final Map<String, Long> lastLogTimeByKey = new ConcurrentHashMap<>();
@@ -47,7 +61,7 @@ public final class WebNetLog {
         try {
             Files.createDirectories(LOG_PATH.getParent());
             out = new PrintWriter(new FileWriter(LOG_PATH.toFile(), false), true);
-            out.println("[webnet.log] init (truncate) at " + System.currentTimeMillis() + " 喵");
+            out.println("[webnet.log] init (truncate) at " + fmtTs(System.currentTimeMillis()) + " 喵");
         } catch (Exception e) {
             out = null;
         }
@@ -64,7 +78,7 @@ public final class WebNetLog {
             System.out.println("[WebNetLog-Fallback] " + msg + " 喵");
             return;
         }
-        w.println("[" + System.currentTimeMillis() + "] " + msg + " 喵");
+        w.println("[" + fmtTs(System.currentTimeMillis()) + "] " + msg + " 喵");
     }
 
     /**
