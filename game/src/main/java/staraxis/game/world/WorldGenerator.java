@@ -36,7 +36,7 @@ public final class WorldGenerator {
                 if (HexMath.distance(origin, c) <= radius) {
                     Vec2d center = WorldHexLayout.sectorCenterWorld2D_GU(c);
                     WorldSector s = new WorldSector(c, center);
-                    s.ownerNationId = cfg.playerNationDef == null ? null : cfg.playerNationDef.id; // 设置星区所属国家ID
+                    s.ownerNationId = null; // 星区初始默认无主（公共），控制权后续由占领/资产归属逻辑决定
                     sectors.put(c, s);
                 }
             }

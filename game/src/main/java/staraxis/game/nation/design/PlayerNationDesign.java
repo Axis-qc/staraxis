@@ -1,6 +1,7 @@
 package staraxis.game.nation.design;
 
 import staraxis.game.nation.NationDef;
+import staraxis.game.nation.SpawnStrategy;
 
 /**
  * PlayerNationDesign
@@ -33,6 +34,18 @@ public class PlayerNationDesign {
      * nation：玩家自定义国家的定义（NationDef）。
      */
     public NationDef nation;
+
+    /**
+     * spawnStrategy：开局出生策略。
+     *
+     * 口径说明：
+     * - RANDOM_SYSTEM：随机选择一个合适的星系和行星作为初始位置。
+     * - PRESET_SYSTEM：使用预设星系（例如根据预设ID从 Astro 预设表中查找）。
+     * - MANUAL_SELECTION：由玩家在界面中显式选择星系/星球（后续扩展）。
+     *
+     * 当前实现：如果未显式设置，建议上层逻辑默认为 RANDOM_SYSTEM。
+     */
+    public SpawnStrategy spawnStrategy = SpawnStrategy.RANDOM_SYSTEM;
 
     /**
      * updatedAtUnixMs：最近一次保存时间（毫秒）。

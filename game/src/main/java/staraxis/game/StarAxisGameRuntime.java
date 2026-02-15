@@ -29,6 +29,7 @@ import staraxis.game.command.SetSystemTimeScaleHandler;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * StarAxisGameRuntime
@@ -36,8 +37,8 @@ import java.util.List;
  * 最小可用权威运行时：
  * - simulationTick 固定脉冲
  * - 游戏时间推进 dtGameHours
- * - tick 结束发布 RealTimeWorldState（双缓冲）
- * - 跨日发布 DailySettlementState
+ * - tick 结束发布 RealTimeWorldState（双缓冲，高频快照）
+ * - 周期/事件驱动发布 DailySettlementState（低频基线快照）喵
  */
 public class StarAxisGameRuntime implements GameRuntime {
 
@@ -153,20 +154,22 @@ public class StarAxisGameRuntime implements GameRuntime {
                     if (sys == null || sys.systemId != spawnSystemId) {
                         continue;
                     }
-                    sys.assignOwnership(nationId);
 
-                    // 确定性选择首都行星：选择星系内 entityId 最小的行星喵
-                    if (ns != null && !sys.planets.isEmpty()) {
-                        PlanetBody capital = null;
-                        for (PlanetBody p : sys.planets) {
-                            if (capital == null || p.entityId < capital.entityId) {
-                                capital = p;
-                            }
-                        }
-                        if (capital != null) {
-                            ns.capitalPlanetEntityId = capital.entityId;
-                        }
+                    // 使用世界种子 + 国家ID 作为确定性随机源，从该星系中随机选择一颗行星作为首都行星喵
+                    PlanetBody capital = null;
+                    if (!sys.planets.isEmpty()) {
+                        long mixed = astroGenerator.getWorldSeedHash() ^ (long) nationId.hashCode();
+                        java.util.Random rr = new java.util.Random(mixed);
+                        capital = sys.planets.get(rr.nextInt(sys.planets.size()));
                     }
+
+                    // 通过资产管理器分配首都行星所有权，并更新国家运行状态喵
+                    if (ns != null && capital != null) {
+                        ws.nationAssetManager.assignEntityToNation(capital.entityId, nationId);
+                        ns.capitalPlanetEntityId = capital.entityId;
+                        ns.spawnSystemEntityId = sys.systemId;
+                    }
+
                     break;
                 }
             }
@@ -178,8 +181,8 @@ public class StarAxisGameRuntime implements GameRuntime {
     @Override
     public void start() {
         publishRealTimeSnapshot();
-        // 开局先发布一份“上一日结算”（占位）：settledDay=当前日-1（下限 0）
-        publishDailySettlementForDay(Math.max(0, worldState.time.gameDatetimeDay - 1));
+        // 开局先发布一份低频基线快照：使用当前游戏总秒数作为时间戳喵
+        publishBaselineSnapshot();
     }
 
     @Override
@@ -194,12 +197,19 @@ public class StarAxisGameRuntime implements GameRuntime {
         // 更新所有国家的可见性状态（基于当前世界状态）
         worldState.visibilitySystem.updateAllNationsVisibility();
 
+        // 检查是否需要推送低频基线快照（每分钟周期或事件触发/玩家操作触发脏标记）喵
+        long currentGameSeconds = worldState.time.getTotalGameSeconds();
+        boolean intervalReached = (currentGameSeconds - worldState.lastBaselinePublishGameSeconds) >= 60;
+        if (intervalReached || worldState.baselineDirty) {
+            publishBaselineSnapshot();
+            worldState.lastBaselinePublishGameSeconds = currentGameSeconds;
+            worldState.baselineDirty = false;
+        }
+
         // Commit
         boolean dayChanged = SimulationClock.commitTick(worldState.time);
         if (dayChanged) {
-            // 跨日结算：发布“上一日已落账结果”
-            int settledDay = Math.max(0, worldState.time.gameDatetimeDay - 1);
-            publishDailySettlementForDay(settledDay);
+            // 跨日逻辑可在此保留，用于未来的统计等，当前由定时/脏标记统一驱动低频快照发布喵
         }
 
         publishRealTimeSnapshot();
@@ -221,13 +231,18 @@ public class StarAxisGameRuntime implements GameRuntime {
         return dailySettlementBuffer;
     }
 
-    private void publishDailySettlementForDay(int settledDay) {
+    /**
+     * 发布低频基线快照（原 publishDailySettlementForDay）。
+     * 作用：同步国家资产表、行星地表等低频/大体量数据，降低高频同步压力喵。
+     */
+    private void publishBaselineSnapshot() {
         DailySettlementState next = new DailySettlementState();
-        next.settledDay = settledDay;
+        next.settledAtGameSeconds = worldState.time.getTotalGameSeconds();
+        next.settledDay = worldState.time.gameDatetimeDay; // 兼容性保留
         next.sectorCount = worldState.worldMap.getSectorsByCoordView().size();
 
-        // 选项 A：全量每日报送低频/静态数据喵
-        HashMap<Long, DailySettlementState.PlanetSurfaceDailySnapshot> map = new HashMap<>();
+        // 1. 填充行星地表快照（低频/静态）喵
+        HashMap<Long, DailySettlementState.PlanetSurfaceDailySnapshot> planetMap = new HashMap<>();
         for (StarSystem system : worldState.astro.getSystemsView()) {
             for (PlanetBody planet : system.planets) {
                 if (planet.surface == null || planet.surface.surfaceRegions == null
@@ -246,11 +261,22 @@ public class StarAxisGameRuntime implements GameRuntime {
                             r.developableSpaceRatio));
                 }
 
-                map.put(planet.entityId,
+                planetMap.put(planet.entityId,
                         new DailySettlementState.PlanetSurfaceDailySnapshot(planet.entityId, List.copyOf(regions)));
             }
         }
-        next.planetSurfacesByPlanetId = map;
+        next.planetSurfacesByPlanetId = planetMap;
+
+        // 2. 填充国家资产全量快照（低频基线）喵
+        HashMap<String, Map<EntityType, List<Long>>> assetMap = new HashMap<>();
+        for (staraxis.game.nation.NationState ns : worldState.nationManager.getAllNationStates()) {
+            Map<EntityType, List<Long>> nationAssets = new HashMap<>();
+            for (Map.Entry<EntityType, java.util.Set<Long>> entry : ns.ownedEntityIdsByType.entrySet()) {
+                nationAssets.put(entry.getKey(), new ArrayList<>(entry.getValue()));
+            }
+            assetMap.put(ns.nationId, nationAssets);
+        }
+        next.nationAssetsByNationId = assetMap;
 
         dailySettlementBuffer.publish(next);
     }
@@ -272,15 +298,10 @@ public class StarAxisGameRuntime implements GameRuntime {
         s.minute = worldState.time.getMinute();
         s.second = worldState.time.getSecond();
 
-        int sectorCount = 0;
         for (WorldSector sector : worldState.worldMap.getSectorsView()) {
             s.putSectorCenter(sector.coord, sector.centerWorldGU);
             s.putSectorOwnerNationId(sector.coord, sector.ownerNationId);
-            sectorCount++;
         }
-        // 调试日志：记录添加到快照的星区数量喵
-        // System.out.println("[StarAxisGameRuntime] Added " + sectorCount + " sectors
-        // to realtime snapshot");
 
         for (StarSystem system : worldState.astro.getSystemsView()) {
             // 1. 创建并注册重心实体

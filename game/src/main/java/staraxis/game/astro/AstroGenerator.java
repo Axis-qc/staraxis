@@ -83,8 +83,8 @@ public final class AstroGenerator {
             if (occupied.contains(key))
                 continue;
 
-            StarSystem sys = generateSystemForPreset(sector, preset,
-                    config.playerNationDef == null ? null : config.playerNationDef.id);
+            StarSystem sys = generateSystemForPreset(sector, preset, null); // 生成阶段不绑定玩家国家，保持天体初始无主（除预设明确指定的
+                                                                            // ownerNationId）
             systems.add(sys);
             occupied.add(key);
             if (preset.presetId != null) {
@@ -132,8 +132,8 @@ public final class AstroGenerator {
                 String key = sector.coord.q() + "," + sector.coord.r();
                 if (occupied.contains(key))
                     continue;
-                StarSystem sys = generateSystemForPreset(sector, preset,
-                        config.playerNationDef == null ? null : config.playerNationDef.id);
+                StarSystem sys = generateSystemForPreset(sector, preset, null); // 生成阶段不绑定玩家国家，保持天体初始无主（除预设明确指定的
+                                                                                // ownerNationId）
                 systems.add(sys);
                 occupied.add(key);
                 if (preset.presetId != null) {
@@ -151,8 +151,7 @@ public final class AstroGenerator {
                 continue;
             }
             if (random.nextDouble() < systemSpawnChance) {
-                systems.add(generateSystemForSector(sector,
-                        config.playerNationDef == null ? null : config.playerNationDef.id));
+                systems.add(generateSystemForSector(sector, null)); // 生成阶段不绑定玩家国家，保持天体初始无主（除预设明确指定的 ownerNationId）
             }
         }
 
@@ -218,7 +217,8 @@ public final class AstroGenerator {
         star.temperatureK = sDef.temperatureK != null ? sDef.temperatureK
                 : randomInt(type.temperatureKRange.get(0), type.temperatureKRange.get(1));
         star.description = type.description;
-        star.ownerNationId = sDef.ownerNationId != null ? sDef.ownerNationId : playerNationId;
+        // 生成阶段仅使用预设中显式声明的 ownerNationId，不再默认绑定到玩家国家ID喵。
+        star.ownerNationId = sDef.ownerNationId;
 
         if (sDef.surfaceTexturePath != null) {
             star.surfaceTexturePath = sDef.surfaceTexturePath;
@@ -257,7 +257,8 @@ public final class AstroGenerator {
             planet.surfaceTexturePath = type.spriteCandidates.get(idx);
         }
 
-        planet.ownerNationId = pDef.ownerNationId != null ? pDef.ownerNationId : playerNationId;
+        // 生成阶段仅使用预设中显式声明的 ownerNationId，不再默认绑定到玩家国家ID喵。
+        planet.ownerNationId = pDef.ownerNationId;
         planet.orbitCenterEntityId = primary.entityId;
 
         if (pDef.orbit != null) {
@@ -324,7 +325,8 @@ public final class AstroGenerator {
         star.massSolar = randomDouble(type.massSolarRange.get(0), type.massSolarRange.get(1));
         star.temperatureK = randomInt(type.temperatureKRange.get(0), type.temperatureKRange.get(1));
         star.description = type.description;
-        star.ownerNationId = playerNationId; // 设置所属国家ID
+        // 随机生成阶段不再默认绑定玩家国家ID，保持恒星初始无主喵。
+        star.ownerNationId = null;
 
         // 从 spriteCandidates 中确定性选择纹理
         if (type.spriteCandidates != null && !type.spriteCandidates.isEmpty()) {
@@ -375,7 +377,8 @@ public final class AstroGenerator {
                 planet.surfaceTexturePath = null;
             }
 
-            planet.ownerNationId = playerNationId; // 设置所属国家ID
+            // 随机生成阶段不再默认绑定玩家国家ID，保持行星初始无主喵。
+            planet.ownerNationId = null;
 
             // 直接填充轨道字段到 PlanetBody
             planet.orbitCenterEntityId = primaryStar.entityId;

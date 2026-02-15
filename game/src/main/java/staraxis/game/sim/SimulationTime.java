@@ -103,4 +103,15 @@ public class SimulationTime {
     public int getDayOfMonth() {
         return ((gameDatetimeDay - 1) % SimulationClock.DAYS_PER_MONTH) + 1;
     }
+
+    /**
+     * 获取当前游戏总秒数（粗略）：基于 gameDatetimeDay 与 accGameHoursInDay 派生。
+     *
+     * 说明：
+     * - 用于低频快照的时间戳计算，不要求绝对精度，只需与模拟推进保持一致喵。
+     */
+    public long getTotalGameSeconds() {
+        double totalHours = (gameDatetimeDay - 1) * 24.0 + accGameHoursInDay;
+        return (long) Math.floor(totalHours * 3600.0);
+    }
 }

@@ -5,6 +5,9 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import staraxis.game.entity.Entity;
+import staraxis.game.entity.EntityType;
+
 /**
  * NationState（国家运行时状态）
  *
@@ -61,6 +64,15 @@ public class NationState {
 
     /** 首都行星实体 ID（权威绑定结果）。 */
     public long capitalPlanetEntityId;
+
+    /**
+     * 按实体类型聚合的直接资产表：EntityType -> 该类型下本国直接拥有的实体ID集合。
+     *
+     * 说明：
+     * - 仅记录“直接所有权”的实体（如行星、城市、舰船等），不展开层级关系。
+     * - 维护逻辑由 NationAssetManager 负责调用本表的增删接口，避免业务层直接操作内部结构。
+     */
+    public final Map<EntityType, Set<Long>> ownedEntityIdsByType = new HashMap<>();
 
     /**
      * 构造函数：创建指定ID的国家运行时状态。
@@ -220,5 +232,79 @@ public class NationState {
      */
     public boolean isActive() {
         return active;
+    }
+
+    /**
+     * 向本国直接资产表中添加一个实体（按实体类型聚合）。
+     *
+     * 说明：
+     * - 不检查实体当前的 ownerNationId，仅负责数据结构维护。
+     * - 资产归属的一致性由 NationAssetManager 负责在调用前后保证。
+     *
+     * @param entity 目标实体
+     */
+    public void addOwnedEntity(Entity entity) {
+        if (entity == null || entity.entityType == null) {
+            return;
+        }
+        addOwnedEntity(entity.entityType, entity.entityId);
+    }
+
+    /**
+     * 向本国直接资产表中添加一个实体ID。
+     *
+     * @param type     实体类型
+     * @param entityId 实体ID
+     */
+    public void addOwnedEntity(EntityType type, long entityId) {
+        if (type == null) {
+            return;
+        }
+        ownedEntityIdsByType.computeIfAbsent(type, k -> new HashSet<>()).add(entityId);
+    }
+
+    /**
+     * 从本国直接资产表中移除一个实体。
+     *
+     * @param entity 目标实体
+     */
+    public void removeOwnedEntity(Entity entity) {
+        if (entity == null || entity.entityType == null) {
+            return;
+        }
+        removeOwnedEntity(entity.entityType, entity.entityId);
+    }
+
+    /**
+     * 从本国直接资产表中移除一个实体ID。
+     *
+     * @param type     实体类型
+     * @param entityId 实体ID
+     */
+    public void removeOwnedEntity(EntityType type, long entityId) {
+        if (type == null) {
+            return;
+        }
+        Set<Long> ids = ownedEntityIdsByType.get(type);
+        if (ids != null) {
+            ids.remove(entityId);
+            if (ids.isEmpty()) {
+                ownedEntityIdsByType.remove(type);
+            }
+        }
+    }
+
+    /**
+     * 获取本国在指定实体类型下直接拥有的实体ID集合的只读视图。
+     *
+     * @param type 实体类型
+     * @return 该类型下的实体ID集合（如果不存在则返回空集合）
+     */
+    public Set<Long> getOwnedEntityIds(EntityType type) {
+        Set<Long> ids = ownedEntityIdsByType.get(type);
+        if (ids == null) {
+            return java.util.Collections.emptySet();
+        }
+        return java.util.Collections.unmodifiableSet(ids);
     }
 }
