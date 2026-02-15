@@ -53,7 +53,6 @@ import InGameMilitaryPanel from '../features/inGame/panels/InGameMilitaryPanel.v
 import InGameDomesticPanel from '../features/inGame/panels/InGameDomesticPanel.vue'
 import InGameDiplomacyPanel from '../features/inGame/panels/InGameDiplomacyPanel.vue'
 import { connectSnapshotWs, type SnapshotWsClient } from '../net/snapshotWs'
-import { wsClient as sharedWsClient } from '../services/ws'
 import { createWorldRenderManager, type WorldRenderer } from '../rendering/worldRenderManager'
 import { useInGameDataHub } from '../features/inGame/composables/useInGameDataHub'
 import { useInGameInputController } from '../features/inGame/input/useInGameInputController'
@@ -329,7 +328,6 @@ onUnmounted(() => {
   window.removeEventListener('popstate', onPopState)
   inputController.detach()
 
-  wsClient.value?.close()
   wsClient.value = null
 
   cameraPersister.detach()

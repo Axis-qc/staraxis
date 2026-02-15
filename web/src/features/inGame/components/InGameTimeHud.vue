@@ -26,23 +26,40 @@ import type { SnapshotMessage, SnapshotWsClient } from '../../../net/snapshotWs'
 
 const props = defineProps<{ snapshot: SnapshotMessage | null; wsClient?: SnapshotWsClient | null }>()
 
-const SPEED_OPTIONS = [1, 5, 10, 30, 60, 720, 1440] as const
+const SPEED_OPTIONS = [
+  1, // 1 游戏秒 / 现实秒（1:1）喵
+  5,
+  10,
+  30,
+  60, // 1 游戏分钟 / 现实秒喵
+  300, // 5 游戏分钟 / 现实秒喵
+  600, // 10 游戏分钟 / 现实秒喵
+  1800, // 30 游戏分钟 / 现实秒喵
+  3600, // 1 游戏小时 / 现实秒喵
+  43200, // 12 游戏小时 / 现实秒喵
+  86400 // 1 游戏日 / 现实秒喵
+] as const
+
 type SpeedOption = (typeof SPEED_OPTIONS)[number]
 
 const speedIndex = ref<number>(Math.max(0, SPEED_OPTIONS.indexOf(1.0)))
 
 function getSpeedLabel(s: SpeedOption) {
-  if (s === 60) return '1h/s'
-  if (s === 720) return '12h/s'
-  if (s === 1440) return '1d/s'
-  return `${s}m/s`
+  if (s === 1) return '1s/s'
+  if (s === 60) return '1m/s'
+  if (s === 300) return '5m/s'
+  if (s === 600) return '10m/s'
+  if (s === 1800) return '30m/s'
+  if (s === 3600) return '1h/s'
+  if (s === 43200) return '12h/s'
+  if (s === 86400) return '1d/s'
+  return `${s}s/s`
 }
 
-function sendSimTimeSpeed(minutesPerSecond: SpeedOption) {
+function sendSimTimeSpeed(gameSecondsPerRealSecond: SpeedOption) {
   // 复用快照 WS 连接发送命令，避免短连接频繁建立/关闭导致 WS 不稳定。
   try {
-    // 兼容旧后端字段名 scale（语义已变为 minutesPerSecond）喵
-    props.wsClient?.send({ type: 'setSimTimeSpeed', minutesPerSecond })
+    props.wsClient?.send({ type: 'setSimTimeSpeed', gameSecondsPerRealSecond })
   } catch {
   }
 }
@@ -61,34 +78,31 @@ function onClickSpeedNext() {
   if (nextScale != null) sendSimTimeSpeed(nextScale)
 }
 
+const canAdjustSpeed = computed(() => {
+  const wt = props.snapshot?.realTimeWorldState?.worldType
+  return wt === 'SINGLE_PLAYER' || wt === 'MULTI_PLAYER'
+})
+
 const text = computed(() => {
   const s = props.snapshot
   const rts = s?.realTimeWorldState
-  if (!s || !s.ok || !rts) return '--.--.--.--:--'
+  if (!s || !s.ok || !rts || rts.year === undefined) return '--.--.--.--:--'
 
-  const gameDatetimeDay = Math.max(0, Number(rts.gameDatetimeDay ?? 0))
-  const accGameHoursInDay = Math.max(0, Number(rts.accGameHoursInDay ?? 0))
+  const year = rts.year
+  const month = String(rts.month).padStart(2, '0')
+  const day = String(rts.day).padStart(2, '0')
+  const hour = String(rts.hour).padStart(2, '0')
+  const minute = String(rts.minute).padStart(2, '0')
+  const second = String(rts.second).padStart(2, '0')
 
-  const totalHours = gameDatetimeDay * 24 + accGameHoursInDay
-
-  const year = Math.floor(totalHours / (360 * 24)) + 1
-  const hourOfYear = totalHours - (year - 1) * 360 * 24
-
-  const month = Math.floor(hourOfYear / (30 * 24)) + 1
-  const hourOfMonth = hourOfYear - (month - 1) * 30 * 24
-
-  const day = Math.floor(hourOfMonth / 24) + 1
-  const hour = Math.floor(hourOfMonth - (day - 1) * 24)
-  const minute = Math.floor((hourOfMonth - (day - 1) * 24 - hour) * 60)
-
-  return `${year}.${month}.${day}.${hour}:${String(minute).padStart(2, '0')}`
+  return `${year}-${month}-${day}日-${hour}:${minute}:${second}`
 })
 </script>
 
 <template>
   <div class="time-hud" aria-label="Time HUD">
     <div class="time-text">{{ text }}</div>
-    <div class="speed-control">
+    <div v-if="canAdjustSpeed" class="speed-control">
       <button class="speed-btn-side" type="button" @click="onClickSpeedPrev" aria-label="Previous speed">
         &lt;
       </button>

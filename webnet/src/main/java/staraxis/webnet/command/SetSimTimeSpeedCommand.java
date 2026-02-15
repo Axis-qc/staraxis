@@ -46,24 +46,40 @@ public class SetSimTimeSpeedCommand implements WebCommandHandler {
     @Override
     public String handle(Map<String, Object> message, StarAxisGameRuntime runtime) {
         try {
-            // 兼容旧字段名 scale，但语义已变为每秒推进的游戏分钟数喵
-            Object scaleObj = message.get("scale");
-            if (scaleObj == null) {
-                scaleObj = message.get("minutesPerSecond");
+            // 新口径：gameSecondsPerRealSecond（现实 1 秒推进的游戏秒数）喵。
+            // 兼容旧字段：
+            // - scale：旧前端字段名（曾用于 timeScale）喵。
+            // - minutesPerSecond：旧口径（游戏分钟/现实秒）喵。
+            Object v = message.get("gameSecondsPerRealSecond");
+            if (v == null) {
+                v = message.get("secondsPerSecond");
             }
-            if (scaleObj == null) {
+            if (v == null) {
+                v = message.get("scale");
+            }
+            if (v == null) {
+                v = message.get("minutesPerSecond");
+            }
+            if (v == null) {
                 return "{\"type\":\"command_response\",\"ok\":false,\"error\":\"missing_speed_value\"}";
             }
 
-            double mps;
-            if (scaleObj instanceof Number) {
-                mps = ((Number) scaleObj).doubleValue();
+            double gsprs;
+            if (v instanceof Number) {
+                gsprs = ((Number) v).doubleValue();
             } else {
-                mps = Double.parseDouble(String.valueOf(scaleObj));
+                gsprs = Double.parseDouble(String.valueOf(v));
             }
 
-            // 校验玩家档位范围：1分钟/s 到 1440分钟(1日)/s 喵
-            if (mps < 1.0 || mps > 1440.0) {
+            // 如果前端仍发送旧口径 minutesPerSecond，则将其转换为秒级比例喵。
+            // minutesPerSecond（游戏分钟/现实秒） => gameSecondsPerRealSecond（游戏秒/现实秒）
+            if (message.get("minutesPerSecond") != null && message.get("gameSecondsPerRealSecond") == null
+                    && message.get("secondsPerSecond") == null) {
+                gsprs = gsprs * 60.0;
+            }
+
+            // 基础校验：必须为正数，避免异常值导致模拟不稳定喵。
+            if (gsprs <= 0.0) {
                 return "{\"type\":\"command_response\",\"ok\":false,\"error\":\"invalid_time_step\"}";
             }
 
@@ -73,12 +89,13 @@ public class SetSimTimeSpeedCommand implements WebCommandHandler {
             } catch (Exception ignored) {
             }
 
-            runtime.getCommandBusForSimOnly().submit(new staraxis.game.command.SetPlayerTimeStepCommand(mps));
+            runtime.getCommandBusForSimOnly().submit(new staraxis.game.command.SetPlayerTimeStepCommand(gsprs));
 
-            staraxis.webnet.core.WebNetLog.log("cmd setSimTimeSpeed queued mps=" + mps + " beforeStep=" + currentStep);
+            staraxis.webnet.core.WebNetLog
+                    .log("cmd setSimTimeSpeed queued gsprs=" + gsprs + " beforeStep=" + currentStep);
 
-            return "{\"type\":\"command_response\",\"ok\":true,\"command\":\"setSimTimeSpeed\",\"minutesPerSecond\":"
-                    + mps
+            return "{\"type\":\"command_response\",\"ok\":true,\"command\":\"setSimTimeSpeed\",\"gameSecondsPerRealSecond\":"
+                    + gsprs
                     + "}";
         } catch (Exception e) {
             return "{\"type\":\"command_response\",\"ok\":false,\"error\":\"command_failed\"}";

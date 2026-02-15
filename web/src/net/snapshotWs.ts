@@ -70,6 +70,15 @@ export type SnapshotMessage = {
         gameDatetimeDay: number
         accGameHoursInDay: number
         worldRadius: number
+        worldType?: string
+        gameSecondsPerRealSecond?: number
+        timeScale?: number
+        year?: number
+        month?: number
+        day?: number
+        hour?: number
+        minute?: number
+        second?: number
         sectorCenters: SectorCenter[]
         entities: EntitySnapshot[]
     }
@@ -113,8 +122,6 @@ export function connectSnapshotWs(options: SnapshotWsOptions = {}): SnapshotWsCl
         }))
     }
 
-    // 触发连接与订阅喵
-    sharedWsClient.connect()
     applyStatus()
 
     return {

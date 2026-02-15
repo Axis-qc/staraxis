@@ -23,6 +23,11 @@ public class WorldGenConfig {
     public String galaxyShape;
 
     /**
+     * worldType：世界类型（单人/多人/服务器）喵。
+     */
+    public WorldType worldType = WorldType.SINGLE_PLAYER;
+
+    /**
      * playerNationDef：玩家选择/自定义的国家定义。
      */
     public staraxis.game.nation.NationDef playerNationDef;

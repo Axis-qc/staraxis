@@ -26,6 +26,23 @@ public class RealTimeWorldState {
 
     public int worldRadius;
 
+    /** 世界类型：用于前端 HUD 与权限展示喵。 */
+    public staraxis.game.world.WorldType worldType;
+
+    /** 现实 1 秒推进的游戏秒数（不含 timeScale）喵。 */
+    public double gameSecondsPerRealSecond;
+
+    /** 系统时间倍率喵。 */
+    public double timeScale;
+
+    // 结构化游戏日期时间字段喵
+    public int year;
+    public int month;
+    public int day;
+    public int hour;
+    public int minute;
+    public int second;
+
     /** 实体总表（entityId -> Entity），新的核心数据结构。 */
     private final Map<Long, Entity> entitiesById = new LinkedHashMap<>();
 
@@ -54,6 +71,15 @@ public class RealTimeWorldState {
         gameDatetimeDay = 0;
         accGameHoursInDay = 0;
         worldRadius = 0;
+        worldType = null;
+        gameSecondsPerRealSecond = 0;
+        timeScale = 0;
+        year = 0;
+        month = 0;
+        day = 0;
+        hour = 0;
+        minute = 0;
+        second = 0;
         entitiesById.clear();
         entityIdsBySector.clear();
         entityIdsBySystem.clear();

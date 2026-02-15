@@ -62,6 +62,8 @@ public class StarAxisGameRuntime implements GameRuntime {
 
     public static StarAxisGameRuntime newGame(WorldGenConfig cfg) {
         SimulationTime time = new SimulationTime();
+        time.worldType = cfg == null || cfg.worldType == null ? staraxis.game.world.WorldType.SINGLE_PLAYER
+                : cfg.worldType;
 
         var worldMap = WorldGenerator.generate(cfg);
 
@@ -260,6 +262,15 @@ public class StarAxisGameRuntime implements GameRuntime {
         s.gameDatetimeDay = worldState.time.gameDatetimeDay;
         s.accGameHoursInDay = worldState.time.accGameHoursInDay;
         s.worldRadius = worldState.worldMap.radius;
+        s.worldType = worldState.time.worldType;
+        s.gameSecondsPerRealSecond = worldState.time.gameSecondsPerRealSecond;
+        s.timeScale = worldState.time.timeScale;
+        s.year = worldState.time.getGameDatetimeYear();
+        s.month = worldState.time.getGameDatetimeMonth();
+        s.day = worldState.time.getDayOfMonth();
+        s.hour = worldState.time.getHour();
+        s.minute = worldState.time.getMinute();
+        s.second = worldState.time.getSecond();
 
         int sectorCount = 0;
         for (WorldSector sector : worldState.worldMap.getSectorsView()) {

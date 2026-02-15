@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { wsClient } from '../services/ws'
 
 export type AuthState = {
     username: string
@@ -34,6 +35,9 @@ export const useAuthStore = defineStore('auth', {
             this.token = payload.token || ''
             this.role = payload.role || 'USER'
             this.selectedNationId = payload.selectedNationId || ''  // 新增
+
+            // 登录成功，显式建立全局 WS 连接喵
+            wsClient.connect()
         },
         clear() {
             this.username = ''
@@ -41,6 +45,9 @@ export const useAuthStore = defineStore('auth', {
             this.token = ''
             this.role = 'USER'
             this.selectedNationId = ''  // 新增
+
+            // 退出登录，显式断开全局 WS 连接喵
+            wsClient.disconnect()
         },
         setSelectedNationId(nationId: string) {
             this.selectedNationId = nationId
