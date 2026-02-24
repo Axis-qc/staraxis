@@ -14,7 +14,6 @@ import staraxis.webnet.command.WebCommandRegistry;
 import staraxis.webnet.core.WsConnectionManager;
 import staraxis.webnet.game.GameSessions;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -96,25 +95,6 @@ public class WebPlayerWebSocketHandler {
                         return;
                     }
 
-                    if ("updateVisibleSectors".equals(type)) {
-                        @SuppressWarnings("unchecked")
-                        List<Map<String, Integer>> sectorList = (List<Map<String, Integer>>) m.get("sectors");
-                        Set<SectorCoord> sectors = new HashSet<>();
-                        if (sectorList != null) {
-                            for (Map<String, Integer> s : sectorList) {
-                                Number q = s.get("q");
-                                Number r = s.get("r");
-                                if (q != null && r != null) {
-                                    sectors.add(new SectorCoord(q.intValue(), r.intValue()));
-                                }
-                            }
-                        }
-                        connMgr.updateVisibleSectors(channel, sectors);
-                        // 更新后立即推送一次当前视野的快照喵
-                        sendSnapshotToChannel(channel);
-                        return;
-                    }
-
                     if ("pong".equals(type)) {
                         connMgr.onPlayerPong(channel);
                         return;
@@ -182,7 +162,6 @@ public class WebPlayerWebSocketHandler {
         }
 
         try {
-            Set<SectorCoord> visible = connMgr.getVisibleSectors(channel);
             String nationId = null;
             try {
                 String pid = connMgr.getPlayerIdByChannel(channel);
@@ -194,6 +173,10 @@ public class WebPlayerWebSocketHandler {
             if (nationId == null) {
                 nationId = connMgr.getNationIdByChannel(channel);
             }
+
+            // 可见星区由服务端权威计算：本国拥有实体所在星区 + 周边一圈喵
+            Set<SectorCoord> visible = runtime.getWorldStateForSimOnly().visibilitySystem
+                    .computeIntelVisibleSectorsForNation(nationId);
 
             String json = objectMapper.writeValueAsString(
                     SnapshotMessageFactory.buildSnapshotMessageWithNation(runtime, 0, visible, nationId));

@@ -1,0 +1,20 @@
+{
+    "detectorSourceStrengthByEntityType": {
+        "PLANET": 5,
+        "SHIP": 3
+    },
+    "detectorSourceRangeByEntityType": {
+        "PLANET": 1,
+        "SHIP": 1
+    },
+    "detectorRingBonusByDistance": {
+        "0": 0,
+        "1": -4
+    },
+    "intelRequiredLevelByEntityType": {
+        "STAR": 0,
+        "PLANET": 0,
+        "SYSTEM_BARYCENTER": 0,
+        "SHIP": 4
+    }
+}

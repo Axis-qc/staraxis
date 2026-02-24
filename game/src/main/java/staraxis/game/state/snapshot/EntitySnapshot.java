@@ -35,6 +35,18 @@ public class EntitySnapshot {
     /** 世界坐标（posWorldGU）。 */
     public final Vec2d posWorldGU;
 
+    /** 所属国家/文明 ID（ownerNationId）。无归属时为 null。 */
+    public final String ownerNationId;
+
+    /**
+     * 是否为公开可见数据（isPublic）。
+     *
+     * 说明：
+     * - true：公开基础数据（例如恒星/行星等基础天文数据）。
+     * - false：私有/情报数据（例如舰船、城市、太空建筑等）。
+     */
+    public final boolean isPublic;
+
     /**
      * 特定于类型的详细信息。
      * 使用 Jackson 的多态序列化，根据 entityType 自动选择正确的子类。
@@ -49,13 +61,15 @@ public class EntitySnapshot {
     public final Object details;
 
     public EntitySnapshot(long entityId, EntityType entityType, long systemId, long parentEntityId,
-            SectorCoord sectorCoord, Vec2d posWorldGU, Object details) {
+            SectorCoord sectorCoord, Vec2d posWorldGU, String ownerNationId, boolean isPublic, Object details) {
         this.entityId = entityId;
         this.entityType = entityType;
         this.systemId = systemId;
         this.parentEntityId = parentEntityId;
         this.sectorCoord = sectorCoord;
         this.posWorldGU = posWorldGU;
+        this.ownerNationId = ownerNationId;
+        this.isPublic = isPublic;
         this.details = details;
     }
 
@@ -69,18 +83,15 @@ public class EntitySnapshot {
         public final int temperatureK;
         public final String description;
         public final String surfaceTexturePath;
-        /** 所属国家/文明 ID（nationId 口径，String 类型，与国家定义 ID 一致）。无归属时为 null。 */
-        public final String ownerNationId;
 
         public StarDetails(String starTypeId, double radiusGU, double massSolar, int temperatureK,
-                String description, String surfaceTexturePath, String ownerNationId) {
+                String description, String surfaceTexturePath) {
             this.starTypeId = starTypeId;
             this.radiusGU = radiusGU;
             this.massSolar = massSolar;
             this.temperatureK = temperatureK;
             this.description = description;
             this.surfaceTexturePath = surfaceTexturePath;
-            this.ownerNationId = ownerNationId;
         }
     }
 
@@ -108,8 +119,6 @@ public class EntitySnapshot {
         public final double radiusGU;
         public final double rotationPeriodHours;
         public final String surfaceTexturePath;
-        /** 所属国家/文明 ID（nationId 口径，String 类型，与国家定义 ID 一致）。无归属时为 null。 */
-        public final String ownerNationId;
 
         /** 是否为所属国家的首都星球喵。 */
         public final boolean isCapital;
@@ -123,7 +132,7 @@ public class EntitySnapshot {
         public final double meanAnomalyDegAtEpoch;
 
         public PlanetDetails(String planetTypeId, double radiusGU, double rotationPeriodHours,
-                String surfaceTexturePath, String ownerNationId, boolean isCapital,
+                String surfaceTexturePath, boolean isCapital,
                 long orbitCenterEntityId,
                 double semiMajorAxisGU,
                 double eccentricity,
@@ -135,7 +144,6 @@ public class EntitySnapshot {
             this.radiusGU = radiusGU;
             this.rotationPeriodHours = rotationPeriodHours;
             this.surfaceTexturePath = surfaceTexturePath;
-            this.ownerNationId = ownerNationId;
             this.isCapital = isCapital;
 
             this.orbitCenterEntityId = orbitCenterEntityId;

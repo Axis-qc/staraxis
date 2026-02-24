@@ -86,14 +86,15 @@ public class VisibilitySystem {
     }
 
     /**
-     * 计算指定实体对指定国家的可见性级别。
+     * 计算指定实体的对指定国家的可见性级别。
      *
-     * @param entity 实体
+     * @param entity   实体
      * @param nationId 国家ID
      * @return 可见性级别："FULL"（完全可见）、"PARTIAL"（部分可见）、"NONE"（不可见）
      */
     public String computeEntityVisibility(Entity entity, String nationId) {
-        if (entity == null) return "NONE";
+        if (entity == null)
+            return "NONE";
 
         // 特殊实体：恒星对所有国家完全可见（基础天文知识）
         if (entity.entityType == staraxis.game.entity.EntityType.STAR) {
@@ -106,11 +107,13 @@ public class VisibilitySystem {
         }
 
         NationState nationState = worldState.nationManager.getNationState(nationId);
-        if (nationState == null) return "NONE";
+        if (nationState == null)
+            return "NONE";
 
         // 获取实体所在星区
         SectorCoord sectorCoord = entity.sectorCoord;
-        if (sectorCoord == null) return "NONE";
+        if (sectorCoord == null)
+            return "NONE";
 
         String coordKey = coordToKey(sectorCoord);
 
@@ -130,13 +133,79 @@ public class VisibilitySystem {
     }
 
     /**
+     * 计算指定国家的“情报可见星区”（服务端权威口径）喵。
+     *
+     * 规则喵：
+     * - 只要某星区内存在本国拥有实体（Entity.ownerNationId == nationId），该星区即为可见喵。
+     * - 并扩展到该星区周边一圈六邻居星区（hex distance=1）作为情报可见星区喵。
+     *
+     * 说明喵：
+     * - 返回 SectorCoord 集合，供 webnet 用于过滤“细节/私有数据”下发喵。
+     * - 前端不参与该计算，避免伪造可见范围导致越权喵。
+     *
+     * @param nationId 国家ID
+     * @return 情报可见星区坐标集合
+     */
+    public Set<SectorCoord> computeIntelVisibleSectorsForNation(String nationId) {
+        Set<SectorCoord> result = new HashSet<>();
+        if (nationId == null || nationId.isBlank()) {
+            return result;
+        }
+
+        // 1) 找到所有本国拥有实体所在星区喵
+        Set<SectorCoord> ownedSectors = new HashSet<>();
+        for (Entity entity : worldState.entitiesById.values()) {
+            if (entity == null) {
+                continue;
+            }
+            if (!nationId.equals(entity.ownerNationId)) {
+                continue;
+            }
+            if (entity.sectorCoord == null) {
+                continue;
+            }
+            ownedSectors.add(entity.sectorCoord);
+        }
+
+        // 2) ownedSectors 本身可见喵
+        result.addAll(ownedSectors);
+
+        // 3) 扩展周边一圈六邻居喵
+        for (SectorCoord c : ownedSectors) {
+            if (c == null) {
+                continue;
+            }
+            // axial 六邻居方向喵
+            SectorCoord[] neighbors = new SectorCoord[] {
+                    new SectorCoord(c.q() + 1, c.r()),
+                    new SectorCoord(c.q() + 1, c.r() - 1),
+                    new SectorCoord(c.q(), c.r() - 1),
+                    new SectorCoord(c.q() - 1, c.r()),
+                    new SectorCoord(c.q() - 1, c.r() + 1),
+                    new SectorCoord(c.q(), c.r() + 1)
+            };
+            for (SectorCoord n : neighbors) {
+                if (n == null) {
+                    continue;
+                }
+                if (worldState.worldMap.getSector(n) != null) {
+                    result.add(n);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /**
      * 更新指定国家的可见性状态（每 tick 调用）。
      *
      * @param nationId 国家ID
      */
     public void updateNationVisibility(String nationId) {
         NationState nationState = worldState.nationManager.getNationState(nationId);
-        if (nationState == null) return;
+        if (nationState == null)
+            return;
 
         // 清除当前可见星区
         nationState.visibleSectorCoords.clear();
@@ -165,7 +234,7 @@ public class VisibilitySystem {
      * 检查星区是否在国家的传感器范围内。
      *
      * @param nationState 国家运行时状态
-     * @param sector 星区
+     * @param sector      星区
      * @return 如果在传感器范围内则返回 true
      */
     private boolean isInSensorRange(NationState nationState, WorldSector sector) {
@@ -196,12 +265,13 @@ public class VisibilitySystem {
      * 检查星区内是否有同盟国单位。
      *
      * @param nationId 国家ID
-     * @param sector 星区
+     * @param sector   星区
      * @return 如果有同盟国单位则返回 true
      */
     private boolean hasAlliedPresence(String nationId, WorldSector sector) {
         NationState nationState = worldState.nationManager.getNationState(nationId);
-        if (nationState == null) return false;
+        if (nationState == null)
+            return false;
 
         for (Long entityId : sector.entityIds) {
             Entity entity = worldState.entitiesById.get(entityId);

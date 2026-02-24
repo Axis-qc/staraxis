@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 import staraxis.game.entity.EntityType;
+import staraxis.game.state.snapshot.EntitySnapshot;
 
 /**
  * DailySettlementState
@@ -43,6 +44,15 @@ public class DailySettlementState {
      */
     public Map<String, Map<EntityType, List<Long>>> nationAssetsByNationId;
 
+    /**
+     * 公开实体基线快照（按星区聚合）：sectorKey -> 公开实体快照列表 喵。
+     * 
+     * 说明：
+     * - 包含恒星、行星、系统重心等公开基础数据喵。
+     * - 用于实现“按星区分区加载”的星图骨架渲染喵。
+     */
+    public Map<String, List<EntitySnapshot>> publicEntityBaselinesBySectorKey;
+
     public DailySettlementState() {
     }
 
@@ -52,6 +62,7 @@ public class DailySettlementState {
         sectorCount = 0;
         planetSurfacesByPlanetId = null;
         nationAssetsByNationId = null;
+        publicEntityBaselinesBySectorKey = null;
     }
 
     /**

@@ -29,18 +29,14 @@ public class ShipDetails {
     /** 舰船来源蓝图 ID（ShipDesign.designId）。 */
     public final String designId;
 
-    /** 所属国家/文明 ID（nationId 口径，String 类型，与国家定义 ID 一致）。 */
-    public final String ownerNationId;
-
     /** 船体耐久（当前口径 0~1）。 */
     public final double hpHull;
 
     /** 已装配组件的 moduleId 列表（最小展示信息）。 */
     public final List<String> componentModuleIds;
 
-    public ShipDetails(String designId, String ownerNationId, double hpHull, List<String> componentModuleIds) {
+    public ShipDetails(String designId, double hpHull, List<String> componentModuleIds) {
         this.designId = designId;
-        this.ownerNationId = ownerNationId;
         this.hpHull = hpHull;
         this.componentModuleIds = componentModuleIds;
     }

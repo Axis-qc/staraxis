@@ -8,6 +8,11 @@ import java.util.Map;
 
 /**
  * RealTimeStateDto
+ * 
+ * 实时世界状态 DTO：负责承载高频同步数据喵。
+ * 
+ * 变更说明：
+ * - 增加 privateEntitiesByIntelLevel 字段，支持按探测等级分层下发私有实体喵。
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class RealTimeStateDto {
@@ -49,13 +54,25 @@ public class RealTimeStateDto {
     /** 星区归属映射："q,r" -> ownerNationId。 */
     public final Map<String, String> sectorOwnerNationIdByCoord;
 
+    /**
+     * 公开实体列表（兼容字段）。
+     * 现已主要由 DailySettlementStateDto.publicEntityBaselinesBySectorKey 承载喵。
+     */
     public final List<EntitySnapshot> entities;
+
+    /**
+     * 按情报等级分组的私有实体快照喵。
+     * Key: 情报等级 (0-10)
+     * Value: 该等级下对当前连接玩家可见的实体列表喵。
+     */
+    public final Map<Integer, List<EntitySnapshot>> privateEntitiesByIntelLevel;
 
     public RealTimeStateDto(long simulationTick, int gameDatetimeDay, double accGameHoursInDay, int worldRadius,
             String worldType, double gameSecondsPerRealSecond, double timeScale,
             int year, int month, int day, int hour, int minute, int second,
             List<SectorCenterDto> sectorCenters, Map<String, String> sectorOwnerNationIdByCoord,
-            List<EntitySnapshot> entities) {
+            List<EntitySnapshot> entities,
+            Map<Integer, List<EntitySnapshot>> privateEntitiesByIntelLevel) {
         this.simulationTick = simulationTick;
         this.gameDatetimeDay = gameDatetimeDay;
         this.accGameHoursInDay = accGameHoursInDay;
@@ -72,5 +89,6 @@ public class RealTimeStateDto {
         this.sectorCenters = sectorCenters;
         this.sectorOwnerNationIdByCoord = sectorOwnerNationIdByCoord;
         this.entities = entities;
+        this.privateEntitiesByIntelLevel = privateEntitiesByIntelLevel;
     }
 }

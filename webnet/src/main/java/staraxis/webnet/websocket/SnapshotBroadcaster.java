@@ -57,7 +57,6 @@ public class SnapshotBroadcaster {
 
             for (WebSocketChannel ch : snapshotSubscribers) {
                 if (ch != null && ch.isOpen()) {
-                    Set<SectorCoord> visible = connMgr.getVisibleSectors(ch);
                     String nationId = null;
                     try {
                         String pid = connMgr.getPlayerIdByChannel(ch);
@@ -69,6 +68,10 @@ public class SnapshotBroadcaster {
                     if (nationId == null) {
                         nationId = connMgr.getNationIdByChannel(ch);
                     }
+
+                    // 可见星区由服务端权威计算：本国拥有实体所在星区 + 周边一圈喵
+                    Set<SectorCoord> visible = runtime.getWorldStateForSimOnly().visibilitySystem
+                            .computeIntelVisibleSectorsForNation(nationId);
 
                     var snapshotDto = SnapshotMessageFactory.buildSnapshotMessageWithNation(runtime,
                             lastTickCostMs.get(),

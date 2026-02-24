@@ -70,6 +70,14 @@ public class WorldState {
      */
     public final VisibilitySystem visibilitySystem = new VisibilitySystem(this);
 
+    /**
+     * 情报系统：计算探测等级与情报可见性（数据驱动）。
+     *
+     * 说明：
+     * - 由 StarAxisGameRuntime.newGame 初始化后注入喵。
+     */
+    public staraxis.game.intel.IntelSystem intelSystem;
+
     public WorldState(SimulationTime time, WorldMap worldMap, AstroData astro) {
         this.time = time;
         this.worldMap = worldMap;
@@ -115,6 +123,11 @@ public class WorldState {
             if (nextSector != null) {
                 nextSector.entityIds.add(entityId);
             }
+        }
+
+        // 实体移动后，如果该实体属于某个国家，则标记情报系统为脏以重算探测范围喵
+        if (intelSystem != null && e.ownerNationId != null) {
+            intelSystem.markDirty(e.ownerNationId);
         }
     }
 }

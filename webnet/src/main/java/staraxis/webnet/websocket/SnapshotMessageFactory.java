@@ -137,63 +137,71 @@ public final class SnapshotMessageFactory {
                     ", nationId=" + nationId + " 喵");
         }
 
-        // 2. 过滤实体快照喵
+        // 2. 过滤实体快照并按情报等级分层聚合喵
         List<EntitySnapshot> allSnapshots = rt.getEntitySnapshotsView();
-        List<EntitySnapshot> filteredSnapshots = new ArrayList<>();
+        List<EntitySnapshot> filteredPublicSnapshots = new ArrayList<>();
+        Map<Integer, List<EntitySnapshot>> privateEntitiesByIntelLevel = new HashMap<>();
 
         // 实体统计日志：首次与每分钟一次喵
         long logNow = System.currentTimeMillis();
         boolean shouldLogEntityStats = !hasLoggedEntityStatsOnce || (logNow - lastLogTimeMs >= 60000);
 
         Map<String, Integer> allTypeCounts = null;
-        Map<String, Integer> filteredTypeCounts = null;
         if (shouldLogEntityStats) {
             allTypeCounts = new HashMap<>();
-            filteredTypeCounts = new HashMap<>();
             for (EntitySnapshot s : allSnapshots) {
                 String tn = s.entityType == null ? "null" : s.entityType.name();
                 allTypeCounts.put(tn, allTypeCounts.getOrDefault(tn, 0) + 1);
             }
         }
 
+        // 获取情报系统引用喵
+        staraxis.game.intel.IntelSystem intelSystem = runtime.getWorldStateForSimOnly().intelSystem;
+
         if (filterSectors != null && !filterSectors.isEmpty()) {
             for (EntitySnapshot s : allSnapshots) {
-                // 本国实体强制推送：ownerNationId == nationId 时无视星区订阅与战争迷雾过滤喵
-                String ownerNationId = extractOwnerNationId(s);
-                boolean isOwnedByCurrentNation = nationId != null && !nationId.isBlank()
-                        && ownerNationId != null && ownerNationId.equals(nationId);
-
-                if (!isOwnedByCurrentNation) {
-                    // 星区过滤：只包含可见星区内的实体喵。
-                    if (!filterSectors.contains(s.sectorCoord)) {
-                        continue;
+                // 2.1 公开实体处理：仅用于向后兼容，主要已由基线承担喵
+                if (s.isPublic) {
+                    if (filterSectors.contains(s.sectorCoord)) {
+                        filteredPublicSnapshots.add(s);
                     }
-
-                    // 国家视野过滤：公共天体不受视野限制；非天体实体必须对该 nationId 完全可见才下发喵。
-                    boolean isNaturalBody = s.entityType == EntityType.STAR
-                            || s.entityType == EntityType.PLANET
-                            || s.entityType == EntityType.SYSTEM_BARYCENTER;
-
-                    if (!isNaturalBody) {
-                        // 未绑定国家：不下发任何非天体实体喵。
-                        if (nationId == null || nationId.isBlank()) {
-                            continue;
-                        }
-
-                        staraxis.game.entity.Entity e = runtime.getWorldStateForSimOnly().entitiesById.get(s.entityId);
-                        String vis = runtime.getWorldStateForSimOnly().visibilitySystem.computeEntityVisibility(e,
-                                nationId);
-                        if (!"FULL".equals(vis)) {
-                            continue;
-                        }
-                    }
+                    continue;
                 }
 
-                filteredSnapshots.add(s);
+                // 2.2 私有实体处理喵
+                if (nationId == null || nationId.isBlank()) {
+                    continue; // 无国家ID不分发私有实体喵
+                }
 
-                if (shouldLogEntityStats && filteredTypeCounts != null) {
-                    String tn = s.entityType == null ? "null" : s.entityType.name();
-                    filteredTypeCounts.put(tn, filteredTypeCounts.getOrDefault(tn, 0) + 1);
+                // 2.2.1 基础可见性过滤（视野系统）喵
+                staraxis.game.entity.Entity e = runtime.getWorldStateForSimOnly().entitiesById.get(s.entityId);
+                if (e == null)
+                    continue;
+
+                // 本国实体强制通过，否则走视野计算喵
+                boolean isOwnedBySelf = nationId.equals(s.ownerNationId);
+                if (!isOwnedBySelf) {
+                    if (!filterSectors.contains(s.sectorCoord))
+                        continue;
+
+                    String vis = runtime.getWorldStateForSimOnly().visibilitySystem.computeEntityVisibility(e,
+                            nationId);
+                    if (!"FULL".equals(vis))
+                        continue;
+                }
+
+                // 2.2.2 情报等级过滤与分层聚合（按星区探测等级表查表）喵
+                if (intelSystem != null) {
+                    Map<String, Integer> sectorIntelLevels = intelSystem.getNationSectorIntelLevelsView(nationId);
+                    int requiredLevel = intelSystem.getRequiredIntelLevel(s.entityType);
+
+                    String sectorKey = "q:" + s.sectorCoord.q() + ",r:" + s.sectorCoord.r();
+                    int detectorLevel = sectorIntelLevels.getOrDefault(sectorKey, -1);
+
+                    // 仅当星区探测等级 >= 实体情报需求等级时，才下发该实体数据喵
+                    if (detectorLevel >= requiredLevel) {
+                        privateEntitiesByIntelLevel.computeIfAbsent(requiredLevel, k -> new ArrayList<>()).add(s);
+                    }
                 }
             }
         }
@@ -203,7 +211,8 @@ public final class SnapshotMessageFactory {
             lastLogTimeMs = logNow;
             staraxis.webnet.core.WebNetLog.logThrottled("snapshot_entity_stats",
                     "[SnapshotMessageFactory] entityStats all=" + String.valueOf(allTypeCounts)
-                            + " filtered=" + String.valueOf(filteredTypeCounts)
+                            + " filteredPublic=" + filteredPublicSnapshots.size()
+                            + " privateTiers=" + privateEntitiesByIntelLevel.keySet()
                             + " filterSectors="
                             + (filterSectors == null ? "null" : String.valueOf(filterSectors.size()))
                             + " nationId=" + nationId);
@@ -225,36 +234,62 @@ public final class SnapshotMessageFactory {
                 rt.second,
                 sectorCenters,
                 rt.getSectorOwnerNationIdByCoordView(),
-                filteredSnapshots);
+                filteredPublicSnapshots,
+                privateEntitiesByIntelLevel);
 
-        // 3. 转换日结算状态（含低频地表数据）喵
+        // 3. 转换低频基线快照（含低频地表与国家资产基线）喵
         DailySettlementState dailyActive = runtime.getDailySettlementStateBufferForReadonly().getActive();
 
-        Map<Long, DailySettlementStateDto.PlanetSurfaceSnapshotDto> planetSurfaces = null;
-        if (dailyActive.planetSurfacesByPlanetId != null) {
-            planetSurfaces = new HashMap<>();
-            for (Map.Entry<Long, DailySettlementState.PlanetSurfaceDailySnapshot> entry : dailyActive.planetSurfacesByPlanetId
-                    .entrySet()) {
-                DailySettlementState.PlanetSurfaceDailySnapshot source = entry.getValue();
+        DailySettlementStateDto daily = null;
+        if (dailyActive != null) {
+            Map<Long, DailySettlementStateDto.PlanetSurfaceSnapshotDto> planetSurfaces = null;
+            if (dailyActive.planetSurfacesByPlanetId != null) {
+                planetSurfaces = new HashMap<>();
+                for (Map.Entry<Long, DailySettlementState.PlanetSurfaceDailySnapshot> entry : dailyActive.planetSurfacesByPlanetId
+                        .entrySet()) {
+                    DailySettlementState.PlanetSurfaceDailySnapshot source = entry.getValue();
 
-                List<DailySettlementStateDto.SurfaceRegionSnapshotDto> regions = source.surfaceRegions.stream()
-                        .map(r -> new DailySettlementStateDto.SurfaceRegionSnapshotDto(
-                                r.regionId,
-                                r.regionType,
-                                r.name,
-                                r.surfacePercentage,
-                                r.developableSpaceRatio))
-                        .collect(Collectors.toList());
+                    List<DailySettlementStateDto.SurfaceRegionSnapshotDto> regions = source.surfaceRegions.stream()
+                            .map(r -> new DailySettlementStateDto.SurfaceRegionSnapshotDto(
+                                    r.regionId,
+                                    r.regionType,
+                                    r.name,
+                                    r.surfacePercentage,
+                                    r.developableSpaceRatio))
+                            .collect(Collectors.toList());
 
-                planetSurfaces.put(entry.getKey(),
-                        new DailySettlementStateDto.PlanetSurfaceSnapshotDto(source.planetEntityId, regions));
+                    planetSurfaces.put(entry.getKey(),
+                            new DailySettlementStateDto.PlanetSurfaceSnapshotDto(source.planetEntityId, regions));
+                }
             }
-        }
 
-        DailySettlementStateDto daily = new DailySettlementStateDto(
-                dailyActive.settledDay,
-                dailyActive.sectorCount,
-                planetSurfaces);
+            // 国家资产基线：EntityType -> String key 喵
+            Map<String, Map<String, List<Long>>> nationAssetsByNationId = null;
+            if (dailyActive.nationAssetsByNationId != null) {
+                nationAssetsByNationId = new HashMap<>();
+                for (Map.Entry<String, Map<EntityType, List<Long>>> e : dailyActive.nationAssetsByNationId.entrySet()) {
+                    String nid = e.getKey();
+                    Map<EntityType, List<Long>> source = e.getValue();
+                    Map<String, List<Long>> target = new HashMap<>();
+                    if (source != null) {
+                        for (Map.Entry<EntityType, List<Long>> t : source.entrySet()) {
+                            if (t.getKey() != null) {
+                                target.put(t.getKey().name(), t.getValue());
+                            }
+                        }
+                    }
+                    nationAssetsByNationId.put(nid, target);
+                }
+            }
+
+            daily = new DailySettlementStateDto(
+                    dailyActive.settledDay,
+                    dailyActive.settledAtGameSeconds,
+                    dailyActive.sectorCount,
+                    planetSurfaces,
+                    nationAssetsByNationId,
+                    dailyActive.publicEntityBaselinesBySectorKey);
+        }
 
         return SnapshotMessageDto.forSuccess(tickCostMs, realTime, daily, nationId);
     }
@@ -266,29 +301,9 @@ public final class SnapshotMessageFactory {
      * @return 国家ID，如果无法提取则返回 null
      */
     public static String extractOwnerNationId(EntitySnapshot snapshot) {
-        if (snapshot.details == null) {
+        if (snapshot == null) {
             return null;
         }
-
-        // 检查 ShipDetails（独立类）
-        if (snapshot.details instanceof staraxis.game.state.snapshot.ShipDetails) {
-            staraxis.game.state.snapshot.ShipDetails shipDetails = (staraxis.game.state.snapshot.ShipDetails) snapshot.details;
-            return shipDetails.ownerNationId;
-        }
-
-        // 检查 EntitySnapshot.StarDetails（内部类）
-        if (snapshot.details instanceof EntitySnapshot.StarDetails) {
-            EntitySnapshot.StarDetails starDetails = (EntitySnapshot.StarDetails) snapshot.details;
-            return starDetails.ownerNationId;
-        }
-
-        // 检查 EntitySnapshot.PlanetDetails（内部类）
-        if (snapshot.details instanceof EntitySnapshot.PlanetDetails) {
-            EntitySnapshot.PlanetDetails planetDetails = (EntitySnapshot.PlanetDetails) snapshot.details;
-            return planetDetails.ownerNationId;
-        }
-
-        // 其他实体类型（如 SystemBarycenterDetails）没有所有者国家ID喵。
-        return null;
+        return snapshot.ownerNationId;
     }
 }

@@ -75,11 +75,19 @@ public class StarAxisGameRuntime implements GameRuntime {
                 new ObjectMapper());
         planetAssets.loadAll();
 
+        // 初始化全局配置注册中心并加载所有配置（含 Intel 等）喵
+        staraxis.game.config.GlobalConfigRegistry configRegistry = new staraxis.game.config.GlobalConfigRegistry(
+                new ObjectMapper());
+        configRegistry.loadAll();
+
         AstroGenerator astroGenerator = new AstroGenerator(astroAssets, planetAssets, cfg.worldSeed);
         List<StarSystem> systems = astroGenerator.generateSystemsForMap(worldMap, cfg);
 
         AstroData astro = new AstroData(systems);
         WorldState ws = new WorldState(time, worldMap, astro);
+
+        // 初始化情报系统并挂载到 WorldState 喵
+        ws.intelSystem = new staraxis.game.intel.IntelSystem(ws, configRegistry.intel());
 
         // 初始化玩家国家并绑定出生点喵
         if (cfg.playerNationDef != null && cfg.playerNationDef.id != null && !cfg.playerNationDef.id.isBlank()) {
@@ -278,6 +286,76 @@ public class StarAxisGameRuntime implements GameRuntime {
         }
         next.nationAssetsByNationId = assetMap;
 
+        // 3. 填充公开实体基线快照（按星区聚合）喵
+        // 说明：此处全量生成全世界所有星区的公开实体（STAR/PLANET/BARYCENTER）快照喵。
+        Map<String, List<EntitySnapshot>> baselineMap = new HashMap<>();
+        for (StarSystem system : worldState.astro.getSystemsView()) {
+            String sectorKey = "q:" + system.sectorCoord.q() + ",r:" + system.sectorCoord.r();
+            List<EntitySnapshot> sectorBaselines = baselineMap.computeIfAbsent(sectorKey, k -> new ArrayList<>());
+
+            // 3.1 系统重心喵
+            sectorBaselines.add(new EntitySnapshot(
+                    system.barycenterEntityId,
+                    EntityType.SYSTEM_BARYCENTER,
+                    system.systemId,
+                    0,
+                    system.sectorCoord,
+                    system.centerWorldGU,
+                    null, // 重心初始通常无主
+                    true, // 公开可见
+                    new EntitySnapshot.SystemBarycenterDetails()));
+
+            // 3.2 恒星喵
+            for (StarBody star : system.stars) {
+                sectorBaselines.add(new EntitySnapshot(
+                        star.entityId,
+                        star.entityType,
+                        star.systemId,
+                        system.barycenterEntityId,
+                        system.sectorCoord,
+                        system.centerWorldGU,
+                        star.ownerNationId,
+                        true, // 公开可见
+                        new EntitySnapshot.StarDetails(star.starTypeId, star.radiusGU, star.massSolar,
+                                star.temperatureK, star.description, star.surfaceTexturePath)));
+            }
+
+            // 3.3 行星喵
+            for (PlanetBody planet : system.planets) {
+                boolean isCapital = false;
+                if (planet.ownerNationId != null) {
+                    var ns = worldState.nationManager.getNationState(planet.ownerNationId);
+                    if (ns != null && ns.capitalPlanetEntityId == planet.entityId) {
+                        isCapital = true;
+                    }
+                }
+
+                sectorBaselines.add(new EntitySnapshot(
+                        planet.entityId,
+                        planet.entityType,
+                        planet.systemId,
+                        system.barycenterEntityId,
+                        system.sectorCoord,
+                        system.centerWorldGU,
+                        planet.ownerNationId,
+                        true, // 公开可见
+                        new EntitySnapshot.PlanetDetails(
+                                planet.planetTypeId,
+                                planet.radiusGU,
+                                planet.rotationPeriodHours,
+                                planet.surfaceTexturePath,
+                                isCapital,
+                                planet.orbitCenterEntityId,
+                                planet.semiMajorAxisGU,
+                                planet.eccentricity,
+                                planet.inclinationDeg,
+                                planet.periapsisArgDeg,
+                                planet.orbitalPeriodDays,
+                                planet.meanAnomalyDegAtEpoch)));
+            }
+        }
+        next.publicEntityBaselinesBySectorKey = baselineMap;
+
         dailySettlementBuffer.publish(next);
     }
 
@@ -317,14 +395,7 @@ public class StarAxisGameRuntime implements GameRuntime {
             worldState.registerEntity(barycenter);
 
             s.putEntity(barycenter);
-            s.putEntitySnapshot(new EntitySnapshot(
-                    barycenter.entityId,
-                    barycenter.entityType,
-                    barycenter.systemId,
-                    barycenter.parentEntityId,
-                    barycenter.sectorCoord,
-                    barycenter.posWorldGU,
-                    new EntitySnapshot.SystemBarycenterDetails()));
+            // 高频快照不再下发重心，重心已移至低频基线公开数据喵
 
             // 2. 注册恒星实体
             for (StarBody star : system.stars) {
@@ -337,15 +408,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                 worldState.registerEntity(star);
 
                 s.putEntity(star);
-                s.putEntitySnapshot(new EntitySnapshot(
-                        star.entityId,
-                        star.entityType,
-                        star.systemId,
-                        star.parentEntityId,
-                        star.sectorCoord,
-                        star.posWorldGU,
-                        new EntitySnapshot.StarDetails(star.starTypeId, star.radiusGU, star.massSolar,
-                                star.temperatureK, star.description, star.surfaceTexturePath, star.ownerNationId)));
+                // 高频快照不再重复下发恒星基础数据，已移至低频基线喵
             }
 
             // 3. 注册行星实体
@@ -360,38 +423,12 @@ public class StarAxisGameRuntime implements GameRuntime {
                 worldState.registerEntity(planet);
 
                 s.putEntity(planet);
-
-                // 确定性判断是否为首都喵
-                boolean isCapital = false;
-                if (planet.ownerNationId != null) {
-                    var ns = worldState.nationManager.getNationState(planet.ownerNationId);
-                    if (ns != null && ns.capitalPlanetEntityId == planet.entityId) {
-                        isCapital = true;
-                    }
-                }
-
-                s.putEntitySnapshot(new EntitySnapshot(
-                        planet.entityId,
-                        planet.entityType,
-                        planet.systemId,
-                        planet.parentEntityId,
-                        planet.sectorCoord,
-                        planet.posWorldGU,
-                        new EntitySnapshot.PlanetDetails(
-                                planet.planetTypeId,
-                                planet.radiusGU,
-                                planet.rotationPeriodHours,
-                                planet.surfaceTexturePath, planet.ownerNationId,
-                                isCapital,
-                                planet.orbitCenterEntityId,
-                                planet.semiMajorAxisGU,
-                                planet.eccentricity,
-                                planet.inclinationDeg,
-                                planet.periapsisArgDeg,
-                                planet.orbitalPeriodDays,
-                                planet.meanAnomalyDegAtEpoch)));
+                // 高频快照不再重复下发行星基础数据，已移至低频基线喵
             }
         }
+
+        // 4. 未来在此处添加私有/动态实体（如 SHIP）的实时快照下发喵
+        // ... (当前暂无动态实体生成逻辑)
 
         realTimeBuffer.swapPublish();
     }

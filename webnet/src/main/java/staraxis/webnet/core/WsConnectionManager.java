@@ -3,7 +3,6 @@ package staraxis.webnet.core;
 import io.undertow.websockets.core.WebSocketChannel;
 import io.undertow.websockets.core.WebSockets;
 import staraxis.webnet.ai.WebAiAutoStarter;
-import staraxis.game.world.hex.SectorCoord;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -23,7 +22,7 @@ public class WsConnectionManager {
     private final Set<WebSocketChannel> allChannels = ConcurrentHashMap.newKeySet();
     private final Set<WebSocketChannel> snapshotSubscribers = ConcurrentHashMap.newKeySet();
 
-    private final ConcurrentHashMap<WebSocketChannel, Set<SectorCoord>> visibleSectorsByChannel = new ConcurrentHashMap<>();
+    // 可见星区由服务端权威计算，不再由客户端上报与存储喵。
 
     // playerId -> Player Channel (实现一号一连) 喵
     private final ConcurrentHashMap<String, WebSocketChannel> playerSessions = new ConcurrentHashMap<>();
@@ -94,10 +93,12 @@ public class WsConnectionManager {
         if (oldChannel != null && oldChannel != channel) {
             String oldConnId = channelToConnectionId.get(oldChannel);
             WebNetLog.logThrottled("conn_kick_" + playerId,
-                    "ConnMgr: Player " + playerId + " reconnected. New=" + connectionId + ", kicking old=" + oldConnId);
+                    "ConnMgr: Player " + playerId + " reconnected. New=" + connectionId + ", kicking old="
+                            + oldConnId);
             try {
                 WebSockets.sendText(
-                        "{\"type\":\"kick\",\"reason\":\"new_login\",\"connectionId\":\"" + connectionId + "\"}",
+                        "{\"type\":\"kick\",\"reason\":\"new_login\",\"connectionId\":\"" + connectionId
+                                + "\"}",
                         oldChannel, null);
                 oldChannel.close();
             } catch (Exception ignored) {
@@ -142,7 +143,9 @@ public class WsConnectionManager {
                             + oldConnId);
             try {
                 WebSockets.sendText(
-                        "{\"type\":\"kick\",\"reason\":\"new_login\",\"connectionId\":\"" + connectionId + "\"}", oldAi,
+                        "{\"type\":\"kick\",\"reason\":\"new_login\",\"connectionId\":\"" + connectionId
+                                + "\"}",
+                        oldAi,
                         null);
                 oldAi.close();
             } catch (Exception ignored) {
@@ -195,7 +198,6 @@ public class WsConnectionManager {
 
     private void cleanupChannel(WebSocketChannel channel) {
         snapshotSubscribers.remove(channel);
-        visibleSectorsByChannel.remove(channel);
         playerLastPongMs.remove(channel);
         channelToNationId.remove(channel);
         channelToConnectionId.remove(channel);
@@ -209,7 +211,8 @@ public class WsConnectionManager {
                     WebNetLog.logThrottled("ai_link_close_" + pid,
                             "ConnMgr: Player " + pid + " disconnected, closing associated AI session喵.");
                     try {
-                        WebSockets.sendText("{\"type\":\"kick\",\"reason\":\"player_disconnected\"}", associatedAi,
+                        WebSockets.sendText("{\"type\":\"kick\",\"reason\":\"player_disconnected\"}",
+                                associatedAi,
                                 null);
                         associatedAi.close();
                     } catch (Exception ignored) {
@@ -234,22 +237,6 @@ public class WsConnectionManager {
 
     public void unsubscribeSnapshot(WebSocketChannel channel) {
         snapshotSubscribers.remove(channel);
-    }
-
-    public void updateVisibleSectors(WebSocketChannel channel, Set<SectorCoord> visibleSectors) {
-        if (channel == null) {
-            return;
-        }
-
-        if (visibleSectors == null || visibleSectors.isEmpty()) {
-            visibleSectorsByChannel.remove(channel);
-        } else {
-            visibleSectorsByChannel.put(channel, visibleSectors);
-        }
-    }
-
-    public Set<SectorCoord> getVisibleSectors(WebSocketChannel channel) {
-        return visibleSectorsByChannel.get(channel);
     }
 
     /**

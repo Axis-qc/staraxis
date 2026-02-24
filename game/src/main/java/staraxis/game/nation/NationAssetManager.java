@@ -54,8 +54,9 @@ public class NationAssetManager {
         }
 
         // 1. 如果之前有归属国家，则先从旧国家资产表移除
+        NationState oldNation = null;
         if (entity.ownerNationId != null) {
-            NationState oldNation = worldState.nationManager.getNationState(entity.ownerNationId);
+            oldNation = worldState.nationManager.getNationState(entity.ownerNationId);
             if (oldNation != null) {
                 oldNation.removeOwnedEntity(entity);
             }
@@ -72,6 +73,14 @@ public class NationAssetManager {
 
         // 标记低频快照为脏，便于尽快通过低频基线快照同步资产变更喵
         worldState.baselineDirty = true;
+
+        // 标记情报系统为脏，触发探测等级重算喵
+        if (worldState.intelSystem != null) {
+            worldState.intelSystem.markDirty(nationId);
+            if (oldNation != null) {
+                worldState.intelSystem.markDirty(oldNation.nationId);
+            }
+        }
     }
 
     /**
@@ -106,8 +115,9 @@ public class NationAssetManager {
             return;
         }
 
-        if (entity.ownerNationId != null) {
-            NationState oldNation = worldState.nationManager.getNationState(entity.ownerNationId);
+        String oldNationId = entity.ownerNationId;
+        if (oldNationId != null) {
+            NationState oldNation = worldState.nationManager.getNationState(oldNationId);
             if (oldNation != null) {
                 oldNation.removeOwnedEntity(entity);
             }
@@ -117,6 +127,11 @@ public class NationAssetManager {
 
         // 标记低频快照为脏喵
         worldState.baselineDirty = true;
+
+        // 标记情报系统为脏喵
+        if (worldState.intelSystem != null && oldNationId != null) {
+            worldState.intelSystem.markDirty(oldNationId);
+        }
     }
 
     /**
