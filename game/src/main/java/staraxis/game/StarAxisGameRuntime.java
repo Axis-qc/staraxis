@@ -360,6 +360,11 @@ public class StarAxisGameRuntime implements GameRuntime {
     }
 
     private void publishRealTimeSnapshot() {
+        // 重要：RealTimeWorldState 同时包含 entitiesById（实体权威表）与 entitySnapshots（对外下发快照）喵。
+        // 历史问题：仅调用 putEntity() 会导致 getEntitySnapshotsView() 为空，webnet 下发
+        // entities=0，前端表现为“拿不到实体/星区内容”喵。
+        // 因此这里必须为需要前端展示/选择/聚焦的实体构造并写入 EntitySnapshot（putEntitySnapshot）喵。
+        // 后续若将恒星/行星等转为低频基线下发，也需要保留至少“壳快照”（id/type/pos/sector）或同步调整前端数据源喵。
         RealTimeWorldState s = realTimeBuffer.beginFillInactive();
 
         s.simulationTick = worldState.time.simulationTick;
@@ -395,7 +400,17 @@ public class StarAxisGameRuntime implements GameRuntime {
             worldState.registerEntity(barycenter);
 
             s.putEntity(barycenter);
-            // 高频快照不再下发重心，重心已移至低频基线公开数据喵
+            // 高频快照下发重心实体快照喵
+            s.putEntitySnapshot(new EntitySnapshot(
+                    barycenter.entityId,
+                    barycenter.entityType,
+                    barycenter.systemId,
+                    barycenter.parentEntityId,
+                    barycenter.sectorCoord,
+                    barycenter.posWorldGU,
+                    barycenter.ownerNationId,
+                    true,
+                    new EntitySnapshot.SystemBarycenterDetails()));
 
             // 2. 注册恒星实体
             for (StarBody star : system.stars) {
@@ -408,7 +423,24 @@ public class StarAxisGameRuntime implements GameRuntime {
                 worldState.registerEntity(star);
 
                 s.putEntity(star);
-                // 高频快照不再重复下发恒星基础数据，已移至低频基线喵
+                // 高频快照下发恒星实体快照喵
+                s.putEntitySnapshot(new EntitySnapshot(
+                        star.entityId,
+                        star.entityType,
+                        star.systemId,
+                        star.parentEntityId,
+                        star.sectorCoord,
+                        star.posWorldGU,
+                        star.ownerNationId,
+                        true,
+                        new EntitySnapshot.StarDetails(
+                                star.starTypeId,
+                                star.radiusGU,
+                                star.massSolar,
+                                star.temperatureK,
+                                star.description,
+                                star.surfaceTexturePath)));
+
             }
 
             // 3. 注册行星实体
@@ -423,7 +455,38 @@ public class StarAxisGameRuntime implements GameRuntime {
                 worldState.registerEntity(planet);
 
                 s.putEntity(planet);
-                // 高频快照不再重复下发行星基础数据，已移至低频基线喵
+                // 高频快照下发行星实体快照喵
+                boolean isCapital = false;
+                // 根据 NationState.capitalPlanetEntityId 判定首都行星喵
+                if (planet.ownerNationId != null) {
+                    var ns = worldState.nationManager.getNationState(planet.ownerNationId);
+                    if (ns != null && ns.capitalPlanetEntityId == planet.entityId) {
+                        isCapital = true;
+                    }
+                }
+                s.putEntitySnapshot(new EntitySnapshot(
+                        planet.entityId,
+                        planet.entityType,
+                        planet.systemId,
+                        planet.parentEntityId,
+                        planet.sectorCoord,
+                        planet.posWorldGU,
+                        planet.ownerNationId,
+                        true,
+                        new EntitySnapshot.PlanetDetails(
+                                planet.planetTypeId,
+                                planet.radiusGU,
+                                planet.rotationPeriodHours,
+                                planet.surfaceTexturePath,
+                                isCapital,
+                                planet.orbitCenterEntityId,
+                                planet.semiMajorAxisGU,
+                                planet.eccentricity,
+                                planet.inclinationDeg,
+                                planet.periapsisArgDeg,
+                                planet.orbitalPeriodDays,
+                                planet.meanAnomalyDegAtEpoch)));
+
             }
         }
 

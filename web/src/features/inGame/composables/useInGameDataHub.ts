@@ -34,6 +34,7 @@
  */
 
 import { computed, onUnmounted, ref, shallowRef, type Ref } from 'vue'
+import { useAuthStore } from '../../../stores/auth'
 import type { EntitySnapshot, SnapshotMessage } from '../../../net/snapshotWs'
 import type { WorldRenderer as ThreeWorldRenderer } from '../../../rendering/worldRenderManager'
 
@@ -55,6 +56,7 @@ type OverviewUiModel = {
     dayText: Ref<string>
     tickCostText: Ref<string>
     sectorCountText: Ref<string>
+    ownedEntities: Ref<EntitySnapshot[]>
 }
 
 export type InGameDataHub = {
@@ -167,8 +169,31 @@ export function useInGameDataHub() {
 
     function setLastSnapshot(s: SnapshotMessage | null) {
         lastSnapshot.value = s
-        if (s?.ok && s.realTimeWorldState?.entities) {
-            entities.value = s.realTimeWorldState.entities
+        if (s?.ok && s.realTimeWorldState) {
+            const rt = s.realTimeWorldState
+            const combined: EntitySnapshot[] = []
+
+            // 1. 加入公开实体喵
+            if (rt.entities) {
+                combined.push(...rt.entities)
+            }
+
+            // 2. 加入按情报等级分层的私有实体喵
+            if (rt.privateEntitiesByIntelLevel) {
+                for (const levelEntities of Object.values(rt.privateEntitiesByIntelLevel)) {
+                    if (Array.isArray(levelEntities)) {
+                        combined.push(...levelEntities)
+                    }
+                }
+            }
+
+            // 按 entityId 去重（以防万一后端重复下发）喵
+            const seen = new Set<number>()
+            entities.value = combined.filter(e => {
+                if (seen.has(e.entityId)) return false
+                seen.add(e.entityId)
+                return true
+            })
         }
     }
 
@@ -207,6 +232,15 @@ export function useInGameDataHub() {
         return String(s.realTimeWorldState?.sectorCenters?.length ?? '-')
     })
 
+    const auth = useAuthStore()
+    const ownedEntities = computed(() => {
+        const s = lastSnapshot.value
+        if (!s || !s.ok || !s.realTimeWorldState || !auth.selectedNationId) return []
+
+        // 过滤出属于玩家国家的实体喵
+        return entities.value.filter(e => e.ownerNationId === auth.selectedNationId)
+    })
+
     const debugZoomText = computed(() => {
         void debugUiTick.value
         const r = renderer.value
@@ -240,6 +274,7 @@ export function useInGameDataHub() {
             dayText: overviewDayText,
             tickCostText: overviewTickCostText,
             sectorCountText: overviewSectorCountText,
+            ownedEntities: ownedEntities,
         },
         debug: {
             zoomText: debugZoomText,

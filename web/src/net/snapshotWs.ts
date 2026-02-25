@@ -38,6 +38,7 @@ export type EntitySnapshot = {
     parentEntityId: number
     sectorCoord: { q: number; r: number }
     posWorldGU: { x: number; y: number }
+    ownerNationId?: string | null
     details: StarDetails | PlanetDetails | SystemBarycenterDetails | null
 }
 
@@ -80,7 +81,9 @@ export type SnapshotMessage = {
         minute?: number
         second?: number
         sectorCenters: SectorCenter[]
+        sectorOwnerNationIdByCoord?: Record<string, string>
         entities: EntitySnapshot[]
+        privateEntitiesByIntelLevel?: Record<string, EntitySnapshot[]>
     }
     dailySettlementState?: DailySettlementState
 }

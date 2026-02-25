@@ -424,7 +424,14 @@ onUnmounted(() => {
     </div>
 
     <InGameOverviewPanel :day-text="hub.overview.dayText.value" :tick-cost-text="hub.overview.tickCostText.value"
-      :sector-count-text="hub.overview.sectorCountText.value" />
+      :sector-count-text="hub.overview.sectorCountText.value" :owned-entities="hub.overview.ownedEntities.value" @focus="({ entityId }: { entityId: number }) => {
+        const r = hub.getRenderer()
+        if (!r) return
+        const p = r.getEntityWorldPosGU(entityId)
+        if (!p) return
+        r.cameraWorldPosGU.set(p.x, p.y)
+        r.applyCameraTransform()
+      }" />
 
     <InGameDevelopmentPanel v-if="activeBottomTab === 'development'" @build="uiBindings.onBuild" />
     <InGameMilitaryPanel v-if="activeBottomTab === 'military'" @developing="uiBindings.onDeveloping" />

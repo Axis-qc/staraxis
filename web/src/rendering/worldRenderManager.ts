@@ -88,6 +88,7 @@ export type WorldFrameState = {
     cullingAabb: { minX: number; maxX: number; minY: number; maxY: number }
     lod: LodState
     totalDays: number
+    visibilityManager: VisibilityStateManager | null
 }
 
 export function createWorldRenderManager(

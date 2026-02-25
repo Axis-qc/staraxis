@@ -209,13 +209,80 @@ public final class SnapshotMessageFactory {
         if (shouldLogEntityStats) {
             hasLoggedEntityStatsOnce = true;
             lastLogTimeMs = logNow;
+
+            int privateCount = 0;
+            for (List<EntitySnapshot> tier : privateEntitiesByIntelLevel.values()) {
+                if (tier != null)
+                    privateCount += tier.size();
+            }
+
+            // 统计过滤原因（近似统计，用于定位“实体为0”问题）喵
+            int skippedNoNationId = 0;
+            int skippedEntityMissing = 0;
+            int skippedNotInFilterSectors = 0;
+            int skippedVisNotFull = 0;
+            int skippedIntelInsufficient = 0;
+
+            if (filterSectors != null && !filterSectors.isEmpty()) {
+                for (EntitySnapshot s : allSnapshots) {
+                    if (s == null)
+                        continue;
+                    if (s.isPublic) {
+                        continue;
+                    }
+                    if (nationId == null || nationId.isBlank()) {
+                        skippedNoNationId++;
+                        continue;
+                    }
+
+                    staraxis.game.entity.Entity e = runtime.getWorldStateForSimOnly().entitiesById.get(s.entityId);
+                    if (e == null) {
+                        skippedEntityMissing++;
+                        continue;
+                    }
+
+                    boolean isOwnedBySelf = nationId.equals(s.ownerNationId);
+                    if (!isOwnedBySelf) {
+                        if (!filterSectors.contains(s.sectorCoord)) {
+                            skippedNotInFilterSectors++;
+                            continue;
+                        }
+                        String vis = runtime.getWorldStateForSimOnly().visibilitySystem.computeEntityVisibility(e,
+                                nationId);
+                        if (!"FULL".equals(vis)) {
+                            skippedVisNotFull++;
+                            continue;
+                        }
+                    }
+
+                    if (intelSystem != null) {
+                        Map<String, Integer> sectorIntelLevels = intelSystem.getNationSectorIntelLevelsView(nationId);
+                        int requiredLevel = intelSystem.getRequiredIntelLevel(s.entityType);
+                        String sectorKey = "q:" + s.sectorCoord.q() + ",r:" + s.sectorCoord.r();
+                        int detectorLevel = sectorIntelLevels.getOrDefault(sectorKey, -1);
+                        if (detectorLevel < requiredLevel) {
+                            skippedIntelInsufficient++;
+                            continue;
+                        }
+                    } else {
+                        skippedIntelInsufficient++;
+                    }
+                }
+            }
+
             staraxis.webnet.core.WebNetLog.logThrottled("snapshot_entity_stats",
                     "[SnapshotMessageFactory] entityStats all=" + String.valueOf(allTypeCounts)
+                            + " allSnapshots=" + allSnapshots.size()
                             + " filteredPublic=" + filteredPublicSnapshots.size()
+                            + " privateCount=" + privateCount
                             + " privateTiers=" + privateEntitiesByIntelLevel.keySet()
-                            + " filterSectors="
-                            + (filterSectors == null ? "null" : String.valueOf(filterSectors.size()))
-                            + " nationId=" + nationId);
+                            + " filterSectors=" + (filterSectors == null ? "null" : String.valueOf(filterSectors.size()))
+                            + " nationId=" + nationId
+                            + " skippedNoNationId=" + skippedNoNationId
+                            + " skippedEntityMissing=" + skippedEntityMissing
+                            + " skippedNotInFilterSectors=" + skippedNotInFilterSectors
+                            + " skippedVisNotFull=" + skippedVisNotFull
+                            + " skippedIntelInsufficient=" + skippedIntelInsufficient);
         }
 
         RealTimeStateDto realTime = new RealTimeStateDto(
