@@ -3,85 +3,57 @@ package staraxis.game.sim;
 /**
  * SimulationClock
  *
- * 单机版“模拟时间推进”纯逻辑实现。
+ * 时间轴常量定义（无状态工具类）喵。
+ *
+ * 职责边界：
+ * - 仅提供统一时间换算与节拍常量。
+ * - 不包含任何时间推进逻辑（推进由 {@link TimelineSystem}负责）喵。
  */
 public final class SimulationClock {
 
     private SimulationClock() {
     }
 
-    public static final int TICKS_PER_SECOND = 25;
+    /**
+     * 固定模拟节拍：每现实秒包含的 simulation tick 数喵。
+     *
+     * 口径：现实 1 秒 = 20 tick。
+     */
+    public static final int TICKS_PER_SECOND = 20;
 
     /**
-     * 默认时间口径：1 现实秒 = 25 tick = 1 游戏秒喵。
+     * 默认“现实秒 -> 游戏秒”基础倍率喵。
+     *
+     * 口径：1.0 表示现实 1 秒推进游戏 1 秒。
+     * 实际推进还会叠加 timeScale：
+     * dtGameSeconds = (gameSecondsPerRealSecond * timeScale) / TICKS_PER_SECOND 喵。
      */
     public static final double BASE_GAME_SECONDS_PER_REAL_SECOND = 1.0;
 
-    /**
-     * 统一时间换算常量喵。
-     * 现实 1 秒 -> 游戏 1 秒；1 分钟 60 秒；1 小时 60 分钟；1 天 24 小时；1 月 30 天；1 年 12 月喵。
-     */
+    /** 每分钟秒数喵。 */
     public static final int SECONDS_PER_MINUTE = 60;
 
+    /** 每小时分钟数喵。 */
     public static final int MINUTES_PER_HOUR = 60;
 
+    /** 每天小时数喵。 */
     public static final int HOURS_PER_DAY = 24;
 
+    /** 每月天数（游戏历法）喵。 */
     public static final int DAYS_PER_MONTH = 30;
 
+    /** 每年月份数（游戏历法）喵。 */
     public static final int MONTHS_PER_YEAR = 12;
 
+    /** 每小时秒数喵。 */
     public static final int SECONDS_PER_HOUR = SECONDS_PER_MINUTE * MINUTES_PER_HOUR;
 
+    /** 每天秒数喵。 */
     public static final int SECONDS_PER_DAY = SECONDS_PER_HOUR * HOURS_PER_DAY;
 
+    /** 每月秒数（基于 30 天）喵。 */
     public static final int SECONDS_PER_MONTH = SECONDS_PER_DAY * DAYS_PER_MONTH;
 
+    /** 每年秒数（基于 12 月）喵。 */
     public static final int SECONDS_PER_YEAR = SECONDS_PER_MONTH * MONTHS_PER_YEAR;
-
-    /**
-     * PrepareTick 阶段：推进 simulationTick，自增当日累计游戏小时数喵。
-     *
-     * 新口径：1 现实秒 = 1 游戏秒；因此每 tick 推进的游戏秒数为：
-     * (seconds/realSecond) / TICKS_PER_SECOND 喵。
-     *
-     * 返回值仍保持为 dtGameHours（本 tick 推进的游戏小时数），供各系统以“小时”为单位推进喵。
-     */
-    public static double prepareTick(SimulationTime time) {
-        if (time == null) {
-            throw new IllegalArgumentException("time_required");
-        }
-
-        time.simulationTick += 1;
-
-        // 系统倍率：timeScale，由系统控制（例如性能限制/战斗加速）喵。
-        // 玩家档位：playerTimeStep 在新口径下不再参与权威时间推进（保留字段以兼容旧指令与 UI）喵。
-        double effectiveGameSecondsPerRealSecond = time.gameSecondsPerRealSecond * time.timeScale;
-
-        double dtGameSeconds = effectiveGameSecondsPerRealSecond / TICKS_PER_SECOND;
-        double dtGameHours = dtGameSeconds / SECONDS_PER_HOUR;
-
-        time.accGameHoursInDay += dtGameHours;
-
-        return dtGameHours;
-    }
-
-    /**
-     * Commit 阶段：跨日判断与日序号推进；返回本 tick 是否触发了日结算喵。
-     *
-     * 口径：1 天 24 小时；月份与年份由上层按 day 推导（30 天=1 月，12 月=1 年）喵。
-     */
-    public static boolean commitTick(SimulationTime time) {
-        if (time == null) {
-            throw new IllegalArgumentException("time_required");
-        }
-
-        if (time.accGameHoursInDay >= HOURS_PER_DAY) {
-            time.accGameHoursInDay -= HOURS_PER_DAY;
-            time.gameDatetimeDay += 1;
-            return true;
-        }
-
-        return false;
-    }
 }

@@ -47,6 +47,8 @@ import staraxis.webnet.core.WsConnectionManager;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import staraxis.webnet.command.WebCommandRegistry;
 import staraxis.webnet.command.SetSimTimeSpeedCommand;
+import staraxis.webnet.command.SpawnColonyShipCommand;
+import staraxis.webnet.command.ColonizePlanetWebCommand;
 import staraxis.webnet.ai.WebAiWebSocketHandler;
 import staraxis.webnet.ai.WebAiAutoStarter;
 import staraxis.webnet.websocket.WebPlayerWebSocketHandler;
@@ -116,6 +118,8 @@ public class WebNetServer {
     public WebNetServer(WebNetServerConfig config) {
         this.config = config;
         commandRegistry.register(new SetSimTimeSpeedCommand());
+        commandRegistry.register(new SpawnColonyShipCommand());
+        commandRegistry.register(new ColonizePlanetWebCommand());
         this.playerWebSocketHandler = new WebPlayerWebSocketHandler(objectMapper, authStore, connMgr, commandRegistry);
         this.aiWebSocketHandler = new WebAiWebSocketHandler(authStore, connMgr);
         this.snapshotBroadcaster = new staraxis.webnet.websocket.SnapshotBroadcaster(objectMapper, connMgr,

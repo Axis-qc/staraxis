@@ -7,6 +7,8 @@ import io.undertow.websockets.core.WebSocketChannel;
 import io.undertow.websockets.core.WebSockets;
 import io.undertow.websockets.spi.WebSocketHttpExchange;
 import staraxis.game.StarAxisGameRuntime;
+import staraxis.game.intel.IntelSystem;
+import staraxis.game.nation.VisibilitySystem;
 import staraxis.game.world.hex.SectorCoord;
 import staraxis.webnet.ai.WebAiAutoStarter;
 import staraxis.webnet.auth.AuthStore;
@@ -100,6 +102,11 @@ public class WebPlayerWebSocketHandler {
                         return;
                     }
 
+                    if ("updateVisibleSectors".equals(type)) {
+                        // 忽略前端上报的可见星区，由服务端情报系统权威计算喵
+                        return;
+                    }
+
                     if ("setNationId".equals(type)) {
                         Object nationIdObj = m.get("nationId");
                         String nationId = nationIdObj == null ? null : String.valueOf(nationIdObj).trim();
@@ -174,9 +181,17 @@ public class WebPlayerWebSocketHandler {
                 nationId = connMgr.getNationIdByChannel(channel);
             }
 
-            // 可见星区由服务端权威计算：本国拥有实体所在星区 + 周边一圈喵
-            Set<SectorCoord> visible = runtime.getWorldStateForSimOnly().visibilitySystem
-                    .computeIntelVisibleSectorsForNation(nationId);
+            // 可见星区由服务端权威计算：基于情报系统的完整探测等级喵
+            IntelSystem intelSystem = runtime.getWorldStateForSimOnly().intelSystem;
+            Set<SectorCoord> visible;
+            if (intelSystem != null) {
+                visible = intelSystem.computeIntelVisibleSectors(nationId);
+            } else {
+                // 情报系统未初始化，回退到简化可见性计算喵
+                System.err.println("[WebPlayerWebSocketHandler] IntelSystem not initialized, falling back to visibility system喵");
+                visible = runtime.getWorldStateForSimOnly().visibilitySystem
+                        .computeIntelVisibleSectorsForNation(nationId);
+            }
 
             String json = objectMapper.writeValueAsString(
                     SnapshotMessageFactory.buildSnapshotMessageWithNation(runtime, 0, visible, nationId));

@@ -14,6 +14,7 @@ import staraxis.game.entity.EntityType;
 import staraxis.game.state.snapshot.EntitySnapshot;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -37,7 +38,8 @@ public final class SnapshotMessageFactory {
     public static WorldSummaryDto buildWorldSummary(StarAxisGameRuntime runtime) {
         RealTimeWorldState rt = runtime.getRealTimeWorldStateReadonly();
         WorldSummaryDto summary = new WorldSummaryDto();
-        summary.gameDay = rt.gameDatetimeDay;
+        // 统一以权威时间轴总秒数推导 Day，避免依赖已移除的旧字段喵。
+        summary.gameDay = (int) (rt.totalGameSeconds / 86400L) + 1;
         summary.simulationTick = rt.simulationTick;
         summary.entityCounts = new HashMap<>();
         summary.nations = new HashMap<>();
@@ -90,55 +92,32 @@ public final class SnapshotMessageFactory {
             Set<SectorCoord> visibleSectors, String nationId) {
         RealTimeWorldState rt = runtime.getRealTimeWorldStateReadonly();
 
-        // 1. 转换实时星区中心数据（仅包含订阅的星区）喵
+        // 1. 转换实时星区中心数据：星区分布是公开数据，推送给所有国家喵
         List<SectorCenterDto> sectorCenters = new ArrayList<>();
         Map<SectorCoord, Vec2d> allCenters = rt.getSectorCentersWorldGUView();
 
-        if (visibleSectors != null && !visibleSectors.isEmpty()) {
-            // 有可见星区：只发送客户端上报的可见星区喵
-            for (SectorCoord sc : visibleSectors) {
-                Vec2d p = allCenters.get(sc);
-                if (p != null) {
-                    sectorCenters.add(new SectorCenterDto(sc.q(), sc.r(), p.x(), p.y()));
-                }
-            }
-        } else {
-            // 没有可见星区或客户端未上报：发送一个默认的可见星区集合（中心附近）喵
-            // 这确保新游戏开始时前端能看到星区数据喵
-            int defaultRadius = 3; // 默认发送中心附近3个环的星区
-            for (Map.Entry<SectorCoord, Vec2d> entry : allCenters.entrySet()) {
-                SectorCoord coord = entry.getKey();
-                // 修正：使用六边形距离计算或简单的范围判定喵
-                if (Math.abs(coord.q()) <= defaultRadius && Math.abs(coord.r()) <= defaultRadius
-                        && Math.abs(coord.q() + coord.r()) <= defaultRadius) {
-                    Vec2d p = entry.getValue();
-                    sectorCenters.add(new SectorCenterDto(coord.q(), coord.r(), p.x(), p.y()));
-                }
-            }
+        // 无条件推送所有星区中心点（地图基础数据）喵
+        for (Map.Entry<SectorCoord, Vec2d> entry : allCenters.entrySet()) {
+            SectorCoord coord = entry.getKey();
+            Vec2d p = entry.getValue();
+            sectorCenters.add(new SectorCenterDto(coord.q(), coord.r(), p.x(), p.y()));
         }
 
         // 为实体过滤创建实际的可见星区集合喵
-        Set<SectorCoord> filterSectors = visibleSectors;
-        if (filterSectors == null || filterSectors.isEmpty()) {
-            // 如果没有可见星区，使用默认星区集合进行过滤喵
-            filterSectors = new HashSet<>();
-            for (SectorCenterDto sc : sectorCenters) {
-                filterSectors.add(new SectorCoord(sc.q, sc.r));
-            }
-        }
+        Set<SectorCoord> filterSectors = visibleSectors != null ? visibleSectors : new HashSet<>();
 
         // 调试日志：降低频率至每分钟一次喵
         long now = System.currentTimeMillis();
         if (now - lastLogTimeMs >= 60000) {
             lastLogTimeMs = now;
-            System.out.println("[SnapshotMessageFactory] sectorCenters count: " + sectorCenters.size() +
-                    ", filterSectors count: " + filterSectors.size() +
-                    ", visibleSectors was " + (visibleSectors == null ? "null" : "size=" + visibleSectors.size()) +
-                    ", nationId=" + nationId + " 喵");
+            System.out.println("[SnapshotMessageFactory] 星区中心点全图推送: " + sectorCenters.size() +
+                    "个, 情报过滤星区: " + filterSectors.size() +
+                    "个, nationId=" + nationId + " 喵");
         }
 
         // 2. 过滤实体快照并按情报等级分层聚合喵
-        List<EntitySnapshot> allSnapshots = rt.getEntitySnapshotsView();
+        // 使用预先构建的按星区组织的快照索引喵
+        Map<SectorCoord, List<EntitySnapshot>> snapshotsBySector = rt.getEntitySnapshotsBySectorView();
         List<EntitySnapshot> filteredPublicSnapshots = new ArrayList<>();
         Map<Integer, List<EntitySnapshot>> privateEntitiesByIntelLevel = new HashMap<>();
 
@@ -149,58 +128,71 @@ public final class SnapshotMessageFactory {
         Map<String, Integer> allTypeCounts = null;
         if (shouldLogEntityStats) {
             allTypeCounts = new HashMap<>();
-            for (EntitySnapshot s : allSnapshots) {
-                String tn = s.entityType == null ? "null" : s.entityType.name();
-                allTypeCounts.put(tn, allTypeCounts.getOrDefault(tn, 0) + 1);
+            // 统计所有实体数量喵
+            for (List<EntitySnapshot> sectorSnapshots : snapshotsBySector.values()) {
+                for (EntitySnapshot s : sectorSnapshots) {
+                    String tn = s.entityType == null ? "null" : s.entityType.name();
+                    allTypeCounts.put(tn, allTypeCounts.getOrDefault(tn, 0) + 1);
+                }
             }
         }
 
         // 获取情报系统引用喵
         staraxis.game.intel.IntelSystem intelSystem = runtime.getWorldStateForSimOnly().intelSystem;
 
-        if (filterSectors != null && !filterSectors.isEmpty()) {
-            for (EntitySnapshot s : allSnapshots) {
-                // 2.1 公开实体处理：仅用于向后兼容，主要已由基线承担喵
+        // 2.2 公开实体处理：天文数据无条件推送给所有国家喵
+        for (List<EntitySnapshot> sectorSnapshots : snapshotsBySector.values()) {
+            for (EntitySnapshot s : sectorSnapshots) {
                 if (s.isPublic) {
-                    if (filterSectors.contains(s.sectorCoord)) {
-                        filteredPublicSnapshots.add(s);
+                    filteredPublicSnapshots.add(s);
+                }
+            }
+        }
+
+        // 2.3 私有实体处理：按情报可见星区分片处理喵
+        if (filterSectors != null && !filterSectors.isEmpty() && nationId != null && !nationId.isBlank()) {
+            // 获取情报等级映射喵
+            Map<String, Integer> sectorIntelLevels = intelSystem != null ?
+                    intelSystem.getNationSectorIntelLevelsView(nationId) : Collections.emptyMap();
+
+            for (SectorCoord visibleSector : filterSectors) {
+                List<EntitySnapshot> sectorSnapshots = snapshotsBySector.get(visibleSector);
+                if (sectorSnapshots == null || sectorSnapshots.isEmpty()) {
+                    continue;
+                }
+
+                for (EntitySnapshot s : sectorSnapshots) {
+                    // 跳过公开实体喵
+                    if (s.isPublic) {
+                        continue;
                     }
-                    continue;
-                }
 
-                // 2.2 私有实体处理喵
-                if (nationId == null || nationId.isBlank()) {
-                    continue; // 无国家ID不分发私有实体喵
-                }
-
-                // 2.2.1 基础可见性过滤（视野系统）喵
-                staraxis.game.entity.Entity e = runtime.getWorldStateForSimOnly().entitiesById.get(s.entityId);
-                if (e == null)
-                    continue;
-
-                // 本国实体强制通过，否则走视野计算喵
-                boolean isOwnedBySelf = nationId.equals(s.ownerNationId);
-                if (!isOwnedBySelf) {
-                    if (!filterSectors.contains(s.sectorCoord))
+                    // 基础可见性过滤（视野系统）喵
+                    staraxis.game.entity.Entity e = runtime.getWorldStateForSimOnly().entitiesById.get(s.entityId);
+                    if (e == null) {
                         continue;
+                    }
 
-                    String vis = runtime.getWorldStateForSimOnly().visibilitySystem.computeEntityVisibility(e,
-                            nationId);
-                    if (!"FULL".equals(vis))
-                        continue;
-                }
+                    // 本国实体强制通过，否则走视野计算喵
+                    boolean isOwnedBySelf = nationId.equals(s.ownerNationId);
+                    if (!isOwnedBySelf) {
+                        String vis = runtime.getWorldStateForSimOnly().visibilitySystem.computeEntityVisibility(e,
+                                nationId);
+                        if (!"FULL".equals(vis)) {
+                            continue;
+                        }
+                    }
 
-                // 2.2.2 情报等级过滤与分层聚合（按星区探测等级表查表）喵
-                if (intelSystem != null) {
-                    Map<String, Integer> sectorIntelLevels = intelSystem.getNationSectorIntelLevelsView(nationId);
-                    int requiredLevel = intelSystem.getRequiredIntelLevel(s.entityType);
+                    // 情报等级过滤与分层聚合喵
+                    if (intelSystem != null) {
+                        int requiredLevel = intelSystem.getRequiredIntelLevel(s.entityType);
+                        String sectorKey = "q:" + s.sectorCoord.q() + ",r:" + s.sectorCoord.r();
+                        int detectorLevel = sectorIntelLevels.getOrDefault(sectorKey, -1);
 
-                    String sectorKey = "q:" + s.sectorCoord.q() + ",r:" + s.sectorCoord.r();
-                    int detectorLevel = sectorIntelLevels.getOrDefault(sectorKey, -1);
-
-                    // 仅当星区探测等级 >= 实体情报需求等级时，才下发该实体数据喵
-                    if (detectorLevel >= requiredLevel) {
-                        privateEntitiesByIntelLevel.computeIfAbsent(requiredLevel, k -> new ArrayList<>()).add(s);
+                        // 仅当星区探测等级 >= 实体情报需求等级时，才下发该实体数据喵
+                        if (detectorLevel >= requiredLevel) {
+                            privateEntitiesByIntelLevel.computeIfAbsent(requiredLevel, k -> new ArrayList<>()).add(s);
+                        }
                     }
                 }
             }
@@ -209,6 +201,12 @@ public final class SnapshotMessageFactory {
         if (shouldLogEntityStats) {
             hasLoggedEntityStatsOnce = true;
             lastLogTimeMs = logNow;
+
+            // 计算所有快照总数喵
+            int totalSnapshotCount = 0;
+            for (List<EntitySnapshot> sectorSnapshots : snapshotsBySector.values()) {
+                totalSnapshotCount += sectorSnapshots.size();
+            }
 
             int privateCount = 0;
             for (List<EntitySnapshot> tier : privateEntitiesByIntelLevel.values()) {
@@ -224,55 +222,58 @@ public final class SnapshotMessageFactory {
             int skippedIntelInsufficient = 0;
 
             if (filterSectors != null && !filterSectors.isEmpty()) {
-                for (EntitySnapshot s : allSnapshots) {
-                    if (s == null)
-                        continue;
-                    if (s.isPublic) {
-                        continue;
-                    }
-                    if (nationId == null || nationId.isBlank()) {
-                        skippedNoNationId++;
-                        continue;
-                    }
-
-                    staraxis.game.entity.Entity e = runtime.getWorldStateForSimOnly().entitiesById.get(s.entityId);
-                    if (e == null) {
-                        skippedEntityMissing++;
-                        continue;
-                    }
-
-                    boolean isOwnedBySelf = nationId.equals(s.ownerNationId);
-                    if (!isOwnedBySelf) {
-                        if (!filterSectors.contains(s.sectorCoord)) {
-                            skippedNotInFilterSectors++;
+                // 遍历所有星区的快照喵
+                for (List<EntitySnapshot> sectorSnapshots : snapshotsBySector.values()) {
+                    for (EntitySnapshot s : sectorSnapshots) {
+                        if (s == null)
+                            continue;
+                        if (s.isPublic) {
                             continue;
                         }
-                        String vis = runtime.getWorldStateForSimOnly().visibilitySystem.computeEntityVisibility(e,
-                                nationId);
-                        if (!"FULL".equals(vis)) {
-                            skippedVisNotFull++;
+                        if (nationId == null || nationId.isBlank()) {
+                            skippedNoNationId++;
                             continue;
                         }
-                    }
 
-                    if (intelSystem != null) {
-                        Map<String, Integer> sectorIntelLevels = intelSystem.getNationSectorIntelLevelsView(nationId);
-                        int requiredLevel = intelSystem.getRequiredIntelLevel(s.entityType);
-                        String sectorKey = "q:" + s.sectorCoord.q() + ",r:" + s.sectorCoord.r();
-                        int detectorLevel = sectorIntelLevels.getOrDefault(sectorKey, -1);
-                        if (detectorLevel < requiredLevel) {
+                        staraxis.game.entity.Entity e = runtime.getWorldStateForSimOnly().entitiesById.get(s.entityId);
+                        if (e == null) {
+                            skippedEntityMissing++;
+                            continue;
+                        }
+
+                        boolean isOwnedBySelf = nationId.equals(s.ownerNationId);
+                        if (!isOwnedBySelf) {
+                            if (!filterSectors.contains(s.sectorCoord)) {
+                                skippedNotInFilterSectors++;
+                                continue;
+                            }
+                            String vis = runtime.getWorldStateForSimOnly().visibilitySystem.computeEntityVisibility(e,
+                                    nationId);
+                            if (!"FULL".equals(vis)) {
+                                skippedVisNotFull++;
+                                continue;
+                            }
+                        }
+
+                        if (intelSystem != null) {
+                            Map<String, Integer> sectorIntelLevels = intelSystem.getNationSectorIntelLevelsView(nationId);
+                            int requiredLevel = intelSystem.getRequiredIntelLevel(s.entityType);
+                            String sectorKey = "q:" + s.sectorCoord.q() + ",r:" + s.sectorCoord.r();
+                            int detectorLevel = sectorIntelLevels.getOrDefault(sectorKey, -1);
+                            if (detectorLevel < requiredLevel) {
+                                skippedIntelInsufficient++;
+                                continue;
+                            }
+                        } else {
                             skippedIntelInsufficient++;
-                            continue;
                         }
-                    } else {
-                        skippedIntelInsufficient++;
                     }
                 }
             }
 
             staraxis.webnet.core.WebNetLog.logThrottled("snapshot_entity_stats",
                     "[SnapshotMessageFactory] entityStats all=" + String.valueOf(allTypeCounts)
-                            + " allSnapshots=" + allSnapshots.size()
+                            + " allSnapshots=" + totalSnapshotCount
                             + " filteredPublic=" + filteredPublicSnapshots.size()
                             + " privateCount=" + privateCount
                             + " privateTiers=" + privateEntitiesByIntelLevel.keySet()
@@ -287,8 +288,8 @@ public final class SnapshotMessageFactory {
 
         RealTimeStateDto realTime = new RealTimeStateDto(
                 rt.simulationTick,
-                rt.gameDatetimeDay,
-                rt.accGameHoursInDay,
+                rt.totalGameSeconds,
+                rt.deltaGameSeconds,
                 rt.worldRadius,
                 rt.worldType.name(),
                 rt.gameSecondsPerRealSecond,

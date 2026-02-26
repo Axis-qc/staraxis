@@ -89,13 +89,27 @@ public class WorldState {
             return;
         }
 
+        // 若实体已存在且星区变化，则先从旧星区索引中移除，避免重复挂载喵
+        Entity existed = entitiesById.get(entity.entityId);
+        SectorCoord previousSectorCoord = entitySectorById.get(entity.entityId);
+        if (existed != null && previousSectorCoord != null) {
+            boolean sectorChanged = entity.sectorCoord == null || !previousSectorCoord.equals(entity.sectorCoord);
+            if (sectorChanged) {
+                WorldSector previousSector = worldMap.getSector(previousSectorCoord);
+                if (previousSector != null) {
+                    previousSector.entityIds.remove(entity.entityId);
+                }
+                entitySectorById.remove(entity.entityId);
+            }
+        }
+
         entitiesById.put(entity.entityId, entity);
 
         if (entity.sectorCoord != null) {
             entitySectorById.put(entity.entityId, entity.sectorCoord);
 
             WorldSector sector = worldMap.getSector(entity.sectorCoord);
-            if (sector != null) {
+            if (sector != null && !sector.entityIds.contains(entity.entityId)) {
                 sector.entityIds.add(entity.entityId);
             }
         }

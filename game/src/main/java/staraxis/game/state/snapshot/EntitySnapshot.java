@@ -156,6 +156,18 @@ public class EntitySnapshot {
         }
     }
 
+    /**
+     * 舰船快照详情喵。
+     *
+     * 说明：
+     * - 当前先提供最小占位结构，满足多态序列化与前端类型分支喵。
+     * - 后续可按需扩展 hp/power/fuel/designId 等字段喵。
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ShipDetails {
+        public final boolean empty = true;
+    }
+
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class SystemBarycenterDetails {
         public final boolean empty = true;

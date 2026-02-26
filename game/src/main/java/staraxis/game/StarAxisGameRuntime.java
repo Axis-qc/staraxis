@@ -9,8 +9,8 @@ import staraxis.game.astro.StarSystem;
 import staraxis.game.astro.def.AstroAssetRepository;
 import staraxis.game.entity.Entity;
 import staraxis.game.entity.EntityType;
-import staraxis.game.sim.SimulationClock;
 import staraxis.game.sim.SimulationTime;
+import staraxis.game.sim.TimelineSystem;
 import staraxis.game.state.DailySettlementState;
 import staraxis.game.state.DailySettlementStateBuffer;
 import staraxis.game.state.RealTimeWorldState;
@@ -25,6 +25,8 @@ import staraxis.game.command.SetPlayerTimeStepCommand;
 import staraxis.game.command.SetPlayerTimeStepHandler;
 import staraxis.game.command.SetSystemTimeScaleCommand;
 import staraxis.game.command.SetSystemTimeScaleHandler;
+import staraxis.game.command.ColonizePlanetCommand;
+import staraxis.game.command.ColonizePlanetHandler;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -55,6 +57,7 @@ public class StarAxisGameRuntime implements GameRuntime {
 
         commandBus.register(SetPlayerTimeStepCommand.class, new SetPlayerTimeStepHandler());
         commandBus.register(SetSystemTimeScaleCommand.class, new SetSystemTimeScaleHandler());
+        commandBus.register(ColonizePlanetCommand.class, new ColonizePlanetHandler());
     }
 
     public CommandBus getCommandBusForSimOnly() {
@@ -171,11 +174,12 @@ public class StarAxisGameRuntime implements GameRuntime {
                         capital = sys.planets.get(rr.nextInt(sys.planets.size()));
                     }
 
-                    // 通过资产管理器分配首都行星所有权，并更新国家运行状态喵
+                    // 世界生成时不分配任何归属，等待玩家选择位置生成殖民舰喵
+                    // 仅记录出生星系，但星系内天体保持无主状态喵
                     if (ns != null && capital != null) {
-                        ws.nationAssetManager.assignEntityToNation(capital.entityId, nationId);
-                        ns.capitalPlanetEntityId = capital.entityId;
-                        ns.spawnSystemEntityId = sys.systemId;
+                        // ws.nationAssetManager.assignEntityToNation(capital.entityId, nationId); // 禁用初始归属分配喵
+                        ns.capitalPlanetEntityId = 0L; // 无首都行星，等待殖民喵
+                        ns.spawnSystemEntityId = sys.systemId; // 记录出生星系喵
                     }
 
                     break;
@@ -195,12 +199,12 @@ public class StarAxisGameRuntime implements GameRuntime {
 
     @Override
     public void update(float dtSeconds) {
-        // PrepareTick
-        double dtGameHours = SimulationClock.prepareTick(worldState.time);
+        // 独立时间轴系统推进：唯一权威时间入口喵
+        TimelineSystem.TickAdvance tickAdvance = TimelineSystem.advanceOneTick(worldState.time);
+        double dtGameHours = tickAdvance.dtGameHours;
 
-        // 处理 Command 队列并更新 WorldState
+        // 处理 Command 队列并更新 WorldState喵。
         commandBus.executeCommands(worldState, dtGameHours);
-        // TODO: 各系统使用 dtGameHours 推进
 
         // 更新所有国家的可见性状态（基于当前世界状态）
         worldState.visibilitySystem.updateAllNationsVisibility();
@@ -214,9 +218,7 @@ public class StarAxisGameRuntime implements GameRuntime {
             worldState.baselineDirty = false;
         }
 
-        // Commit
-        boolean dayChanged = SimulationClock.commitTick(worldState.time);
-        if (dayChanged) {
+        if (tickAdvance.dayChanged) {
             // 跨日逻辑可在此保留，用于未来的统计等，当前由定时/脏标记统一驱动低频快照发布喵
         }
 
@@ -368,8 +370,8 @@ public class StarAxisGameRuntime implements GameRuntime {
         RealTimeWorldState s = realTimeBuffer.beginFillInactive();
 
         s.simulationTick = worldState.time.simulationTick;
-        s.gameDatetimeDay = worldState.time.gameDatetimeDay;
-        s.accGameHoursInDay = worldState.time.accGameHoursInDay;
+        s.totalGameSeconds = worldState.time.getTotalGameSeconds();
+        s.deltaGameSeconds = worldState.time.lastDeltaGameSeconds;
         s.worldRadius = worldState.worldMap.radius;
         s.worldType = worldState.time.worldType;
         s.gameSecondsPerRealSecond = worldState.time.gameSecondsPerRealSecond;
@@ -490,8 +492,35 @@ public class StarAxisGameRuntime implements GameRuntime {
             }
         }
 
-        // 4. 未来在此处添加私有/动态实体（如 SHIP）的实时快照下发喵
-        // ... (当前暂无动态实体生成逻辑)
+        // 4. 追加私有/动态实体（当前主要是 SHIP）的实时快照下发喵
+        // 说明：该分支只处理非天体动态实体，避免与上方天体循环重复写入喵
+        java.util.ArrayList<Entity> dynamicEntities = new java.util.ArrayList<>(worldState.entitiesById.values());
+        for (Entity entity : dynamicEntities) {
+            if (entity == null || entity.entityType == null) {
+                continue;
+            }
+            if (entity.entityType != EntityType.SHIP) {
+                continue;
+            }
+
+            // 保障动态实体有星区索引，避免前端按星区过滤时丢失喵
+            if (entity.sectorCoord == null && entity.posWorldGU != null) {
+                entity.sectorCoord = staraxis.game.world.WorldHexLayout.worldToSectorCoord(entity.posWorldGU);
+            }
+
+            s.putEntity(entity);
+            // SHIP 为私有/情报数据，isPublic=false 喵
+            s.putEntitySnapshot(new EntitySnapshot(
+                    entity.entityId,
+                    entity.entityType,
+                    entity.systemId,
+                    entity.parentEntityId,
+                    entity.sectorCoord,
+                    entity.posWorldGU,
+                    entity.ownerNationId,
+                    false,
+                    new EntitySnapshot.ShipDetails()));
+        }
 
         realTimeBuffer.swapPublish();
     }

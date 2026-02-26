@@ -15,19 +15,37 @@ public class SimulationTime {
     public WorldType worldType = WorldType.SINGLE_PLAYER;
 
     /**
-     * 本地模拟 Tick；固定 25 tick/s；主循环 PrepareTick 阶段自增 +1。
+     * 本地模拟 Tick；固定 20 tick/s；主循环 TimelineSystem 阶段自增 +1。
      */
     public long simulationTick;
 
     /**
-     * 游戏日序号 (从 1 开始)；当累计游戏小时数满 24h 后，在 Commit 阶段 +1。
+     * 权威累计游戏秒（可带小数，单位：秒）喵。
      *
-     * 说明：月份与年份按规则派生（30 天=1 月，12 月=1 年），避免重复权威状态喵。
+     * 说明：
+     * - 这是时间轴系统的唯一推进源。
+     * - 其派生字段（年/月/日/时/分/秒）由该值推导，避免多源时间漂移喵。
+     */
+    public double totalGameSecondsAcc;
+
+    /**
+     * 上一 tick 推进的游戏秒数（dt）喵。
+     */
+    public double lastDeltaGameSeconds;
+
+    /**
+     * 游戏日序号 (从 1 开始)。
+     *
+     * 说明：
+     * - 作为便捷缓存字段保留，权威来源仍为 totalGameSecondsAcc 派生喵。
      */
     public int gameDatetimeDay = 1;
 
     /**
-     * 当日累计游戏小时数；范围 [0, 24)，是驱动日结算的核心变量。
+     * 当日累计游戏小时数；范围 [0, 24)。
+     *
+     * 说明：
+     * - 作为便捷缓存字段保留，权威来源仍为 totalGameSecondsAcc 派生喵。
      */
     public double accGameHoursInDay;
 
@@ -105,13 +123,9 @@ public class SimulationTime {
     }
 
     /**
-     * 获取当前游戏总秒数（粗略）：基于 gameDatetimeDay 与 accGameHoursInDay 派生。
-     *
-     * 说明：
-     * - 用于低频快照的时间戳计算，不要求绝对精度，只需与模拟推进保持一致喵。
+     * 获取当前游戏总秒数（向下取整）喵。
      */
     public long getTotalGameSeconds() {
-        double totalHours = (gameDatetimeDay - 1) * 24.0 + accGameHoursInDay;
-        return (long) Math.floor(totalHours * 3600.0);
+        return (long) Math.floor(totalGameSecondsAcc);
     }
 }

@@ -19,13 +19,13 @@
  * - 将画布 pointermove 事件绑定到 `onCanvasPointerMove`，用于计算鼠标世界坐标。
  *
  * @provides
- * - **overview**：总览面板所需的展示模型（日期、Tick 耗时、星区数量等）。
+ * - **overview**：总览面板所需的展示模型（基于权威时间戳推导的日期、Tick 耗时、星区数量等）。
  * - **debug**：调试浮窗所需的展示模型（缩放倍率、镜头中心、鼠标世界坐标、世界状态摘要等）。
  * - **entities**：扁平化的实体快照列表，供渲染器等模块消费。
  * - **输入函数**：`setRenderer/setLastSnapshot/onCanvasPointerMove`。
  *
  * @inputs
- * - `SnapshotMessage`：来自 `connectSnapshotWs` 的快照推送。
+ * - `SnapshotMessage`：来自 `connectSnapshotWs` 的快照推送（含 `totalGameSeconds` / `deltaGameSeconds` 时间轴字段）。
  * - `ThreeWorldRenderer`：来自 `createThreeWorldRenderer` 的渲染器实例。
  *
  * @potential_issues
@@ -214,10 +214,13 @@ export function useInGameDataHub() {
         mouseWorldPosGU.value = { x: worldX, y: worldY }
     }
 
+    // 日期显示改为基于新时间轴字段 totalGameSeconds 推导，避免依赖旧字段喵
     const overviewDayText = computed(() => {
         const s = lastSnapshot.value
         if (!s || !s.ok || !s.realTimeWorldState) return '-'
-        return `Day ${s.realTimeWorldState.gameDatetimeDay}`
+        const totalGameSeconds = s.realTimeWorldState.totalGameSeconds ?? 0
+        const gameDay = Math.floor(totalGameSeconds / 86400) + 1
+        return `Day ${gameDay}`
     })
 
     const overviewTickCostText = computed(() => {

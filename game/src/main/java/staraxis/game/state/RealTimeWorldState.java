@@ -20,9 +20,11 @@ public class RealTimeWorldState {
 
     public long simulationTick;
 
-    public int gameDatetimeDay;
+    /** 权威累计游戏秒（向下取整）喵。 */
+    public long totalGameSeconds;
 
-    public double accGameHoursInDay;
+    /** 本 tick 推进的游戏秒数（Δt）喵。 */
+    public double deltaGameSeconds;
 
     public int worldRadius;
 
@@ -60,6 +62,9 @@ public class RealTimeWorldState {
 
     private final List<EntitySnapshot> entitySnapshots = new ArrayList<>();
 
+    /** 按星区组织的实体快照索引（sectorCoord -> 快照列表）喵。 */
+    private final Map<SectorCoord, List<EntitySnapshot>> entitySnapshotsBySector = new LinkedHashMap<>();
+
     public RealTimeWorldState() {
     }
 
@@ -68,8 +73,8 @@ public class RealTimeWorldState {
      */
     public void resetForFill() {
         simulationTick = 0;
-        gameDatetimeDay = 0;
-        accGameHoursInDay = 0;
+        totalGameSeconds = 0;
+        deltaGameSeconds = 0;
         worldRadius = 0;
         worldType = null;
         gameSecondsPerRealSecond = 0;
@@ -86,6 +91,7 @@ public class RealTimeWorldState {
         sectorCentersWorldGU.clear();
         sectorOwnerNationIdByCoord.clear();
         entitySnapshots.clear();
+        entitySnapshotsBySector.clear();
     }
 
     /**
@@ -103,6 +109,13 @@ public class RealTimeWorldState {
             return;
 
         entitySnapshots.add(snapshot);
+
+        // 同时按星区索引喵
+        if (snapshot.sectorCoord != null) {
+            entitySnapshotsBySector
+                .computeIfAbsent(snapshot.sectorCoord, k -> new ArrayList<>())
+                .add(snapshot);
+        }
     }
 
     /**
@@ -146,5 +159,15 @@ public class RealTimeWorldState {
 
     public List<EntitySnapshot> getEntitySnapshotsView() {
         return Collections.unmodifiableList(entitySnapshots);
+    }
+
+    /**
+     * 获取按星区组织的实体快照只读视图喵。
+     *
+     * @return 不可修改的 Map，key 为星区坐标，value 为该星区的实体快照列表喵
+     */
+    public Map<SectorCoord, List<EntitySnapshot>> getEntitySnapshotsBySectorView() {
+        // 返回不可修改的视图，但内部列表仍然是可变的（由填充层控制）喵
+        return Collections.unmodifiableMap(entitySnapshotsBySector);
     }
 }

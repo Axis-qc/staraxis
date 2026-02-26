@@ -8,27 +8,40 @@ import java.util.Map;
 
 /**
  * RealTimeStateDto
- * 
- * 实时世界状态 DTO：负责承载高频同步数据喵。
- * 
- * 变更说明：
- * - 增加 privateEntitiesByIntelLevel 字段，支持按探测等级分层下发私有实体喵。
+ *
+ * 实时世界状态 DTO：承载高频同步数据喵。
+ *
+ * 时间轴口径：
+ * - simulationTick：权威模拟 tick。
+ * - totalGameSeconds：权威累计游戏秒时间戳（向下取整）。
+ * - deltaGameSeconds：本 tick 推进量（Δt）。
+ * - year/month/day/hour/minute/second：由权威时间轴派生的人类可读字段喵。
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class RealTimeStateDto {
 
     public final long simulationTick;
-    public final int gameDatetimeDay;
-    public final double accGameHoursInDay;
+
+    /** 权威累计游戏秒时间戳（向下取整）喵。 */
+    public final long totalGameSeconds;
+
+    /** 本 tick 推进的游戏秒数（Δt）喵。 */
+    public final double deltaGameSeconds;
+
     public final int worldRadius;
 
     /** 世界类型喵。 */
     public final String worldType;
 
-    /** 现实 1 秒推进的游戏秒数（不含 timeScale）喵。 */
+    /**
+     * 现实 1 秒推进的游戏秒数（基础倍率，不含 timeScale）喵。
+     *
+     * 实际每 tick 推进量：
+     * (gameSecondsPerRealSecond * timeScale) / TICKS_PER_SECOND 喵。
+     */
     public final double gameSecondsPerRealSecond;
 
-    /** 系统时间倍率喵。 */
+    /** 系统时间倍率（作用于基础倍率的线性放缩）喵。 */
     public final double timeScale;
 
     /** 结构化游戏日期时间：年（从 1 开始）喵。 */
@@ -67,15 +80,16 @@ public class RealTimeStateDto {
      */
     public final Map<Integer, List<EntitySnapshot>> privateEntitiesByIntelLevel;
 
-    public RealTimeStateDto(long simulationTick, int gameDatetimeDay, double accGameHoursInDay, int worldRadius,
+    public RealTimeStateDto(long simulationTick, long totalGameSeconds, double deltaGameSeconds,
+            int worldRadius,
             String worldType, double gameSecondsPerRealSecond, double timeScale,
             int year, int month, int day, int hour, int minute, int second,
             List<SectorCenterDto> sectorCenters, Map<String, String> sectorOwnerNationIdByCoord,
             List<EntitySnapshot> entities,
             Map<Integer, List<EntitySnapshot>> privateEntitiesByIntelLevel) {
         this.simulationTick = simulationTick;
-        this.gameDatetimeDay = gameDatetimeDay;
-        this.accGameHoursInDay = accGameHoursInDay;
+        this.totalGameSeconds = totalGameSeconds;
+        this.deltaGameSeconds = deltaGameSeconds;
         this.worldRadius = worldRadius;
         this.worldType = worldType;
         this.gameSecondsPerRealSecond = gameSecondsPerRealSecond;

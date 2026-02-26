@@ -67,9 +67,12 @@ export type SnapshotMessage = {
     error?: string
     tickCostMs?: number
     realTimeWorldState?: {
+        /** 权威模拟 tick。 */
         simulationTick: number
-        gameDatetimeDay: number
-        accGameHoursInDay: number
+        /** 权威时间轴：累计游戏秒（向下取整）。 */
+        totalGameSeconds: number
+        /** 权威时间轴：本次快照对应 tick 的推进秒数（Δt）。 */
+        deltaGameSeconds: number
         worldRadius: number
         worldType?: string
         gameSecondsPerRealSecond?: number
