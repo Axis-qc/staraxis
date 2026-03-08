@@ -165,7 +165,16 @@ public class EntitySnapshot {
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class ShipDetails {
-        public final boolean empty = true;
+        /** 舰船自定义标记集合（customFlags）喵。 */
+        public final java.util.Set<String> customFlags;
+
+        /** 舰船朝向角（headingDeg，角度制）：0 度朝 +X，逆时针为正喵。 */
+        public final double headingDeg;
+
+        public ShipDetails(java.util.Set<String> customFlags, double headingDeg) {
+            this.customFlags = customFlags == null ? java.util.Set.of() : java.util.Set.copyOf(customFlags);
+            this.headingDeg = headingDeg;
+        }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

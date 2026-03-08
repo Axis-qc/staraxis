@@ -70,6 +70,8 @@ import { useInGameWindows } from '../features/inGame/composables/useInGameWindow
 import { createCameraStatePersister, loadPersistedCameraState } from '../features/inGame/composables/useCameraPersist'
 
 import { useAuthStore } from '../stores/auth'
+import { useWorldSessionStore } from '../stores/worldSession'
+import { manualSaveWorld, listAvailableSpawns, confirmSpawn } from '../net/worldSavesApi'
 
 const router = useRouter()
 const { getSpritePath } = useAstroAssets()
@@ -93,6 +95,15 @@ const hub = useInGameDataHub()
 const wsClient = ref<SnapshotWsClient | null>(null)
 const renderer = ref<WorldRenderer | null>(null)
 const auth = useAuthStore()
+const worldSession = useWorldSessionStore()
+
+/**
+ * 出生流程（并入 in-game）状态喵。
+ */
+const spawnSystems = ref<Array<{ systemId: number; sectorQ: number; sectorR: number; centerX: number; centerY: number; starCount: number; planetCount: number }>>([])
+const selectedSpawnSystemId = ref<number | null>(null)
+const spawnLoading = ref(false)
+const spawnError = ref('')
 const { playerId } = storeToRefs(auth)
 
 // 镜头状态持久化（sessionStorage）喵
@@ -103,9 +114,9 @@ let isFirstSnapshotLog = true
 
 const activeBottomTab = ref<InGameBottomTab | null>(null)
 
-// 标记是否需要执行初始首都聚焦（如果没有缓存镜头状态）喵
-let needsInitialFocusOnCapital = false
-let hasAppliedInitialCapitalFocus = false
+// 标记是否需要执行初始出生舰船聚焦（如果没有缓存镜头状态）喵
+let needsInitialFocusOnInitialShip = false
+let hasAppliedInitialShipFocus = false
 
 // --- 逻辑下沉集成 --- //
 const {
@@ -206,10 +217,69 @@ function onContextMenu(e: MouseEvent) {
   e.preventDefault()
 }
 
+function chooseRandomSpawnInGame() {
+  if (!spawnSystems.value.length) {
+    selectedSpawnSystemId.value = null
+    return
+  }
+  const idx = Math.floor(Math.random() * spawnSystems.value.length)
+  selectedSpawnSystemId.value = spawnSystems.value[idx]?.systemId ?? null
+}
+
+async function confirmSpawnInGame() {
+  if (!auth.playerId || !worldSession.selectedWorldId) {
+    spawnError.value = 'player_or_world_required'
+    return
+  }
+  if (!selectedSpawnSystemId.value) {
+    spawnError.value = 'spawn_system_required'
+    return
+  }
+
+  spawnLoading.value = true
+  spawnError.value = ''
+  try {
+    const resp = await confirmSpawn({
+      worldId: worldSession.selectedWorldId,
+      playerId: auth.playerId,
+      chosenSystemId: selectedSpawnSystemId.value,
+    })
+    if (!resp.ok) {
+      throw new Error(resp.error || 'spawn_failed')
+    }
+
+    if (resp.nationId) {
+      auth.setSelectedNationId(resp.nationId)
+    }
+    worldSession.setPlayerWorldState('SPAWNED')
+  } catch (e: any) {
+    spawnError.value = String(e?.message || e)
+  } finally {
+    spawnLoading.value = false
+  }
+}
+
 function onPopState() {
   try {
     history.pushState({ saLock: true }, '', location.href)
   } catch { }
+}
+
+async function requestManualSave() {
+  if (!worldSession.selectedWorldId) {
+    showDevelopingHintAtCenter()
+    return
+  }
+
+  try {
+    const resp = await manualSaveWorld(worldSession.selectedWorldId)
+    if (!resp.ok) {
+      throw new Error(resp.error || 'manual_save_failed')
+    }
+    devTooltip.show('手动存档完成喵', new MouseEvent('click', { clientX: window.innerWidth / 2, clientY: 60 }))
+  } catch (e: any) {
+    devTooltip.show(`手动存档失败: ${String(e?.message || e)}喵`, new MouseEvent('click', { clientX: window.innerWidth / 2, clientY: 60 }))
+  }
 }
 
 function dispatch(action: GameAction) {
@@ -224,6 +294,8 @@ function dispatch(action: GameAction) {
       activeBottomTab.value = activeBottomTab.value === action.tab ? null : action.tab
       return
     case 'RequestSaveGame':
+      void requestManualSave()
+      return
     case 'RequestLoadGame':
     case 'ShowDevelopingHint':
       showDevelopingHintAtCenter()
@@ -237,7 +309,7 @@ function dispatch(action: GameAction) {
 const uiBindings = useInGameUiInputBindings({ onAction: dispatch })
 const inputController = useInGameInputController({ onAction: dispatch })
 
-onMounted(() => {
+onMounted(async () => {
   const el = rootRef.value
   if (el) {
     el.addEventListener('contextmenu', onContextMenu)
@@ -252,7 +324,7 @@ onMounted(() => {
   const container = containerRef.value
   if (container) {
     const persisted = loadPersistedCameraState(playerId.value)
-    needsInitialFocusOnCapital = !persisted
+    needsInitialFocusOnInitialShip = !persisted
     const r = createWorldRenderManager(container, {
       minZoom: 0.1,
       maxZoom: 2_000_000,
@@ -294,30 +366,49 @@ onMounted(() => {
       hub.setLastSnapshot(s)
       hub.getRenderer()?.updateFromSnapshot(s)
 
-      // 若本会话没有镜头缓存，则扫描本国实体列表找到首都行星并做一次初始聚焦喵
-      if (!hasAppliedInitialCapitalFocus && needsInitialFocusOnCapital) {
+      // 若本会话没有镜头缓存，则扫描本国实体列表找到初始舰船并做一次初始聚焦喵。
+      if (!hasAppliedInitialShipFocus && needsInitialFocusOnInitialShip) {
         const r = hub.getRenderer()
         const entities = s.realTimeWorldState?.entities ?? []
         const nationId = auth.selectedNationId
 
         if (r && nationId) {
-          const capitalPlanet = entities.find((e) => {
-            if (e.entityType !== 'PLANET') return false
+          // 新策略：优先聚焦携带固定 flag 的初始出生舰船喵。
+          const initialShip = entities.find((e) => {
+            if (e.entityType !== 'SHIP') return false
             const d: any = e.details
-            return d && d.ownerNationId === nationId && d.isCapital === true
+            const flags: string[] = Array.isArray(d?.customFlags) ? d.customFlags : []
+            return e.ownerNationId === nationId && flags.includes('INITIAL_SPAWN_SHIP')
           })
 
-          if (capitalPlanet && capitalPlanet.posWorldGU) {
-            r.cameraWorldPosGU.set(capitalPlanet.posWorldGU.x, capitalPlanet.posWorldGU.y)
+          if (initialShip && initialShip.posWorldGU) {
+            r.cameraWorldPosGU.set(initialShip.posWorldGU.x, initialShip.posWorldGU.y)
             r.applyCameraTransform()
-            hasAppliedInitialCapitalFocus = true
-            needsInitialFocusOnCapital = false
+            hasAppliedInitialShipFocus = true
+            needsInitialFocusOnInitialShip = false
             cameraPersister.schedulePersist()
           }
         }
       }
     },
   })
+
+  // 出生流程并入 in-game：进入游戏后若未出生，加载可选出生点喵。
+  if (worldSession.playerWorldState === 'SPAWN_PENDING' && worldSession.selectedWorldId) {
+    spawnLoading.value = true
+    try {
+      const spawnsResp = await listAvailableSpawns(worldSession.selectedWorldId)
+      if (!spawnsResp.ok) {
+        throw new Error(spawnsResp.error || 'list_spawns_failed')
+      }
+      spawnSystems.value = spawnsResp.systems || []
+      selectedSpawnSystemId.value = spawnSystems.value[0]?.systemId ?? null
+    } catch (e: any) {
+      spawnError.value = String(e?.message || e)
+    } finally {
+      spawnLoading.value = false
+    }
+  }
 })
 
 onUnmounted(() => {
@@ -367,6 +458,23 @@ onUnmounted(() => {
       :snapshot="hub.lastSnapshot.value" @close="closePlanetWindow" />
 
     <InGameSelectionRect :rect="selection.selectionRect.value" />
+
+    <div v-if="worldSession.playerWorldState === 'SPAWN_PENDING'" class="spawn-overlay">
+      <div class="spawn-panel">
+        <h3>选择出生点</h3>
+        <div class="row">
+          <button :disabled="spawnLoading" @click="chooseRandomSpawnInGame">随机位置</button>
+          <button :disabled="spawnLoading" @click="confirmSpawnInGame">确认出生</button>
+        </div>
+        <div class="list">
+          <label v-for="s in spawnSystems" :key="s.systemId" class="spawn-item">
+            <input type="radio" name="spawn-in-game" :value="s.systemId" v-model.number="selectedSpawnSystemId" />
+            <span>system={{ s.systemId }} sector=({{ s.sectorQ }},{{ s.sectorR }}) planets={{ s.planetCount }}</span>
+          </label>
+        </div>
+        <div v-if="spawnError" class="spawn-error">{{ spawnError }}</div>
+      </div>
+    </div>
 
     <InGameEscMenu v-model:open="isEscMenuOpen" @resume="uiBindings.onResume" @save="uiBindings.onClickSave"
       @load="uiBindings.onClickLoad" @quit="uiBindings.onClickQuit" />
@@ -536,6 +644,50 @@ onUnmounted(() => {
   position: absolute;
   inset: 0;
   touch-action: none;
+}
+
+.spawn-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: grid;
+  place-items: center;
+  z-index: 60;
+}
+
+.spawn-panel {
+  width: min(880px, 92vw);
+  max-height: 80vh;
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--glow-color) 25%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--background-color) 78%, rgba(0, 0, 0, 0.3));
+  padding: 14px;
+}
+
+.spawn-panel .row {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.spawn-panel .list {
+  display: grid;
+  gap: 8px;
+}
+
+.spawn-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid color-mix(in srgb, var(--glow-color) 22%, transparent);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.spawn-error {
+  color: #ff6b6b;
+  margin-top: 8px;
 }
 
 .kv {

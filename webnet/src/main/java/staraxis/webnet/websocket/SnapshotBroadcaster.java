@@ -7,8 +7,10 @@ import staraxis.game.StarAxisGameRuntime;
 import staraxis.game.world.hex.SectorCoord;
 import staraxis.webnet.core.WsConnectionManager;
 import staraxis.webnet.game.GameSessions;
+import staraxis.webnet.api.joingame.WorldSavesApi;
 
 import java.util.Set;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -20,9 +22,13 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class SnapshotBroadcaster {
 
+    /** 自动存档间隔（tick）：300 tick 约 5 分钟（按 1Hz tick）喵。 */
+    private static final long AUTO_SAVE_INTERVAL_TICKS = 300L;
+
     private final ObjectMapper objectMapper;
     private final WsConnectionManager connMgr;
     private final AtomicLong lastTickCostMs;
+    private final Map<String, Long> lastAutoSaveTickByWorldId = new java.util.concurrent.ConcurrentHashMap<>();
 
     public SnapshotBroadcaster(ObjectMapper objectMapper, WsConnectionManager connMgr, AtomicLong lastTickCostMs) {
         this.objectMapper = objectMapper;
@@ -34,19 +40,45 @@ public class SnapshotBroadcaster {
      * 执行一次 tick 并向订阅者广播快照喵。
      */
     public void tickAndBroadcast() {
+        String activeWorldId = GameSessions.getActiveWorldId();
         StarAxisGameRuntime runtime = GameSessions.getRuntime();
         if (runtime == null) {
             return;
         }
 
-        long t0 = System.nanoTime();
-        try {
-            runtime.update(0f);
-        } catch (Exception e) {
-            return;
-        } finally {
-            long costMs = Math.max(0, (System.nanoTime() - t0) / 1_000_000L);
-            lastTickCostMs.set(costMs);
+        // 世界推进策略（tickPolicy）喵：
+        // - ALWAYS_RUN：始终推进权威时间轴喵。
+        // - RUN_WHEN_ONLINE：仅当有玩家加入该世界时推进（单机/存档友好）喵。
+        String tickPolicy = GameSessions.getActiveTickPolicy();
+        boolean shouldAdvance = true;
+        if ("RUN_WHEN_ONLINE".equals(tickPolicy)) {
+            int joinedPlayers = GameSessions.getJoinedPlayerCount(activeWorldId);
+            shouldAdvance = joinedPlayers > 0;
+        }
+
+        if (shouldAdvance) {
+            long t0 = System.nanoTime();
+            try {
+                runtime.update(0f);
+            } catch (Exception e) {
+                return;
+            } finally {
+                long costMs = Math.max(0, (System.nanoTime() - t0) / 1_000_000L);
+                lastTickCostMs.set(costMs);
+            }
+
+            // 自动存档：按 tick 间隔触发，最多保留 4 个 autosave 文件喵。
+            long nowTick = runtime.getRealTimeWorldStateReadonly().simulationTick;
+            long lastTick = lastAutoSaveTickByWorldId.getOrDefault(activeWorldId, 0L);
+            if (nowTick - lastTick >= AUTO_SAVE_INTERVAL_TICKS) {
+                boolean saved = WorldSavesApi.tryAutoSave(objectMapper, activeWorldId);
+                if (saved) {
+                    lastAutoSaveTickByWorldId.put(activeWorldId, nowTick);
+                }
+            }
+        } else {
+            // 暂停推进时保持 tickCost 为 0，便于前端识别“已暂停推进”状态喵。
+            lastTickCostMs.set(0);
         }
 
         try {

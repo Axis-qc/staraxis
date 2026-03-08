@@ -43,7 +43,7 @@ public final class ApiRoutes {
 
         // --- 已下沉业务路由 ---
         staraxis.webnet.api.nation.NationRoutes.register(apiHandler, objectMapper);
-        staraxis.webnet.api.joingame.NewGameRoutes.register(apiHandler, objectMapper);
+        staraxis.webnet.api.joingame.NewGameRoutes.register(apiHandler, objectMapper, authStore);
         staraxis.webnet.api.snapshot.SnapshotRoutes.register(apiHandler, objectMapper, authStore, connMgr,
                 tickCostMsSupplier);
 

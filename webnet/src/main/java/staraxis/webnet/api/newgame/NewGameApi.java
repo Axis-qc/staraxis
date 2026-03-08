@@ -112,8 +112,18 @@ public final class NewGameApi {
             throw new IllegalArgumentException("worldGenConfig_required");
         }
 
-        // 接入 game 世界生成（当前为同步生成 + webnet 内存会话存储）
+        // 接入 game 世界生成（当前为同步生成 + webnet 内存会话存储）喵
         WorldGenConfig cfg = new WorldGenConfig();
+
+        String worldName = req.get("worldName") == null ? null : String.valueOf(req.get("worldName")).trim();
+        String tickPolicy = req.get("tickPolicy") == null ? null : String.valueOf(req.get("tickPolicy")).trim();
+        if (tickPolicy == null || tickPolicy.isBlank()) {
+            Object fromDraft = d.worldGenConfig.get("tickPolicy");
+            tickPolicy = fromDraft == null ? "RUN_WHEN_ONLINE" : String.valueOf(fromDraft).trim();
+        }
+        if (!"ALWAYS_RUN".equals(tickPolicy) && !"RUN_WHEN_ONLINE".equals(tickPolicy)) {
+            tickPolicy = "RUN_WHEN_ONLINE";
+        }
         // 注入玩家国家定义喵
         staraxis.game.nation.NationDef nationDef = new staraxis.game.nation.NationDef();
         nationDef.id = d.nationId;
@@ -184,13 +194,19 @@ public final class NewGameApi {
 
         runtime.start();
 
-        // 单世界：覆盖当前运行时
-        GameSessions.setRuntime(runtime);
-        staraxis.webnet.core.WebNetLog.log("NewGameApi.step3Confirm setRuntime ok worldRadius=" + cfg.worldRadius);
+        // 多世界：注册为 worldId，并切换为当前激活世界喵
+        String worldId = GameSessions.setRuntime(runtime);
+        var finalWorldName = (worldName == null || worldName.isBlank()) ? ("World-" + cfg.worldRadius + "R") : worldName;
+        GameSessions.registerRuntime(worldId, runtime, finalWorldName, tickPolicy);
+        staraxis.webnet.core.WebNetLog.log("NewGameApi.step3Confirm setRuntime ok worldRadius=" + cfg.worldRadius
+                + " worldId=" + worldId + " tickPolicy=" + tickPolicy);
 
         return Map.of(
                 "ok", true,
-                "gameSessionId", "single_world");
+                "gameSessionId", worldId,
+                "worldId", worldId,
+                "worldName", finalWorldName,
+                "tickPolicy", tickPolicy);
     }
 
     /**

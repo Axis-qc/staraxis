@@ -116,6 +116,7 @@ public class SpawnColonyShipCommand implements WebCommandHandler {
             ship.hpHull = 1.0;      // 满耐久喵
             ship.power = 100.0;     // 初始能源喵
             ship.fuel = 100.0;      // 初始燃料喵
+            ship.customFlags.add("INITIAL_SPAWN_SHIP"); // 固定 flag：初始出生舰船喵
             // components 字段已初始化为空列表，无需修改喵
 
             // 设置星区坐标（已计算好）喵

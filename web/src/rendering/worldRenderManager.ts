@@ -28,6 +28,7 @@ import { createRenderLoop } from './systems/renderLoop'
 import { createTextureManager } from './subsystems/textureManager'
 import { StarRenderer } from './subsystems/starRenderer'
 import { PlanetRenderer } from './subsystems/planetRenderer'
+import { ShipRenderer } from './subsystems/shipRenderer'
 import { SelectionRenderer } from './subsystems/selectionRenderer'
 import { GridRenderer } from './subsystems/gridRenderer'
 import { HexOutlineRenderer } from './subsystems/hexOutlineRenderer'
@@ -141,11 +142,12 @@ export function createWorldRenderManager(
     // 初始化渲染子系统
     const starRenderer = new StarRenderer()
     const planetRenderer = new PlanetRenderer()
+    const shipRenderer = new ShipRenderer()
     const selectionRenderer = new SelectionRenderer(entityQuery.getEntityWorldPosGU)
     const gridRenderer = new GridRenderer()
     const hexOutlineRenderer = new HexOutlineRenderer()
 
-    const subsystems = [starRenderer, planetRenderer, selectionRenderer, gridRenderer, hexOutlineRenderer]
+    const subsystems = [starRenderer, planetRenderer, shipRenderer, selectionRenderer, gridRenderer, hexOutlineRenderer]
     for (const s of subsystems) s.init(ctx)
 
     // 初始化输入系统
@@ -287,18 +289,35 @@ export function createWorldRenderManager(
     const updateFromSnapshot = (snapshot: SnapshotMessage) => {
         if (!snapshot.ok || !snapshot.realTimeWorldState) return
 
+        // 合并公开实体与私有实体（按情报等级分层）喵。
+        // 说明：SHIP（舰船实体）通常走 privateEntitiesByIntelLevel（私有实体分层）下发，
+        // 若只读取 entities（公开实体）会导致前端“无舰船可渲染”喵。
+        const publicEntities = snapshot.realTimeWorldState.entities ?? []
+        const privateTierMap = snapshot.realTimeWorldState.privateEntitiesByIntelLevel ?? {}
+        const privateEntities = Object.values(privateTierMap).flatMap((arr) => arr ?? [])
+
+        // 去重：同一 entityId 以后出现者覆盖前者（通常 private 精度更高）喵。
+        const mergedById = new Map<number, import('../net/snapshotWs').EntitySnapshot>()
+        for (const e of publicEntities) {
+            mergedById.set(e.entityId, e)
+        }
+        for (const e of privateEntities) {
+            mergedById.set(e.entityId, e)
+        }
+        const mergedEntities = Array.from(mergedById.values())
+
         // 更新可见性状态
         const currentTime = Date.now()
         visibilityManager.updateFromSnapshot(
-            snapshot.realTimeWorldState.entities ?? [],
+            mergedEntities,
             snapshot.realTimeWorldState.sectorCenters ?? [],
             currentTime
         )
 
         frameBuilder.updateSectorCenters(snapshot.realTimeWorldState.sectorCenters ?? [])
-        frameBuilder.updateEntities(snapshot.realTimeWorldState.entities ?? [])
+        frameBuilder.updateEntities(mergedEntities)
         entityQuery.updateSnapshot(snapshot)
-        entityQuery.updateEntities(snapshot.realTimeWorldState.entities ?? [])
+        entityQuery.updateEntities(mergedEntities)
 
         const frame = frameBuilder.build(snapshot)
         for (const s of subsystems) {

@@ -8,6 +8,9 @@ import staraxis.webnet.api.newgame.NewGameDraftRepository;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Deque;
+
+import staraxis.webnet.auth.AuthStore;
 
 /**
  * NewGameRoutes（新游戏/加入游戏路由挂载器）喵。
@@ -24,10 +27,176 @@ public final class NewGameRoutes {
     /**
      * 注册 join-game 和 newgame 相关路由喵。
      */
-    public static void register(PathHandler apiHandler, ObjectMapper objectMapper) {
+    public static void register(PathHandler apiHandler, ObjectMapper objectMapper, staraxis.webnet.auth.AuthStore authStore) {
         if (apiHandler == null) {
             return;
         }
+
+        // --- World Saves Routes（存档模式）喵 ---
+
+        java.util.function.Function<io.undertow.server.HttpServerExchange, AuthStore.Session> requireSession = exchange -> {
+            String authz = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
+            AuthStore.Session session = authStore.getSessionFromAuthorizationHeader(authz);
+            if (session == null) {
+                exchange.setStatusCode(401);
+                try {
+                    exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of("ok", false, "error", "unauthorized")));
+                } catch (Exception ignored) {
+                    exchange.endExchange();
+                }
+            }
+            return session;
+        };
+
+        java.util.function.Predicate<AuthStore.Session> isAdmin = s -> s != null && "ADMIN".equalsIgnoreCase(WorldSavesApi.resolveRole(authStore, s.playerId));
+
+        apiHandler.addExactPath("/worlds", exchange -> {
+            exchange.dispatch(() -> {
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, NewGameApi.jsonContentType());
+                try {
+                    String method = exchange.getRequestMethod().toString();
+                    AuthStore.Session session = requireSession.apply(exchange);
+                    if (session == null) {
+                        return;
+                    }
+
+                    if ("GET".equalsIgnoreCase(method)) {
+                        Map<String, Object> resp = WorldSavesApi.handleListWorlds(objectMapper, isAdmin.test(session));
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
+                        return;
+                    }
+                    if ("POST".equalsIgnoreCase(method)) {
+                        if (!isAdmin.test(session)) {
+                            exchange.setStatusCode(403);
+                            exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of("ok", false, "error", "admin_required")));
+                            return;
+                        }
+                        exchange.startBlocking();
+                        String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                        Map<String, Object> req = NewGameApi.parseBodyToMap(objectMapper, body);
+                        Map<String, Object> resp = WorldSavesApi.handleCreateWorld(objectMapper, req);
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
+                        return;
+                    }
+
+                    exchange.setStatusCode(405);
+                    exchange.getResponseSender().send(
+                            objectMapper.writeValueAsString(Map.of("ok", false, "error", "method_not_allowed")));
+                } catch (Exception e) {
+                    exchange.setStatusCode(400);
+                    try {
+                        exchange.getResponseSender().send(objectMapper
+                                .writeValueAsString(Map.of("ok", false, "error", String.valueOf(e.getMessage()))));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                }
+            });
+        });
+
+        apiHandler.addPrefixPath("/worlds/", exchange -> {
+            exchange.dispatch(() -> {
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, NewGameApi.jsonContentType());
+                try {
+                    String rel = exchange.getRelativePath(); // /{worldId}/join or /{worldId}/player-state
+                    if (rel == null || rel.isBlank() || "/".equals(rel)) {
+                        exchange.setStatusCode(404);
+                        exchange.getResponseSender().send(objectMapper
+                                .writeValueAsString(Map.of("ok", false, "error", "worldId_required")));
+                        return;
+                    }
+
+                    String path = rel.startsWith("/") ? rel.substring(1) : rel;
+                    String[] parts = path.split("/");
+                    String worldId = parts.length > 0 ? parts[0] : "";
+                    String action = parts.length > 1 ? parts[1] : "";
+
+                    if (worldId.isBlank()) {
+                        exchange.setStatusCode(404);
+                        exchange.getResponseSender().send(objectMapper
+                                .writeValueAsString(Map.of("ok", false, "error", "worldId_required")));
+                        return;
+                    }
+
+                    AuthStore.Session session = requireSession.apply(exchange);
+                    if (session == null) {
+                        return;
+                    }
+
+                    if ("join".equals(action) && "POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
+                        exchange.startBlocking();
+                        String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                        Map<String, Object> req = NewGameApi.parseBodyToMap(objectMapper, body);
+                        if (req.get("playerId") == null) {
+                            req = new java.util.LinkedHashMap<>(req);
+                            req.put("playerId", session.playerId);
+                        }
+                        Map<String, Object> resp = WorldSavesApi.handleJoinWorld(objectMapper, worldId, req, isAdmin.test(session));
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
+                        return;
+                    }
+
+                    if ("save".equals(action) && "POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
+                        if (!isAdmin.test(session)) {
+                            exchange.setStatusCode(403);
+                            exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of("ok", false, "error", "admin_required")));
+                            return;
+                        }
+                        exchange.startBlocking();
+                        String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                        Map<String, Object> req = NewGameApi.parseBodyToMap(objectMapper, body);
+                        Map<String, Object> resp = WorldSavesApi.handleManualSave(objectMapper, worldId, req);
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
+                        return;
+                    }
+
+                    if ("saves".equals(action) && "GET".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
+                        if (!isAdmin.test(session)) {
+                            exchange.setStatusCode(403);
+                            exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of("ok", false, "error", "admin_required")));
+                            return;
+                        }
+                        Map<String, Object> resp = WorldSavesApi.handleListSaves(objectMapper, worldId);
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
+                        return;
+                    }
+
+                    if ("load".equals(action) && "POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
+                        if (!isAdmin.test(session)) {
+                            exchange.setStatusCode(403);
+                            exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of("ok", false, "error", "admin_required")));
+                            return;
+                        }
+                        exchange.startBlocking();
+                        String body = new String(exchange.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                        Map<String, Object> req = NewGameApi.parseBodyToMap(objectMapper, body);
+                        Map<String, Object> resp = WorldSavesApi.handleLoadWorld(objectMapper, worldId, req);
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
+                        return;
+                    }
+
+                    if ("player-state".equals(action) && "GET".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
+                        Deque<String> pv = exchange.getQueryParameters().get("playerId");
+                        String playerId = (pv == null || pv.isEmpty()) ? null : pv.peekFirst();
+                        Map<String, Object> resp = WorldSavesApi.handlePlayerState(objectMapper, worldId, playerId == null ? null : playerId.trim());
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
+                        return;
+                    }
+
+                    exchange.setStatusCode(404);
+                    exchange.getResponseSender().send(
+                            objectMapper.writeValueAsString(Map.of("ok", false, "error", "route_not_found")));
+                } catch (Exception e) {
+                    exchange.setStatusCode(400);
+                    try {
+                        exchange.getResponseSender().send(objectMapper
+                                .writeValueAsString(Map.of("ok", false, "error", String.valueOf(e.getMessage()))));
+                    } catch (Exception ignored) {
+                        exchange.endExchange();
+                    }
+                }
+            });
+        });
 
         // --- Join Game Routes ---
 
@@ -46,7 +215,8 @@ public final class NewGameRoutes {
                 }
                 try {
                     JoinGameApi.setJsonContentType(exchange);
-                    Map<String, Object> resp = JoinGameApi.handleAvailableSpawns();
+                    String worldId = JoinGameApi.query(exchange, "worldId");
+                    Map<String, Object> resp = JoinGameApi.handleAvailableSpawns(worldId);
                     exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
                 } catch (Exception e) {
                     exchange.setStatusCode(400);

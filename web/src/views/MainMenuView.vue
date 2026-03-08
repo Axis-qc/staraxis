@@ -62,15 +62,14 @@ useStarfield(canvasRef)
       </header>
 
       <nav class="hud-nav">
-        <button class="menu-item" @click="router.push('/new-game/nation')">
+        <button class="menu-item" @click="router.push('/worlds')">
           <span class="bullet" />
           <span>{{ t('mainMenu.newGame') }}</span>
         </button>
 
-        <button class="menu-item" @click="developing(t('mainMenu.loadGame'), $event)">
+        <button class="menu-item" @click="router.push('/load-game')">
           <span class="bullet" />
           <span>{{ t('mainMenu.loadGame') }}</span>
-          <span class="tag-developing">{{ t('mainMenu.tag.developing') }}</span>
         </button>
 
         <button class="menu-item" @click="developing(t('mainMenu.multiplayer'), $event)">

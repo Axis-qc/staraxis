@@ -29,6 +29,13 @@ export type PlanetDetails = {
     meanAnomalyDegAtEpoch: number
 }
 
+export type ShipDetails = {
+    /** 舰船自定义标记集合（customFlags），例如 INITIAL_SPAWN_SHIP（初始出生舰船）喵。 */
+    customFlags?: string[]
+    /** 舰船朝向角（headingDeg，角度制）：0 度朝 +X，逆时针为正喵。 */
+    headingDeg?: number
+}
+
 export type SystemBarycenterDetails = {}
 
 export type EntitySnapshot = {
@@ -39,7 +46,7 @@ export type EntitySnapshot = {
     sectorCoord: { q: number; r: number }
     posWorldGU: { x: number; y: number }
     ownerNationId?: string | null
-    details: StarDetails | PlanetDetails | SystemBarycenterDetails | null
+    details: StarDetails | PlanetDetails | ShipDetails | SystemBarycenterDetails | null
 }
 
 export type SurfaceRegionSnapshot = {

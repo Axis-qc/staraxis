@@ -24,7 +24,9 @@ import staraxis.game.entity.Entity;
 import staraxis.game.entity.EntityType;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 舰船实体（权威世界状态中的可交互对象）。
@@ -46,6 +48,15 @@ public class ShipBody extends Entity {
 
     /** 燃料（占位）。 */
     public double fuel;
+
+    /**
+     * 舰船自定义标记集合（customFlags）喵。
+     *
+     * 说明：
+     * - 用于承载可扩展语义（例如初始出生舰船、任务专用舰船等）喵。
+     * - 采用字符串集合避免频繁新增布尔字段喵。
+     */
+    public Set<String> customFlags = new LinkedHashSet<>();
 
     public ShipBody() {
         this.entityType = EntityType.SHIP;

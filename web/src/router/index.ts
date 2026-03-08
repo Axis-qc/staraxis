@@ -33,9 +33,16 @@ const router = createRouter({
             component: () => import('../views/ShipDesignerDevView.vue'),
         },
         {
+            path: '/worlds',
+            name: 'worlds',
+            component: () => import('../views/WorldSavesView.vue'),
+            meta: { requiresAuth: true, viewMode: 'worlds' },
+        },
+        {
             path: '/load-game',
             name: 'load-game',
-            component: () => import('../views/DevelopingView.vue'),
+            component: () => import('../views/WorldSavesView.vue'),
+            meta: { requiresAuth: true, viewMode: 'saves' },
         },
         {
             path: '/multiplayer',
@@ -43,18 +50,7 @@ const router = createRouter({
             component: () => import('../views/DevelopingView.vue'),
         },
 
-        {
-            path: '/new-game/nation',
-            name: 'new-game-nation',
-            component: () => import('../views/NewGameNationSelectView.vue'),
-            meta: { requiresAuth: true },
-        },
-        {
-            path: '/new-game/world-settings',
-            name: 'new-game-world-settings',
-            component: () => import('../views/NewGameWorldSettingsView.vue'),
-            meta: { requiresAuth: true },
-        },
+
         {
             path: '/in-game',
             name: 'in-game',

@@ -510,6 +510,21 @@ public class StarAxisGameRuntime implements GameRuntime {
 
             s.putEntity(entity);
             // SHIP 为私有/情报数据，isPublic=false 喵
+            java.util.Set<String> customFlags = java.util.Set.of();
+            if (entity instanceof staraxis.game.ship.ShipBody shipBody && shipBody.customFlags != null) {
+                customFlags = java.util.Set.copyOf(shipBody.customFlags);
+            }
+
+            // 朝向计算：优先由速度向量推导，静止时回退 0 度喵。
+            double headingDeg = 0.0;
+            if (entity.velWorldGU != null) {
+                double vx = entity.velWorldGU.x();
+                double vy = entity.velWorldGU.y();
+                if (Math.abs(vx) > 1e-9 || Math.abs(vy) > 1e-9) {
+                    headingDeg = Math.toDegrees(Math.atan2(vy, vx));
+                }
+            }
+
             s.putEntitySnapshot(new EntitySnapshot(
                     entity.entityId,
                     entity.entityType,
@@ -519,7 +534,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                     entity.posWorldGU,
                     entity.ownerNationId,
                     false,
-                    new EntitySnapshot.ShipDetails()));
+                    new EntitySnapshot.ShipDetails(customFlags, headingDeg)));
         }
 
         realTimeBuffer.swapPublish();

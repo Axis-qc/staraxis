@@ -200,6 +200,32 @@ public class AuthStore {
         throw new IllegalArgumentException("account not found by playerId");
     }
 
+    /**
+     * 按 playerId 查询账号角色。
+     *
+     * 说明：
+     * - 未命中时回退 USER，避免权限判断出现空值歧义喵。
+     */
+    public String getRoleByPlayerId(String playerId) {
+        if (playerId == null || playerId.isBlank()) {
+            return "USER";
+        }
+        try {
+            AccountFiles.ensureDir();
+            for (var p : AccountFiles.listAccountFiles()) {
+                try {
+                    Account a = objectMapper.readValue(p.toFile(), Account.class);
+                    if (a != null && playerId.equals(a.playerId)) {
+                        return (a.role == null || a.role.isBlank()) ? "USER" : a.role.trim();
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return "USER";
+    }
+
     private String newToken() {
         byte[] b = new byte[32];
         secureRandom.nextBytes(b);

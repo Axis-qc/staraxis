@@ -62,7 +62,16 @@ public final class JoinGameApi {
      * GET /api/join-game/available-spawns
      */
     public static Map<String, Object> handleAvailableSpawns() {
-        StarAxisGameRuntime runtime = GameSessions.getRuntime();
+        return handleAvailableSpawns(null);
+    }
+
+    /**
+     * GET /api/join-game/available-spawns?worldId=...
+     */
+    public static Map<String, Object> handleAvailableSpawns(String worldId) {
+        StarAxisGameRuntime runtime = (worldId == null || worldId.isBlank())
+                ? GameSessions.getRuntime()
+                : GameSessions.getRuntime(worldId);
         if (runtime == null) {
             return Map.of(
                     "ok", false,
@@ -98,17 +107,30 @@ public final class JoinGameApi {
      * POST /api/join-game/confirm-spawn
      */
     public static Map<String, Object> handleConfirmSpawn(ObjectMapper objectMapper, Map<String, Object> req) {
-        StarAxisGameRuntime runtime = GameSessions.getRuntime();
+        String worldId = req.get("worldId") == null ? null : String.valueOf(req.get("worldId")).trim();
+        StarAxisGameRuntime runtime = (worldId == null || worldId.isBlank())
+                ? GameSessions.getRuntime()
+                : GameSessions.getRuntime(worldId);
         if (runtime == null) {
             return Map.of(
                     "ok", false,
                     "error", "no_game_runtime");
         }
 
+        if (worldId != null && !worldId.isBlank()) {
+            GameSessions.setActiveWorld(worldId);
+        }
+
         String playerId = req.get("playerId") == null ? null : String.valueOf(req.get("playerId")).trim();
+        Object randomSpawnObj = req.get("randomSpawn");
+        boolean randomSpawn = Boolean.TRUE.equals(randomSpawnObj)
+                || (randomSpawnObj != null && "true".equalsIgnoreCase(String.valueOf(randomSpawnObj)));
+
         Object chosen = req.get("chosenSystemId");
         long chosenSystemId;
-        if (chosen instanceof Number) {
+        if (randomSpawn) {
+            chosenSystemId = -1L;
+        } else if (chosen instanceof Number) {
             chosenSystemId = ((Number) chosen).longValue();
         } else if (chosen != null) {
             try {
@@ -131,16 +153,30 @@ public final class JoinGameApi {
         }
 
         StarSystem target = null;
-        for (StarSystem sys : runtime.getWorldStateForSimOnly().astro.getSystemsView()) {
-            if (sys != null && sys.systemId == chosenSystemId) {
-                target = sys;
-                break;
+        if (randomSpawn) {
+            long bestId = Long.MAX_VALUE;
+            for (StarSystem sys : runtime.getWorldStateForSimOnly().astro.getSystemsView()) {
+                if (sys == null || !isSystemUnowned(sys)) {
+                    continue;
+                }
+                if (sys.systemId < bestId) {
+                    bestId = sys.systemId;
+                    target = sys;
+                }
+            }
+        } else {
+            for (StarSystem sys : runtime.getWorldStateForSimOnly().astro.getSystemsView()) {
+                if (sys != null && sys.systemId == chosenSystemId) {
+                    target = sys;
+                    break;
+                }
             }
         }
+
         if (target == null) {
             return Map.of(
                     "ok", false,
-                    "error", "system_not_found");
+                    "error", randomSpawn ? "no_spawn_system_available" : "system_not_found");
         }
 
         if (!isSystemUnowned(target)) {
@@ -161,33 +197,36 @@ public final class JoinGameApi {
 
         var ns = nm.getNationState(nationId);
         if (ns != null) {
-            // 名称暂用 nationId，占位：后续可接入 accounts/玩家昵称喵
+            // 新策略：初始无首都、无预设国家路线，仅记录出生星系用于后续发展喵。
             if (ns.name == null || ns.name.isBlank()) {
                 ns.name = nationId;
             }
             ns.spawnSystemEntityId = target.systemId;
-
-            // 确定性选择首都行星：选择星系内 entityId 最小的行星作为初始首都喵
-            if (!target.planets.isEmpty()) {
-                PlanetBody capital = null;
-                for (PlanetBody p : target.planets) {
-                    if (capital == null || p.entityId < capital.entityId) {
-                        capital = p;
-                    }
-                }
-                if (capital != null) {
-                    ns.capitalPlanetEntityId = capital.entityId;
-                }
-            }
+            ns.capitalPlanetEntityId = 0L;
         }
 
         // 占用：系统级 owner + 系统内天体 owner 全量落账喵
         target.assignOwnership(nationId);
 
+        if (worldId != null && !worldId.isBlank()) {
+            GameSessions.markPlayerSpawned(worldId, playerId);
+            // 更新世界内玩家角色状态为已出生，并记录 nationId 喵
+            try {
+                WorldSaveRepository repo = new WorldSaveRepository(objectMapper);
+                repo.upsertPlayer(worldId, playerId, null, "SPAWNED", nationId);
+            } catch (Exception e) {
+                return Map.of(
+                        "ok", false,
+                        "error", "player_registry_update_failed: " + e.getMessage());
+            }
+        }
+
         return Map.of(
                 "ok", true,
                 "nationId", nationId,
-                "spawnSystemId", target.systemId);
+                "spawnSystemId", target.systemId,
+                "worldId", worldId,
+                "playerState", (worldId == null || worldId.isBlank()) ? "SPAWNED" : GameSessions.getPlayerState(worldId, playerId));
     }
 
     private static boolean isSystemUnowned(StarSystem sys) {
