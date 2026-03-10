@@ -1,0 +1,170 @@
+package staraxis.game.ship;
+
+import staraxis.game.astro.StarSystem;
+import staraxis.game.entity.EntityType;
+import staraxis.game.state.WorldState;
+import staraxis.game.world.Vec2d;
+import staraxis.game.world.WorldHexLayout;
+import staraxis.game.world.hex.SectorCoord;
+
+/**
+ * ShipSpawnService（舰船生成服务）喵。
+ *
+ * 作用：
+ * - 在 game 模块集中管理舰船生成权威逻辑，确保所有状态修改在模拟层执行喵。
+ * - 提供初始舰船生成、舰船装配、舰船销毁等核心服务喵。
+ *
+ * 规则：
+ * - 所有方法必须接收 WorldState 作为第一个参数，确保在权威上下文中执行喵。
+ * - 舰船属性优先从配置加载，硬编码仅为兜底喵。
+ * - 实体 ID 必须通过 WorldState.generateEntityId() 生成，确保全局唯一性喵。
+ */
+public final class ShipSpawnService {
+
+    private ShipSpawnService() {
+    }
+
+    /**
+     * 为指定国家在出生星系生成初始殖民舰喵。
+     *
+     * 策略：
+     * - 使用星系中心坐标（StarSystem.centerWorldGU）并偏移 500 GU 避免与星体重叠喵。
+     * - 舰船标记为 INITIAL_SPAWN_SHIP 供前端特殊处理喵。
+     * - 硬编码初始属性：耐久 1.0、能源 100、燃料 100喵。
+     * - 生成后自动注册到 WorldState 并分配国家归属喵。
+     *
+     * @param worldState 权威世界状态（必须非空）
+     * @param nationId   所属国家ID（必须非空）
+     * @param spawnSystem 出生星系（必须非空）
+     * @return 生成的舰船实体ID，失败时返回 -1
+     */
+    public static long spawnInitialShip(WorldState worldState, String nationId, StarSystem spawnSystem) {
+        if (worldState == null) {
+            throw new IllegalArgumentException("worldState_required");
+        }
+        if (nationId == null || nationId.isBlank()) {
+            throw new IllegalArgumentException("nationId_required");
+        }
+        if (spawnSystem == null) {
+            throw new IllegalArgumentException("spawnSystem_required");
+        }
+
+        // 1. 生成实体ID（全局唯一）喵
+        long entityId = worldState.generateEntityId();
+        if (entityId <= 0) {
+            return -1;
+        }
+
+        // 2. 计算出生位置：星系中心偏移 500 GU（避免与星体重叠）喵
+        Vec2d systemCenter = spawnSystem.centerWorldGU;
+        if (systemCenter == null) {
+            // 若星系中心未定义，则使用星区中心喵
+            SectorCoord sectorCoord = spawnSystem.sectorCoord;
+            if (sectorCoord == null) {
+                return -1;
+            }
+            systemCenter = WorldHexLayout.sectorCenterWorld2D_GU(sectorCoord);
+        }
+
+        // 固定偏移向量（500 GU 在 X 轴正方向）喵
+        Vec2d offset = new Vec2d(500.0, 0.0);
+        Vec2d shipPos = new Vec2d(systemCenter.x() + offset.x(), systemCenter.y() + offset.y());
+
+        // 3. 计算星区坐标喵
+        SectorCoord sectorCoord = WorldHexLayout.worldToSectorCoord(shipPos);
+
+        // 4. 创建舰船实体喵
+        ShipBody ship = new ShipBody();
+        ship.entityId = entityId;
+        ship.entityType = EntityType.SHIP;
+        ship.designId = null; // 暂不依赖设计文件喵
+        ship.ownerNationId = nationId;
+        ship.posWorldGU = shipPos;
+        ship.velWorldGU = new Vec2d(0, 0);
+        ship.sectorCoord = sectorCoord;
+        ship.systemId = spawnSystem.systemId; // 所属星系ID喵
+
+        // 硬编码初始属性喵
+        ship.hpHull = 1.0;      // 满耐久喵
+        ship.power = 100.0;     // 初始能源喵
+        ship.fuel = 100.0;      // 初始燃料喵
+        ship.customFlags.add("INITIAL_SPAWN_SHIP"); // 标记为初始出生舰船喵
+
+        // 5. 注册到权威世界状态喵
+        worldState.registerEntity(ship);
+
+        // 6. 通过资产管理器分配归属（确保国家资产列表更新）喵
+        worldState.nationAssetManager.assignEntityToNation(entityId, nationId);
+
+        return entityId;
+    }
+
+    /**
+     * 在指定位置生成舰船（通用方法）喵。
+     *
+     * 策略：
+     * - 使用提供的世界坐标和星区坐标（若未提供则自动计算）喵。
+     * - 可指定所属星系ID（systemId），0 表示不在任何星系内喵。
+     * - 可指定自定义标记集合（customFlags），为空时仅包含基本标记喵。
+     * - 硬编码基础属性：耐久 1.0、能源 100、燃料 100喵。
+     *
+     * @param worldState 权威世界状态（必须非空）
+     * @param nationId   所属国家ID（必须非空）
+     * @param position   世界坐标（GU，必须非空）
+     * @param sectorCoord 星区坐标（可为空，自动计算）
+     * @param systemId   所属星系ID（0 表示无）
+     * @param customFlags 自定义标记集合（可为空）
+     * @return 生成的舰船实体ID，失败时返回 -1
+     */
+    public static long spawnShipAtPosition(WorldState worldState, String nationId, Vec2d position,
+                                          SectorCoord sectorCoord, long systemId, java.util.Set<String> customFlags) {
+        if (worldState == null) {
+            throw new IllegalArgumentException("worldState_required");
+        }
+        if (nationId == null || nationId.isBlank()) {
+            throw new IllegalArgumentException("nationId_required");
+        }
+        if (position == null) {
+            throw new IllegalArgumentException("position_required");
+        }
+
+        // 1. 生成实体ID（全局唯一）喵
+        long entityId = worldState.generateEntityId();
+        if (entityId <= 0) {
+            return -1;
+        }
+
+        // 2. 计算星区坐标（若未提供）喵
+        SectorCoord finalSectorCoord = sectorCoord;
+        if (finalSectorCoord == null) {
+            finalSectorCoord = WorldHexLayout.worldToSectorCoord(position);
+        }
+
+        // 3. 创建舰船实体喵
+        ShipBody ship = new ShipBody();
+        ship.entityId = entityId;
+        ship.entityType = EntityType.SHIP;
+        ship.designId = null; // 暂不依赖设计文件喵
+        ship.ownerNationId = nationId;
+        ship.posWorldGU = position;
+        ship.velWorldGU = new Vec2d(0, 0);
+        ship.sectorCoord = finalSectorCoord;
+        ship.systemId = systemId;
+
+        // 硬编码基础属性喵
+        ship.hpHull = 1.0;      // 满耐久喵
+        ship.power = 100.0;     // 初始能源喵
+        ship.fuel = 100.0;      // 初始燃料喵
+        if (customFlags != null) {
+            ship.customFlags.addAll(customFlags);
+        }
+
+        // 4. 注册到权威世界状态喵
+        worldState.registerEntity(ship);
+
+        // 5. 通过资产管理器分配归属喵
+        worldState.nationAssetManager.assignEntityToNation(entityId, nationId);
+
+        return entityId;
+    }
+}

@@ -7,6 +7,8 @@ import staraxis.game.StarAxisGameRuntime;
 import staraxis.game.astro.PlanetBody;
 import staraxis.game.astro.StarBody;
 import staraxis.game.astro.StarSystem;
+import staraxis.game.ship.ShipSpawnService;
+import staraxis.webnet.core.WebNetLog;
 import staraxis.webnet.game.GameSessions;
 
 import java.nio.charset.StandardCharsets;
@@ -207,6 +209,16 @@ public final class JoinGameApi {
 
         // 占用：系统级 owner + 系统内天体 owner 全量落账喵
         target.assignOwnership(nationId);
+
+        // 生成初始殖民舰喵
+        long shipEntityId = ShipSpawnService.spawnInitialShip(ws, nationId, target);
+        if (shipEntityId > 0) {
+            // 日志记录（可选）喵
+            staraxis.webnet.core.WebNetLog.log("Spawned initial colony ship entityId=" + shipEntityId +
+                    " for nation " + nationId + " in system " + target.systemId + " 喵");
+        } else {
+            staraxis.webnet.core.WebNetLog.log("WARNING: Failed to spawn initial colony ship for nation " + nationId + " 喵");
+        }
 
         if (worldId != null && !worldId.isBlank()) {
             GameSessions.markPlayerSpawned(worldId, playerId);

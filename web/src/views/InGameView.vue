@@ -463,8 +463,8 @@ onUnmounted(() => {
       <div class="spawn-panel">
         <h3>选择出生点</h3>
         <div class="row">
-          <button :disabled="spawnLoading" @click="chooseRandomSpawnInGame">随机位置</button>
-          <button :disabled="spawnLoading" @click="confirmSpawnInGame">确认出生</button>
+          <button class="sa-btn" :disabled="spawnLoading" @click="chooseRandomSpawnInGame">随机位置</button>
+          <button class="sa-btn primary" :disabled="spawnLoading" @click="confirmSpawnInGame">确认出生</button>
         </div>
         <div class="list">
           <label v-for="s in spawnSystems" :key="s.systemId" class="spawn-item">
@@ -660,9 +660,12 @@ onUnmounted(() => {
   max-height: 80vh;
   overflow: auto;
   border: 1px solid color-mix(in srgb, var(--glow-color) 25%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--background-color) 78%, rgba(0, 0, 0, 0.3));
-  padding: 14px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--panel-bg) 65%, rgba(0, 0, 0, 0.35));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 0 32px color-mix(in srgb, var(--glow-color) 15%, transparent);
+  padding: 24px;
 }
 
 .spawn-panel .row {
@@ -679,15 +682,34 @@ onUnmounted(() => {
 .spawn-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  border: 1px solid color-mix(in srgb, var(--glow-color) 22%, transparent);
-  border-radius: 8px;
-  padding: 8px;
+  gap: 12px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 40%, transparent);
+  border-radius: 10px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--panel-bg) 30%, rgba(0, 0, 0, 0.2));
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.spawn-item:hover {
+  border-color: var(--glow-color);
+  background: color-mix(in srgb, var(--panel-bg) 45%, rgba(0, 0, 0, 0.3));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--glow-color) 20%, transparent);
+  transform: translateY(-2px);
+}
+
+.spawn-item input[type="radio"] {
+  accent-color: var(--glow-color);
 }
 
 .spawn-error {
-  color: #ff6b6b;
-  margin-top: 8px;
+  color: var(--danger-color);
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--danger-color) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger-color) 30%, transparent);
+  font-size: 0.9rem;
 }
 
 .kv {

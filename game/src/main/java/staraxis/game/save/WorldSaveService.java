@@ -2,6 +2,9 @@ package staraxis.game.save;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import staraxis.game.StarAxisGameRuntime;
+import staraxis.game.entity.Entity;
+import staraxis.game.entity.EntityType;
+import staraxis.game.ship.ShipBody;
 import staraxis.game.state.RealTimeWorldState;
 import staraxis.game.state.WorldState;
 
@@ -170,6 +173,56 @@ public final class WorldSaveService {
             nations.add(n);
         }
         root.put("nations", nations);
+
+        // 动态实体层快照（SHIP、STATION 等）喵。
+        List<Map<String, Object>> entities = new ArrayList<>();
+        for (Entity entity : ws.entitiesById.values()) {
+            if (entity == null || entity.entityType == null) {
+                continue;
+            }
+            // 排除天文实体（由天文数据单独管理）喵
+            if (entity.entityType == EntityType.STAR ||
+                entity.entityType == EntityType.PLANET ||
+                entity.entityType == EntityType.SYSTEM_BARYCENTER) {
+                continue;
+            }
+
+            Map<String, Object> e = new LinkedHashMap<>();
+            e.put("entityId", entity.entityId);
+            e.put("entityType", entity.entityType.name());
+            e.put("systemId", entity.systemId);
+            e.put("parentEntityId", entity.parentEntityId);
+            if (entity.sectorCoord != null) {
+                e.put("sectorQ", entity.sectorCoord.q());
+                e.put("sectorR", entity.sectorCoord.r());
+            }
+            if (entity.posWorldGU != null) {
+                e.put("posX", entity.posWorldGU.x());
+                e.put("posY", entity.posWorldGU.y());
+            }
+            if (entity.velWorldGU != null) {
+                e.put("velX", entity.velWorldGU.x());
+                e.put("velY", entity.velWorldGU.y());
+            }
+            e.put("ownerNationId", entity.ownerNationId);
+
+            // 舰船特有字段喵
+            if (entity instanceof ShipBody ship) {
+                e.put("designId", ship.designId);
+                e.put("hpHull", ship.hpHull);
+                e.put("power", ship.power);
+                e.put("fuel", ship.fuel);
+                if (ship.customFlags != null && !ship.customFlags.isEmpty()) {
+                    e.put("customFlags", new ArrayList<>(ship.customFlags));
+                }
+            }
+
+            entities.add(e);
+        }
+        root.put("entities", entities);
+
+        // 实体 ID 生成器状态喵（确保存档/加载一致性）喵
+        root.put("nextEntityId", ws.getNextEntityId());
 
         return root;
     }

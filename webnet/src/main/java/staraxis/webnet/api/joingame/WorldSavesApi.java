@@ -2,7 +2,12 @@ package staraxis.webnet.api.joingame;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import staraxis.game.StarAxisGameRuntime;
+import staraxis.game.entity.Entity;
+import staraxis.game.entity.EntityType;
+import staraxis.game.ship.ShipBody;
+import staraxis.game.world.Vec2d;
 import staraxis.game.world.WorldGenConfig;
+import staraxis.game.world.hex.SectorCoord;
 import staraxis.webnet.game.GameSessions;
 
 import java.util.ArrayList;
@@ -404,6 +409,15 @@ public final class WorldSavesApi {
                 if (nationsObj instanceof List<?> list) {
                     applyNationState(runtime, list);
                 }
+                Object entitiesObj = state.get("entities");
+                if (entitiesObj instanceof List<?> list) {
+                    applyEntitiesState(runtime, list);
+                }
+                // 恢复实体 ID 生成器状态喵
+                Object nextEntityIdObj = state.get("nextEntityId");
+                if (nextEntityIdObj instanceof Number n) {
+                    runtime.getWorldStateForSimOnly().setNextEntityId(n.longValue());
+                }
             }
 
             String worldName = meta.get("worldName") == null ? worldId : String.valueOf(meta.get("worldName"));
@@ -486,6 +500,97 @@ public final class WorldSavesApi {
                     }
                     ws.nationManager.assignPlayerToNation(String.valueOf(pid), nationId);
                 }
+            }
+        }
+    }
+
+    /**
+     * 恢复动态实体状态（SHIP、STATION 等）喵。
+     */
+    private static void applyEntitiesState(StarAxisGameRuntime runtime, List<?> entitiesList) {
+        var ws = runtime.getWorldStateForSimOnly();
+        for (Object item : entitiesList) {
+            if (!(item instanceof Map<?, ?> e)) {
+                continue;
+            }
+            Object entityIdObj = e.get("entityId");
+            if (entityIdObj == null) {
+                continue;
+            }
+            long entityId = ((Number) entityIdObj).longValue();
+
+            // 检查实体是否已存在（例如天文实体），避免重复注册喵
+            if (ws.entitiesById.containsKey(entityId)) {
+                continue;
+            }
+
+            Object entityTypeObj = e.get("entityType");
+            EntityType entityType = null;
+            if (entityTypeObj instanceof String typeStr) {
+                try {
+                    entityType = EntityType.valueOf(typeStr);
+                } catch (IllegalArgumentException ignored) {
+                }
+            }
+            if (entityType == null) {
+                continue;
+            }
+
+            // 仅恢复动态实体（SHIP、STATION）喵
+            if (entityType != EntityType.SHIP && entityType != EntityType.STATION) {
+                continue;
+            }
+
+            // 创建实体实例喵
+            Entity entity = null;
+            if (entityType == EntityType.SHIP) {
+                ShipBody ship = new ShipBody();
+                ship.entityId = entityId;
+                ship.entityType = entityType;
+                ship.designId = e.get("designId") == null ? null : String.valueOf(e.get("designId"));
+                ship.hpHull = e.get("hpHull") instanceof Number n ? n.doubleValue() : 1.0;
+                ship.power = e.get("power") instanceof Number n ? n.doubleValue() : 100.0;
+                ship.fuel = e.get("fuel") instanceof Number n ? n.doubleValue() : 100.0;
+                Object flagsObj = e.get("customFlags");
+                if (flagsObj instanceof List<?> flagList) {
+                    for (Object flag : flagList) {
+                        if (flag != null) {
+                            ship.customFlags.add(String.valueOf(flag));
+                        }
+                    }
+                }
+                entity = ship;
+            } else {
+                // 未来支持 STATION 类型喵
+                continue;
+            }
+
+            // 设置通用字段喵
+            entity.systemId = e.get("systemId") instanceof Number n ? n.longValue() : 0L;
+            entity.parentEntityId = e.get("parentEntityId") instanceof Number n ? n.longValue() : 0L;
+            Object sectorQ = e.get("sectorQ");
+            Object sectorR = e.get("sectorR");
+            if (sectorQ instanceof Number q && sectorR instanceof Number r) {
+                entity.sectorCoord = new SectorCoord(q.intValue(), r.intValue());
+            }
+            Object posX = e.get("posX");
+            Object posY = e.get("posY");
+            if (posX instanceof Number x && posY instanceof Number y) {
+                entity.posWorldGU = new Vec2d(x.doubleValue(), y.doubleValue());
+            }
+            Object velX = e.get("velX");
+            Object velY = e.get("velY");
+            if (velX instanceof Number vx && velY instanceof Number vy) {
+                entity.velWorldGU = new Vec2d(vx.doubleValue(), vy.doubleValue());
+            }
+            entity.ownerNationId = e.get("ownerNationId") == null ? null : String.valueOf(e.get("ownerNationId"));
+
+            // 注册到世界状态喵
+            ws.registerEntity(entity);
+
+            // 分配国家资产归属喵
+            if (entity.ownerNationId != null && !entity.ownerNationId.isBlank()) {
+                ws.nationAssetManager.assignEntityToNation(entityId, entity.ownerNationId);
             }
         }
     }

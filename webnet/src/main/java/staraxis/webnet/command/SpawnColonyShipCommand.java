@@ -47,8 +47,6 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class SpawnColonyShipCommand implements WebCommandHandler {
 
-    private static final AtomicLong nextEntityId = new AtomicLong(1000000L); // 从大数字开始避免与星体ID冲突喵
-
     @Override
     public String type() {
         return "spawnColonyShip";
@@ -103,38 +101,17 @@ public class SpawnColonyShipCommand implements WebCommandHandler {
                 return "{\"type\":\"command_response\",\"ok\":false,\"error\":\"position_required\"}";
             }
 
-            // 创建殖民舰实体喵（使用硬编码基础属性，暂不依赖设计文件）喵
-            ShipBody ship = new ShipBody();
-            ship.entityId = nextEntityId.incrementAndGet();
-            ship.entityType = EntityType.SHIP;
-            ship.designId = null; // 暂不依赖设计文件喵
-            ship.ownerNationId = nationId;
-            ship.posWorldGU = worldPos;
-            ship.velWorldGU = new Vec2d(0, 0);
+            // 使用权威舰船生成服务创建殖民舰喵
+            var worldState = runtime.getWorldStateForSimOnly();
+            java.util.Set<String> customFlags = new java.util.LinkedHashSet<>();
+            customFlags.add("INITIAL_SPAWN_SHIP");
+            long shipEntityId = staraxis.game.ship.ShipSpawnService.spawnShipAtPosition(
+                    worldState, nationId, worldPos, sectorCoord, 0L, customFlags);
 
-            // 设置硬编码的基础属性喵
-            ship.hpHull = 1.0;      // 满耐久喵
-            ship.power = 100.0;     // 初始能源喵
-            ship.fuel = 100.0;      // 初始燃料喵
-            ship.customFlags.add("INITIAL_SPAWN_SHIP"); // 固定 flag：初始出生舰船喵
-            // components 字段已初始化为空列表，无需修改喵
-
-            // 设置星区坐标（已计算好）喵
-            ship.sectorCoord = sectorCoord;
-
-            // 设置系统ID（暂时为0，表示不在任何恒星系内）喵
-            ship.systemId = 0L;
-
-            // 注册到WorldState喵
-            runtime.getWorldStateForSimOnly().registerEntity(ship);
-
-            // 通过资产管理器分配归属喵
-            runtime.getWorldStateForSimOnly().nationAssetManager.assignEntityToNation(ship.entityId, nationId);
-
-            staraxis.webnet.core.WebNetLog.log("Spawned colony ship entityId=" + ship.entityId +
+            staraxis.webnet.core.WebNetLog.log("Spawned colony ship entityId=" + shipEntityId +
                     " at (" + worldPos.x() + "," + worldPos.y() + ") in sector [" + sectorCoord.q() + "," + sectorCoord.r() + "] for nation " + nationId + " 喵");
 
-            return "{\"type\":\"command_response\",\"ok\":true,\"command\":\"spawnColonyShip\",\"shipEntityId\":" + ship.entityId + "}";
+            return "{\"type\":\"command_response\",\"ok\":true,\"command\":\"spawnColonyShip\",\"shipEntityId\":" + shipEntityId + "}";
         } catch (Exception e) {
             staraxis.webnet.core.WebNetLog.log("SpawnColonyShipCommand failed: " + String.valueOf(e));
             return "{\"type\":\"command_response\",\"ok\":false,\"error\":\"command_failed\"}";

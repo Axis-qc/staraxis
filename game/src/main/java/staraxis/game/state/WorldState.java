@@ -78,6 +78,18 @@ public class WorldState {
      */
     public staraxis.game.intel.IntelSystem intelSystem;
 
+    /**
+     * 全局实体 ID 生成器（nextEntityId）喵。
+     *
+     * 作用：
+     * - 确保所有动态实体（SHIP、STATION 等）拥有全局唯一且递增的 ID喵。
+     * - 起始值设为 1000000L，避免与天文实体（STAR、PLANET）ID 冲突喵。
+     *
+     * 存档一致性：
+     * - 存档时必须序列化此字段，加载时恢复，保证重启后 ID 不重复喵。
+     */
+    private long nextEntityId = 1000000L;
+
     public WorldState(SimulationTime time, WorldMap worldMap, AstroData astro) {
         this.time = time;
         this.worldMap = worldMap;
@@ -142,6 +154,52 @@ public class WorldState {
         // 实体移动后，如果该实体属于某个国家，则标记情报系统为脏以重算探测范围喵
         if (intelSystem != null && e.ownerNationId != null) {
             intelSystem.markDirty(e.ownerNationId);
+        }
+    }
+
+    /**
+     * 生成全局唯一实体 ID（generateEntityId）喵。
+     *
+     * 作用：
+     * - 线程安全递增 nextEntityId，确保多线程环境下 ID 不重复喵。
+     * - 返回递增后的 ID 值，用于新实体创建喵。
+     *
+     * 使用场景：
+     * - 舰船生成、空间站生成等动态实体创建时调用喵。
+     * - 禁止直接修改 nextEntityId 字段，必须通过此方法获取喵。
+     *
+     * @return 下一个可用的实体 ID（>0）
+     */
+    public synchronized long generateEntityId() {
+        return nextEntityId++;
+    }
+
+    /**
+     * 获取下一个实体 ID（getNextEntityId）喵。
+     *
+     * 作用：
+     * - 用于存档序列化，保存当前 ID 生成器状态喵。
+     * - 仅限存档服务使用，业务逻辑请使用 generateEntityId() 喵。
+     *
+     * @return 下一个可用的实体 ID（未递增）
+     */
+    public synchronized long getNextEntityId() {
+        return nextEntityId;
+    }
+
+    /**
+     * 设置下一个实体 ID（setNextEntityId）喵。
+     *
+     * 作用：
+     * - 用于存档反序列化，恢复 ID 生成器状态喵。
+     * - 仅限存档加载时调用，确保新生成的实体 ID 不与现有实体冲突喵。
+     * - 若传入值小于当前 nextEntityId，则忽略（安全保护）喵。
+     *
+     * @param value 要设置的下一实体 ID（必须 >0）
+     */
+    public synchronized void setNextEntityId(long value) {
+        if (value > nextEntityId) {
+            nextEntityId = value;
         }
     }
 }
