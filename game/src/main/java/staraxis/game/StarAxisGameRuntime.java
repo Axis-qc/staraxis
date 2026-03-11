@@ -27,6 +27,8 @@ import staraxis.game.command.SetSystemTimeScaleCommand;
 import staraxis.game.command.SetSystemTimeScaleHandler;
 import staraxis.game.command.ColonizePlanetCommand;
 import staraxis.game.command.ColonizePlanetHandler;
+import staraxis.game.command.MoveShipCommand;
+import staraxis.game.command.MoveShipHandler;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -58,10 +60,20 @@ public class StarAxisGameRuntime implements GameRuntime {
         commandBus.register(SetPlayerTimeStepCommand.class, new SetPlayerTimeStepHandler());
         commandBus.register(SetSystemTimeScaleCommand.class, new SetSystemTimeScaleHandler());
         commandBus.register(ColonizePlanetCommand.class, new ColonizePlanetHandler());
+        commandBus.register(MoveShipCommand.class, new MoveShipHandler());
     }
 
     public CommandBus getCommandBusForSimOnly() {
         return commandBus;
+    }
+
+    /**
+     * 提交命令到命令总线喵。
+     *
+     * @param command 要执行的命令
+     */
+    public void submitCommand(staraxis.game.command.Command command) {
+        commandBus.submit(command);
     }
 
     public static StarAxisGameRuntime newGame(WorldGenConfig cfg) {

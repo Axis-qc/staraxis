@@ -57,6 +57,9 @@ type OverviewUiModel = {
     tickCostText: Ref<string>
     sectorCountText: Ref<string>
     ownedEntities: Ref<EntitySnapshot[]>
+    ownedPlanets: Ref<EntitySnapshot[]>
+    ownedShips: Ref<EntitySnapshot[]>
+    ownedStations: Ref<EntitySnapshot[]>
 }
 
 export type InGameDataHub = {
@@ -244,6 +247,21 @@ export function useInGameDataHub() {
         return entities.value.filter(e => e.ownerNationId === auth.selectedNationId)
     })
 
+    // 资产分类：行星喵
+    const ownedPlanets = computed(() => {
+        return ownedEntities.value.filter(e => e.entityType === 'PLANET')
+    })
+
+    // 资产分类：舰队（舰船）喵
+    const ownedShips = computed(() => {
+        return ownedEntities.value.filter(e => e.entityType === 'SHIP')
+    })
+
+    // 资产分类：太空设施（空间站等）喵
+    const ownedStations = computed(() => {
+        return ownedEntities.value.filter(e => e.entityType === 'STATION')
+    })
+
     const debugZoomText = computed(() => {
         void debugUiTick.value
         const r = renderer.value
@@ -278,6 +296,9 @@ export function useInGameDataHub() {
             tickCostText: overviewTickCostText,
             sectorCountText: overviewSectorCountText,
             ownedEntities: ownedEntities,
+            ownedPlanets: ownedPlanets,
+            ownedShips: ownedShips,
+            ownedStations: ownedStations,
         },
         debug: {
             zoomText: debugZoomText,

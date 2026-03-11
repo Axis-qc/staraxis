@@ -150,13 +150,20 @@ public final class SnapshotMessageFactory {
         }
 
         // 2.3 私有实体处理：按情报可见星区分片处理喵
-        if (filterSectors != null && !filterSectors.isEmpty() && nationId != null && !nationId.isBlank()) {
-            // 获取情报等级映射喵
-            Map<String, Integer> sectorIntelLevels = intelSystem != null ?
+        // 修改：支持nationId为null时的降级处理（包含所有本国实体）喵
+        // 重要：即使filterSectors为空，只要有nationId，也要处理本国实体喵
+        boolean hasNationId = nationId != null && !nationId.isBlank();
+        if (snapshotsBySector != null && !snapshotsBySector.isEmpty()) {
+            // 获取情报等级映射喵（nationId可能为null）
+            Map<String, Integer> sectorIntelLevels = (intelSystem != null && hasNationId) ?
                     intelSystem.getNationSectorIntelLevelsView(nationId) : Collections.emptyMap();
 
-            for (SectorCoord visibleSector : filterSectors) {
-                List<EntitySnapshot> sectorSnapshots = snapshotsBySector.get(visibleSector);
+            // 确定要遍历的星区：如果filterSectors非空则用它，否则遍历所有星区喵
+            Set<SectorCoord> sectorsToProcess = (filterSectors != null && !filterSectors.isEmpty()) ?
+                    filterSectors : snapshotsBySector.keySet();
+
+            for (SectorCoord sector : sectorsToProcess) {
+                List<EntitySnapshot> sectorSnapshots = snapshotsBySector.get(sector);
                 if (sectorSnapshots == null || sectorSnapshots.isEmpty()) {
                     continue;
                 }
@@ -173,9 +180,23 @@ public final class SnapshotMessageFactory {
                         continue;
                     }
 
-                    // 本国实体强制通过，否则走视野计算喵
-                    boolean isOwnedBySelf = nationId.equals(s.ownerNationId);
+                    // 本国实体强制通过逻辑喵
+                    boolean isOwnedBySelf = false;
+                    if (hasNationId) {
+                        // 正常情况：比较ownerNationId喵
+                        isOwnedBySelf = nationId.equals(s.ownerNationId);
+                    } else {
+                        // nationId为null时的降级方案：如果实体有ownerNationId，则视为"本国"喵
+                        // 这样至少能看到自己的舰船，直到WebSocket正确建立nationId映射
+                        isOwnedBySelf = s.ownerNationId != null && !s.ownerNationId.isBlank();
+                    }
+
                     if (!isOwnedBySelf) {
+                        // 非本国实体需要视野计算喵
+                        if (nationId == null || nationId.isBlank()) {
+                            // nationId为null时，跳过非本国实体喵
+                            continue;
+                        }
                         String vis = runtime.getWorldStateForSimOnly().visibilitySystem.computeEntityVisibility(e,
                                 nationId);
                         if (!"FULL".equals(vis)) {
@@ -184,7 +205,7 @@ public final class SnapshotMessageFactory {
                     }
 
                     // 情报等级过滤与分层聚合喵
-                    if (intelSystem != null) {
+                    if (intelSystem != null && nationId != null && !nationId.isBlank()) {
                         int requiredLevel = intelSystem.getRequiredIntelLevel(s.entityType);
                         String sectorKey = "q:" + s.sectorCoord.q() + ",r:" + s.sectorCoord.r();
                         int detectorLevel = sectorIntelLevels.getOrDefault(sectorKey, -1);
@@ -193,6 +214,9 @@ public final class SnapshotMessageFactory {
                         if (detectorLevel >= requiredLevel) {
                             privateEntitiesByIntelLevel.computeIfAbsent(requiredLevel, k -> new ArrayList<>()).add(s);
                         }
+                    } else {
+                        // nationId为null时，直接加入默认层级喵
+                        privateEntitiesByIntelLevel.computeIfAbsent(0, k -> new ArrayList<>()).add(s);
                     }
                 }
             }

@@ -52,8 +52,10 @@ import InGameTechPanel from '../features/inGame/panels/InGameTechPanel.vue'
 import InGameMilitaryPanel from '../features/inGame/panels/InGameMilitaryPanel.vue'
 import InGameDomesticPanel from '../features/inGame/panels/InGameDomesticPanel.vue'
 import InGameDiplomacyPanel from '../features/inGame/panels/InGameDiplomacyPanel.vue'
-import { connectSnapshotWs, type SnapshotWsClient } from '../net/snapshotWs'
+import { connectSnapshotWs, type SnapshotWsClient, type EntitySnapshot } from '../net/snapshotWs'
 import { createWorldRenderManager, type WorldRenderer } from '../rendering/worldRenderManager'
+import ShipPanel from '../features/inGame/components/ShipPanel.vue'
+import { sendMoveShipCommand } from '../net/shipCommandsApi'
 import { useInGameDataHub } from '../features/inGame/composables/useInGameDataHub'
 import { useInGameInputController } from '../features/inGame/input/useInGameInputController'
 import { useInGameUiInputBindings } from '../features/inGame/input/useInGameUiInputBindings'
@@ -130,17 +132,21 @@ const {
   onDebugWindowHeaderPointerMove, onDebugWindowHeaderPointerUp
 } = useInGameDebugWindow(hub)
 
+// 选中的舰船面板状态喵
+const selectedShipPanelOpen = ref(false)
+const selectedShipEntity = ref<EntitySnapshot | null>(null)
+
 // RTS 选择系统喵
 const selection = useRtsSelection({
   getEntities: () => {
     const r = hub.getRenderer()
     if (!r) return []
     const entities = hub.entities.value
-    const out: Array<{ id: number; type: 'STAR' | 'PLANET'; worldPosGU: { x: number; y: number } }> = []
+    const out: Array<{ id: number; type: 'STAR' | 'PLANET' | 'SHIP'; worldPosGU: { x: number; y: number } }> = []
     for (const e of entities) {
       const p = r.getEntityWorldPosGU(e.entityId)
       if (!p) continue
-      if (e.entityType === 'STAR' || e.entityType === 'PLANET') {
+      if (e.entityType === 'STAR' || e.entityType === 'PLANET' || e.entityType === 'SHIP') {
         out.push({ id: e.entityId, type: e.entityType, worldPosGU: p })
       }
     }
@@ -156,6 +162,20 @@ const selection = useRtsSelection({
     const sx = cx + (world.x - r.cameraWorldPosGU.x) / r.zoom.value
     const sy = cy - (world.y - r.cameraWorldPosGU.y) / r.zoom.value
     return { x: sx, y: sy }
+  },
+  onSelectionChange: (selectedIds: number[]) => {
+    // 如果选中的是舰船，显示舰船面板喵
+    if (selectedIds.length === 1) {
+      const entity = hub.entities.value.find(e => e.entityId === selectedIds[0])
+      if (entity && entity.entityType === 'SHIP') {
+        selectedShipEntity.value = entity
+        selectedShipPanelOpen.value = true
+        return
+      }
+    }
+    // 否则关闭舰船面板
+    selectedShipPanelOpen.value = false
+    selectedShipEntity.value = null
   },
 })
 
@@ -198,9 +218,41 @@ watch(
 const rightClickCommand = useRtsRightClickCommand({
   getRenderer: () => hub.getRenderer(),
   getSelectedIds: () => selection.selectedIds.value,
+  getSelectedEntities: () => {
+    const ids = selection.selectedIds.value
+    return hub.entities.value.filter(e => ids.includes(e.entityId))
+  },
   onCommandIntent: (intent) => {
-    void intent
-    showDevelopingHintAtCenter()
+    console.log('[Command Intent]', intent)
+  },
+  sendCommand: async (intent, entities) => {
+    if (intent.type !== 'Move') return
+
+    const worldId = worldSession.selectedWorldId
+    const nationId = auth.selectedNationId
+    if (!worldId || !nationId) return
+
+    // 只发送移动命令给舰船喵
+    for (const entity of entities) {
+      if (entity.entityType !== 'SHIP') continue
+
+      console.log(`[Ship Command] Moving ship ${entity.entityId} to (${intent.targetWorldGU.x.toFixed(0)}, ${intent.targetWorldGU.y.toFixed(0)})`)
+
+      // 发送移动命令到后端喵
+      const result = await sendMoveShipCommand({
+        worldId,
+        nationId,
+        shipEntityId: entity.entityId,
+        targetX: intent.targetWorldGU.x,
+        targetY: intent.targetWorldGU.y,
+      })
+
+      if (!result.ok) {
+        console.error('[Ship Command] Failed:', result.error)
+      } else {
+        console.log('[Ship Command] Success!')
+      }
+    }
   },
 })
 
@@ -353,11 +405,20 @@ onMounted(async () => {
         const planets = entities.filter(e => e.entityType === 'PLANET')
         const planetsWithDetails = planets.filter(p => p.details !== null)
 
+        // 统计私有实体中的舰船喵
+        const privateTiers = s.realTimeWorldState?.privateEntitiesByIntelLevel ?? {}
+        const privateEntities = Object.values(privateTiers).flatMap(arr => arr ?? [])
+        const ships = privateEntities.filter(e => e.entityType === 'SHIP')
+        const shipsWithDetails = ships.filter(s => s.details !== null)
+
         console.log(
-          `[Snapshot Debug] first=${isFirstSnapshotLog} ok=${ok} sectors=${sectorCentersCount} entities=${entitiesCount} planets=${planets.length}(withDetails:${planetsWithDetails.length}) 喵`,
+          `[Snapshot Debug] first=${isFirstSnapshotLog} ok=${ok} sectors=${sectorCentersCount} entities=${entitiesCount} planets=${planets.length}(withDetails:${planetsWithDetails.length}) ships=${ships.length}(withDetails:${shipsWithDetails.length}) 喵`,
         )
         if (planets.length > 0 && planetsWithDetails.length === 0) {
           console.error('[Snapshot Debug] Warning: Planets exist but all details are NULL! 喵')
+        }
+        if (ships.length > 0) {
+          console.log('[Snapshot Debug] Ships found:', ships.map(s => ({ id: s.entityId, owner: s.ownerNationId, pos: s.posWorldGU })))
         }
         isFirstSnapshotLog = false
         lastSnapshotLogTime = now
@@ -373,8 +434,13 @@ onMounted(async () => {
         const nationId = auth.selectedNationId
 
         if (r && nationId) {
+          // 合并公开和私有实体来查找初始舰船喵
+          const privateTiers = s.realTimeWorldState?.privateEntitiesByIntelLevel ?? {}
+          const privateEntities = Object.values(privateTiers).flatMap(arr => arr ?? [])
+          const allEntities = [...entities, ...privateEntities]
+
           // 新策略：优先聚焦携带固定 flag 的初始出生舰船喵。
-          const initialShip = entities.find((e) => {
+          const initialShip = allEntities.find((e) => {
             if (e.entityType !== 'SHIP') return false
             const d: any = e.details
             const flags: string[] = Array.isArray(d?.customFlags) ? d.customFlags : []
@@ -531,15 +597,38 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <InGameOverviewPanel :day-text="hub.overview.dayText.value" :tick-cost-text="hub.overview.tickCostText.value"
-      :sector-count-text="hub.overview.sectorCountText.value" :owned-entities="hub.overview.ownedEntities.value" @focus="({ entityId }: { entityId: number }) => {
+    <InGameOverviewPanel
+      :day-text="hub.overview.dayText.value"
+      :tick-cost-text="hub.overview.tickCostText.value"
+      :sector-count-text="hub.overview.sectorCountText.value"
+      :owned-planets="hub.overview.ownedPlanets.value"
+      :owned-ships="hub.overview.ownedShips.value"
+      :owned-stations="hub.overview.ownedStations.value"
+      @focus-entity="(entityId: number) => {
         const r = hub.getRenderer()
         if (!r) return
         const p = r.getEntityWorldPosGU(entityId)
         if (!p) return
         r.cameraWorldPosGU.set(p.x, p.y)
         r.applyCameraTransform()
-      }" />
+      }"
+    />
+
+    <!-- 舰船信息面板喵 -->
+    <ShipPanel
+      :ship="selectedShipEntity"
+      :is-open="selectedShipPanelOpen"
+      @close="selectedShipPanelOpen = false"
+      @focus="() => {
+        if (!selectedShipEntity) return
+        const r = hub.getRenderer()
+        if (!r) return
+        const p = r.getEntityWorldPosGU(selectedShipEntity.entityId)
+        if (!p) return
+        r.cameraWorldPosGU.set(p.x, p.y)
+        r.applyCameraTransform()
+      }"
+    />
 
     <InGameDevelopmentPanel v-if="activeBottomTab === 'development'" @build="uiBindings.onBuild" />
     <InGameMilitaryPanel v-if="activeBottomTab === 'military'" @developing="uiBindings.onDeveloping" />

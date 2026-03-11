@@ -52,14 +52,30 @@ export class ShipRenderer implements WorldRenderSubsystem {
   update(ctx: WorldRenderContext, frame: WorldFrameState): void {
     const { entitiesById, selectedIds, cullingAabb, lod } = frame
 
-    // 复用行星 LOD（缩放级别）可见性门槛作为临时舰船门槛喵。
-    const shipLod = lod.planet
+    // 舰船 LOD：始终可见（除非被选中时）喵
+    // 注意：舰船使用独立的 LOD 逻辑，不受行星隐藏阈值影响
+    const shipLod: import('./lodSystem').EntityLodState = {
+      level: 0,
+      visible: true,
+      params: {
+        sizeScale: 1.0,
+        textureQuality: 1.0,
+        showLabel: true,
+        showEffects: true,
+        showDetails: true,
+      },
+    }
     const visibleIds = new Set<number>()
+
+    // 调试：统计舰船数量喵
+    let shipCount = 0
+    let renderedCount = 0
 
     for (const entity of entitiesById.values()) {
       if (entity.entityType !== 'SHIP') {
         continue
       }
+      shipCount++
 
       const isSelected = selectedIds.has(entity.entityId)
       if (!shouldRender(shipLod, isSelected)) {
@@ -68,6 +84,7 @@ export class ShipRenderer implements WorldRenderSubsystem {
 
       const pos = ctx.getEntityWorldPosGU(entity.entityId)
       if (!pos) {
+        console.log(`[ShipRenderer] Ship ${entity.entityId} has no position`)
         continue
       }
 
@@ -102,6 +119,12 @@ export class ShipRenderer implements WorldRenderSubsystem {
 
       mesh.position.set(pos.x - ctx.cameraWorldPosGU.x, pos.y - ctx.cameraWorldPosGU.y, 0.15)
       mesh.visible = true
+      renderedCount++
+    }
+
+    // 调试：每60帧输出一次统计喵
+    if (shipCount > 0 && Math.random() < 0.01) {
+      console.log(`[ShipRenderer] Ships in frame: ${shipCount}, Rendered: ${renderedCount}`)
     }
 
     // 回收不可见舰船喵。

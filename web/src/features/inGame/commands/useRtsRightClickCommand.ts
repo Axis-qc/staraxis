@@ -11,6 +11,7 @@
  */
 
 import type { WorldRenderer as ThreeWorldRenderer } from '../../../rendering/worldRenderManager'
+import type { EntitySnapshot } from '../../../net/snapshotWs'
 
 export type RtsCommandIntent =
     | {
@@ -18,6 +19,8 @@ export type RtsCommandIntent =
         unitIds: number[]
         targetWorldGU: { x: number; y: number }
     }
+
+export type CommandSender = (intent: RtsCommandIntent, selectedEntities: EntitySnapshot[]) => Promise<void>
 
 function clientToWorldGU(renderer: ThreeWorldRenderer, canvasRect: DOMRect, clientX: number, clientY: number) {
     const localX = clientX - canvasRect.left
@@ -34,7 +37,9 @@ function clientToWorldGU(renderer: ThreeWorldRenderer, canvasRect: DOMRect, clie
 export function useRtsRightClickCommand(opts: {
     getRenderer: () => ThreeWorldRenderer | null
     getSelectedIds: () => number[]
+    getSelectedEntities: () => EntitySnapshot[]
     onCommandIntent?: (intent: RtsCommandIntent) => void
+    sendCommand?: CommandSender
 }) {
     function onPointerDown(e: PointerEvent) {
         if (e.button !== 2) return
@@ -57,6 +62,12 @@ export function useRtsRightClickCommand(opts: {
             type: 'Move',
             unitIds: [...selected],
             targetWorldGU,
+        }
+
+        // 优先使用新的命令发送器喵
+        const selectedEntities = opts.getSelectedEntities()
+        if (opts.sendCommand) {
+            opts.sendCommand(intent, selectedEntities).catch(console.error)
         }
 
         opts.onCommandIntent?.(intent)

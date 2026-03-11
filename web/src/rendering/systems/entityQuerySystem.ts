@@ -39,7 +39,8 @@ export function createEntityQuerySystem(): EntityQuerySystem {
         const e = entitiesById.get(entityId)
         if (!e) return null
 
-        if (e.entityType === 'STAR') {
+        // 恒星和舰船直接返回位置喵
+        if (e.entityType === 'STAR' || e.entityType === 'SHIP') {
             return e.posWorldGU ?? null
         }
 

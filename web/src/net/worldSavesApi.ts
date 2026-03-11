@@ -96,3 +96,15 @@ export async function confirmSpawn(req: { worldId: string; playerId: string; cho
   })
   return parseJson(resp)
 }
+
+/**
+ * 删除世界及其所有存档喵。
+ * 仅管理员可执行此操作。
+ */
+export async function deleteWorldSave(worldId: string): Promise<{ ok: boolean; worldId?: string; message?: string; error?: string }> {
+  const resp = await fetch(`/api/worlds/${encodeURIComponent(worldId)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  })
+  return parseJson(resp)
+}

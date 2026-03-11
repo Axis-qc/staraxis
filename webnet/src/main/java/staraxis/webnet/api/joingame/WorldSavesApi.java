@@ -40,10 +40,10 @@ public final class WorldSavesApi {
      * GET /api/worlds
      */
     public static Map<String, Object> handleListWorlds(ObjectMapper objectMapper, boolean includeAllWorldsForAdmin) {
-        List<Map<String, Object>> worlds = new ArrayList<>();
-        WorldSaveRepository repo = new WorldSaveRepository(objectMapper);
-
         try {
+            List<Map<String, Object>> worlds = new ArrayList<>();
+            WorldSaveRepository repo = new WorldSaveRepository(objectMapper);
+
             List<Map<String, Object>> metas = repo.listWorldMetas();
             for (Map<String, Object> meta : metas) {
                 String worldId = meta.get("worldId") == null ? null : String.valueOf(meta.get("worldId"));
@@ -66,9 +66,17 @@ public final class WorldSavesApi {
 
                 StarAxisGameRuntime runtime = GameSessions.getRuntime(worldId);
                 if (runtime != null) {
-                    item.put("worldRadius", runtime.getWorldStateForSimOnly().worldMap.radius);
-                    item.put("simulationTick", runtime.getRealTimeWorldStateReadonly().simulationTick);
-                    item.put("totalGameSeconds", runtime.getRealTimeWorldStateReadonly().totalGameSeconds);
+                    try {
+                        item.put("worldRadius", runtime.getWorldStateForSimOnly().worldMap.radius);
+                        item.put("simulationTick", runtime.getRealTimeWorldStateReadonly().simulationTick);
+                        item.put("totalGameSeconds", runtime.getRealTimeWorldStateReadonly().totalGameSeconds);
+                    } catch (Exception e) {
+                        // 如果运行时状态访问失败，回退到元数据喵。
+                        Object radius = meta.get("worldRadius");
+                        item.put("worldRadius", radius == null ? 0 : radius);
+                        item.put("simulationTick", 0);
+                        item.put("totalGameSeconds", 0);
+                    }
                 } else {
                     Object radius = meta.get("worldRadius");
                     item.put("worldRadius", radius == null ? 0 : radius);
@@ -77,14 +85,19 @@ public final class WorldSavesApi {
                 }
                 worlds.add(item);
             }
-        } catch (Exception e) {
-            throw new IllegalArgumentException("list_worlds_failed: " + e.getMessage());
-        }
 
-        return Map.of(
-                "ok", true,
-                "worlds", worlds,
-                "activeWorldId", GameSessions.getActiveWorldId());
+            String activeWorldId = GameSessions.getActiveWorldId();
+            if (activeWorldId == null) {
+                activeWorldId = "";
+            }
+            return Map.of(
+                    "ok", true,
+                    "worlds", worlds,
+                    "activeWorldId", activeWorldId);
+        } catch (Exception e) {
+            // 发生异常时返回错误响应，而不是抛出异常喵。
+            return Map.of("ok", false, "error", "list_worlds_failed: " + e.getMessage());
+        }
     }
 
     /**
@@ -326,6 +339,37 @@ public final class WorldSavesApi {
             return true;
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    /**
+     * DELETE /api/worlds/{worldId}
+     * 删除世界及其所有存档喵。
+     */
+    public static Map<String, Object> handleDeleteWorld(ObjectMapper objectMapper, String worldId) {
+        if (worldId == null || worldId.isBlank()) {
+            return Map.of("ok", false, "error", "worldId_required");
+        }
+
+        // 如果世界正在运行，先停止它喵
+        StarAxisGameRuntime runtime = GameSessions.getRuntime(worldId);
+        if (runtime != null) {
+            try {
+                runtime.stop();
+            } catch (Exception e) {
+                // 停止失败继续尝试删除喵
+            }
+            GameSessions.unregisterRuntime(worldId);
+        }
+
+        // 删除世界存档目录喵
+        WorldSaveRepository repo = new WorldSaveRepository(objectMapper);
+        boolean deleted = repo.deleteWorld(worldId);
+
+        if (deleted) {
+            return Map.of("ok", true, "worldId", worldId, "message", "world_deleted");
+        } else {
+            return Map.of("ok", false, "error", "delete_world_failed");
         }
     }
 

@@ -23,9 +23,16 @@ export type ScreenRect = {
     h: number
 }
 
+export type SelectableEntity = {
+    id: number
+    type: 'STAR' | 'PLANET' | 'SHIP'
+    worldPosGU: { x: number; y: number }
+}
+
 export function useRtsSelection(opts: {
-    getEntities: () => Array<{ id: number; type: 'STAR' | 'PLANET'; worldPosGU: { x: number; y: number } }>
+    getEntities: () => SelectableEntity[]
     worldToClient: (world: { x: number; y: number }) => { x: number; y: number }
+    onSelectionChange?: (selectedIds: number[]) => void
 }) {
     const isSelecting = ref(false)
     const startClient = ref<{ x: number; y: number } | null>(null)
@@ -72,11 +79,25 @@ export function useRtsSelection(opts: {
             const x2 = rect.x + rect.w
             const y2 = rect.y + rect.h
 
+            // 检查框选范围大小，小于阈值视为点击（单选）
+            const isClick = rect.w < 5 && rect.h < 5
+
             const hits: number[] = []
             for (const e of opts.getEntities()) {
                 const p = opts.worldToClient(e.worldPosGU)
-                if (p.x >= x1 && p.x <= x2 && p.y >= y1 && p.y <= y2) {
-                    hits.push(e.id)
+                if (isClick) {
+                    // 点击模式：使用圆形碰撞检测（20像素半径）
+                    const dx = p.x - (x1 + x2) / 2
+                    const dy = p.y - (y1 + y2) / 2
+                    if (dx * dx + dy * dy <= 400) { // 20^2 = 400
+                        hits.push(e.id)
+                        break // 点击只选第一个
+                    }
+                } else {
+                    // 框选模式：矩形碰撞检测
+                    if (p.x >= x1 && p.x <= x2 && p.y >= y1 && p.y <= y2) {
+                        hits.push(e.id)
+                    }
                 }
             }
             selectedIds.value = hits
@@ -85,6 +106,9 @@ export function useRtsSelection(opts: {
         isSelecting.value = false
         startClient.value = null
         currentClient.value = null
+
+        // 触发选择变化回调喵
+        opts.onSelectionChange?.(selectedIds.value)
     }
 
     function cancelSelection() {

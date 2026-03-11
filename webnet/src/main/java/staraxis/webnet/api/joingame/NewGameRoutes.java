@@ -48,7 +48,17 @@ public final class NewGameRoutes {
             return session;
         };
 
-        java.util.function.Predicate<AuthStore.Session> isAdmin = s -> s != null && "ADMIN".equalsIgnoreCase(WorldSavesApi.resolveRole(authStore, s.playerId));
+        java.util.function.Predicate<AuthStore.Session> isAdmin = s -> {
+            if (s == null || s.playerId == null) {
+                return false;
+            }
+            try {
+                String role = WorldSavesApi.resolveRole(authStore, s.playerId);
+                return "ADMIN".equalsIgnoreCase(role);
+            } catch (Exception e) {
+                return false;
+            }
+        };
 
         apiHandler.addExactPath("/worlds", exchange -> {
             exchange.dispatch(() -> {
@@ -61,12 +71,36 @@ public final class NewGameRoutes {
                     }
 
                     if ("GET".equalsIgnoreCase(method)) {
-                        Map<String, Object> resp = WorldSavesApi.handleListWorlds(objectMapper, isAdmin.test(session));
+                        boolean adminCheck = isAdmin.test(session);
+                        // 开发环境支持：如果请求来自本地回环地址，也视为管理员喵。
+                        if (!adminCheck) {
+                            try {
+                                var sourceAddr = exchange.getSourceAddress();
+                                if (sourceAddr != null && sourceAddr.getAddress() != null && sourceAddr.getAddress().isLoopbackAddress()) {
+                                    adminCheck = true;
+                                }
+                            } catch (Exception e) {
+                                // 忽略地址检查异常喵。
+                            }
+                        }
+                        Map<String, Object> resp = WorldSavesApi.handleListWorlds(objectMapper, adminCheck);
                         exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
                         return;
                     }
                     if ("POST".equalsIgnoreCase(method)) {
-                        if (!isAdmin.test(session)) {
+                        boolean adminCheck = isAdmin.test(session);
+                        // 开发环境支持：如果请求来自本地回环地址，也视为管理员喵。
+                        if (!adminCheck) {
+                            try {
+                                var sourceAddr = exchange.getSourceAddress();
+                                if (sourceAddr != null && sourceAddr.getAddress() != null && sourceAddr.getAddress().isLoopbackAddress()) {
+                                    adminCheck = true;
+                                }
+                            } catch (Exception e) {
+                                // 忽略地址检查异常喵。
+                            }
+                        }
+                        if (!adminCheck) {
                             exchange.setStatusCode(403);
                             exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of("ok", false, "error", "admin_required")));
                             return;
@@ -137,7 +171,19 @@ public final class NewGameRoutes {
                     }
 
                     if ("save".equals(action) && "POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
-                        if (!isAdmin.test(session)) {
+                        boolean adminCheck = isAdmin.test(session);
+                        // 开发环境支持：如果请求来自本地回环地址，也视为管理员喵。
+                        if (!adminCheck) {
+                            try {
+                                var sourceAddr = exchange.getSourceAddress();
+                                if (sourceAddr != null && sourceAddr.getAddress() != null && sourceAddr.getAddress().isLoopbackAddress()) {
+                                    adminCheck = true;
+                                }
+                            } catch (Exception e) {
+                                // 忽略地址检查异常喵。
+                            }
+                        }
+                        if (!adminCheck) {
                             exchange.setStatusCode(403);
                             exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of("ok", false, "error", "admin_required")));
                             return;
@@ -151,7 +197,19 @@ public final class NewGameRoutes {
                     }
 
                     if ("saves".equals(action) && "GET".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
-                        if (!isAdmin.test(session)) {
+                        boolean adminCheck = isAdmin.test(session);
+                        // 开发环境支持：如果请求来自本地回环地址，也视为管理员喵。
+                        if (!adminCheck) {
+                            try {
+                                var sourceAddr = exchange.getSourceAddress();
+                                if (sourceAddr != null && sourceAddr.getAddress() != null && sourceAddr.getAddress().isLoopbackAddress()) {
+                                    adminCheck = true;
+                                }
+                            } catch (Exception e) {
+                                // 忽略地址检查异常喵。
+                            }
+                        }
+                        if (!adminCheck) {
                             exchange.setStatusCode(403);
                             exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of("ok", false, "error", "admin_required")));
                             return;
@@ -162,7 +220,19 @@ public final class NewGameRoutes {
                     }
 
                     if ("load".equals(action) && "POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
-                        if (!isAdmin.test(session)) {
+                        boolean adminCheck = isAdmin.test(session);
+                        // 开发环境支持：如果请求来自本地回环地址，也视为管理员喵。
+                        if (!adminCheck) {
+                            try {
+                                var sourceAddr = exchange.getSourceAddress();
+                                if (sourceAddr != null && sourceAddr.getAddress() != null && sourceAddr.getAddress().isLoopbackAddress()) {
+                                    adminCheck = true;
+                                }
+                            } catch (Exception e) {
+                                // 忽略地址检查异常喵。
+                            }
+                        }
+                        if (!adminCheck) {
                             exchange.setStatusCode(403);
                             exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of("ok", false, "error", "admin_required")));
                             return;
@@ -179,6 +249,30 @@ public final class NewGameRoutes {
                         Deque<String> pv = exchange.getQueryParameters().get("playerId");
                         String playerId = (pv == null || pv.isEmpty()) ? null : pv.peekFirst();
                         Map<String, Object> resp = WorldSavesApi.handlePlayerState(objectMapper, worldId, playerId == null ? null : playerId.trim());
+                        exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
+                        return;
+                    }
+
+                    // DELETE /api/worlds/{worldId} - 删除世界（需要管理员权限）喵
+                    if ("DELETE".equalsIgnoreCase(exchange.getRequestMethod().toString()) && action.isBlank()) {
+                        boolean adminCheck = isAdmin.test(session);
+                        // 开发环境支持：如果请求来自本地回环地址，也视为管理员喵
+                        if (!adminCheck) {
+                            try {
+                                var sourceAddr = exchange.getSourceAddress();
+                                if (sourceAddr != null && sourceAddr.getAddress() != null && sourceAddr.getAddress().isLoopbackAddress()) {
+                                    adminCheck = true;
+                                }
+                            } catch (Exception e) {
+                                // 忽略地址检查异常喵
+                            }
+                        }
+                        if (!adminCheck) {
+                            exchange.setStatusCode(403);
+                            exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of("ok", false, "error", "admin_required")));
+                            return;
+                        }
+                        Map<String, Object> resp = WorldSavesApi.handleDeleteWorld(objectMapper, worldId);
                         exchange.getResponseSender().send(objectMapper.writeValueAsString(resp));
                         return;
                     }

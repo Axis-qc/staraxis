@@ -188,8 +188,29 @@ public final class GameSessions {
     }
 
     /**
-     * 世界会话元信息喵。
+     * 注销指定 worldId 的运行时，停止相关会话喵。
+     * 用于删除世界时清理内存中的会话状态。
      */
+    public static synchronized void unregisterRuntime(String worldId) {
+        if (worldId == null || worldId.isBlank()) {
+            return;
+        }
+        runtimesByWorldId.remove(worldId);
+        metasByWorldId.remove(worldId);
+        playerStatesByWorldId.remove(worldId);
+        if (worldId.equals(activeWorldId)) {
+            activeWorldId = null;
+            // 如果还有其他世界，将第一个设为活跃喵
+            if (!runtimesByWorldId.isEmpty()) {
+                activeWorldId = runtimesByWorldId.keySet().iterator().next();
+                WorldSessionMeta meta = metasByWorldId.get(activeWorldId);
+                if (meta != null) {
+                    meta.active = true;
+                }
+            }
+        }
+    }
+
     public static class WorldSessionMeta {
         public String worldId;
         public String worldName;

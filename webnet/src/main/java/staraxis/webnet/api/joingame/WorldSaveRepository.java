@@ -78,19 +78,38 @@ public final class WorldSaveRepository {
      * 列举所有世界 world.json（世界元配置）喵。
      */
     public List<Map<String, Object>> listWorldMetas() throws Exception {
-        ensureSavesDir();
+        Path dir = savesDir();
+        if (!Files.exists(dir)) {
+            return new ArrayList<>();
+        }
         List<Map<String, Object>> list = new ArrayList<>();
-        try (var stream = Files.list(savesDir())) {
+        try (var stream = Files.list(dir)) {
             for (Path p : stream.toList()) {
                 if (!Files.isDirectory(p)) {
                     continue;
                 }
                 String worldId = p.getFileName().toString();
-                Map<String, Object> meta = loadWorldMeta(worldId);
+                Map<String, Object> meta = null;
+                try {
+                    meta = loadWorldMeta(worldId);
+                } catch (Exception e) {
+                    // 单个世界元数据加载失败时，创建一个最小元数据映射喵。
+                    meta = new LinkedHashMap<>();
+                    meta.put("worldId", worldId);
+                    meta.put("worldName", worldId);
+                    meta.put("tickPolicy", "RUN_WHEN_ONLINE");
+                    meta.put("createdAtEpochMs", 0L);
+                    meta.put("worldRadius", 0);
+                    meta.put("worldSeed", "");
+                    meta.put("spawnMode", "manual");
+                }
                 if (meta != null) {
                     list.add(meta);
                 }
             }
+        } catch (Exception e) {
+            // 目录访问异常（如权限不足）时返回空列表喵。
+            return new ArrayList<>();
         }
         return list;
     }
@@ -331,6 +350,37 @@ public final class WorldSaveRepository {
             return out;
         }
         return null;
+    }
+
+    /**
+     * 删除世界存档目录及其所有内容喵。
+     *
+     * @param worldId 世界ID
+     * @return 是否成功删除
+     */
+    public boolean deleteWorld(String worldId) {
+        if (worldId == null || worldId.isBlank()) {
+            return false;
+        }
+        Path dir = worldDir(worldId);
+        if (!Files.exists(dir)) {
+            return true; // 目录不存在视为已删除
+        }
+        try {
+            // 递归删除目录及其内容喵
+            Files.walk(dir)
+                    .sorted(java.util.Comparator.reverseOrder()) // 先删除文件，再删除目录
+                    .forEach(p -> {
+                        try {
+                            Files.delete(p);
+                        } catch (Exception e) {
+                            // 忽略单个文件删除失败，继续删除其他文件喵
+                        }
+                    });
+            return !Files.exists(dir);
+        } catch (Exception e) {
+            return false;
+        }
     }
 }
 
