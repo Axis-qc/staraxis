@@ -29,10 +29,12 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'focusEntity', entityId: number): void
+  (e: 'selectEntity', entity: EntitySnapshot): void
 }>()
 
 function onEntityClick(entity: EntitySnapshot) {
   emit('focusEntity', entity.entityId)
+  emit('selectEntity', entity)
 }
 
 function getEntityName(entity: EntitySnapshot): string {

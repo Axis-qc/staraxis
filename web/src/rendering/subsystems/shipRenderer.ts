@@ -20,16 +20,69 @@ import { shouldRender } from './lodSystem'
 const INITIAL_SPAWN_SHIP_FLAG = 'INITIAL_SPAWN_SHIP'
 
 /**
+ * 舰船渲染状态（用于平滑移动和位置同步）喵。
+ *
+ * 策略：插值而非预测喵。
+ * - targetPos: 最新权威位置（快照位置）喵。
+ * - displayPos: 当前显示位置，每帧向 targetPos 插值移动喵。
+ * - 这样保证显示位置不会偏离权威位置太远，同时保持平滑喵。
+ */
+interface ShipRenderState {
+  /** 目标位置（最新权威位置）喵。 */
+  targetPos: { x: number; y: number }
+  /** 当前显示位置（向 targetPos 插值）喵。 */
+  displayPos: { x: number; y: number }
+  /** 是否正在移动喵。 */
+  isMoving: boolean
+  /** 上次收到权威坐标的时间戳（performance.now()）喵。 */
+  lastAuthTime: number
+}
+
+/**
  * ShipRenderer（舰船渲染器）喵。
+ *
+ * 渲染策略喵：
+ * - 使用"插值"而非"预测"，避免前端后端计算偏差喵。
+ * - 保存最新权威位置作为 targetPos，当前显示位置 displayPos 向其平滑插值喵。
+ * - 每帧 displayPos 以固定速度向 targetPos 移动，保证平滑且不会偏离太远喵。
+ * - 收到新快照时更新 targetPos，displayPos 继续向新目标平滑移动喵。
  */
 export class ShipRenderer implements WorldRenderSubsystem {
   private readonly shipPool: THREE.Mesh[] = []
   private readonly activeByEntityId = new Map<number, THREE.Mesh>()
 
   /**
+   * 路径线条对象池喵。
+   */
+  private readonly pathLinePool: THREE.Line[] = []
+  private readonly activePathByEntityId = new Map<number, THREE.Line>()
+
+  /**
+   * 舰船渲染状态映射（entityId -> renderState）喵。
+   */
+  private readonly renderStateById = new Map<number, ShipRenderState>()
+
+  /**
    * 舰船渲染共用三角形几何（朝上箭头形）喵。
    */
   private shipTriangleGeometry: THREE.BufferGeometry | null = null
+
+  /**
+   * 路径线条共用材质喵。
+   */
+  private pathLineMaterial: THREE.LineBasicMaterial | null = null
+
+  /**
+   * 插值速度（GU/毫秒）：displayPos 向 targetPos 移动的速度喵。
+   * 较高的值 = 更快跟上权威位置，但可能不够平滑喵。
+   * 较低的值 = 更平滑，但延迟更大喵。
+   */
+  private readonly INTERPOLATION_SPEED_GU_PER_MS = 0.05
+
+  /**
+   * 最大插值距离（GU）：当差异超过此值时直接跳到目标位置喵。
+   */
+  private readonly MAX_INTERPOLATION_DISTANCE_GU = 100.0
 
   init(_ctx: WorldRenderContext): void {
     // 以世界单位构建一个等腰三角形，占位表示舰船朝向喵。
@@ -43,6 +96,14 @@ export class ShipRenderer implements WorldRenderSubsystem {
     geometry.computeVertexNormals()
     this.shipTriangleGeometry = geometry
 
+    // 创建路径线条共用材质喵
+    this.pathLineMaterial = new THREE.LineBasicMaterial({
+      color: 0x56d7ff,
+      transparent: true,
+      opacity: 0.6,
+      depthWrite: false,
+    })
+
     // 预热少量对象池喵。
     for (let i = 0; i < 16; i++) {
       this.shipPool.push(this.createShipMesh())
@@ -50,10 +111,12 @@ export class ShipRenderer implements WorldRenderSubsystem {
   }
 
   update(ctx: WorldRenderContext, frame: WorldFrameState): void {
-    const { entitiesById, selectedIds, cullingAabb, lod } = frame
+    const { entitiesById, selectedIds, cullingAabb } = frame
 
-    // 舰船 LOD：始终可见（除非被选中时）喵
-    // 注意：舰船使用独立的 LOD 逻辑，不受行星隐藏阈值影响
+    // 当前渲染时间戳喵
+    const now = performance.now()
+
+    // 舰船 LOD：始终可见喵
     const shipLod: import('./lodSystem').EntityLodState = {
       level: 0,
       visible: true,
@@ -82,13 +145,63 @@ export class ShipRenderer implements WorldRenderSubsystem {
         continue
       }
 
-      const pos = ctx.getEntityWorldPosGU(entity.entityId)
-      if (!pos) {
+      // 获取快照中的权威位置喵
+      const authPos = entity.posWorldGU
+      if (!authPos) {
         console.log(`[ShipRenderer] Ship ${entity.entityId} has no position`)
         continue
       }
 
-      if (!isSelected && !isPointInAabb(pos, cullingAabb)) {
+      const detailAny: any = entity.details
+      const authIsMoving = detailAny?.isMoving === true
+      const headingDeg = Number(detailAny?.headingDeg ?? 0)
+
+      // 获取或创建渲染状态喵
+      let renderState = this.renderStateById.get(entity.entityId)
+
+      if (!renderState) {
+        // 首次渲染该舰船，初始化渲染状态喵
+        // displayPos 和 targetPos 都初始化为权威位置喵
+        renderState = {
+          targetPos: { x: authPos.x, y: authPos.y },
+          displayPos: { x: authPos.x, y: authPos.y },
+          isMoving: authIsMoving,
+          lastAuthTime: now,
+        }
+        this.renderStateById.set(entity.entityId, renderState)
+      } else {
+        // 更新目标位置为最新权威位置喵
+        renderState.targetPos = { x: authPos.x, y: authPos.y }
+        renderState.isMoving = authIsMoving
+        renderState.lastAuthTime = now
+
+        // 计算当前显示位置与目标位置的距离喵
+        const dx = renderState.targetPos.x - renderState.displayPos.x
+        const dy = renderState.targetPos.y - renderState.displayPos.y
+        const distance = Math.sqrt(dx * dx + dy * dy)
+
+        // 如果距离超过阈值，直接跳到目标位置（防止累积误差）喵
+        if (distance > this.MAX_INTERPOLATION_DISTANCE_GU) {
+          renderState.displayPos = { x: renderState.targetPos.x, y: renderState.targetPos.y }
+        } else if (distance > 0.01) {
+          // 否则平滑插值向目标位置移动喵
+          // 计算每帧移动的距离（基于 INTERPOLATION_SPEED_GU_PER_MS）喵
+          const frameTimeMs = 16.67 // 假设 60 FPS，每帧约 16.67ms
+          const maxMoveDistance = this.INTERPOLATION_SPEED_GU_PER_MS * frameTimeMs
+
+          // 如果距离很小，直接到达；否则按比例移动喵
+          if (distance <= maxMoveDistance) {
+            renderState.displayPos = { x: renderState.targetPos.x, y: renderState.targetPos.y }
+          } else {
+            const ratio = maxMoveDistance / distance
+            renderState.displayPos.x += dx * ratio
+            renderState.displayPos.y += dy * ratio
+          }
+        }
+      }
+
+      // 使用显示位置进行视锥剔除检查喵
+      if (!isSelected && !isPointInAabb(renderState.displayPos, cullingAabb)) {
         continue
       }
 
@@ -101,7 +214,6 @@ export class ShipRenderer implements WorldRenderSubsystem {
         ctx.entitiesGroup.add(mesh)
       }
 
-      const detailAny: any = entity.details
       const flags: string[] = Array.isArray(detailAny?.customFlags) ? detailAny.customFlags : []
       const isInitialShip = flags.includes(INITIAL_SPAWN_SHIP_FLAG)
 
@@ -114,12 +226,24 @@ export class ShipRenderer implements WorldRenderSubsystem {
       mesh.scale.set(baseScale, baseScale, 1)
 
       // 按后端下发朝向角（headingDeg）旋转：几何默认朝 +Y，需减 90 度对齐 +X 基准喵。
-      const headingDeg = Number(detailAny?.headingDeg ?? 0)
       mesh.rotation.z = THREE.MathUtils.degToRad(headingDeg - 90)
 
-      mesh.position.set(pos.x - ctx.cameraWorldPosGU.x, pos.y - ctx.cameraWorldPosGU.y, 0.15)
+      // 使用显示位置设置 Mesh 位置喵
+      mesh.position.set(
+        renderState.displayPos.x - ctx.cameraWorldPosGU.x,
+        renderState.displayPos.y - ctx.cameraWorldPosGU.y,
+        0.15
+      )
       mesh.visible = true
       renderedCount++
+
+      // 处理移动路径显示（仅当选中且正在移动时）喵
+      const movementTarget = detailAny?.movementTarget
+      if (isSelected && renderState.isMoving && movementTarget) {
+        this.updatePathLine(ctx, entity.entityId, renderState.displayPos, movementTarget)
+      } else {
+        this.removePathLine(ctx, entity.entityId)
+      }
     }
 
     // 调试：每60帧输出一次统计喵
@@ -127,11 +251,20 @@ export class ShipRenderer implements WorldRenderSubsystem {
       console.log(`[ShipRenderer] Ships in frame: ${shipCount}, Rendered: ${renderedCount}`)
     }
 
-    // 回收不可见舰船喵。
+    // 回收不可见舰船及其路径喵
+    for (const [id, line] of this.activePathByEntityId.entries()) {
+      if (!visibleIds.has(id) || !selectedIds.has(id)) {
+        this.activePathByEntityId.delete(id)
+        this.releasePathLine(line)
+        line.parent?.remove(line)
+      }
+    }
     for (const [id, mesh] of this.activeByEntityId.entries()) {
       if (!visibleIds.has(id)) {
         this.activeByEntityId.delete(id)
         this.releaseShipMesh(mesh)
+        // 清理渲染状态喵
+        this.renderStateById.delete(id)
       }
     }
   }
@@ -146,10 +279,28 @@ export class ShipRenderer implements WorldRenderSubsystem {
     }
     this.activeByEntityId.clear()
 
+    // 清理路径线条对象池喵
+    for (const line of this.pathLinePool) {
+      line.geometry.dispose()
+    }
+    for (const line of this.activePathByEntityId.values()) {
+      line.geometry.dispose()
+      line.parent?.remove(line)
+    }
+    this.activePathByEntityId.clear()
+
     if (this.shipTriangleGeometry) {
       this.shipTriangleGeometry.dispose()
       this.shipTriangleGeometry = null
     }
+
+    if (this.pathLineMaterial) {
+      this.pathLineMaterial.dispose()
+      this.pathLineMaterial = null
+    }
+
+    // 清理渲染状态映射喵
+    this.renderStateById.clear()
   }
 
   /**
@@ -189,6 +340,85 @@ export class ShipRenderer implements WorldRenderSubsystem {
     mesh.frustumCulled = false
     mesh.visible = false
     return mesh
+  }
+
+  /**
+   * 更新或创建舰船的移动路径线条喵。
+   */
+  private updatePathLine(
+    ctx: WorldRenderContext,
+    entityId: number,
+    shipPos: { x: number; y: number },
+    targetPos: { x: number; y: number },
+  ): void {
+    let line = this.activePathByEntityId.get(entityId)
+
+    if (!line) {
+      line = this.acquirePathLine()
+      this.activePathByEntityId.set(entityId, line)
+      ctx.entitiesGroup.add(line)
+    }
+
+    // 更新路径几何体（从舰船位置到目标位置）喵
+    const positions = new Float32Array([
+      shipPos.x - ctx.cameraWorldPosGU.x, shipPos.y - ctx.cameraWorldPosGU.y, 0.1,
+      targetPos.x - ctx.cameraWorldPosGU.x, targetPos.y - ctx.cameraWorldPosGU.y, 0.1,
+    ])
+    const geometry = line.geometry as THREE.BufferGeometry
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    geometry.attributes.position.needsUpdate = true
+
+    line.visible = true
+  }
+
+  /**
+   * 移除舰船的移动路径线条喵。
+   */
+  private removePathLine(ctx: WorldRenderContext, entityId: number): void {
+    const line = this.activePathByEntityId.get(entityId)
+    if (line) {
+      this.activePathByEntityId.delete(entityId)
+      this.releasePathLine(line)
+      line.parent?.remove(line)
+    }
+  }
+
+  /**
+   * 从对象池获取路径线条喵。
+   */
+  private acquirePathLine(): THREE.Line {
+    const line = this.pathLinePool.pop()
+    if (line) {
+      line.visible = true
+      return line
+    }
+    return this.createPathLine()
+  }
+
+  /**
+   * 归还路径线条到对象池喵。
+   */
+  private releasePathLine(line: THREE.Line): void {
+    line.visible = false
+    line.parent?.remove(line)
+    this.pathLinePool.push(line)
+  }
+
+  /**
+   * 创建路径线条喵。
+   */
+  private createPathLine(): THREE.Line {
+    const geometry = new THREE.BufferGeometry()
+    const material = this.pathLineMaterial ?? new THREE.LineBasicMaterial({
+      color: 0x56d7ff,
+      transparent: true,
+      opacity: 0.6,
+      depthWrite: false,
+    })
+    const line = new THREE.Line(geometry, material)
+    line.frustumCulled = false
+    line.visible = false
+    return line
   }
 }
 

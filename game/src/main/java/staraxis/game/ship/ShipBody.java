@@ -75,7 +75,59 @@ public class ShipBody extends Entity {
     public boolean isMoving = false;
 
     /**
+     * 当前舰首朝向（角度制，0度朝+X方向）喵。
+     * 这是舰船当前的实际朝向，用于物理计算。
+     */
+    public double currentHeadingDeg = 0.0;
+
+    /**
      * 目标朝向（角度制，0度朝+X方向）喵。
+     * 这是舰船想要转向的目标朝向。
      */
     public double targetHeadingDeg = 0.0;
+
+    // ========== 舰船性能数据（TODO: 应从 ShipDesign 配置读取，并支持科技等级加成）==========
+
+    /**
+     * 最大速度（GU/游戏秒）喵。
+     * 全向移动时的理论最大速度。
+     * TODO: 当前为殖民舰默认值，后续应根据舰船设计和科技等级计算喵。
+     */
+    public double maxSpeed = 20.0;
+
+    /**
+     * 基础加速度（GU/游戏秒²）喵。
+     * 侧向/反向移动时的加速度。
+     * TODO: 后续应根据舰船设计和科技等级计算喵。
+     */
+    public double baseAcceleration = 5.0;
+
+    /**
+     * 舰首朝向加速度加成（GU/游戏秒²）喵。
+     * 当移动方向与舰首朝向一致时的额外加速度。
+     * 总加速度 = baseAcceleration + bowAccelerationBonus
+     * TODO: 后续应根据舰船设计和科技等级计算喵。
+     */
+    public double bowAccelerationBonus = 5.0;
+
+    /**
+     * 转向角速度（度/游戏秒）喵。
+     * 舰首旋转的速度。
+     * TODO: 后续应根据舰船设计和科技等级计算喵。
+     */
+    public double turnRate = 45.0;
+
+    /**
+     * 侧向移动速度惩罚系数（0.0~1.0）喵。
+     * 垂直于舰首方向移动时的速度惩罚。
+     * 实际最大速度 = maxSpeed * lateralSpeedPenalty
+     */
+    public double lateralSpeedPenalty = 0.6;
+
+    /**
+     * 反向移动速度惩罚系数（0.0~1.0）喵。
+     * 与舰首相反方向移动时的速度惩罚。
+     * 实际最大速度 = maxSpeed * reverseSpeedPenalty
+     */
+    public double reverseSpeedPenalty = 0.3;
 }

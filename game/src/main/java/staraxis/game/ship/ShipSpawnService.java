@@ -90,6 +90,15 @@ public final class ShipSpawnService {
         ship.fuel = 100.0;      // 初始燃料喵
         ship.customFlags.add("INITIAL_SPAWN_SHIP"); // 标记为初始出生舰船喵
 
+        // 初始化舰船性能数据（从 ShipDesign 配置读取，当前使用 ShipBody 默认值）喵
+        // 科技等级加成将在科技系统完成后接入喵
+        // ship.maxSpeed = ...;              // 继承 ShipBody 默认值 20.0 GU/s
+        // ship.baseAcceleration = ...;      // 继承 ShipBody 默认值 5.0 GU/s²
+        // ship.bowAccelerationBonus = ...;  // 继承 ShipBody 默认值 5.0 GU/s²
+        // ship.turnRate = ...;              // 继承 ShipBody 默认值 45.0 度/秒
+        // ship.lateralSpeedPenalty = ...;   // 继承 ShipBody 默认值 0.6
+        // ship.reverseSpeedPenalty = ...;   // 继承 ShipBody 默认值 0.3
+
         // 5. 注册到权威世界状态喵
         worldState.registerEntity(ship);
 
@@ -158,6 +167,9 @@ public final class ShipSpawnService {
         if (customFlags != null) {
             ship.customFlags.addAll(customFlags);
         }
+
+        // 初始化舰船性能数据（从 ShipDesign 配置读取，当前使用 ShipBody 默认值）喵
+        // 科技等级加成将在科技系统完成后接入喵
 
         // 4. 注册到权威世界状态喵
         worldState.registerEntity(ship);

@@ -34,6 +34,24 @@ export type ShipDetails = {
     customFlags?: string[]
     /** 舰船朝向角（headingDeg，角度制）：0 度朝 +X，逆时针为正喵。 */
     headingDeg?: number
+    /** 是否正在移动喵。 */
+    isMoving?: boolean
+    /** 移动目标位置（世界坐标 GU），仅当 isMoving=true 时有效喵。 */
+    movementTarget?: { x: number; y: number }
+    /** 当前速度矢量（GU/游戏秒）喵。 */
+    velocity?: { x: number; y: number }
+    /** 最大速度（GU/游戏秒）喵。 */
+    maxSpeed?: number
+    /** 基础加速度（GU/游戏秒²）喵。 */
+    baseAcceleration?: number
+    /** 舰首朝向加速度加成（GU/游戏秒²）喵。 */
+    bowAccelerationBonus?: number
+    /** 转向角速度（度/游戏秒）喵。 */
+    turnRate?: number
+    /** 侧向移动速度惩罚系数（0.0~1.0）喵。 */
+    lateralSpeedPenalty?: number
+    /** 反向移动速度惩罚系数（0.0~1.0）喵。 */
+    reverseSpeedPenalty?: number
 }
 
 export type SystemBarycenterDetails = {}

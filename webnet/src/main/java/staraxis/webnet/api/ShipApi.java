@@ -27,6 +27,7 @@ import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 import io.undertow.util.PathTemplateMatch;
+import staraxis.webnet.api.ship.ShipCommandApi;
 
 import java.io.File;
 import java.io.IOException;
@@ -63,6 +64,9 @@ public class ShipApi {
             String relativePath = exchange.getRelativePath();
             if (relativePath.startsWith("/textures")) {
                 handleTexturesList(exchange);
+            } else if (relativePath.equals("/move")) {
+                // 处理舰船移动命令喵
+                handleMoveShip(exchange);
             } else if (relativePath.startsWith("/modules/by-texture")) {
                 handleFindModuleByTexture(exchange);
             } else if (relativePath.startsWith("/modules/") && relativePath.endsWith("/mount-points")) {
@@ -71,6 +75,65 @@ public class ShipApi {
                 exchange.setStatusCode(404).endExchange();
             }
         };
+    }
+
+    /**
+     * POST /api/ship/move
+     * 处理舰船移动命令，转发到 ShipCommandApi 喵。
+     */
+    private void handleMoveShip(HttpServerExchange exchange) {
+        if (!exchange.getRequestMethod().equalToString("POST")) {
+            exchange.setStatusCode(405).endExchange();
+            return;
+        }
+
+        exchange.dispatch(() -> {
+            try {
+                exchange.startBlocking();
+                String body = new String(exchange.getInputStream().readAllBytes());
+                @SuppressWarnings("unchecked")
+                Map<String, Object> req = objectMapper.readValue(body, Map.class);
+
+                // 从请求中提取 worldId（可以从查询参数或请求体中获取）喵
+                String worldId = getQueryParam(exchange, "worldId");
+                if (worldId == null && req.containsKey("worldId")) {
+                    worldId = String.valueOf(req.get("worldId"));
+                }
+
+                if (worldId == null || worldId.isBlank()) {
+                    exchange.setStatusCode(400);
+                    exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                    exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                            "ok", false,
+                            "error", "worldId_required")));
+                    return;
+                }
+
+                // 调用 ShipCommandApi 处理移动命令喵
+                Map<String, Object> result = ShipCommandApi.handleMoveShip(objectMapper, worldId, req);
+
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                exchange.getResponseSender().send(objectMapper.writeValueAsString(result));
+            } catch (Exception e) {
+                exchange.setStatusCode(500);
+                try {
+                    exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                    exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                            "ok", false,
+                            "error", String.valueOf(e.getMessage()))));
+                } catch (Exception ignored) {
+                    exchange.endExchange();
+                }
+            }
+        });
+    }
+
+    /**
+     * 获取查询参数喵。
+     */
+    private String getQueryParam(HttpServerExchange exchange, String name) {
+        var deque = exchange.getQueryParameters().get(name);
+        return deque == null || deque.isEmpty() ? null : deque.getFirst();
     }
 
     /**

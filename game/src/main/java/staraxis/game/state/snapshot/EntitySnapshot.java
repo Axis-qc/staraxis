@@ -160,8 +160,8 @@ public class EntitySnapshot {
      * 舰船快照详情喵。
      *
      * 说明：
-     * - 当前先提供最小占位结构，满足多态序列化与前端类型分支喵。
-     * - 后续可按需扩展 hp/power/fuel/designId 等字段喵。
+     * - 包含物理移动状态，供前端做平滑插值渲染喵。
+     * - 速度矢量用于位置预测，实现流畅视觉体验喵。
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class ShipDetails {
@@ -171,9 +171,62 @@ public class EntitySnapshot {
         /** 舰船朝向角（headingDeg，角度制）：0 度朝 +X，逆时针为正喵。 */
         public final double headingDeg;
 
-        public ShipDetails(java.util.Set<String> customFlags, double headingDeg) {
+        /** 是否正在移动喵。 */
+        public final boolean isMoving;
+
+        /** 移动目标位置（世界坐标 GU），仅当 isMoving=true 时有效喵。 */
+        public final Vec2d movementTarget;
+
+        /** 当前速度矢量（GU/游戏秒）喵。 */
+        public final Vec2d velocity;
+
+        /** 最大速度（GU/游戏秒）喵。 */
+        public final double maxSpeed;
+
+        /** 基础加速度（GU/游戏秒²）喵。 */
+        public final double baseAcceleration;
+
+        /** 舰首朝向加速度加成（GU/游戏秒²）喵。 */
+        public final double bowAccelerationBonus;
+
+        /** 转向角速度（度/游戏秒）喵。 */
+        public final double turnRate;
+
+        /** 侧向移动速度惩罚系数（0.0~1.0）喵。 */
+        public final double lateralSpeedPenalty;
+
+        /** 反向移动速度惩罚系数（0.0~1.0）喵。 */
+        public final double reverseSpeedPenalty;
+
+        public ShipDetails(
+                java.util.Set<String> customFlags,
+                double headingDeg,
+                boolean isMoving,
+                Vec2d movementTarget,
+                Vec2d velocity,
+                double maxSpeed,
+                double baseAcceleration,
+                double bowAccelerationBonus,
+                double turnRate,
+                double lateralSpeedPenalty,
+                double reverseSpeedPenalty) {
             this.customFlags = customFlags == null ? java.util.Set.of() : java.util.Set.copyOf(customFlags);
             this.headingDeg = headingDeg;
+            this.isMoving = isMoving;
+            this.movementTarget = movementTarget;
+            this.velocity = velocity;
+            this.maxSpeed = maxSpeed;
+            this.baseAcceleration = baseAcceleration;
+            this.bowAccelerationBonus = bowAccelerationBonus;
+            this.turnRate = turnRate;
+            this.lateralSpeedPenalty = lateralSpeedPenalty;
+            this.reverseSpeedPenalty = reverseSpeedPenalty;
+        }
+
+        /** 兼容性构造函数（用于旧代码）喵。 */
+        public ShipDetails(java.util.Set<String> customFlags, double headingDeg) {
+            this(customFlags, headingDeg, false, null, null,
+                 20.0, 5.0, 5.0, 45.0, 0.6, 0.3);
         }
     }
 

@@ -1,14 +1,31 @@
 package staraxis.game;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import staraxis.game.astro.AstroData;
 import staraxis.game.astro.AstroGenerator;
 import staraxis.game.astro.PlanetBody;
 import staraxis.game.astro.StarBody;
 import staraxis.game.astro.StarSystem;
 import staraxis.game.astro.def.AstroAssetRepository;
+import staraxis.game.command.ColonizePlanetCommand;
+import staraxis.game.command.ColonizePlanetHandler;
+import staraxis.game.command.CommandBus;
+import staraxis.game.command.MoveShipCommand;
+import staraxis.game.command.MoveShipHandler;
+import staraxis.game.command.SetPlayerTimeStepCommand;
+import staraxis.game.command.SetPlayerTimeStepHandler;
+import staraxis.game.command.SetSystemTimeScaleCommand;
+import staraxis.game.command.SetSystemTimeScaleHandler;
 import staraxis.game.entity.Entity;
 import staraxis.game.entity.EntityType;
+import staraxis.game.ship.ShipBody;
+import staraxis.game.ship.ShipMovementSystem;
 import staraxis.game.sim.SimulationTime;
 import staraxis.game.sim.TimelineSystem;
 import staraxis.game.state.DailySettlementState;
@@ -17,23 +34,11 @@ import staraxis.game.state.RealTimeWorldState;
 import staraxis.game.state.RealTimeWorldStateBuffer;
 import staraxis.game.state.WorldState;
 import staraxis.game.state.snapshot.EntitySnapshot;
+import staraxis.game.world.Vec2d;
 import staraxis.game.world.WorldGenConfig;
 import staraxis.game.world.WorldGenerator;
+import staraxis.game.world.WorldHexLayout;
 import staraxis.game.world.WorldSector;
-import staraxis.game.command.CommandBus;
-import staraxis.game.command.SetPlayerTimeStepCommand;
-import staraxis.game.command.SetPlayerTimeStepHandler;
-import staraxis.game.command.SetSystemTimeScaleCommand;
-import staraxis.game.command.SetSystemTimeScaleHandler;
-import staraxis.game.command.ColonizePlanetCommand;
-import staraxis.game.command.ColonizePlanetHandler;
-import staraxis.game.command.MoveShipCommand;
-import staraxis.game.command.MoveShipHandler;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 /**
  * StarAxisGameRuntime
@@ -53,6 +58,8 @@ public class StarAxisGameRuntime implements GameRuntime {
     private final DailySettlementStateBuffer dailySettlementBuffer = new DailySettlementStateBuffer();
 
     private final CommandBus commandBus = new CommandBus();
+
+    private final ShipMovementSystem shipMovementSystem = new ShipMovementSystem();
 
     public StarAxisGameRuntime(WorldState worldState) {
         this.worldState = worldState;
@@ -217,6 +224,9 @@ public class StarAxisGameRuntime implements GameRuntime {
 
         // 处理 Command 队列并更新 WorldState喵。
         commandBus.executeCommands(worldState, dtGameHours);
+
+        // 处理舰船移动喵
+        shipMovementSystem.update(worldState, dtGameHours);
 
         // 更新所有国家的可见性状态（基于当前世界状态）
         worldState.visibilitySystem.updateAllNationsVisibility();
@@ -537,6 +547,31 @@ public class StarAxisGameRuntime implements GameRuntime {
                 }
             }
 
+            // 获取舰船的移动状态和物理属性喵
+            boolean isMoving = false;
+            Vec2d movementTarget = null;
+            Vec2d velocity = null;
+            // 默认值与 ShipBody 一致，后续从 shipBody 读取实际值喵
+            double maxSpeed = 20.0;
+            double baseAcceleration = 5.0;
+            double bowAccelerationBonus = 5.0;
+            double turnRate = 45.0;
+            double lateralSpeedPenalty = 0.6;
+            double reverseSpeedPenalty = 0.3;
+            if (entity instanceof staraxis.game.ship.ShipBody shipBody) {
+                isMoving = shipBody.isMoving;
+                movementTarget = shipBody.movementTarget;
+                velocity = shipBody.velWorldGU;
+                maxSpeed = shipBody.maxSpeed;
+                baseAcceleration = shipBody.baseAcceleration;
+                bowAccelerationBonus = shipBody.bowAccelerationBonus;
+                turnRate = shipBody.turnRate;
+                lateralSpeedPenalty = shipBody.lateralSpeedPenalty;
+                reverseSpeedPenalty = shipBody.reverseSpeedPenalty;
+                // 使用当前朝向作为headingDeg喵
+                headingDeg = shipBody.currentHeadingDeg;
+            }
+
             s.putEntitySnapshot(new EntitySnapshot(
                     entity.entityId,
                     entity.entityType,
@@ -546,7 +581,9 @@ public class StarAxisGameRuntime implements GameRuntime {
                     entity.posWorldGU,
                     entity.ownerNationId,
                     false,
-                    new EntitySnapshot.ShipDetails(customFlags, headingDeg)));
+                    new EntitySnapshot.ShipDetails(customFlags, headingDeg, isMoving, movementTarget, velocity,
+                            maxSpeed, baseAcceleration, bowAccelerationBonus, turnRate,
+                            lateralSpeedPenalty, reverseSpeedPenalty)));
         }
 
         realTimeBuffer.swapPublish();

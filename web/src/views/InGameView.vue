@@ -612,6 +612,15 @@ onUnmounted(() => {
         r.cameraWorldPosGU.set(p.x, p.y)
         r.applyCameraTransform()
       }"
+      @select-entity="(entity: EntitySnapshot) => {
+        // 选中实体并更新选择状态喵
+        selection.selectedIds.value = [entity.entityId]
+        // 如果是舰船，显示舰船面板喵
+        if (entity.entityType === 'SHIP') {
+          selectedShipEntity.value = entity
+          selectedShipPanelOpen.value = true
+        }
+      }"
     />
 
     <!-- 舰船信息面板喵 -->
