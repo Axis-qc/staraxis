@@ -69,8 +69,8 @@ public class AdminApi {
         long last = lastDisconnectAtMs.get();
         long idleMs = last > 0 ? (System.currentTimeMillis() - last) : 0;
 
-        File webUi = new File("webui");
-        boolean webUiExists = webUi.exists() && webUi.isDirectory();
+        File webUi = WebUiRoutes.findWebUiDir();
+        boolean webUiExists = webUi != null && webUi.isDirectory();
         long webUiLastModified = webUiExists ? webUi.lastModified() : 0L;
         boolean webUiIndexExists = webUiExists && new File(webUi, "index.html").isFile();
 
