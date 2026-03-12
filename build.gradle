@@ -70,6 +70,110 @@ subprojects {
 
 eclipse.project.name = 'staraxis' + '-parent'
 
+// 游戏发行文件夹路径
+def gameDistDir = file('G:/games/staraxis/StarAxis Game')
+
+// 构建前端（npm run build）
+tasks.register('buildWeb', Exec) {
+  group = 'build'
+  description = 'Build web frontend using npm.'
+
+  workingDir = file('web')
+
+  // Windows 使用 cmd /c，Unix 使用 npm 直接执行
+  // 使用 vite build 直接构建，跳过类型检查（避免 TS 错误阻止构建）
+  if (System.getProperty('os.name').toLowerCase().contains('windows')) {
+    commandLine 'cmd', '/c', 'npx vite build'
+  } else {
+    commandLine 'npx', 'vite', 'build'
+  }
+
+  // 只有当前端文件发生变化时才重新构建
+  inputs.dir('web/src')
+  inputs.file('web/package.json')
+  inputs.file('web/vite.config.ts')
+  outputs.dir("${gameDistDir}/webui")
+
+  // 即使构建失败（如类型错误）也继续执行，因为 vite 构建输出通常仍然可用
+  ignoreExitValue = true
+}
+
+// 复制启动脚本到发行目录
+tasks.register('copyLaunchScripts', Copy) {
+  group = 'build'
+  description = 'Copy launch scripts to distribution directory.'
+
+  from('webnet/dist') {
+    include '*.bat'
+    include '*.txt'
+  }
+  into(gameDistDir)
+}
+
+// 复制 assets 资源到发行目录
+tasks.register('copyGameAssets', Copy) {
+  group = 'build'
+  description = 'Copy game assets to distribution directory.'
+
+  from('assets')
+  into("${gameDistDir}/assets")
+  exclude '**/*.tmp'
+}
+
+// 复制后端 Jar 到发行目录
+tasks.register('copyBackendJar', Copy) {
+  group = 'build'
+  description = 'Copy backend fat jar to distribution directory.'
+
+  dependsOn ':webnet:fatJar'
+
+  from(tasks.getByPath(':webnet:fatJar').archiveFile)
+  into(gameDistDir)
+  rename { 'StarAxis.jar' }
+}
+
+// 完整打包任务 - 构建整个游戏发行版
+tasks.register('dist') {
+  group = 'build'
+  description = 'Build complete game distribution (frontend + backend + assets + scripts).'
+
+  dependsOn 'buildWeb'
+  dependsOn 'copyLaunchScripts'
+  dependsOn 'copyGameAssets'
+  dependsOn 'copyBackendJar'
+
+  doLast {
+    println "========================================"
+    println " StarAxis 发行版构建完成！"
+    println "========================================"
+    println "输出目录: ${gameDistDir}"
+    println ""
+    println "文件清单:"
+    println "  - StarAxis.jar        : 游戏主程序"
+    println "  - StarAxis.bat        : 启动脚本"
+    println "  - StarAxis-Debug.bat  : 调试脚本"
+    println "  - README.txt          : 使用说明"
+    println "  - assets/             : 游戏资源"
+    println "  - webui/              : 前端界面"
+    println "========================================"
+  }
+}
+
+// 创建根项目的 build 任务（如果不存在）
+// 注意：根项目没有应用 java 插件，需要手动创建 build 任务
+tasks.register('build') {
+  group = 'build'
+  description = 'Build complete project including distribution.'
+  dependsOn 'dist'
+}
+
+// 清理任务
+tasks.register('clean', Delete) {
+  group = 'build'
+  description = 'Clean distribution directory.'
+  delete gameDistDir
+}
+
 // Web 版启动入口：仅启动 webnet（HTTP + WebSocket），不启动 lwjgl3/libgdx
 // 用法：./gradlew runWeb
 

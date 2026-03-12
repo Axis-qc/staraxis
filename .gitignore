@@ -263,6 +263,7 @@ token_report.txt
 *.bin
 *.jar
 !gradle/wrapper/gradle-wrapper.jar
+StarAxis Game/
 
 ## OpenCode configuration (local only)
 opencode.json

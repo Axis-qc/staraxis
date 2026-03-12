@@ -31,25 +31,27 @@ tasks.register('fatJar', Jar) {
     attributes('Main-Class': application.mainClass.get())
   }
 
+  // 包含 webnet 自身编译输出
   from(sourceSets.main.output)
 
+  // 包含 game 模块编译输出（类文件和资源）
+  from(project(':game').sourceSets.main.output)
+
+  // 包含所有外部依赖（Undertow、Jackson 等）
   dependsOn configurations.runtimeClasspath
   from {
-    configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    configurations.runtimeClasspath
+      .filter { !it.path.contains('game') } // 排除 game 的 jar（已直接包含上面的output）
+      .collect { it.isDirectory() ? it : zipTree(it) }
   }
 }
 
-tasks.register('distLauncher', Copy) {
-  // Gradle 9+ 可能会因为项目根目录下存在不可读/被锁定的文件（如 .gradle/**/checksums.lock）
-  // 而拒绝对 Copy 任务进行状态跟踪，导致任务直接失败。
-  // 这里关闭状态跟踪以保证发行拷贝动作可执行。
-  doNotTrackState("Copy to root dir may contain locked/unreadable files (e.g. .gradle checksums.lock)")
+// 确保打包前先编译 game 模块
+tasks.fatJar.dependsOn(':game:compileJava')
+tasks.fatJar.dependsOn(':game:processResources')
 
-  dependsOn tasks.fatJar
-  from(tasks.fatJar.archiveFile)
-  into(rootProject.rootDir)
-  rename { 'StarAxis.jar' }
-}
+// 注意：打包任务已移至根项目 build.gradle
+// 使用 ./gradlew build 或 ./gradlew dist 构建完整发行版
 
 run {
   // Web 版不需要 LibGDX assets workingDir，这里保持在项目根目录，方便读取 ../web/dist

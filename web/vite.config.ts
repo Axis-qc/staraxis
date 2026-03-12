@@ -38,8 +38,8 @@ export default defineConfig({
   // 定义 webui 为基础路径
   base: '/webui/',
   build: {
-    // 定义构建输出目录
-    outDir: '../webui',
+    // 定义构建输出目录 - 输出到游戏发行文件夹
+    outDir: 'G:/games/staraxis/StarAxis Game/webui',
     emptyOutDir: true,
   },
 })
