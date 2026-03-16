@@ -13,6 +13,7 @@ import * as THREE from 'three'
 import type { WorldRenderContext, WorldFrameState } from '../worldRenderManager'
 import type { WorldRenderSubsystem } from './worldRenderSubsystem'
 import { shouldRender } from './lodSystem'
+import { logger } from '../../utils/logger'
 
 /**
  * 初始舰船标记常量（与后端固定 flag 一致）喵。
@@ -36,6 +37,8 @@ interface ShipRenderState {
   isMoving: boolean
   /** 上次收到权威坐标的时间戳（performance.now()）喵。 */
   lastAuthTime: number
+  /** 上次记录的权威isMoving状态（用于调试日志去重）喵。 */
+  lastLoggedAuthIsMoving?: boolean
 }
 
 /**
@@ -239,6 +242,16 @@ export class ShipRenderer implements WorldRenderSubsystem {
 
       // 处理移动路径显示（仅当选中且正在移动时）喵
       const movementTarget = detailAny?.movementTarget
+
+      // 调试：只在选中且isMoving状态变化时打印日志喵
+      if (isSelected && renderState.lastLoggedAuthIsMoving !== authIsMoving) {
+        renderState.lastLoggedAuthIsMoving = authIsMoving
+        logger.info('ShipRenderer-Path', `ship=${entity.entityId} isMoving状态变化: ${!authIsMoving ? 'false->' : ''}true hasTarget=${!!movementTarget}`)
+        if (authIsMoving && movementTarget) {
+          logger.info('MoveShip-Trace', `前端渲染路径 ship=${entity.entityId} 目标=(${movementTarget.x.toFixed(0)},${movementTarget.y.toFixed(0)}) 时间=${performance.now().toFixed(0)}ms`)
+        }
+      }
+
       if (isSelected && renderState.isMoving && movementTarget) {
         this.updatePathLine(ctx, entity.entityId, renderState.displayPos, movementTarget)
       } else {

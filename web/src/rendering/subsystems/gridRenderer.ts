@@ -31,6 +31,7 @@ export class GridRenderer implements WorldRenderSubsystem {
     private grid: THREE.LineSegments | null = null
     private geometry: THREE.BufferGeometry | null = null
     private material: THREE.LineBasicMaterial | null = null
+    private visible: boolean = true
 
     init(ctx: WorldRenderContext): void {
         this.material = new THREE.LineBasicMaterial({
@@ -49,13 +50,20 @@ export class GridRenderer implements WorldRenderSubsystem {
         ctx.worldGroup.add(this.grid)
     }
 
+    setVisible(visible: boolean): void {
+        this.visible = visible
+        if (this.grid) {
+            this.grid.visible = visible
+        }
+    }
+
     update(ctx: WorldRenderContext, frame: WorldFrameState): void {
         void frame
 
         if (!this.geometry || !this.grid) return
 
-        // 网格始终可见，不参与LOD系统
-        this.grid.visible = true
+        // 网格可见性控制，不参与LOD系统
+        this.grid.visible = this.visible
 
         const camera = ctx.camera
         const zoom = ctx.zoom.value

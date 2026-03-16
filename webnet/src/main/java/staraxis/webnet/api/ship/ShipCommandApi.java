@@ -24,10 +24,14 @@ public final class ShipCommandApi {
     public static Map<String, Object> handleMoveShip(ObjectMapper objectMapper,
                                                       String worldId,
                                                       Map<String, Object> req) {
+        long apiStartTime = System.currentTimeMillis();
+
         String nationId = req.get("nationId") == null ? null : String.valueOf(req.get("nationId"));
         Long shipEntityId = req.get("shipEntityId") instanceof Number n ? n.longValue() : null;
         Double targetX = req.get("targetX") instanceof Number n ? n.doubleValue() : null;
         Double targetY = req.get("targetY") instanceof Number n ? n.doubleValue() : null;
+
+        System.out.println("[MoveShip-Trace] API接收 ship=" + shipEntityId + " 目标=(" + Math.round(targetX != null ? targetX : 0) + "," + Math.round(targetY != null ? targetY : 0) + ") 时间=" + apiStartTime);
 
         if (nationId == null || nationId.isBlank()) {
             return Map.of("ok", false, "error", "nationId_required");
@@ -47,6 +51,9 @@ public final class ShipCommandApi {
         // 提交移动命令到游戏层执行喵
         MoveShipCommand command = new MoveShipCommand(nationId, shipEntityId, targetX, targetY);
         runtime.submitCommand(command);
+
+        long apiEndTime = System.currentTimeMillis();
+        System.out.println("[MoveShip-Trace] API提交命令 ship=" + shipEntityId + " 耗时=" + (apiEndTime - apiStartTime) + "ms");
 
         return Map.of(
                 "ok", true,

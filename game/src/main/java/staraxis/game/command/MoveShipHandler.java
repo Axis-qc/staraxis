@@ -14,6 +14,8 @@ public class MoveShipHandler implements CommandHandler<MoveShipCommand> {
 
     @Override
     public void handle(MoveShipCommand command, WorldState worldState, double dtGameHours) {
+        long handlerStartTime = System.currentTimeMillis();
+
         if (command == null) {
             throw new IllegalArgumentException("command_required");
         }
@@ -26,16 +28,18 @@ public class MoveShipHandler implements CommandHandler<MoveShipCommand> {
         double targetX = command.getTargetX();
         double targetY = command.getTargetY();
 
+        System.out.println("[MoveShip-Trace] Handler执行 ship=" + shipEntityId + " 目标=(" + Math.round(targetX) + "," + Math.round(targetY) + ") Tick=" + worldState.time.simulationTick);
+
         // 获取舰船实体喵
         Entity entity = worldState.entitiesById.get(shipEntityId);
         if (entity == null) {
-            System.out.println("[MoveShip] Ship not found: " + shipEntityId);
+            System.out.println("[MoveShip-Trace] Ship not found: " + shipEntityId);
             return;
         }
 
         // 检查是否为舰船类型喵
         if (!(entity instanceof ShipBody)) {
-            System.out.println("[MoveShip] Entity is not a ship: " + shipEntityId);
+            System.out.println("[MoveShip-Trace] Entity is not a ship: " + shipEntityId);
             return;
         }
 
@@ -43,7 +47,7 @@ public class MoveShipHandler implements CommandHandler<MoveShipCommand> {
 
         // 检查舰船是否属于该国家喵
         if (!nationId.equals(ship.ownerNationId)) {
-            System.out.println("[MoveShip] Ship does not belong to nation: " + nationId);
+            System.out.println("[MoveShip-Trace] Ship does not belong to nation: " + nationId);
             return;
         }
 
@@ -54,11 +58,11 @@ public class MoveShipHandler implements CommandHandler<MoveShipCommand> {
         // 计算朝向（从当前位置到目标位置）喵
         double dx = targetX - ship.posWorldGU.x();
         double dy = targetY - ship.posWorldGU.y();
+        double distance = Math.sqrt(dx * dx + dy * dy);
         double headingDeg = Math.toDegrees(Math.atan2(dy, dx));
         ship.targetHeadingDeg = headingDeg;
 
-        System.out.println("[MoveShip] Ship " + shipEntityId + " moving to (" +
-                Math.round(targetX) + ", " + Math.round(targetY) + ") heading " +
-                Math.round(headingDeg) + "°");
+        long handlerEndTime = System.currentTimeMillis();
+        System.out.println("[MoveShip-Trace] Handler完成 ship=" + shipEntityId + " 已设置移动目标 距离=" + String.format("%.1f", distance) + "GU 耗时=" + (handlerEndTime - handlerStartTime) + "ms");
     }
 }

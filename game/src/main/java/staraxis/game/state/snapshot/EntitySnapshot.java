@@ -60,8 +60,24 @@ public class EntitySnapshot {
     })
     public final Object details;
 
+    /**
+     * 情报需求等级（intelRequiredLevel，0-10）喵。
+     *
+     * 说明：
+     * - 0 级：基础天文数据，无需探测即可见（如恒星、行星基础信息）喵。
+     * - 1-10 级：需要对应探测等级才能看到实体细节喵。
+     * - 用于 Webnet 快速裁剪：玩家在某星区的探测等级 >= 此值时可见喵。
+     */
+    public final int intelRequiredLevel;
+
     public EntitySnapshot(long entityId, EntityType entityType, long systemId, long parentEntityId,
             SectorCoord sectorCoord, Vec2d posWorldGU, String ownerNationId, boolean isPublic, Object details) {
+        this(entityId, entityType, systemId, parentEntityId, sectorCoord, posWorldGU, ownerNationId, isPublic, details, 0);
+    }
+
+    public EntitySnapshot(long entityId, EntityType entityType, long systemId, long parentEntityId,
+            SectorCoord sectorCoord, Vec2d posWorldGU, String ownerNationId, boolean isPublic, Object details,
+            int intelRequiredLevel) {
         this.entityId = entityId;
         this.entityType = entityType;
         this.systemId = systemId;
@@ -71,6 +87,7 @@ public class EntitySnapshot {
         this.ownerNationId = ownerNationId;
         this.isPublic = isPublic;
         this.details = details;
+        this.intelRequiredLevel = Math.max(0, Math.min(10, intelRequiredLevel));
     }
 
     // --- Details Payloads ---
@@ -164,6 +181,7 @@ public class EntitySnapshot {
      * - 速度矢量用于位置预测，实现流畅视觉体验喵。
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     public static class ShipDetails {
         /** 舰船自定义标记集合（customFlags）喵。 */
         public final java.util.Set<String> customFlags;

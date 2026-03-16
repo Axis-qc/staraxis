@@ -42,6 +42,9 @@ export function useRtsRightClickCommand(opts: {
     sendCommand?: CommandSender
 }) {
     function onPointerDown(e: PointerEvent) {
+        const eventTime = e.timeStamp
+        const processStart = performance.now()
+
         if (e.button !== 2) return
 
         // 禁止浏览器/插件默认行为（尽力）
@@ -49,6 +52,7 @@ export function useRtsRightClickCommand(opts: {
 
         const selected = opts.getSelectedIds()
         if (!selected || selected.length === 0) {
+            console.log(`[RightClick-Delay] 无选中实体，跳过处理 延迟=${(processStart - eventTime).toFixed(2)}ms`)
             return
         }
 
@@ -57,6 +61,12 @@ export function useRtsRightClickCommand(opts: {
 
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
         const targetWorldGU = clientToWorldGU(r, rect, e.clientX, e.clientY)
+
+        const processEnd = performance.now()
+        const totalDelay = processEnd - eventTime
+        const processTime = processEnd - processStart
+
+        console.log(`[RightClick-Delay] 坐标计算完成 目标=(${targetWorldGU.x.toFixed(0)},${targetWorldGU.y.toFixed(0)}) 总延迟=${totalDelay.toFixed(2)}ms 处理耗时=${processTime.toFixed(2)}ms`)
 
         const intent: RtsCommandIntent = {
             type: 'Move',
@@ -67,7 +77,11 @@ export function useRtsRightClickCommand(opts: {
         // 优先使用新的命令发送器喵
         const selectedEntities = opts.getSelectedEntities()
         if (opts.sendCommand) {
-            opts.sendCommand(intent, selectedEntities).catch(console.error)
+            const sendStart = performance.now()
+            opts.sendCommand(intent, selectedEntities).then(() => {
+                const sendEnd = performance.now()
+                console.log(`[RightClick-Delay] 命令发送完成 总延迟=${(sendEnd - eventTime).toFixed(2)}ms 发送耗时=${(sendEnd - sendStart).toFixed(2)}ms`)
+            }).catch(console.error)
         }
 
         opts.onCommandIntent?.(intent)

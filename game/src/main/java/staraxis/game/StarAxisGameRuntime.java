@@ -39,6 +39,7 @@ import staraxis.game.world.WorldGenConfig;
 import staraxis.game.world.WorldGenerator;
 import staraxis.game.world.WorldHexLayout;
 import staraxis.game.world.WorldSector;
+import staraxis.game.log.PerformanceMonitor;
 
 /**
  * StarAxisGameRuntime
@@ -218,6 +219,8 @@ public class StarAxisGameRuntime implements GameRuntime {
 
     @Override
     public void update(float dtSeconds) {
+        long tickStartTime = System.nanoTime();
+
         // 独立时间轴系统推进：唯一权威时间入口喵
         TimelineSystem.TickAdvance tickAdvance = TimelineSystem.advanceOneTick(worldState.time);
         double dtGameHours = tickAdvance.dtGameHours;
@@ -245,6 +248,21 @@ public class StarAxisGameRuntime implements GameRuntime {
         }
 
         publishRealTimeSnapshot();
+
+        // 记录性能数据喵
+        long tickEndTime = System.nanoTime();
+        long tickTimeMs = (tickEndTime - tickStartTime) / 1_000_000L;
+
+        // 获取实体数量和星区数量喵
+        int entityCount = worldState.entitiesById.size();
+        int sectorCount = worldState.worldMap.getSectorsByCoordView().size();
+        int activePlayerCount = worldState.nationManager.getAllNationIds().size();
+        long simulationTick = worldState.time.simulationTick;
+
+        // 记录到性能监测器（快照生成时间在 SnapshotBroadcaster 中记录）喵
+        PerformanceMonitor.getInstance().record(
+            tickTimeMs, 0, entityCount, sectorCount, activePlayerCount, simulationTick
+        );
     }
 
     @Override
@@ -425,6 +443,7 @@ public class StarAxisGameRuntime implements GameRuntime {
 
             s.putEntity(barycenter);
             // 高频快照下发重心实体快照喵
+            // 系统重心：情报等级 0（基础天文数据，公开可见）喵
             s.putEntitySnapshot(new EntitySnapshot(
                     barycenter.entityId,
                     barycenter.entityType,
@@ -434,7 +453,8 @@ public class StarAxisGameRuntime implements GameRuntime {
                     barycenter.posWorldGU,
                     barycenter.ownerNationId,
                     true,
-                    new EntitySnapshot.SystemBarycenterDetails()));
+                    new EntitySnapshot.SystemBarycenterDetails(),
+                    0));
 
             // 2. 注册恒星实体
             for (StarBody star : system.stars) {
@@ -448,6 +468,7 @@ public class StarAxisGameRuntime implements GameRuntime {
 
                 s.putEntity(star);
                 // 高频快照下发恒星实体快照喵
+                // 恒星：情报等级 0（基础天文数据，公开可见）喵
                 s.putEntitySnapshot(new EntitySnapshot(
                         star.entityId,
                         star.entityType,
@@ -463,7 +484,8 @@ public class StarAxisGameRuntime implements GameRuntime {
                                 star.massSolar,
                                 star.temperatureK,
                                 star.description,
-                                star.surfaceTexturePath)));
+                                star.surfaceTexturePath),
+                        0));
 
             }
 
@@ -488,6 +510,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                         isCapital = true;
                     }
                 }
+                // 行星：情报等级 0（基础天文数据，公开可见）喵
                 s.putEntitySnapshot(new EntitySnapshot(
                         planet.entityId,
                         planet.entityType,
@@ -509,7 +532,8 @@ public class StarAxisGameRuntime implements GameRuntime {
                                 planet.inclinationDeg,
                                 planet.periapsisArgDeg,
                                 planet.orbitalPeriodDays,
-                                planet.meanAnomalyDegAtEpoch)));
+                                planet.meanAnomalyDegAtEpoch),
+                        0));
 
             }
         }
@@ -572,6 +596,17 @@ public class StarAxisGameRuntime implements GameRuntime {
                 headingDeg = shipBody.currentHeadingDeg;
             }
 
+            // 获取情报需求等级（从 IntelSystem 查询，默认 4 级）喵
+            int intelRequiredLevel = worldState.intelSystem != null ?
+                    worldState.intelSystem.getRequiredIntelLevel(entity.entityType) : 4;
+
+            // 调试日志：只在舰船正在移动时记录（降低日志频率）喵
+            if (isMoving) {
+                System.out.println("[ShipSnapshot-Trace] ship=" + entity.entityId + " isMoving=true headingDeg=" + String.format("%.1f", headingDeg) +
+                    " target=" + (movementTarget != null ? "(" + Math.round(movementTarget.x()) + "," + Math.round(movementTarget.y()) + ")" : "null") +
+                    " tick=" + worldState.time.simulationTick);
+            }
+
             s.putEntitySnapshot(new EntitySnapshot(
                     entity.entityId,
                     entity.entityType,
@@ -583,8 +618,12 @@ public class StarAxisGameRuntime implements GameRuntime {
                     false,
                     new EntitySnapshot.ShipDetails(customFlags, headingDeg, isMoving, movementTarget, velocity,
                             maxSpeed, baseAcceleration, bowAccelerationBonus, turnRate,
-                            lateralSpeedPenalty, reverseSpeedPenalty)));
+                            lateralSpeedPenalty, reverseSpeedPenalty),
+                    intelRequiredLevel));
         }
+
+        // 5. 对所有星区的实体快照按情报等级排序，供 Webnet 二分查找快速裁剪喵
+        s.sortEntitySnapshotsByIntelLevel();
 
         realTimeBuffer.swapPublish();
     }

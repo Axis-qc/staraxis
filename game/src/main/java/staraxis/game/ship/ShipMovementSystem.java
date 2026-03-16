@@ -36,11 +36,11 @@ public class ShipMovementSystem {
 
             if (!ship.isMoving || ship.movementTarget == null) {
                 // 不在移动状态时减速到停止喵
-                decelerateToStop(ship, dtGameSeconds);
+                decelerateToStop(ship, dtGameSeconds, worldState);
                 continue;
             }
 
-            updateShipMovement(ship, dtGameSeconds);
+            updateShipMovement(ship, dtGameSeconds, worldState);
         }
     }
 
@@ -62,7 +62,7 @@ public class ShipMovementSystem {
     /**
      * 减速到停止喵。
      */
-    private void decelerateToStop(ShipBody ship, double dtGameSeconds) {
+    private void decelerateToStop(ShipBody ship, double dtGameSeconds, WorldState worldState) {
         if (ship.velWorldGU == null) {
             ship.velWorldGU = new Vec2d(0, 0);
             return;
@@ -88,13 +88,13 @@ public class ShipMovementSystem {
             ship.velWorldGU.y() * scale
         );
 
-        applyVelocity(ship, dtGameSeconds);
+        applyVelocity(ship, dtGameSeconds, worldState);
     }
 
     /**
      * 更新单个舰船的移动（全向移动）喵。
      */
-    private void updateShipMovement(ShipBody ship, double dtGameSeconds) {
+    private void updateShipMovement(ShipBody ship, double dtGameSeconds, WorldState worldState) {
         // 计算到目标的距离和期望移动方向喵
         double dx = ship.movementTarget.x() - ship.posWorldGU.x();
         double dy = ship.movementTarget.y() - ship.posWorldGU.y();
@@ -190,16 +190,19 @@ public class ShipMovementSystem {
         }
 
         // 应用速度更新位置喵
-        applyVelocity(ship, dtGameSeconds);
+        applyVelocity(ship, dtGameSeconds, worldState);
     }
 
     /**
      * 应用速度更新位置喵。
      */
-    private void applyVelocity(ShipBody ship, double dtGameSeconds) {
+    private void applyVelocity(ShipBody ship, double dtGameSeconds, WorldState worldState) {
         if (ship.velWorldGU == null) {
             return;
         }
+
+        // 保存旧星区坐标，用于跨区检测喵
+        var oldSectorCoord = ship.sectorCoord;
 
         double newX = ship.posWorldGU.x() + ship.velWorldGU.x() * dtGameSeconds;
         double newY = ship.posWorldGU.y() + ship.velWorldGU.y() * dtGameSeconds;
@@ -207,6 +210,28 @@ public class ShipMovementSystem {
 
         // 更新星区坐标喵
         ship.sectorCoord = WorldHexLayout.worldToSectorCoord(ship.posWorldGU);
+
+        // 跨星区检测：如果跨区且舰船是探测源，触发情报系统重算喵
+        if (oldSectorCoord != null && !oldSectorCoord.equals(ship.sectorCoord)) {
+            if (isDetectorSource(ship, worldState) && ship.ownerNationId != null) {
+                worldState.intelSystem.markDirty(ship.ownerNationId);
+            }
+        }
+    }
+
+    /**
+     * 判断实体是否为探测源喵。
+     */
+    private boolean isDetectorSource(ShipBody ship, WorldState worldState) {
+        if (worldState.intelSystem == null) {
+            return false;
+        }
+        var config = worldState.intelSystem.getConfig();
+        if (config == null) {
+            return false;
+        }
+        return config.detectorSourceStrengthByEntityType.containsKey(ship.entityType)
+                && config.detectorSourceRangeByEntityType.containsKey(ship.entityType);
     }
 
     /**

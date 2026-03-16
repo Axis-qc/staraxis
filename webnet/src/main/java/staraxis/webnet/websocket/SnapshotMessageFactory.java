@@ -149,15 +149,13 @@ public final class SnapshotMessageFactory {
             }
         }
 
-        // 2.3 私有实体处理：按情报可见星区分片处理喵
-        // 修改：支持nationId为null时的降级处理（包含所有本国实体）喵
-        // 重要：即使filterSectors为空，只要有nationId，也要处理本国实体喵
+        // 2.3 私有实体处理：使用星区缓存的探测等级 + 二分查找快速裁剪喵
+        // 优化点：
+        // - 直接从星区读取 nationDetectorLevels，O(1) 查询喵
+        // - 实体列表已按 intelRequiredLevel 排序，二分查找确定 cutoff 点喵
+        // - 复杂度从 O(Entities) 降至 O(VisibleSectors * log(EntitiesPerSector)) 喵
         boolean hasNationId = nationId != null && !nationId.isBlank();
         if (snapshotsBySector != null && !snapshotsBySector.isEmpty()) {
-            // 获取情报等级映射喵（nationId可能为null）
-            Map<String, Integer> sectorIntelLevels = (intelSystem != null && hasNationId) ?
-                    intelSystem.getNationSectorIntelLevelsView(nationId) : Collections.emptyMap();
-
             // 确定要遍历的星区：如果filterSectors非空则用它，否则遍历所有星区喵
             Set<SectorCoord> sectorsToProcess = (filterSectors != null && !filterSectors.isEmpty()) ?
                     filterSectors : snapshotsBySector.keySet();
@@ -168,55 +166,37 @@ public final class SnapshotMessageFactory {
                     continue;
                 }
 
-                for (EntitySnapshot s : sectorSnapshots) {
+                // O(1) 从星区缓存获取玩家在此星区的探测等级喵
+                var worldSector = runtime.getWorldStateForSimOnly().worldMap.getSector(sector);
+                int detectorLevel = (worldSector != null && hasNationId) ?
+                        worldSector.getDetectorLevel(nationId) : -1;
+
+                // 如果该玩家在此星区无探测，只处理本国实体喵
+                boolean hasDetector = detectorLevel >= 0;
+
+                // 实体列表已按 intelRequiredLevel 排序喵
+                // 使用二分查找找到 cutoff 点：最后一个 intelRequiredLevel <= detectorLevel 的索引喵
+                int cutoffIndex = hasDetector ? findCutoffIndex(sectorSnapshots, detectorLevel) : 0;
+
+                for (int i = 0; i < sectorSnapshots.size(); i++) {
+                    EntitySnapshot s = sectorSnapshots.get(i);
+
                     // 跳过公开实体喵
                     if (s.isPublic) {
                         continue;
                     }
 
-                    // 基础可见性过滤（视野系统）喵
-                    staraxis.game.entity.Entity e = runtime.getWorldStateForSimOnly().entitiesById.get(s.entityId);
-                    if (e == null) {
+                    // 本国实体强制可见（无论探测等级）喵
+                    boolean isOwnedBySelf = hasNationId && nationId.equals(s.ownerNationId);
+                    if (isOwnedBySelf) {
+                        privateEntitiesByIntelLevel.computeIfAbsent(s.intelRequiredLevel, k -> new ArrayList<>()).add(s);
                         continue;
                     }
 
-                    // 本国实体强制通过逻辑喵
-                    boolean isOwnedBySelf = false;
-                    if (hasNationId) {
-                        // 正常情况：比较ownerNationId喵
-                        isOwnedBySelf = nationId.equals(s.ownerNationId);
-                    } else {
-                        // nationId为null时的降级方案：如果实体有ownerNationId，则视为"本国"喵
-                        // 这样至少能看到自己的舰船，直到WebSocket正确建立nationId映射
-                        isOwnedBySelf = s.ownerNationId != null && !s.ownerNationId.isBlank();
-                    }
-
-                    if (!isOwnedBySelf) {
-                        // 非本国实体需要视野计算喵
-                        if (nationId == null || nationId.isBlank()) {
-                            // nationId为null时，跳过非本国实体喵
-                            continue;
-                        }
-                        String vis = runtime.getWorldStateForSimOnly().visibilitySystem.computeEntityVisibility(e,
-                                nationId);
-                        if (!"FULL".equals(vis)) {
-                            continue;
-                        }
-                    }
-
-                    // 情报等级过滤与分层聚合喵
-                    if (intelSystem != null && nationId != null && !nationId.isBlank()) {
-                        int requiredLevel = intelSystem.getRequiredIntelLevel(s.entityType);
-                        String sectorKey = "q:" + s.sectorCoord.q() + ",r:" + s.sectorCoord.r();
-                        int detectorLevel = sectorIntelLevels.getOrDefault(sectorKey, -1);
-
-                        // 仅当星区探测等级 >= 实体情报需求等级时，才下发该实体数据喵
-                        if (detectorLevel >= requiredLevel) {
-                            privateEntitiesByIntelLevel.computeIfAbsent(requiredLevel, k -> new ArrayList<>()).add(s);
-                        }
-                    } else {
-                        // nationId为null时，直接加入默认层级喵
-                        privateEntitiesByIntelLevel.computeIfAbsent(0, k -> new ArrayList<>()).add(s);
+                    // 非本国实体：需要在该星区有探测，且情报等级 <= 探测等级喵
+                    // 由于列表已排序，i < cutoffIndex 的实体都满足条件喵
+                    if (hasDetector && i < cutoffIndex) {
+                        privateEntitiesByIntelLevel.computeIfAbsent(s.intelRequiredLevel, k -> new ArrayList<>()).add(s);
                     }
                 }
             }
@@ -397,5 +377,31 @@ public final class SnapshotMessageFactory {
             return null;
         }
         return snapshot.ownerNationId;
+    }
+
+    /**
+     * 二分查找：找到最后一个 intelRequiredLevel <= detectorLevel 的索引+1喵。
+     *
+     * 说明：
+     * - 实体列表已按 intelRequiredLevel 升序排序喵。
+     * - 返回值为 cutoffIndex，表示 [0, cutoffIndex) 范围内的实体都可见喵。
+     * - 例如：实体等级 [0,0,1,1,3,6]，detectorLevel=1，返回 4（前4个可见）喵。
+     *
+     * @param snapshots     已排序的实体快照列表
+     * @param detectorLevel 玩家在该星区的探测等级
+     * @return cutoffIndex，范围 [0, snapshots.size()]
+     */
+    private static int findCutoffIndex(List<EntitySnapshot> snapshots, int detectorLevel) {
+        int left = 0;
+        int right = snapshots.size();
+        while (left < right) {
+            int mid = (left + right) >>> 1;
+            if (snapshots.get(mid).intelRequiredLevel <= detectorLevel) {
+                left = mid + 1;
+            } else {
+                right = mid;
+            }
+        }
+        return left;
     }
 }

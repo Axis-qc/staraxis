@@ -42,6 +42,15 @@ public class IntelSystem {
     }
 
     /**
+     * 获取情报系统配置喵。
+     *
+     * @return IntelConfigDef 配置对象
+     */
+    public IntelConfigDef getConfig() {
+        return config;
+    }
+
+    /**
      * 标记指定国家的探测图为脏，触发重算喵。
      * 触发点：实体所有权变更、探测源实体移动、探测属性相关科技/建筑变化喵。
      */
@@ -118,6 +127,7 @@ public class IntelSystem {
 
     /**
      * 如果缓存已脏，则为指定国家重新计算全图探测分布图喵。
+     * 同时更新各星区的 nationDetectorLevels 缓存，供 Webnet 快速查询喵。
      */
     private void rebuildIfDirty(String nationId) {
         if (!dirtyFlags.getOrDefault(nationId, true) && detectorCache.containsKey(nationId)) {
@@ -173,6 +183,21 @@ public class IntelSystem {
                             newMap.put(key, Math.max(newMap.getOrDefault(key, -1), level));
                         }
                     }
+                }
+            }
+
+            // 3. 更新星区的 nationDetectorLevels 缓存喵
+            // 先清理该国家在所有星区的旧数据喵
+            for (var sector : worldState.worldMap.getSectorsView()) {
+                sector.nationDetectorLevels.remove(nationId);
+            }
+            // 再写入新的探测等级喵
+            for (Map.Entry<String, Integer> entry : newMap.entrySet()) {
+                SectorCoord coord = keyToCoord(entry.getKey());
+                if (coord == null) continue;
+                var sector = worldState.worldMap.getSector(coord);
+                if (sector != null) {
+                    sector.nationDetectorLevels.put(nationId, entry.getValue());
                 }
             }
 

@@ -170,4 +170,20 @@ public class RealTimeWorldState {
         // 返回不可修改的视图，但内部列表仍然是可变的（由填充层控制）喵
         return Collections.unmodifiableMap(entitySnapshotsBySector);
     }
+
+    /**
+     * 对所有星区的实体快照按情报等级排序喵。
+     *
+     * 说明：
+     * - 用于 Webnet 二分查找快速裁剪可见实体喵。
+     * - 排序规则：按 intelRequiredLevel 升序（0级在前，高等级在后）喵。
+     * - 应在 publishRealTimeSnapshot() 填充完所有快照后调用喵。
+     */
+    public void sortEntitySnapshotsByIntelLevel() {
+        for (List<EntitySnapshot> sectorSnapshots : entitySnapshotsBySector.values()) {
+            if (sectorSnapshots.size() > 1) {
+                sectorSnapshots.sort(java.util.Comparator.comparingInt(es -> es.intelRequiredLevel));
+            }
+        }
+    }
 }

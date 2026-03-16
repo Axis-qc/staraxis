@@ -55,6 +55,7 @@ export type WorldRenderer = {
     removeSectorsFromCache: (sectorKeys: string[]) => void
     getEntityWorldPosGU: (entityId: number) => { x: number; y: number } | null
     setCurrentNationId: (nationId: string | null) => void
+    setGridVisible: (visible: boolean) => void
     onCameraChanged: (cb: () => void) => () => void
     dispose: () => void
 }
@@ -366,6 +367,13 @@ export function createWorldRenderManager(
         }
     }
 
+    const setGridVisible = (visible: boolean) => {
+        gridRenderer.setVisible(visible)
+        // 触发更新以确保可见性立即生效喵
+        const frame = frameBuilder.build(null)
+        gridRenderer.update(ctx, frame)
+    }
+
     return {
         zoom,
         cameraWorldPosGU,
@@ -378,6 +386,7 @@ export function createWorldRenderManager(
         removeSectorsFromCache,
         getEntityWorldPosGU,
         setCurrentNationId,
+        setGridVisible,
         onCameraChanged,
         dispose,
     }

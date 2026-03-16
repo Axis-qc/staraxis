@@ -70,6 +70,7 @@ import { useVisibleSectors } from '../features/inGame/composables/useVisibleSect
 import { useInGameDebugWindow } from '../features/inGame/composables/useInGameDebugWindow'
 import { useInGameWindows } from '../features/inGame/composables/useInGameWindows'
 import { createCameraStatePersister, loadPersistedCameraState } from '../features/inGame/composables/useCameraPersist'
+import { logger } from '../utils/logger'
 
 import { useAuthStore } from '../stores/auth'
 import { useWorldSessionStore } from '../stores/worldSession'
@@ -135,6 +136,16 @@ const {
 // 选中的舰船面板状态喵
 const selectedShipPanelOpen = ref(false)
 const selectedShipEntity = ref<EntitySnapshot | null>(null)
+
+// 网格可见性状态喵
+const gridVisible = ref(true)
+
+function toggleGridVisible() {
+    const renderer = hub.getRenderer()
+    if (!renderer) return
+    gridVisible.value = !gridVisible.value
+    renderer.setGridVisible(gridVisible.value)
+}
 
 // RTS 选择系统喵
 const selection = useRtsSelection({
@@ -361,6 +372,18 @@ function dispatch(action: GameAction) {
 const uiBindings = useInGameUiInputBindings({ onAction: dispatch })
 const inputController = useInGameInputController({ onAction: dispatch })
 
+// 画布指针按下处理（框选 + 右键命令）喵
+function onCanvasPointerDown(e: PointerEvent) {
+  try {
+    const t = performance.now()
+    selection.onPointerDown(e)
+    rightClickCommand.onPointerDown(e)
+    console.log(`[PointerDown-Delay] 总处理时间=${(performance.now() - t).toFixed(2)}ms`)
+  } catch (err) {
+    console.error('[onCanvasPointerDown] Error:', err)
+  }
+}
+
 onMounted(async () => {
   const el = rootRef.value
   if (el) {
@@ -498,7 +521,7 @@ onUnmounted(() => {
 <template>
   <div ref="rootRef" class="in-game-root">
     <div ref="containerRef" class="render-container" @pointermove="hub.onCanvasPointerMove"
-      @pointerdown="(e) => { selection.onPointerDown(e); rightClickCommand.onPointerDown(e) }"
+      @pointerdown="onCanvasPointerDown"
       @pointermove.capture="selection.onPointerMove" @pointerup.capture="selection.onPointerUp"
       @pointercancel.capture="selection.cancelSelection"></div>
 
@@ -593,6 +616,22 @@ onUnmounted(() => {
         <div class="kv">
           <div class="k">国家ID</div>
           <div class="v">{{ auth.selectedNationId || '未设置' }}</div>
+        </div>
+        <div class="kv">
+          <div class="k">世界网格</div>
+          <div class="v">
+            <button class="debug-toggle-btn" type="button" @click="toggleGridVisible">
+              {{ gridVisible ? 'ON' : 'OFF' }}
+            </button>
+          </div>
+        </div>
+        <div class="kv">
+          <div class="k">日志导出</div>
+          <div class="v">
+            <button class="debug-toggle-btn" type="button" @click="logger.exportLogs()">
+              导出
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -832,5 +871,24 @@ onUnmounted(() => {
   text-align: right;
   font-size: 11px;
   color: color-mix(in srgb, var(--text-color) 65%, transparent);
+}
+
+.debug-toggle-btn {
+  min-width: 48px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--glow-color) 25%, transparent);
+  background: color-mix(in srgb, var(--panel-bg) 50%, rgba(0, 0, 0, 0.3));
+  color: var(--text-color);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.debug-toggle-btn:hover {
+  border-color: color-mix(in srgb, var(--glow-color) 60%, transparent);
+  background: color-mix(in srgb, var(--panel-bg) 70%, rgba(0, 0, 0, 0.4));
+  color: var(--text-color-hover);
 }
 </style>

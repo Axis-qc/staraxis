@@ -105,10 +105,17 @@ public class SnapshotBroadcaster {
                     Set<SectorCoord> visible = runtime.getWorldStateForSimOnly().visibilitySystem
                             .computeIntelVisibleSectorsForNation(nationId);
 
+                    // 记录快照生成时间喵
+                    long snapshotStartTime = System.nanoTime();
                     var snapshotDto = SnapshotMessageFactory.buildSnapshotMessageWithNation(runtime,
                             lastTickCostMs.get(),
                             visible, nationId);
                     String json = objectMapper.writeValueAsString(snapshotDto);
+                    long snapshotBuildTimeMs = (System.nanoTime() - snapshotStartTime) / 1_000_000L;
+
+                    // 更新性能监测器中的快照生成时间喵
+                    staraxis.game.log.PerformanceMonitor.getInstance().updateLastSnapshotBuildTime(snapshotBuildTimeMs);
+
                     WebSockets.sendText(json, ch, null);
                 }
             }
