@@ -115,7 +115,7 @@ export class StarRenderer implements WorldRenderSubsystem {
 
             const isSelected = selectedIds.has(entity.entityId)
             
-            // 快速剔除检查：LOD不可见或不在视锥内
+            // 快速剔除检查：LOD不可见或不在镜头内
             const shouldBeVisible = shouldRender(starLod, isSelected) && 
                 entity.posWorldGU && 
                 (isSelected || isPointInAabb(entity.posWorldGU, cullingAabb))

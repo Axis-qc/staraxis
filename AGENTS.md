@@ -1,208 +1,103 @@
-# StarAxis - AI 代理指南
+# AGENTS 工作日志
 
-本文档为在 StarAxis 项目中工作的 AI 代理提供必要信息喵。
+## 2026-03-27：渲染性能优化 - ShipRenderer增量状态更新与术语清理
 
-## 项目概述
+### 📋 工作摘要
+针对前端渲染性能瓶颈，实施核心优化：只对镜头大小1.2倍内的实体进行完整渲染计算，镜头外实体完全不计算（但继续接收快照更新），同时保持选中实体始终完整更新喵。
 
-StarAxis 是一个采用分离架构的太空策略游戏喵：
-- **后端**：Java 21 + libGDX 的游戏模拟引擎（`game` 模块）
-- **前端**：Vue 3 + TypeScript + Three.js 的 Web 渲染界面（`web` 模块）
-- **通信**：`webnet` 模块作为 WebSocket 服务器连接游戏和网页
-- **架构**：浏览器前端渲染 + Java 后端模拟的权威架构
+**核心原则**：
+- 后端全量推送数据（4X大战略游戏特性），前端智能处理
+- 2D游戏使用2D术语，清理不必要的3D概念
+- 选中实体特权保障：无论是否在镜头内都完整更新
 
-## 构建命令
+### ✅ 已完成的任务
 
-### Java 后端（Gradle）
-```bash
-# 构建所有模块
-./gradlew build
+#### 1. ShipRenderer增量状态更新（核心优化）
+- **文件**: `web/src/rendering/subsystems/shipRenderer.ts`
+- **修改位置**: 第159-163行
+- **优化逻辑**:
+  ```typescript
+  // 提前镜头检查：非选中且不在镜头内 -> 跳过状态更新喵
+  if (!isSelected && !isPointInAabb(authPos, cullingAabb)) {
+      // 非选中且不在镜头内，跳过所有后续计算喵
+      continue
+  }
+  stateUpdatedCount++
+  ```
+- **作用范围**：仅对以下实体执行完整的`renderState`更新和插值计算：
+  - 在镜头1.2倍范围内（`cullingAabb`）的实体
+  - 选中实体（无论是否在镜头内）
+- **状态同步机制**：依赖现有的 `MAX_INTERPOLATION_DISTANCE_GU = 100.0` 机制，实体从镜头外进入时自动跳跃同步喵。
+- **调试日志增强**：将输出更新为 `Ships total: ${shipCount}, State-updated: ${stateUpdatedCount}, Rendered: ${renderedCount}`，清晰区分三种计数喵。
 
-# 运行所有测试
-./gradlew test
+#### 2. 3D术语清理（统一为2D术语）
+清理项目中不必要的3D概念表述，统一使用2D游戏术语喵：
 
-# 运行特定模块测试（如 game 模块）
-./gradlew :game:test
+| 文件 | 修改前 | 修改后 | 备注 |
+|------|--------|--------|------|
+| `cameraSystem.ts` | "相机视锥" | "相机投影范围" | 第5、9、15行 |
+| `cameraSystem.ts` | "管理相机视锥更新" | "管理相机投影范围更新" | 第9行 |
+| `frameStateBuilder.ts` | "基于屏幕像素计算世界范围（禁用视锥检测）" | "基于屏幕像素计算世界范围（2D游戏优化）" | 第85行 |
+| `starRenderer.ts` | "不在视锥内" | "不在镜头内" | 第118行 |
+| `文件结构.md` | "相机视锥" | "相机投影范围" | 第66行 |
 
-# 运行单个测试类
-./gradlew :game:test --tests "staraxis.game.astro.AstroDataTest"
+**保留的Three.js API**：`updateFrustum()`函数名和`frustumCulled`属性保持不变（底层API兼容）喵。
 
-# 清理构建
-./gradlew clean
+#### 3. 架构合规性检查
+- ✅ **后端全量推送**：不要求后端只推送镜头内实体，前端智能处理
+- ✅ **2D游戏特性**：清理3D术语，使用"镜头剔除"、"可见性检查"等2D概念
+- ✅ **选中实体保障**：选中实体无论是否在镜头内都完整更新，确保UI功能正常
 
-# 运行 Web 版本（仅启动 webnet 服务器）
-./gradlew runWeb
-./gradlew :webnet:run
+### 📊 预期性能收益
 
-# 构建可分发 jar
-./gradlew :webnet:fatJar
-./gradlew :webnet:distLauncher  # 复制到根目录为 StarAxis.jar
+| 指标 | 优化前 | 优化后 | 收益分析 |
+|------|--------|--------|----------|
+| **CPU计算** | 所有SHIP实体都更新`renderState` | 仅镜头内+选中实体更新`renderState` | 镜头外实体完全跳过计算，显著降低CPU负载喵 |
+| **内存占用** | `renderStateById`可能无限增长 | 镜头外非选中实体的`renderState`及时清理 | 内存使用更稳定，避免无限增长喵 |
+| **调试信息** | 仅总实体数和渲染数 | 新增状态更新实体数 | 便于性能分析和瓶颈定位喵 |
+| **术语准确性** | 混合3D/2D术语 | 统一2D游戏术语 | 代码更清晰，减少概念混淆喵 |
 
-# 运行原生桌面版本
-./gradlew :lwjgl3:run
-```
+### 🔍 验证建议
 
-### Web 前端（npm）
-```bash
-cd web
+#### 1. 功能测试
+- **选中实体保障**：选中实体在镜头外是否正常更新状态和显示路径喵。
+- **镜头内实体**：镜头内实体插值平滑性，位置同步准确性喵。
+- **状态同步**：实体从镜头外进入时状态同步（跳跃阈值100GU）喵。
+- **回归测试**：移动路径显示、初始舰船特殊渲染、对象池复用喵。
 
-# 开发服务器
-npm run dev
+#### 2. 性能测试
+- **耗时测量**：浏览器Performance面板测量`ShipRenderer.update`耗时减少比例喵。
+- **FPS对比**：大量实体（>1000）时的FPS提升情况喵。
+- **内存监控**：`renderStateById`映射大小稳定性喵。
 
-# 生产构建
-npm run build
+#### 3. 调试验证
+- **控制台输出**：检查新的调试日志格式，确认`stateUpdatedCount`计数正确喵。
+- **统计指标**：验证`Ships total`、`State-updated`、`Rendered`三个计数的逻辑关系喵。
 
-# 预览生产构建
-npm run preview
+### 🚀 下一步选项
 
-# 类型检查
-npx vue-tsc -b
-```
+根据原始计划，以下为可选继续工作：
 
-### 组合开发（Windows 批处理）
-```bash
-# 同时启动后端和前端
-run-web-dev.bat
-```
+1. **继续术语清理**：搜索项目中其他可能存在的3D概念表述，确保术语一致性喵。
+2. **其他渲染子系统优化**：分析`starRenderer`、`planetRenderer`是否需要类似的增量更新机制喵。
+3. **完整验证测试**：运行实际游戏场景测试，收集性能提升数据喵。
+4. **创建性能监控**：添加更详细的性能指标收集和可视化面板喵。
+5. **扩展优化范围**：将增量更新模式应用到其他渲染类型（恒星、行星等）喵。
 
-## 代码风格指南
+### 📁 相关文件
+- `web/src/rendering/subsystems/shipRenderer.ts` - 核心优化文件
+- `web/src/rendering/systems/cameraSystem.ts` - 术语清理
+- `web/src/rendering/systems/frameStateBuilder.ts` - 剔除范围计算
+- `web/src/rendering/subsystems/starRenderer.ts` - 术语清理
+- `web/src/文件结构.md` - 文档更新
+- `web/src/rendering/subsystems/planetRenderer.ts` - 待优化候选
 
-### Java 后端
-- **Java 版本**：21（源/目标兼容性）
-- **缩进**：4 个空格（根据 `.editorconfig`）
-- **行尾**：LF（Unix 风格）
-- **字符集**：UTF-8
-- **导入**：标准库导入在前，第三方库在后
-- **命名**：
-  - 类：`PascalCase`
-  - 方法/变量：`camelCase`
-  - 常量：`UPPER_SNAKE_CASE`
-  - 包：`staraxis.module.subpackage`
-- **注释**：所有代码必须有注释（CLAUDE.md 强制要求）
-  - 公有方法：记录功能和参数
-  - 复杂逻辑：解释实现思路
-  - 关键算法：包含性能考虑
-- **错误处理**：可恢复错误使用受检异常，编程错误使用运行时异常
-- **不可变性**：尽可能使用不可变数据结构（参考 `AstroData` 示例）
-- **注解**：在适当位置使用 `@Nullable`/`@NotNull`
-
-### TypeScript/JavaScript 前端
-- **TypeScript**：启用严格模式（tsconfig.app.json）
-- **缩进**：2 个空格（根据 Vue/TS 惯例）
-- **Vue 3**：优先使用组合式 API
-- **导入**：使用路径别名 `@/` 指向 `src/` 目录
-- **命名**：
-  - 组件：`PascalCase`（如 `StarMap.vue`）
-  - 变量/函数：`camelCase`
-  - 常量：`UPPER_SNAKE_CASE`
-  - 接口/类型：`PascalCase`
-- **类型安全**：启用所有严格编译器选项（`noUnusedLocals`、`noUnusedParameters` 等）
-
-### Gradle 文件
-- **缩进**：2 个空格（根据 `.editorconfig`）
-
-## 测试
-
-### Java 测试
-- **位置**：每个模块的 `src/test/java/`
-- **框架**：JUnit（基于标准 Gradle Java 项目推断）
-- **命名**：测试类以 `Test` 结尾（如 `AstroDataTest.java`）
-- **运行单个测试**：使用 `./gradlew :module:test --tests "fully.qualified.TestClassName"`
-
-### 前端测试
-- 当前未配置测试框架
-- 通过 `npm run dev` 进行手动测试
-
-## 架构约束（关键）
-
-来自 CLAUDE.md 的 12 条硬规则：
-
-1. **模拟层权威**：所有改变游戏结果的逻辑只在 `game` 模块执行喵
-2. **确定性优先**：相同输入与初始状态必须得到相同结果喵
-3. **模拟时间驱动**：游戏推进与结算绑定 `simulationTick`/`gameDatetimeDay`，不能由 FPS 或实时时钟驱动喵
-4. **多核并行是强制项**：可并行计算要拆分为 Job；但权威写入必须在"落账点"串行化处理喵
-5. **双快照口径**：
-   - **上一日结算状态（DailySettlementState）**：UI 层展示经济、生产、人口等具有固定结算周期（按"日"）的数据喵
-   - **实时世界状态（RealTimeWorldState）**：战斗、移动、即时事件等实时系统，以及需要即时数据的 UI 展示喵
-6. **命名/术语统一**：所有字段写法必须一致，文档中出现字段必须用 `fieldName`（解释）格式喵
-7. **代码必须带注释**：所有代码都必须带注释，禁止不写注释，禁止删除已有注释，仅允许修改喵
-8. **模块化、可维护性与数据驱动**：所有功能必须以模块化方式设计喵
-9. **禁止硬编码**：代码内禁止出现硬编码与硬枚举，应该数据驱动喵
-10. **数据驱动优先**：游戏行为与内容应由外部数据（如 JSON/表）定义喵
-11. **配置加载口径**：所有可配置项必须通过配置系统加载，禁止散落的魔法数字与硬编码字符串喵
-12. **可演进性**：配置与数据结构需要允许未来迭代与 Mod 扩展喵
-
-## 模块职责
-
-- **`game`**：权威模拟层 - 核心游戏逻辑、天文数据生成、行星/恒星系统、命令总线、经济系统喵
-- **`webnet`**：通信服务器 - 连接 `game` 模块与前端喵
-- **`web`**：客户端界面 - Vue 3 + TypeScript + Three.js，纯展示层喵
-- **`client`**：客户端应用层（未来原生 Java 客户端使用，当前未使用）
-- **`ui`**：UI 层（未来原生 Java 客户端使用，当前未使用）
-
-## 通信流向
-```
-game（游戏模拟） → webnet（通信中转） → web（前端展示）
-```
-**严格禁止**：web 和 game 之间的直接交互，所有通信必须经过 webnet 模块喵。
-
-## 开发工作流
-
-1. **搜索优先**：在修改或添加代码前，必须先搜索现有代码库喵
-2. **配置管理**：集中管理所有配置项，支持热重载，为 Mod 提供扩展点喵
-3. **国际化支持**：所有用户可见文本必须支持国际化喵
-4. **资源管理**：资源存储在 `/assets` 路径内，预加载字体，按需加载音频喵
-
-## Cursor 规则（.cursor/rules/specify-rules.mdc）
-
-- **活跃技术**：Java 21 + libGDX 1.12.1 + LWJGL3 后端
-- **结构**：多模块 Gradle（`shared/` + `lwjgl3/`）
-- **序列化**：Kryo（现有 KryoSerializer）
-- **日志**：logback
-- **网络**：需要明确（Netty/Java NIO/其他）
-
-## 代码检查和格式化
-
-### Java
-- **EditorConfig**：强制执行 4 空格缩进、LF 行尾、UTF-8 字符集
-- **Checkstyle**：当前未配置
-- **推荐**：如果添加了 spotless 插件，运行 `./gradlew spotlessApply`
-
-### TypeScript/JavaScript
-- **TypeScript 编译器**：通过 `tsconfig.app.json` 提供严格检查
-- **ESLint**：当前未配置
-- **Prettier**：当前未配置
-
-## 性能考虑
-
-- **内存管理**：大对象使用对象池，及时释放不再使用的资源喵
-- **渲染优化**：Three.js 渲染使用实例化渲染，避免每帧创建新对象喵
-- **网络优化**：WebSocket 消息使用二进制协议，状态更新使用增量更新喵
-
-## 常见陷阱避免
-
-1. **禁止硬编码游戏逻辑** - 使用数据驱动配置喵
-2. **禁止从前端修改游戏状态** - 前端仅负责展示喵
-3. **始终添加注释** - 每个方法和复杂逻辑块都需要解释喵
-4. **遵循命名约定** - 保持代码库一致性喵
-5. **保持确定性** - 确保相同输入产生相同输出喵
-6. **尊重模块边界** - 不要绕过 `webnet` 进行游戏-前端通信喵
-
-## 快速参考
-
-```bash
-# 启动完整开发环境
-./gradlew runWeb & cd web && npm run dev
-
-# 构建所有内容
-./gradlew build && cd web && npm run build
-
-# 运行测试
-./gradlew test
-
-# 创建分发版本
-./gradlew :webnet:distLauncher
-```
+### 📝 技术要点
+- **剔除范围**：`CULLING_SCALE = 1.2`，基于屏幕像素计算世界单位剔除范围喵。
+- **插值参数**：`INTERPOLATION_SPEED_GU_PER_MS = 0.05`，`MAX_INTERPOLATION_DISTANCE_GU = 100.0`喵。
+- **对象池**：`shipPool`、`pathLinePool`复用机制保持优化喵。
+- **2D检查**：`isPointInAabb()`函数进行轴对齐包围盒检查喵。
 
 ---
-*最后更新：2026-02-13*
-*基于 build.gradle、package.json、CLAUDE.md 和代码库结构分析*
+*记录时间：2026-03-27 18:00*
+*优化目标：提升前端渲染性能，减少冗余计算，统一项目术语喵。*

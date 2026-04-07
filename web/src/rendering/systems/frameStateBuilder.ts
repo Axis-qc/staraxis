@@ -82,9 +82,9 @@ export function createFrameStateBuilder(
     }
 
     const build = (snapshot: SnapshotMessage | null): FrameState => {
-        // 基于屏幕像素计算世界范围（禁用视锥检测）
-        // 使用屏幕宽高的 1.5 倍作为剔除范围
-        const CULLING_SCALE = 1.5
+        // 基于屏幕像素计算世界范围（2D游戏优化）
+        // 使用屏幕宽高的 1.2 倍作为剔除范围
+        const CULLING_SCALE = 1.2
         const screenWidthPx = container.clientWidth
         const screenHeightPx = container.clientHeight
 

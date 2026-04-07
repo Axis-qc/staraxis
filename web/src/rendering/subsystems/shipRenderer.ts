@@ -135,6 +135,7 @@ export class ShipRenderer implements WorldRenderSubsystem {
 
     // 调试：统计舰船数量喵
     let shipCount = 0
+    let stateUpdatedCount = 0
     let renderedCount = 0
 
     for (const entity of entitiesById.values()) {
@@ -154,6 +155,14 @@ export class ShipRenderer implements WorldRenderSubsystem {
         console.log(`[ShipRenderer] Ship ${entity.entityId} has no position`)
         continue
       }
+
+      // 提前镜头检查：非选中且不在镜头内 -> 跳过状态更新喵
+      if (!isSelected && !isPointInAabb(authPos, cullingAabb)) {
+        // 非选中且不在镜头内，跳过所有后续计算喵
+        continue
+      }
+
+      stateUpdatedCount++
 
       const detailAny: any = entity.details
       const authIsMoving = detailAny?.isMoving === true
@@ -203,7 +212,7 @@ export class ShipRenderer implements WorldRenderSubsystem {
         }
       }
 
-      // 使用显示位置进行视锥剔除检查喵
+      // 使用显示位置进行镜头剔除检查喵
       if (!isSelected && !isPointInAabb(renderState.displayPos, cullingAabb)) {
         continue
       }
@@ -261,7 +270,9 @@ export class ShipRenderer implements WorldRenderSubsystem {
 
     // 调试：每60帧输出一次统计喵
     if (shipCount > 0 && Math.random() < 0.01) {
-      console.log(`[ShipRenderer] Ships in frame: ${shipCount}, Rendered: ${renderedCount}`)
+      const width = cullingAabb.maxX - cullingAabb.minX
+      const height = cullingAabb.maxY - cullingAabb.minY
+      console.log(`[ShipRenderer] Ships total: ${shipCount}, State-updated: ${stateUpdatedCount}, Rendered: ${renderedCount}, CullingAABB: ${width.toFixed(0)}x${height.toFixed(0)} GU (scale=1.2)`)
     }
 
     // 回收不可见舰船及其路径喵

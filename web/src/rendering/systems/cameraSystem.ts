@@ -2,17 +2,17 @@
  * @file cameraSystem.ts
  *
  * @description
- * 相机系统 - 管理 Three.js 相机、渲染器和视锥。
+ * 相机系统 - 管理 Three.js 相机、渲染器和投影范围。
  *
  * 作用：
  * - 创建和配置 Three.js WebGLRenderer、Scene、OrthographicCamera。
- * - 管理相机视锥更新（响应容器尺寸变化）。
+ * - 管理相机投影范围更新（响应容器尺寸变化）。
  * - 应用相机变换（缩放、位置）。
  * - 提供渲染上下文。
  *
  * @usage
  * - 在 WorldRenderManager 中创建 CameraSystem 实例。
- * - 调用 updateFrustum() 响应容器 resize。
+ * - 调用 updateFrustum() 更新相机投影范围。
  * - 调用 applyTransform(zoom, position) 更新相机状态。
  */
 import * as THREE from 'three'
