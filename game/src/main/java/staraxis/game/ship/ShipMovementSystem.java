@@ -18,6 +18,17 @@ import staraxis.game.world.WorldHexLayout;
 public class ShipMovementSystem {
 
     /**
+     * 简化计算计数器映射（ship -> 计数器）喵。
+     * 用于降低简化计算的频率喵。
+     */
+    private final java.util.Map<ShipBody, Integer> simplifiedCalculationCounters = new java.util.HashMap<>();
+
+    /**
+     * 简化计算频率（每 N tick 计算一次）喵。
+     */
+    private static final int SIMPLIFIED_CALCULATION_INTERVAL_TICKS = 4;
+
+    /**
      * 更新所有舰船的移动状态喵。
      *
      * @param worldState  世界状态
@@ -31,16 +42,22 @@ public class ShipMovementSystem {
                 continue;
             }
 
-            // 更新舰首朝向（始终转向目标朝向）喵
-            updateHeading(ship, dtGameSeconds);
+            // 检查是否启用简化计算模式喵
+            if (ship.simplifiedMovementEnabled && ship.movementCommand != null) {
+                // 简化计算：基于指令推测位置喵
+                updateShipMovementSimplified(ship, dtGameSeconds, worldState);
+            } else {
+                // 完整物理计算（向后兼容）喵
+                updateHeading(ship, dtGameSeconds);
 
-            if (!ship.isMoving || ship.movementTarget == null) {
-                // 不在移动状态时减速到停止喵
-                decelerateToStop(ship, dtGameSeconds, worldState);
-                continue;
+                if (!ship.isMoving || ship.movementTarget == null) {
+                    // 不在移动状态时减速到停止喵
+                    decelerateToStop(ship, dtGameSeconds, worldState);
+                    continue;
+                }
+
+                updateShipMovement(ship, dtGameSeconds, worldState);
             }
-
-            updateShipMovement(ship, dtGameSeconds, worldState);
         }
     }
 
@@ -245,5 +262,135 @@ public class ShipMovementSystem {
             angle += 360.0;
         }
         return angle;
+    }
+
+    /**
+     * 简化移动计算：基于指令推测位置喵。
+     * 前端进行完整视觉计算，后端只进行简化验证喵。
+     *
+     * @param ship 舰船实体
+     * @param dtGameSeconds 时间增量（游戏秒）
+     * @param worldState 世界状态
+     */
+    private void updateShipMovementSimplified(ShipBody ship, double dtGameSeconds, WorldState worldState) {
+        MovementCommand command = ship.movementCommand;
+        if (command == null) {
+            // 无指令，使用完整计算作为后备喵
+            updateShipMovement(ship, dtGameSeconds, worldState);
+            return;
+        }
+
+        // 获取计数器并更新喵
+        int counter = simplifiedCalculationCounters.getOrDefault(ship, 0);
+        counter = (counter + 1) % SIMPLIFIED_CALCULATION_INTERVAL_TICKS;
+        simplifiedCalculationCounters.put(ship, counter);
+
+        // 只有计数器为0时才执行完整验证计算喵
+        // 其他tick使用非常简化的直线运动喵
+        if (counter == 0) {
+            // 每 N tick 执行一次完整计算作为验证喵
+            updateShipMovement(ship, dtGameSeconds * SIMPLIFIED_CALCULATION_INTERVAL_TICKS, worldState);
+        } else {
+            // 简化直线运动：恒定速度，直线移动喵
+            updateShipMovementSimplifiedLinear(ship, dtGameSeconds, command);
+        }
+
+        // 清理不再需要的计数器喵
+        if (!ship.simplifiedMovementEnabled || ship.movementCommand == null) {
+            simplifiedCalculationCounters.remove(ship);
+        }
+    }
+
+    /**
+     * 简化直线运动计算：恒定速度，直线移动喵。
+     * 这是一个非常简化的算法，用于减少CPU计算喵。
+     *
+     * @param ship 舰船实体
+     * @param dtGameSeconds 时间增量（游戏秒）
+     * @param command 移动指令
+     */
+    private void updateShipMovementSimplifiedLinear(ShipBody ship, double dtGameSeconds, MovementCommand command) {
+        if (command.commandType == MovementCommand.TYPE_STOP) {
+            // 停止指令：线性减速到零喵
+            if (ship.velWorldGU == null) {
+                ship.velWorldGU = new Vec2d(0, 0);
+                return;
+            }
+
+            double currentSpeed = Math.sqrt(
+                ship.velWorldGU.x() * ship.velWorldGU.x() +
+                ship.velWorldGU.y() * ship.velWorldGU.y()
+            );
+
+            if (currentSpeed < 0.01) {
+                ship.velWorldGU = new Vec2d(0, 0);
+                ship.isMoving = false;
+                ship.movementCommand = null;
+                return;
+            }
+
+            // 线性减速喵
+            double decelAmount = command.baseAcceleration * dtGameSeconds;
+            double newSpeed = Math.max(0, currentSpeed - decelAmount);
+            double scale = newSpeed / currentSpeed;
+
+            ship.velWorldGU = new Vec2d(
+                ship.velWorldGU.x() * scale,
+                ship.velWorldGU.y() * scale
+            );
+
+            // 应用速度更新位置喵
+            ship.posWorldGU = new Vec2d(
+                ship.posWorldGU.x() + ship.velWorldGU.x() * dtGameSeconds,
+                ship.posWorldGU.y() + ship.velWorldGU.y() * dtGameSeconds
+            );
+        } else if (command.commandType == MovementCommand.TYPE_MOVE_TO) {
+            // 移动指令：直线运动，恒定速度喵
+            if (command.targetPosition == null) {
+                return;
+            }
+
+            // 计算到目标的距离和方向喵
+            double dx = command.targetPosition.x() - ship.posWorldGU.x();
+            double dy = command.targetPosition.y() - ship.posWorldGU.y();
+            double distance = Math.sqrt(dx * dx + dy * dy);
+
+            // 如果已接近目标，停止喵
+            if (distance < 20.0) {
+                ship.isMoving = false;
+                ship.velWorldGU = new Vec2d(0, 0);
+                ship.movementCommand = null;
+                return;
+            }
+
+            // 计算移动方向喵
+            double dirX = dx / distance;
+            double dirY = dy / distance;
+
+            // 使用恒定速度（最大速度的一半）喵
+            double speed = command.maxSpeed * 0.5;
+
+            // 更新速度喵
+            ship.velWorldGU = new Vec2d(dirX * speed, dirY * speed);
+
+            // 更新位置喵
+            ship.posWorldGU = new Vec2d(
+                ship.posWorldGU.x() + ship.velWorldGU.x() * dtGameSeconds,
+                ship.posWorldGU.y() + ship.velWorldGU.y() * dtGameSeconds
+            );
+
+            // 更新舰首朝向（简单转向目标方向）喵
+            double targetHeading = Math.toDegrees(Math.atan2(dirY, dirX));
+            double headingDiff = normalizeAngle(targetHeading - ship.currentHeadingDeg);
+            double maxTurn = command.turnRate * dtGameSeconds;
+
+            if (Math.abs(headingDiff) <= maxTurn) {
+                ship.currentHeadingDeg = targetHeading;
+            } else {
+                ship.currentHeadingDeg += Math.signum(headingDiff) * maxTurn;
+            }
+            ship.currentHeadingDeg = normalizeAngle(ship.currentHeadingDeg);
+            ship.targetHeadingDeg = ship.currentHeadingDeg;
+        }
     }
 }

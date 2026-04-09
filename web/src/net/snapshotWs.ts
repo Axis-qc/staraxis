@@ -52,6 +52,17 @@ export type ShipDetails = {
     lateralSpeedPenalty?: number
     /** 反向移动速度惩罚系数（0.0~1.0）喵。 */
     reverseSpeedPenalty?: number
+    /** 移动指令信息（简化计算模式）喵。 */
+    movementCommand?: {
+        /** 指令类型：'MOVE_TO' | 'STOP' 喵。 */
+        commandType: string
+        /** 目标位置（仅当 commandType === 'MOVE_TO' 时有效）喵。 */
+        targetPosition?: { x: number; y: number }
+        /** 起始游戏时间（游戏秒）喵。 */
+        startGameSeconds?: number
+        /** 起始模拟 tick 喵。 */
+        startSimulationTick?: number
+    }
 }
 
 export type SystemBarycenterDetails = {}
@@ -98,6 +109,10 @@ export type SnapshotMessage = {
         totalGameSeconds: number
         /** 权威时间轴：本次快照对应 tick 的推进秒数（Δt）。 */
         deltaGameSeconds: number
+        /** 游戏日期天（整数）。 */
+        gameDatetimeDay?: number
+        /** 当前游戏日内累计游戏小时数（用于跨日结算）。 */
+        accGameHoursInDay?: number
         worldRadius: number
         worldType?: string
         gameSecondsPerRealSecond?: number

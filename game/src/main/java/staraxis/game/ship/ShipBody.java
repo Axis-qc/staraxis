@@ -130,4 +130,17 @@ public class ShipBody extends Entity {
      * 实际最大速度 = maxSpeed * reverseSpeedPenalty
      */
     public double reverseSpeedPenalty = 0.3;
+
+    /**
+     * 当前移动指令（简化计算模式）喵。
+     * 当启用简化计算时，存储移动指令信息喵。
+     */
+    public MovementCommand movementCommand;
+
+    /**
+     * 是否启用简化计算模式喵。
+     * 为 true 时，ShipMovementSystem 使用基于指令的推测计算喵。
+     * 为 false 时，使用完整的物理计算（向后兼容）喵。
+     */
+    public boolean simplifiedMovementEnabled = true;
 }

@@ -14,6 +14,9 @@ import type { WorldRenderContext, WorldFrameState } from '../worldRenderManager'
 import type { WorldRenderSubsystem } from './worldRenderSubsystem'
 import { shouldRender } from './lodSystem'
 import { logger } from '../../utils/logger'
+import { ShipMovementSystemFrontend, type ShipState } from '../../game/systems/ShipMovementSystemFrontend.ts'
+import { defaultGameTimeManager } from '../../game/time/GameTimeManager.ts'
+import { defaultPredictionCorrector } from '../../game/prediction/PredictionCorrector.ts'
 
 /**
  * 初始舰船标记常量（与后端固定 flag 一致）喵。
@@ -39,6 +42,14 @@ interface ShipRenderState {
   lastAuthTime: number
   /** 上次记录的权威isMoving状态（用于调试日志去重）喵。 */
   lastLoggedAuthIsMoving?: boolean
+  /** 预测状态（前端移动计算）喵。 */
+  predictionState?: ShipState
+  /** 预测位置（前端计算）喵。 */
+  predictedPosition?: { x: number; y: number }
+  /** 预测速度（前端计算）喵。 */
+  predictedVelocity?: { x: number; y: number } | null
+  /** 最后预测更新时间戳（performance.now()）喵。 */
+  lastPredictionTimeMs?: number
 }
 
 /**
@@ -66,6 +77,31 @@ export class ShipRenderer implements WorldRenderSubsystem {
   private readonly renderStateById = new Map<number, ShipRenderState>()
 
   /**
+   * 前端舰船移动系统喵。
+   */
+  private readonly movementSystem = new ShipMovementSystemFrontend()
+
+  /**
+   * 游戏时间管理器喵。
+   */
+  private readonly timeManager = defaultGameTimeManager
+
+  /**
+   * 预测纠正器喵。
+   */
+  private readonly predictionCorrector = defaultPredictionCorrector
+
+  /**
+   * 是否启用预测模式（默认 true，前端视觉计算迁移方案已启用）喵。
+   */
+  private predictionEnabled = true
+
+  /**
+   * 最后处理的模拟 tick，用于避免重复更新时间快照喵。
+   */
+  private lastProcessedTick = 0
+
+  /**
    * 舰船渲染共用三角形几何（朝上箭头形）喵。
    */
   private shipTriangleGeometry: THREE.BufferGeometry | null = null
@@ -86,6 +122,35 @@ export class ShipRenderer implements WorldRenderSubsystem {
    * 最大插值距离（GU）：当差异超过此值时直接跳到目标位置喵。
    */
   private readonly MAX_INTERPOLATION_DISTANCE_GU = 100.0
+
+  /**
+   * 启用或禁用预测模式喵。
+   *
+   * @param enabled 是否启用预测
+   */
+  enablePrediction(enabled: boolean): void {
+    this.predictionEnabled = enabled
+    if (enabled) {
+      console.debug(`[ShipRenderer] 预测模式已启用喵。`)
+    } else {
+      console.debug(`[ShipRenderer] 预测模式已禁用喵。`)
+    }
+  }
+
+  /**
+   * 更新时间快照喵。
+   * 当收到新的后端快照时调用此方法喵。
+   *
+   * @param snapshot 时间快照数据
+   */
+  updateTimeSnapshot(snapshot: {
+    simulationTick: number
+    totalGameSeconds: number
+    deltaGameSeconds: number
+    timeScale?: number
+  }): void {
+    this.timeManager.updateSnapshot(snapshot)
+  }
 
   init(_ctx: WorldRenderContext): void {
     // 以世界单位构建一个等腰三角形，占位表示舰船朝向喵。
@@ -116,8 +181,28 @@ export class ShipRenderer implements WorldRenderSubsystem {
   update(ctx: WorldRenderContext, frame: WorldFrameState): void {
     const { entitiesById, selectedIds, cullingAabb } = frame
 
+    // 更新时间快照（如果快照中有新的时间信息）喵
+    const snapshot = frame.snapshot
+    if (snapshot?.realTimeWorldState) {
+      const rt = snapshot.realTimeWorldState
+      if (rt.simulationTick !== this.lastProcessedTick) {
+        this.updateTimeSnapshot({
+          simulationTick: rt.simulationTick,
+          totalGameSeconds: rt.totalGameSeconds,
+          deltaGameSeconds: rt.deltaGameSeconds,
+          timeScale: rt.timeScale ?? rt.gameSecondsPerRealSecond
+        })
+        this.lastProcessedTick = rt.simulationTick
+      }
+    }
+
     // 当前渲染时间戳喵
     const now = performance.now()
+
+    // 更新时间管理器（用于预测计算）喵
+    const timeState = this.timeManager.update()
+    const currentGameSeconds = timeState.currentGameSeconds
+    const isGamePaused = timeState.isPaused || timeState.timeScale === 0
 
     // 舰船 LOD：始终可见喵
     const shipLod: import('./lodSystem').EntityLodState = {
@@ -167,6 +252,15 @@ export class ShipRenderer implements WorldRenderSubsystem {
       const detailAny: any = entity.details
       const authIsMoving = detailAny?.isMoving === true
       const headingDeg = Number(detailAny?.headingDeg ?? 0)
+      const authVelocity = detailAny?.velocity
+      const movementTarget = detailAny?.movementTarget
+      const maxSpeed = detailAny?.maxSpeed ?? 20.0
+      const baseAcceleration = detailAny?.baseAcceleration ?? 5.0
+      const bowAccelerationBonus = detailAny?.bowAccelerationBonus ?? 5.0
+      const turnRate = detailAny?.turnRate ?? 45.0
+      const lateralSpeedPenalty = detailAny?.lateralSpeedPenalty ?? 0.6
+      const reverseSpeedPenalty = detailAny?.reverseSpeedPenalty ?? 0.3
+      const movementCommand = detailAny?.movementCommand
 
       // 获取或创建渲染状态喵
       let renderState = this.renderStateById.get(entity.entityId)
@@ -186,8 +280,43 @@ export class ShipRenderer implements WorldRenderSubsystem {
         renderState.targetPos = { x: authPos.x, y: authPos.y }
         renderState.isMoving = authIsMoving
         renderState.lastAuthTime = now
+      }
 
-        // 计算当前显示位置与目标位置的距离喵
+      // 更新预测纠正器的权威状态喵
+      this.predictionCorrector.updateEntityState(
+        entity.entityId,
+        renderState.displayPos, // 预测位置初始化为显示位置喵
+        { x: authPos.x, y: authPos.y }, // 权威位置喵
+        renderState.predictedVelocity ?? null, // 预测速度喵
+        authVelocity ? { x: authVelocity.x, y: authVelocity.y } : null // 权威速度喵
+      )
+
+      // 预测模式：初始化或更新预测状态喵
+      if (this.predictionEnabled && !isGamePaused) {
+        this.updatePredictionState(
+          entity.entityId,
+          renderState,
+          {
+            authPos,
+            headingDeg,
+            authIsMoving,
+            movementTarget,
+            authVelocity,
+            maxSpeed,
+            baseAcceleration,
+            bowAccelerationBonus,
+            turnRate,
+            lateralSpeedPenalty,
+            reverseSpeedPenalty,
+            movementCommand,
+          },
+          currentGameSeconds,
+          now
+        )
+      }
+
+      // 计算当前显示位置与目标位置的距离喵（仅在非预测模式或游戏暂停时使用）喵
+      if (!this.predictionEnabled || isGamePaused) {
         const dx = renderState.targetPos.x - renderState.displayPos.x
         const dy = renderState.targetPos.y - renderState.displayPos.y
         const distance = Math.sqrt(dx * dx + dy * dy)
@@ -250,7 +379,6 @@ export class ShipRenderer implements WorldRenderSubsystem {
       renderedCount++
 
       // 处理移动路径显示（仅当选中且正在移动时）喵
-      const movementTarget = detailAny?.movementTarget
 
       // 调试：只在选中且isMoving状态变化时打印日志喵
       if (isSelected && renderState.lastLoggedAuthIsMoving !== authIsMoving) {
@@ -289,6 +417,123 @@ export class ShipRenderer implements WorldRenderSubsystem {
         this.releaseShipMesh(mesh)
         // 清理渲染状态喵
         this.renderStateById.delete(id)
+      }
+    }
+  }
+
+  /**
+   * 更新实体预测状态喵。
+   *
+   * @param entityId 实体ID
+   * @param renderState 渲染状态
+   * @param entityData 实体数据
+   * @param currentGameSeconds 当前游戏秒数
+   * @param now 当前时间戳（performance.now()）
+   */
+  private updatePredictionState(
+    entityId: number,
+    renderState: ShipRenderState,
+    entityData: {
+      authPos: { x: number; y: number }
+      headingDeg: number
+      authIsMoving: boolean
+      movementTarget?: { x: number; y: number }
+      authVelocity?: { x: number; y: number }
+      maxSpeed: number
+      baseAcceleration: number
+      bowAccelerationBonus: number
+      turnRate: number
+      lateralSpeedPenalty: number
+      reverseSpeedPenalty: number
+      movementCommand?: any
+    },
+    currentGameSeconds: number,
+    now: number
+  ): void {
+    // 初始化或获取预测状态喵
+    let predictionState = renderState.predictionState
+    if (!predictionState) {
+      predictionState = {
+        entityId,
+        position: { x: entityData.authPos.x, y: entityData.authPos.y },
+        velocity: entityData.authVelocity ? { x: entityData.authVelocity.x, y: entityData.authVelocity.y } : null,
+        movementTarget: entityData.movementTarget ? { x: entityData.movementTarget.x, y: entityData.movementTarget.y } : null,
+        isMoving: entityData.authIsMoving,
+        currentHeadingDeg: entityData.headingDeg,
+        targetHeadingDeg: entityData.headingDeg,
+        maxSpeed: entityData.maxSpeed,
+        baseAcceleration: entityData.baseAcceleration,
+        bowAccelerationBonus: entityData.bowAccelerationBonus,
+        turnRate: entityData.turnRate,
+        lateralSpeedPenalty: entityData.lateralSpeedPenalty,
+        reverseSpeedPenalty: entityData.reverseSpeedPenalty,
+      }
+      renderState.predictionState = predictionState
+      renderState.lastPredictionTimeMs = now
+    } else {
+      // 更新预测状态的基础参数喵
+      predictionState.maxSpeed = entityData.maxSpeed
+      predictionState.baseAcceleration = entityData.baseAcceleration
+      predictionState.bowAccelerationBonus = entityData.bowAccelerationBonus
+      predictionState.turnRate = entityData.turnRate
+      predictionState.lateralSpeedPenalty = entityData.lateralSpeedPenalty
+      predictionState.reverseSpeedPenalty = entityData.reverseSpeedPenalty
+
+      // 更新移动目标和状态喵
+      predictionState.movementTarget = entityData.movementTarget
+        ? { x: entityData.movementTarget.x, y: entityData.movementTarget.y }
+        : null
+      predictionState.isMoving = entityData.authIsMoving
+    }
+
+    // 计算时间增量（游戏秒）喵
+    const lastPredictionTimeMs = renderState.lastPredictionTimeMs ?? now
+    const deltaRealMs = now - lastPredictionTimeMs
+    const deltaGameSeconds = this.timeManager.realMsToGameSeconds(deltaRealMs)
+
+    // 如果游戏时间有推进，进行预测计算喵
+    if (deltaGameSeconds > 0) {
+      // 创建临时世界状态（简化）喵
+      const worldState = { gameTimeSeconds: currentGameSeconds }
+
+      // 更新预测状态喵
+      this.movementSystem.update([predictionState], worldState, deltaGameSeconds)
+
+      // 保存预测结果喵
+      renderState.predictedPosition = { x: predictionState.position.x, y: predictionState.position.y }
+      renderState.predictedVelocity = predictionState.velocity
+        ? { x: predictionState.velocity.x, y: predictionState.velocity.y }
+        : null
+      renderState.lastPredictionTimeMs = now
+
+      // 更新预测纠正器的预测状态喵
+      this.predictionCorrector.updateEntityState(
+        entityId,
+        { x: predictionState.position.x, y: predictionState.position.y }, // 新的预测位置喵
+        entityData.authPos, // 权威位置（不变）喵
+        predictionState.velocity ? { x: predictionState.velocity.x, y: predictionState.velocity.y } : null, // 新的预测速度喵
+        entityData.authVelocity ? { x: entityData.authVelocity.x, y: entityData.authVelocity.y } : null // 权威速度喵
+      )
+
+      // 计算纠正结果喵
+      const correctionResult = this.predictionCorrector.calculateCorrection(
+        entityId,
+        deltaRealMs
+      )
+
+      // 应用纠正结果喵
+      if (correctionResult.corrected) {
+        renderState.displayPos = { ...correctionResult.displayPosition }
+        if (correctionResult.displayVelocity) {
+          renderState.predictedVelocity = { ...correctionResult.displayVelocity }
+          if (predictionState.velocity) {
+            predictionState.velocity.x = correctionResult.displayVelocity.x
+            predictionState.velocity.y = correctionResult.displayVelocity.y
+          }
+        }
+      } else {
+        // 无纠正，使用预测位置喵
+        renderState.displayPos = { ...renderState.predictedPosition! }
       }
     }
   }
@@ -390,7 +635,7 @@ export class ShipRenderer implements WorldRenderSubsystem {
     ])
     const geometry = line.geometry as THREE.BufferGeometry
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    geometry.attributes.position.needsUpdate = true
+    geometry.attributes.position!.needsUpdate = true
 
     line.visible = true
   }
@@ -398,7 +643,7 @@ export class ShipRenderer implements WorldRenderSubsystem {
   /**
    * 移除舰船的移动路径线条喵。
    */
-  private removePathLine(ctx: WorldRenderContext, entityId: number): void {
+  private removePathLine(_ctx: WorldRenderContext, entityId: number): void {
     const line = this.activePathByEntityId.get(entityId)
     if (line) {
       this.activePathByEntityId.delete(entityId)
