@@ -1,4 +1,9 @@
 /**
+ * @deprecated 将迁移到分层架构中的CelestialLayer喵。
+ * 新代码请使用 src/rendering/layers/celestial/renderers/starRenderer.ts 喵。
+ */
+
+/**
  * @file starRenderer.ts
  *
  * @description
