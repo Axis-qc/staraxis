@@ -32,6 +32,8 @@ import { ShipRenderer } from './subsystems/shipRenderer'
 import { SelectionRenderer } from './subsystems/selectionRenderer'
 import { GridRenderer } from './subsystems/gridRenderer'
 import { HexOutlineRenderer } from './subsystems/hexOutlineRenderer'
+import { SimpleLayerManager } from './layers/layerManager'
+import type { RenderLayer } from './layers'
 import type { LodState, LodOptions } from './subsystems/lodSystem'
 import { createInputSystem } from '../input/inputSystem'
 import { VisibilityStateManager } from './systems/visibilityState'
@@ -58,6 +60,10 @@ export type WorldRenderer = {
     setGridVisible: (visible: boolean) => void
     onCameraChanged: (cb: () => void) => () => void
     dispose: () => void
+    // 新增层控制API
+    getLayer: (name: string) => RenderLayer | null
+    setLayerVisible: (name: string, visible: boolean) => void
+    setLayerQuality: (name: string, quality: number) => void
 }
 
 export type WorldRendererOptions = {
@@ -117,6 +123,9 @@ export function createWorldRenderManager(
     const cameraSystem = createCameraSystem(container)
     const { renderer, scene, camera, worldGroup, entitiesGroup, canvas } = cameraSystem
 
+    // 初始化层管理器
+    const layerManager = new SimpleLayerManager()
+
     // 初始化纹理管理器
     const textureManager = createTextureManager()
 
@@ -138,7 +147,7 @@ export function createWorldRenderManager(
     }
 
     // 初始化帧状态构建器
-    const frameBuilder = createFrameStateBuilder(container, cameraWorldPosGU, zoom, options.lod, visibilityManager)
+    const frameBuilder = createFrameStateBuilder(container, cameraWorldPosGU, zoom, options.lod)
 
     // 初始化渲染子系统
     const starRenderer = new StarRenderer()
@@ -270,7 +279,8 @@ export function createWorldRenderManager(
         inputSystem,
         cameraWorldPosGU,
         zoom,
-        applyCameraTransform
+        applyCameraTransform,
+        { layerManager } // 新增层管理器参数
     )
 
     // 启动渲染循环
@@ -389,5 +399,15 @@ export function createWorldRenderManager(
         setGridVisible,
         onCameraChanged,
         dispose,
+        // 层控制API
+        getLayer: (name: string) => layerManager.getLayer(name),
+        setLayerVisible: (name: string, visible: boolean) => {
+            const layer = layerManager.getLayer(name)
+            if (layer) layer.setVisible(visible)
+        },
+        setLayerQuality: (name: string, quality: number) => {
+            const layer = layerManager.getLayer(name)
+            if (layer) layer.setQuality(quality)
+        },
     }
 }
