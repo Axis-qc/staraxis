@@ -13,10 +13,11 @@
 import type { WorldRenderContext, WorldFrameState } from '../../worldRenderManager'
 import { BaseLayer } from '../baseLayer'
 import { RenderOrder } from '../index'
+import { LayerStarRenderer } from './renderers/starRenderer'
 
 export class CelestialLayer extends BaseLayer {
-    private _starRenderer: any = null
-    private _planetRenderer: any = null
+    private _starRenderer: LayerStarRenderer | null = null
+    private _planetRenderer: any = null // TODO: 后续添加
 
     constructor() {
         super('celestial', RenderOrder.CELESTIAL)
@@ -26,23 +27,37 @@ export class CelestialLayer extends BaseLayer {
         // 初始化时将group添加到世界组
         ctx.worldGroup.add(this.group)
 
-        // TODO: 初始化具体渲染器（后续任务实现）
-        console.log('CelestialLayer initialized')
+        // 初始化恒星渲染器
+        this._starRenderer = new LayerStarRenderer(this.group)
+        this._starRenderer.init()
 
-        // 避免未使用变量警告
-        void this._starRenderer
-        void this._planetRenderer
+        // TODO: 初始化行星渲染器
+        console.log('CelestialLayer initialized with star renderer')
+        void this._planetRenderer // 避免未使用变量警告
     }
 
-    update(_ctx: WorldRenderContext, _frame: WorldFrameState): void {
+    update(ctx: WorldRenderContext, frame: WorldFrameState): void {
         if (!this.visible) return
 
-        // TODO: 更新星体渲染器（后续任务实现）
+        // 更新恒星渲染器
+        if (this._starRenderer) {
+            this._starRenderer.update(ctx, frame)
+        }
+
+        // TODO: 更新行星渲染器
+
         this.updateTimestamp()
     }
 
     dispose(ctx: WorldRenderContext): void {
-        // TODO: 清理资源（后续任务实现）
+        // 清理渲染器
+        if (this._starRenderer) {
+            this._starRenderer.dispose()
+            this._starRenderer = null
+        }
+
+        // TODO: 清理行星渲染器
+
         ctx.worldGroup.remove(this.group)
         super.setVisible(false)
     }
