@@ -19,9 +19,11 @@ import type { WorldRenderContext } from '../worldRenderManager'
 import type { WorldRenderSubsystem } from '../subsystems/worldRenderSubsystem'
 import type { FrameState } from './frameStateBuilder'
 import type { InputSystem } from '../../input/inputSystem'
+import type { LayerManager } from '../layers'
 
 export type RenderLoopOptions = {
     keyboardPanSpeed?: number
+    layerManager?: LayerManager
 }
 
 export type RenderLoop = {
@@ -44,6 +46,7 @@ export function createRenderLoop(
     options: RenderLoopOptions = {}
 ): RenderLoop {
     const KEYBOARD_PAN_SPEED = options.keyboardPanSpeed ?? 20
+    const layerManager = options.layerManager
     let rafId = 0
     let isRunning = false
 
@@ -79,8 +82,15 @@ export function createRenderLoop(
 
         // 构建帧状态并更新子系统
         const frame = buildFrameState()
-        for (const s of subsystems) {
-            s.update(ctx, frame)
+
+        // 优先使用层管理器，如果存在
+        if (layerManager) {
+            layerManager.updateAll(ctx, frame)
+        } else {
+            // 回退到子系统（兼容模式）
+            for (const s of subsystems) {
+                s.update(ctx, frame)
+            }
         }
 
         // 渲染场景
