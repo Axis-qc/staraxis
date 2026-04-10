@@ -1,25 +1,24 @@
 /**
- * @deprecated 将迁移到分层架构中的EntityLayer喵。
- * 新代码请使用 src/rendering/layers/entity/renderers/shipRenderer.ts 喵。
- *
  * @file shipRenderer.ts
  *
  * @description
- * 舰船渲染器（ShipRenderer）喵。
+ * 舰船渲染器适配层版本（LayerShipRenderer）喵。
+ * 基于原有ShipRenderer重构，适配分层架构中的EntityLayer喵。
  *
  * 作用喵：
  * - 渲染实体快照中的 SHIP（舰船实体）喵。
  * - 对初始舰船（customFlags 包含 INITIAL_SPAWN_SHIP）使用三角形占位渲染喵。
  * - 提供对象池复用，降低频繁创建/销毁 Mesh 的开销喵。
+ * - 支持预测模式和插值平滑移动喵。
  */
+
 import * as THREE from 'three'
-import type { WorldRenderContext, WorldFrameState } from '../worldRenderManager'
-import type { WorldRenderSubsystem } from './worldRenderSubsystem'
-import { shouldRender } from './lodSystem'
-import { logger } from '../../utils/logger'
-import { ShipMovementSystemFrontend, type ShipState } from '../../game/systems/ShipMovementSystemFrontend.ts'
-import { defaultGameTimeManager } from '../../game/time/GameTimeManager.ts'
-import { defaultPredictionCorrector } from '../../game/prediction/PredictionCorrector.ts'
+import type { WorldRenderContext, WorldFrameState } from '../../../worldRenderManager'
+import { shouldRender } from '@/rendering/subsystems/lodSystem'
+import { logger } from '@/utils/logger'
+import { ShipMovementSystemFrontend, type ShipState } from '@/game/systems/ShipMovementSystemFrontend'
+import { defaultGameTimeManager } from '@/game/time/GameTimeManager'
+import { defaultPredictionCorrector } from '@/game/prediction/PredictionCorrector'
 
 /**
  * 初始舰船标记常量（与后端固定 flag 一致）喵。
@@ -56,7 +55,17 @@ interface ShipRenderState {
 }
 
 /**
- * ShipRenderer（舰船渲染器）喵。
+ * 点是否在 AABB（轴对齐包围盒）中喵。
+ */
+function isPointInAabb(
+  p: { x: number; y: number },
+  a: { minX: number; maxX: number; minY: number; maxY: number },
+): boolean {
+  return p.x >= a.minX && p.x <= a.maxX && p.y >= a.minY && p.y <= a.maxY
+}
+
+/**
+ * LayerShipRenderer（分层架构舰船渲染器）喵。
  *
  * 渲染策略喵：
  * - 使用"插值"而非"预测"，避免前端后端计算偏差喵。
@@ -64,7 +73,7 @@ interface ShipRenderState {
  * - 每帧 displayPos 以固定速度向 targetPos 移动，保证平滑且不会偏离太远喵。
  * - 收到新快照时更新 targetPos，displayPos 继续向新目标平滑移动喵。
  */
-export class ShipRenderer implements WorldRenderSubsystem {
+export class LayerShipRenderer {
   private readonly shipPool: THREE.Mesh[] = []
   private readonly activeByEntityId = new Map<number, THREE.Mesh>()
 
@@ -126,6 +135,12 @@ export class ShipRenderer implements WorldRenderSubsystem {
    */
   private readonly MAX_INTERPOLATION_DISTANCE_GU = 100.0
 
+  private layerGroup: THREE.Group
+
+  constructor(layerGroup: THREE.Group) {
+    this.layerGroup = layerGroup
+  }
+
   /**
    * 启用或禁用预测模式喵。
    *
@@ -134,9 +149,9 @@ export class ShipRenderer implements WorldRenderSubsystem {
   enablePrediction(enabled: boolean): void {
     this.predictionEnabled = enabled
     if (enabled) {
-      console.debug(`[ShipRenderer] 预测模式已启用喵。`)
+      console.debug(`[LayerShipRenderer] 预测模式已启用喵。`)
     } else {
-      console.debug(`[ShipRenderer] 预测模式已禁用喵。`)
+      console.debug(`[LayerShipRenderer] 预测模式已禁用喵。`)
     }
   }
 
@@ -155,7 +170,7 @@ export class ShipRenderer implements WorldRenderSubsystem {
     this.timeManager.updateSnapshot(snapshot)
   }
 
-  init(_ctx: WorldRenderContext): void {
+  init(): void {
     // 以世界单位构建一个等腰三角形，占位表示舰船朝向喵。
     const geometry = new THREE.BufferGeometry()
     const vertices = new Float32Array([
@@ -208,7 +223,7 @@ export class ShipRenderer implements WorldRenderSubsystem {
     const isGamePaused = timeState.isPaused || timeState.timeScale === 0
 
     // 舰船 LOD：始终可见喵
-    const shipLod: import('./lodSystem').EntityLodState = {
+    const shipLod: import('@/rendering/subsystems/lodSystem').EntityLodState = {
       level: 0,
       visible: true,
       params: {
@@ -240,7 +255,7 @@ export class ShipRenderer implements WorldRenderSubsystem {
       // 获取快照中的权威位置喵
       const authPos = entity.posWorldGU
       if (!authPos) {
-        console.log(`[ShipRenderer] Ship ${entity.entityId} has no position`)
+        console.log(`[LayerShipRenderer] Ship ${entity.entityId} has no position`)
         continue
       }
 
@@ -355,7 +370,7 @@ export class ShipRenderer implements WorldRenderSubsystem {
       if (!mesh) {
         mesh = this.acquireShipMesh()
         this.activeByEntityId.set(entity.entityId, mesh)
-        ctx.entitiesGroup.add(mesh)
+        this.layerGroup.add(mesh)
       }
 
       const flags: string[] = Array.isArray(detailAny?.customFlags) ? detailAny.customFlags : []
@@ -381,12 +396,10 @@ export class ShipRenderer implements WorldRenderSubsystem {
       mesh.visible = true
       renderedCount++
 
-      // 处理移动路径显示（仅当选中且正在移动时）喵
-
       // 调试：只在选中且isMoving状态变化时打印日志喵
       if (isSelected && renderState.lastLoggedAuthIsMoving !== authIsMoving) {
         renderState.lastLoggedAuthIsMoving = authIsMoving
-        logger.info('ShipRenderer-Path', `ship=${entity.entityId} isMoving状态变化: ${!authIsMoving ? 'false->' : ''}true hasTarget=${!!movementTarget}`)
+        logger.info('LayerShipRenderer-Path', `ship=${entity.entityId} isMoving状态变化: ${!authIsMoving ? 'false->' : ''}true hasTarget=${!!movementTarget}`)
         if (authIsMoving && movementTarget) {
           logger.info('MoveShip-Trace', `前端渲染路径 ship=${entity.entityId} 目标=(${movementTarget.x.toFixed(0)},${movementTarget.y.toFixed(0)}) 时间=${performance.now().toFixed(0)}ms`)
         }
@@ -403,7 +416,7 @@ export class ShipRenderer implements WorldRenderSubsystem {
     if (shipCount > 0 && Math.random() < 0.01) {
       const width = cullingAabb.maxX - cullingAabb.minX
       const height = cullingAabb.maxY - cullingAabb.minY
-      console.log(`[ShipRenderer] Ships total: ${shipCount}, State-updated: ${stateUpdatedCount}, Rendered: ${renderedCount}, CullingAABB: ${width.toFixed(0)}x${height.toFixed(0)} GU (scale=1.2)`)
+      console.log(`[LayerShipRenderer] Ships total: ${shipCount}, State-updated: ${stateUpdatedCount}, Rendered: ${renderedCount}, CullingAABB: ${width.toFixed(0)}x${height.toFixed(0)} GU (scale=1.2)`)
     }
 
     // 回收不可见舰船及其路径喵
@@ -541,7 +554,7 @@ export class ShipRenderer implements WorldRenderSubsystem {
     }
   }
 
-  dispose(_ctx: WorldRenderContext): void {
+  dispose(): void {
     for (const mesh of this.shipPool) {
       ;(mesh.material as THREE.Material).dispose()
     }
@@ -628,7 +641,7 @@ export class ShipRenderer implements WorldRenderSubsystem {
     if (!line) {
       line = this.acquirePathLine()
       this.activePathByEntityId.set(entityId, line)
-      ctx.entitiesGroup.add(line)
+      this.layerGroup.add(line)
     }
 
     // 更新路径几何体（从舰船位置到目标位置）喵
@@ -692,14 +705,4 @@ export class ShipRenderer implements WorldRenderSubsystem {
     line.visible = false
     return line
   }
-}
-
-/**
- * 点是否在 AABB（轴对齐包围盒）中喵。
- */
-function isPointInAabb(
-  p: { x: number; y: number },
-  a: { minX: number; maxX: number; minY: number; maxY: number },
-): boolean {
-  return p.x >= a.minX && p.x <= a.maxX && p.y >= a.minY && p.y <= a.maxY
 }

@@ -1173,7 +1173,7 @@ git commit -m "feat: 创建实体层基础结构"
 - Create: `src/rendering/layers/entity/renderers/shipRenderer.ts`
 - Modify: `src/rendering/subsystems/shipRenderer.ts` (标记为待废弃)
 
-- [ ] **Step 1: 创建适配层接口的ShipRenderer**
+- [x] **Step 1: 创建适配层接口的ShipRenderer**
 
 由于ShipRenderer代码较长，这里创建基础结构，具体实现可参考原有逻辑：
 
@@ -1205,7 +1205,7 @@ export class LayerShipRenderer {
 }
 ```
 
-- [ ] **Step 2: 标记原有ShipRenderer为待废弃**
+- [x] **Step 2: 标记原有ShipRenderer为待废弃**
 
 ```typescript
 // 在 src/rendering/subsystems/shipRenderer.ts 顶部添加
@@ -1215,19 +1215,19 @@ export class LayerShipRenderer {
  */
 ```
 
-- [ ] **Step 3: 编译检查**
+- [x] **Step 3: 编译检查**
 
 ```bash
 cd web
-npm run type-check
+npx vue-tsc -b
 ```
-Expected: 无类型错误
+Expected: 使用@/别名路径解决模块导入问题，类型检查通过
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
-git add src/rendering/layers/entity/renderers/shipRenderer.ts src/rendering/subsystems/shipRenderer.ts
-git commit -m "feat: 创建ShipRenderer适配层版本基础"
+git add src/rendering/layers/entity/renderers/shipRenderer.ts src/rendering/subsystems/shipRenderer.ts web/src/rendering/layers/entity/entityLayer.ts docs/superpowers/plans/2026-04-10-frontend-render-layers-implementation.md
+git commit -m "feat: 完成ShipRenderer重构适配实体层，支持预测和路径渲染"
 ```
 
 ---
@@ -1617,12 +1617,12 @@ git commit -m "chore: 添加渲染性能测试脚本"
 
 ## 计划完成总结
 
-**实现状态**: 计划完成，包含15个主要任务，覆盖分层架构的全部核心功能喵。
+**实现状态**: 实施中，已完成基础架构（Task 1-4）和部分星体层、实体层，剩余背景层和整合清理喵。
 
 **关键里程碑**:
-1. ✅ **基础架构** (Task 1-3已完成, Task 4待办): 层接口、基础类、管理器、WorldRenderManager改造
-2. ⬜ **星体层** (Task 5-9): CelestialLayer、StarRenderer重构、集成测试
-3. ⬜ **实体层** (Task 10-11): EntityLayer基础、ShipRenderer适配
+1. ✅ **基础架构** (Task 1-4已完成): 层接口、基础类、管理器、WorldRenderManager改造
+2. 🟨 **星体层** (Task 5-9部分完成): CelestialLayer、StarRenderer重构已完成，集成进行中
+3. 🟨 **实体层** (Task 10已完成, Task 11进行中): EntityLayer基础完成，ShipRenderer适配中
 4. ⬜ **背景层** (Task 12): BackgroundLayer、星空渲染器
 5. ⬜ **整合清理** (Task 13-16): 移除旧代码、添加API、测试
 
