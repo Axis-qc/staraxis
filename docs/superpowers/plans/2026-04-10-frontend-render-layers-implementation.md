@@ -1418,7 +1418,7 @@ git commit -m "refactor: 移除旧的子系统引用，完全切换到分层架�
 **Files:**
 - Modify: `src/rendering/worldRenderManager.ts`
 
-- [ ] **Step 1: 实现层控制API**
+- [x] **Step 1: 实现层控制API**
 
 在WorldRenderer返回对象中添加：
 
@@ -1439,7 +1439,7 @@ return {
 }
 ```
 
-- [ ] **Step 2: 编译检查**
+- [x] **Step 2: 编译检查**
 
 ```bash
 cd web
@@ -1447,12 +1447,13 @@ npm run type-check
 ```
 Expected: 无类型错误
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add src/rendering/worldRenderManager.ts
 git commit -m "feat: 添加层控制API到WorldRenderer"
 ```
+> **注**：层控制API已在Task 13的提交（"refactor: 移除旧的子系统引用，完全切换到分层架构"）中实现并提交喵。
 
 ### Task 15: 端到端测试
 
