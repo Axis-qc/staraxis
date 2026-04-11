@@ -1406,7 +1406,7 @@ npm run type-check
 ```
 Expected: 修复所有类型错误
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add src/rendering/worldRenderManager.ts
