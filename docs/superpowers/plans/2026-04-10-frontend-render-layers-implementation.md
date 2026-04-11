@@ -1553,92 +1553,37 @@ git commit -m "test: 添加分层架构集成测试"
 ```
 > **注**：根据游戏渲染测试特殊性，采用契约测试策略验证API设计，避免复杂DOM/WebGL环境依赖喵。
 
-### Task 16: 性能测试和优化
+### Task 16: 性能测试和优化 (跳过)
 
 **Files:**
-- Create: `scripts/test-render-performance.js`
+- Create: `scripts/test-render-performance.js` (不创建)
 
-- [ ] **Step 1: 创建性能测试脚本**
+- [x] **Step 1: 创建性能测试脚本** (跳过)
 
-```javascript
-/**
- * @file test-render-performance.js
- *
- * @description
- * 渲染性能测试脚本喵。
- */
+> **跳过说明**：根据用户指示，跳过性能测试自动化，未来也不设计测试系统喵。
 
-console.log('=== 渲染分层架构性能测试 ===')
+- [x] **Step 2: 运行性能测试准备** (跳过)
 
-// 模拟测试场景
-const testScenarios = [
-    { name: '空场景', stars: 0, planets: 0, ships: 0 },
-    { name: '小场景', stars: 10, planets: 50, ships: 100 },
-    { name: '中场景', stars: 50, planets: 200, ships: 500 },
-    { name: '大场景', stars: 200, planets: 1000, ships: 2000 },
-]
+> **跳过说明**：性能测试将通过手动方式进行验证喵。
 
-// 输出测试计划
-console.log('测试场景:')
-testScenarios.forEach(scene => {
-    console.log(`  ${scene.name}: ${scene.stars}恒星, ${scene.planets}行星, ${scene.ships}舰船`)
-})
+- [x] **Step 3: 提交** (跳过)
 
-console.log('\n性能测试步骤:')
-console.log('1. 测量初始加载时间')
-console.log('2. 测量帧率稳定性 (60秒)')
-console.log('3. 测量内存使用情况')
-console.log('4. 比较分层架构与原架构性能')
-
-console.log('\n验收标准:')
-console.log('- 帧率: 不低于原架构95%')
-console.log('- 内存: 增加不超过10%')
-console.log('- 加载: 时间增加不超过15%')
-
-console.log('\n执行命令:')
-console.log('npm run dev')
-console.log('然后在浏览器中访问 http://localhost:5173 进行手动测试喵。')
-```
-
-- [ ] **Step 2: 运行性能测试准备**
-
-```bash
-cd web
-node scripts/test-render-performance.js
-```
-Expected: 输出测试计划
-
-- [ ] **Step 3: 提交**
-
-```bash
-git add scripts/test-render-performance.js
-git commit -m "chore: 添加渲染性能测试脚本"
-```
+> **跳过说明**：Task 16整体跳过，前端渲染层重构任务已全部完成喵。
 
 ---
 
 ## 计划完成总结
 
-**实现状态**: 实施中，已完成基础架构（Task 1-4）和部分星体层、实体层，剩余背景层和整合清理喵。
+**实现状态**: 已完成，前端渲染层重构任务全部完成喵。
 
 **关键里程碑**:
-1. ✅ **基础架构** (Task 1-4已完成): 层接口、基础类、管理器、WorldRenderManager改造
-2. 🟨 **星体层** (Task 5-9部分完成): CelestialLayer、StarRenderer重构已完成，集成进行中
-3. 🟨 **实体层** (Task 10已完成, Task 11进行中): EntityLayer基础完成，ShipRenderer适配中
-4. ⬜ **背景层** (Task 12): BackgroundLayer、星空渲染器
-5. ⬜ **整合清理** (Task 13-16): 移除旧代码、添加API、测试
+1. ✅ **基础架构** (Task 1-4): 层接口、基础类、管理器、WorldRenderManager改造
+2. ✅ **星体层** (Task 5-9): CelestialLayer、StarRenderer重构与集成
+3. ✅ **实体层** (Task 10-11): EntityLayer、ShipRenderer适配
+4. ✅ **背景层** (Task 12): BackgroundLayer、星空渲染器
+5. ✅ **整合清理** (Task 13-16): 移除旧代码、添加API、测试（Task 16跳过）
 
 **风险评估**:
-- **性能风险**: 低 - 逐步迁移，每阶段可测试
-- **兼容性风险**: 中 - 保持API不变，现有功能不受影响
-- **复杂度风险**: 中 - 任务分解细致，可独立实施
-
-**下一步执行选项**:
-
-**Plan complete and saved to `docs/superpowers/plans/2026-04-10-frontend-render-layers-implementation.md`. Two execution options:**
-
-**1. Subagent-Driven (recommended)** - I dispatch a fresh subagent per task, review between tasks, fast iteration
-
-**2. Inline Execution** - Execute tasks in this session using executing-plans, batch execution with checkpoints
-
-**Which approach?**
+- **性能风险**: 低 - 逐步迁移，保持API兼容性
+- **兼容性风险**: 低 - API保持完全向后兼容
+- **复杂度风险**: 低 - 任务已全部完成，架构稳定
