@@ -26,12 +26,6 @@ import { createFrameStateBuilder } from './systems/frameStateBuilder'
 import { createEntityQuerySystem } from './systems/entityQuerySystem'
 import { createRenderLoop } from './systems/renderLoop'
 import { createTextureManager } from './subsystems/textureManager'
-import { StarRenderer } from './subsystems/starRenderer'
-import { PlanetRenderer } from './subsystems/planetRenderer'
-import { ShipRenderer } from './subsystems/shipRenderer'
-import { SelectionRenderer } from './subsystems/selectionRenderer'
-import { GridRenderer } from './subsystems/gridRenderer'
-import { HexOutlineRenderer } from './subsystems/hexOutlineRenderer'
 import { SimpleLayerManager } from './layers/layerManager'
 import type { RenderLayer } from './layers'
 import { CelestialLayer } from './layers/celestial'
@@ -155,16 +149,6 @@ export function createWorldRenderManager(
     // 初始化帧状态构建器
     const frameBuilder = createFrameStateBuilder(container, cameraWorldPosGU, zoom, options.lod)
 
-    // 初始化渲染子系统
-    const starRenderer = new StarRenderer()
-    const planetRenderer = new PlanetRenderer()
-    const shipRenderer = new ShipRenderer()
-    const selectionRenderer = new SelectionRenderer(entityQuery.getEntityWorldPosGU)
-    const gridRenderer = new GridRenderer()
-    const hexOutlineRenderer = new HexOutlineRenderer()
-
-    const subsystems = [starRenderer, planetRenderer, shipRenderer, selectionRenderer, gridRenderer, hexOutlineRenderer]
-    for (const s of subsystems) s.init(ctx)
 
     // 初始化输入系统
     const inputSystem = createInputSystem(canvas)
@@ -185,9 +169,6 @@ export function createWorldRenderManager(
         // 触发重建以更新LOD
         const frame = frameBuilder.build(null)
         currentCullingAabb = frame.cullingAabb
-        for (const s of subsystems) {
-            s.update(ctx, frame)
-        }
         // 通知外部相机已变化喵
         for (const cb of cameraChangeListeners) cb()
     }
@@ -280,7 +261,7 @@ export function createWorldRenderManager(
         scene,
         camera,
         ctx,
-        subsystems,
+        [], // 子系统已迁移到分层架构
         buildFrameState,
         inputSystem,
         cameraWorldPosGU,
@@ -297,10 +278,7 @@ export function createWorldRenderManager(
     // API
     const setSelectedEntityIds = (ids: number[]) => {
         frameBuilder.setSelectedIds(ids)
-        const frame = frameBuilder.build(null)
-        for (const s of subsystems) {
-            s.update(ctx, frame)
-        }
+        void frameBuilder.build(null) // 触发帧状态更新，供层管理器使用
     }
 
     const updateFromSnapshot = (snapshot: SnapshotMessage) => {
@@ -336,10 +314,7 @@ export function createWorldRenderManager(
         entityQuery.updateSnapshot(snapshot)
         entityQuery.updateEntities(mergedEntities)
 
-        const frame = frameBuilder.build(snapshot)
-        for (const s of subsystems) {
-            s.update(ctx, frame)
-        }
+        void frameBuilder.build(snapshot) // 触发帧状态更新，供层管理器使用
     }
 
     const getEntityWorldPosGU = entityQuery.getEntityWorldPosGU
@@ -367,7 +342,6 @@ export function createWorldRenderManager(
         renderLoop.stop()
         inputSystem.dispose()
 
-        for (const s of subsystems) s.dispose(ctx)
         textureManager.dispose()
         cameraSystem.dispose()
     }
@@ -377,17 +351,12 @@ export function createWorldRenderManager(
     const setCurrentNationId = (nationId: string | null) => {
         visibilityManager.setCurrentNationId(nationId)
         // 国家变更后需要重新构建帧状态
-        const frame = frameBuilder.build(null)
-        for (const s of subsystems) {
-            s.update(ctx, frame)
-        }
+        void frameBuilder.build(null) // 触发帧状态更新，供层管理器使用
     }
 
     const setGridVisible = (visible: boolean) => {
-        gridRenderer.setVisible(visible)
-        // 触发更新以确保可见性立即生效喵
-        const frame = frameBuilder.build(null)
-        gridRenderer.update(ctx, frame)
+        // TODO: 实现网格层后重新启用网格可见性控制喵
+        console.log(`setGridVisible(${visible}) - 网格层尚未实现`)
     }
 
     return {

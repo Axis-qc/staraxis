@@ -1241,7 +1241,7 @@ git commit -m "feat: 完成ShipRenderer重构适配实体层，支持预测和�
 - Create: `src/rendering/layers/background/backgroundLayer.ts`
 - Create: `src/rendering/layers/background/renderers/starfieldRenderer.ts`
 
-- [ ] **Step 1: 创建背景层基础文件**
+- [x] **Step 1: 创建背景层基础文件**
 
 ```typescript
 // src/rendering/layers/background/index.ts
@@ -1342,7 +1342,7 @@ export class StarfieldRenderer {
 }
 ```
 
-- [ ] **Step 2: 在WorldRenderManager中注册背景层**
+- [x] **Step 2: 在WorldRenderManager中注册背景层**
 
 ```typescript
 // 添加导入
@@ -1376,7 +1376,7 @@ git commit -m "feat: 创建背景层基础结构和星空渲染器"
 **Files:**
 - Modify: `src/rendering/worldRenderManager.ts`
 
-- [ ] **Step 1: 移除旧的子系统初始化和更新代码**
+- [x] **Step 1: 移除旧的子系统初始化和更新代码**
 
 找到并删除以下代码块：
 1. 第144-152行：子系统初始化和循环
@@ -1385,7 +1385,7 @@ git commit -m "feat: 创建背景层基础结构和星空渲染器"
 4. 第324-326行：子系统更新循环
 5. 第353-354行：子系统dispose循环
 
-- [ ] **Step 2: 移除不再需要的导入**
+- [x] **Step 2: 移除不再需要的导入**
 
 删除不再需要的子系统导入：
 ```typescript
@@ -1398,7 +1398,7 @@ import { GridRenderer } from './subsystems/gridRenderer'
 import { HexOutlineRenderer } from './subsystems/hexOutlineRenderer'
 ```
 
-- [ ] **Step 3: 编译检查**
+- [x] **Step 3: 编译检查**
 
 ```bash
 cd web
