@@ -72,3 +72,5 @@ export interface LayerManager {
     setAllVisible(visible: boolean): void
     disposeAll(ctx: WorldRenderContext): void
 }
+
+export { ScreenSpaceLayer } from './screenSpaceLayer'

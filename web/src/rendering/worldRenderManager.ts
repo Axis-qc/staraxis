@@ -146,6 +146,11 @@ export function createWorldRenderManager(
         options,
     }
 
+    // 初始化所有渲染层
+    for (const layer of layerManager.layers.values()) {
+        layer.init(ctx)
+    }
+
     // 初始化帧状态构建器
     const frameBuilder = createFrameStateBuilder(container, cameraWorldPosGU, zoom, options.lod)
 

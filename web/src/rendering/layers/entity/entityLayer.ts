@@ -10,7 +10,7 @@ export class EntityLayer extends BaseLayer {
         super('entity', RenderOrder.ENTITY)
     }
 
-    async init(ctx: WorldRenderContext): Promise<void> {
+    init(ctx: WorldRenderContext): void {
         ctx.worldGroup.add(this.group)
 
         // 初始化舰船渲染器

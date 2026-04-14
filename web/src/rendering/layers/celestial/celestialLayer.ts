@@ -23,7 +23,7 @@ export class CelestialLayer extends BaseLayer {
         super('celestial', RenderOrder.CELESTIAL)
     }
 
-    async init(ctx: WorldRenderContext): Promise<void> {
+    init(ctx: WorldRenderContext): void {
         // 初始化时将group添加到世界组
         ctx.worldGroup.add(this.group)
 
