@@ -229,6 +229,7 @@ $RECYCLE.BIN/
 **/.temp/
 **/.history/
 **/.pytest_cache/
+**/.worktrees/
 
 ## Python:
 __pycache__/
