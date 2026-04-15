@@ -7,7 +7,8 @@
 import * as THREE from 'three'
 import type { WorldRenderContext, WorldFrameState } from '../../../worldRenderManager'
 import type { PlanetDetails } from '../../../../net/snapshotWs'
-import { shouldRender, getLodSize } from '../../../subsystems/lodSystem'
+// TODO: [TASK-2/3] 任务2/3实现时取消注释
+// import { shouldRender, getLodSize } from '../../../subsystems/lodSystem'
 
 export class LayerPlanetRenderer {
   private parentGroup: THREE.Group
@@ -24,20 +25,23 @@ export class LayerPlanetRenderer {
   private static readonly MAX_TRAIL_POINTS = 1000
 
   constructor(parentGroup: THREE.Group) {
+    if (!parentGroup) {
+      throw new Error('parentGroup is required for LayerPlanetRenderer')
+    }
     this.parentGroup = parentGroup
   }
 
   init(ctx: WorldRenderContext): void {
     this.context = ctx
-    // TODO: 初始化后备圆形纹理
-    // TODO: 预创建精灵对象池
+    // TODO: [TASK-2/3] 初始化后备圆形纹理
+    // TODO: [TASK-2/3] 预创建精灵对象池
   }
 
   update(ctx: WorldRenderContext, frame: WorldFrameState): void {
-    // TODO: 实现更新逻辑
+    // TODO: [TASK-2/3] 实现更新逻辑
   }
 
   dispose(): void {
-    // TODO: 实现清理逻辑
+    // TODO: [TASK-2/3] 实现清理逻辑
   }
 }
