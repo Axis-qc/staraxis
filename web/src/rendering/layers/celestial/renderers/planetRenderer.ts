@@ -31,10 +31,73 @@ export class LayerPlanetRenderer {
     this.parentGroup = parentGroup
   }
 
+  private createCircleTexture(): THREE.CanvasTexture {
+    const canvas = document.createElement('canvas')
+    canvas.width = 64
+    canvas.height = 64
+    const ctx = canvas.getContext('2d')!
+
+    ctx.clearRect(0, 0, 64, 64)
+
+    const centerX = 32
+    const centerY = 32
+    const radius = 30
+
+    const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius)
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 1)')
+    gradient.addColorStop(0.8, 'rgba(255, 255, 255, 1)')
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0.8)')
+
+    ctx.beginPath()
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2)
+    ctx.fillStyle = gradient
+    ctx.fill()
+
+    const texture = new THREE.CanvasTexture(canvas)
+    texture.needsUpdate = true
+    return texture
+  }
+
   init(ctx: WorldRenderContext): void {
     this.context = ctx
-    // TODO: [TASK-2/3] 初始化后备圆形纹理
-    // TODO: [TASK-2/3] 预创建精灵对象池
+    this.fallbackCircleTexture = this.createCircleTexture()
+
+    // 预创建精灵对象池（20个）
+    for (let i = 0; i < 20; i++) {
+      const material = new THREE.SpriteMaterial({
+        color: 0xffffff,
+        sizeAttenuation: true,
+      })
+      const sprite = new THREE.Sprite(material)
+      sprite.visible = false
+      this.parentGroup.add(sprite)
+      this.planetSpritePool.push(sprite)
+    }
+
+    console.log('LayerPlanetRenderer initialized')
+  }
+
+  private acquirePlanetSprite(): THREE.Sprite {
+    const sprite = this.planetSpritePool.pop()
+    if (sprite) {
+      sprite.visible = true
+      return sprite
+    }
+
+    const material = new THREE.SpriteMaterial({
+      color: 0xffffff,
+      sizeAttenuation: true,
+    })
+    const newSprite = new THREE.Sprite(material)
+    this.parentGroup.add(newSprite)
+    return newSprite
+  }
+
+  private releasePlanetSprite(sprite: THREE.Sprite): void {
+    const material = sprite.material as THREE.SpriteMaterial
+    material.map = null
+    sprite.visible = false
+    this.planetSpritePool.push(sprite)
   }
 
   update(ctx: WorldRenderContext, frame: WorldFrameState): void {
