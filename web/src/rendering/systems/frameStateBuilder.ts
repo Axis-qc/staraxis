@@ -35,6 +35,7 @@ export type FrameStateBuilder = {
     removeEntities: (entityIds: number[]) => void
     removeSectors: (sectorKeys: string[]) => void
     setSelectedIds: (ids: number[]) => void
+    clearAllSectors: () => void
 }
 
 export function createFrameStateBuilder(
@@ -81,6 +82,10 @@ export function createFrameStateBuilder(
         sectorCenters = sectorCenters.filter(sc => !keySet.has(`${sc.q},${sc.r}`))
     }
 
+    const clearAllSectors = () => {
+        sectorCenters = []
+    }
+
     const build = (snapshot: SnapshotMessage | null): FrameState => {
         // 基于屏幕像素计算世界范围（2D游戏优化）
         // 使用屏幕宽高的 1.2 倍作为剔除范围
@@ -125,5 +130,6 @@ export function createFrameStateBuilder(
         removeEntities,
         removeSectors,
         setSelectedIds,
+        clearAllSectors,
     }
 }

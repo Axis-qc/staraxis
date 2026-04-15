@@ -53,6 +53,14 @@ public final class GameSessions {
         }
 
         // 单运行世界约束：同一时刻仅保留一个运行时喵。
+        // 在清除旧运行时之前，先停止它喵。
+        for (StarAxisGameRuntime existingRuntime : runtimesByWorldId.values()) {
+            try {
+                existingRuntime.stop();
+            } catch (Exception e) {
+                // 忽略停止异常喵。
+            }
+        }
         runtimesByWorldId.clear();
         runtimesByWorldId.put(worldId, runtime);
 
@@ -194,6 +202,15 @@ public final class GameSessions {
     public static synchronized void unregisterRuntime(String worldId) {
         if (worldId == null || worldId.isBlank()) {
             return;
+        }
+        // 停止该世界的运行时喵。
+        StarAxisGameRuntime runtime = runtimesByWorldId.get(worldId);
+        if (runtime != null) {
+            try {
+                runtime.stop();
+            } catch (Exception e) {
+                // 忽略停止异常喵。
+            }
         }
         runtimesByWorldId.remove(worldId);
         metasByWorldId.remove(worldId);

@@ -52,6 +52,7 @@ export type WorldRenderer = {
     updateFromSnapshot: (snapshot: SnapshotMessage) => void
     removeEntitiesFromCache: (entityIds: number[]) => void
     removeSectorsFromCache: (sectorKeys: string[]) => void
+    clearAllSectorsFromCache: () => void
     getEntityWorldPosGU: (entityId: number) => { x: number; y: number } | null
     setCurrentNationId: (nationId: string | null) => void
     setGridVisible: (visible: boolean) => void
@@ -333,6 +334,10 @@ export function createWorldRenderManager(
         frameBuilder.removeSectors(sectorKeys)
     }
 
+    const clearAllSectorsFromCache = () => {
+        frameBuilder.clearAllSectors()
+    }
+
     const dispose = () => {
         resizeObserver.disconnect()
 
@@ -374,6 +379,7 @@ export function createWorldRenderManager(
         updateFromSnapshot,
         removeEntitiesFromCache,
         removeSectorsFromCache,
+        clearAllSectorsFromCache,
         getEntityWorldPosGU,
         setCurrentNationId,
         setGridVisible,

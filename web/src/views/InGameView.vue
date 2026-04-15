@@ -500,6 +500,14 @@ onMounted(async () => {
   }
 })
 
+// 监听世界切换，清除星区缓存
+watch(() => worldSession.selectedWorldId, (newWorldId, oldWorldId) => {
+  if (newWorldId && newWorldId !== oldWorldId) {
+    console.log(`[WorldSwitch] Clearing sector cache for world switch: ${oldWorldId} -> ${newWorldId} 喵`)
+    renderer.value?.clearAllSectorsFromCache()
+  }
+})
+
 onUnmounted(() => {
   const el = rootRef.value
   if (el) {

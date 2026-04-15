@@ -267,6 +267,8 @@ public class StarAxisGameRuntime implements GameRuntime {
 
     @Override
     public void stop() {
+        // 停止游戏运行时，清理资源喵。
+        // 当前实现没有需要显式释放的资源，保留为空方法以供未来扩展喵。
     }
 
     public WorldState getWorldStateForSimOnly() {
