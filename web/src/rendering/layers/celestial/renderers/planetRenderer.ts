@@ -9,13 +9,6 @@ import type { WorldRenderContext, WorldFrameState } from '../../../worldRenderMa
 import type { PlanetDetails } from '../../../../net/snapshotWs'
 import { shouldRender, getLodSize } from '../../../subsystems/lodSystem'
 
-// 虚拟使用以通过TypeScript严格检查（基础结构阶段）
-const _unusedImports = {
-  PlanetDetails: null as unknown as PlanetDetails,
-  shouldRender,
-  getLodSize
-}
-
 export class LayerPlanetRenderer {
   private parentGroup: THREE.Group
   private planetSpritePool: THREE.Sprite[] = []
@@ -36,18 +29,11 @@ export class LayerPlanetRenderer {
 
   init(ctx: WorldRenderContext): void {
     this.context = ctx
-    // 虚拟使用以通过TypeScript严格检查（基础结构阶段）
-    this.parentGroup
-    this.planetSpritePool; this.activePlanetSpritesByEntityId; this.fallbackCircleTexture
-    this.trailMeshPool; this.activeTrailsByEntityId; this.positionHistory; this.lastSampleMinuteByEntityId; LayerPlanetRenderer.MAX_TRAIL_POINTS
-    _unusedImports
     // TODO: 初始化后备圆形纹理
     // TODO: 预创建精灵对象池
   }
 
   update(ctx: WorldRenderContext, frame: WorldFrameState): void {
-    // 虚拟使用以通过TypeScript严格检查
-    ctx; frame; this.context
     // TODO: 实现更新逻辑
   }
 
