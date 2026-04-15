@@ -17,6 +17,7 @@ export class LayerPlanetRenderer {
   private fallbackCircleTexture: THREE.CanvasTexture | null = null
   private context: WorldRenderContext | null = null
   private poolSize: number
+  private disposed = false
 
   // 移动轨迹相关（复用现有逻辑）
   private trailMeshPool: THREE.Mesh[] = []
@@ -29,6 +30,9 @@ export class LayerPlanetRenderer {
   constructor(parentGroup: THREE.Group, poolSize: number = LayerPlanetRenderer.DEFAULT_POOL_SIZE) {
     if (!parentGroup) {
       throw new Error('parentGroup is required for LayerPlanetRenderer')
+    }
+    if (poolSize <= 0) {
+      throw new Error('poolSize must be positive')
     }
     this.parentGroup = parentGroup
     this.poolSize = poolSize
@@ -132,6 +136,20 @@ export class LayerPlanetRenderer {
   }
 
   dispose(): void {
+    // 防止重复清理喵
+    if (this.disposed) {
+      return
+    }
+
+    // 首先解除所有材质的纹理引用，防止双重释放喵
+    const allSprites = [...this.planetSpritePool, ...this.activePlanetSpritesByEntityId.values()]
+    for (const sprite of allSprites) {
+      if (sprite.material instanceof THREE.SpriteMaterial) {
+        const material = sprite.material
+        material.map = null
+      }
+    }
+
     // 清理后备纹理喵
     if (this.fallbackCircleTexture) {
       this.fallbackCircleTexture.dispose()
@@ -142,7 +160,7 @@ export class LayerPlanetRenderer {
     for (const sprite of this.planetSpritePool) {
       if (sprite.material instanceof THREE.SpriteMaterial) {
         const material = sprite.material
-        if (material.map) material.map.dispose()
+        // 纹理已统一释放，此处不再单独释放喵
         material.dispose()
       } else {
         console.warn('Unexpected material type in planet sprite pool', sprite.material)
@@ -156,7 +174,7 @@ export class LayerPlanetRenderer {
     for (const sprite of this.activePlanetSpritesByEntityId.values()) {
       if (sprite.material instanceof THREE.SpriteMaterial) {
         const material = sprite.material
-        if (material.map) material.map.dispose()
+        // 纹理已统一释放，此处不再单独释放喵
         material.dispose()
       } else {
         console.warn('Unexpected material type in active planet sprite', sprite.material)
@@ -203,5 +221,6 @@ export class LayerPlanetRenderer {
     this.lastSampleMinuteByEntityId.clear()
 
     console.log('LayerPlanetRenderer disposed')
+    this.disposed = true
   }
 }
