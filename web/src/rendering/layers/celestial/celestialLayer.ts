@@ -14,10 +14,11 @@ import type { WorldRenderContext, WorldFrameState } from '../../worldRenderManag
 import { BaseLayer } from '../baseLayer'
 import { RenderOrder } from '../index'
 import { LayerStarRenderer } from './renderers/starRenderer'
+import { LayerPlanetRenderer } from './renderers/planetRenderer'
 
 export class CelestialLayer extends BaseLayer {
     private _starRenderer: LayerStarRenderer | null = null
-    private _planetRenderer: any = null // TODO: 后续添加
+    private _planetRenderer: LayerPlanetRenderer | null = null
 
     constructor() {
         super('celestial', RenderOrder.CELESTIAL)
@@ -31,9 +32,10 @@ export class CelestialLayer extends BaseLayer {
         this._starRenderer = new LayerStarRenderer(this.group)
         this._starRenderer.init()
 
-        // TODO: 初始化行星渲染器
-        console.log('CelestialLayer initialized with star renderer')
-        void this._planetRenderer // 避免未使用变量警告
+        // 初始化行星渲染器
+        this._planetRenderer = new LayerPlanetRenderer(this.group)
+        this._planetRenderer.init(ctx)
+        console.log('CelestialLayer initialized with star and planet renderers')
     }
 
     update(ctx: WorldRenderContext, frame: WorldFrameState): void {
@@ -44,7 +46,10 @@ export class CelestialLayer extends BaseLayer {
             this._starRenderer.update(ctx, frame)
         }
 
-        // TODO: 更新行星渲染器
+        // 更新行星渲染器
+        if (this._planetRenderer) {
+            this._planetRenderer.update(ctx, frame)
+        }
 
         this.updateTimestamp()
     }
@@ -56,7 +61,11 @@ export class CelestialLayer extends BaseLayer {
             this._starRenderer = null
         }
 
-        // TODO: 清理行星渲染器
+        // 清理行星渲染器
+        if (this._planetRenderer) {
+            this._planetRenderer.dispose()
+            this._planetRenderer = null
+        }
 
         ctx.worldGroup.remove(this.group)
         super.setVisible(false)
