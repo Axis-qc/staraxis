@@ -7,8 +7,7 @@
 import * as THREE from 'three'
 import type { WorldRenderContext, WorldFrameState } from '../../../worldRenderManager'
 import type { PlanetDetails } from '../../../../net/snapshotWs'
-// TODO: [TASK-2/3] 任务2/3实现时取消注释
-// import { shouldRender, getLodSize } from '../../../subsystems/lodSystem'
+import { shouldRender, getLodSize } from '../../../subsystems/lodSystem'
 
 export class LayerPlanetRenderer {
   private parentGroup: THREE.Group
@@ -131,8 +130,148 @@ export class LayerPlanetRenderer {
     this.planetSpritePool.push(sprite)
   }
 
+  private releaseTrailMesh(mesh: THREE.Mesh): void {
+    mesh.visible = false
+    this.trailMeshPool.push(mesh)
+  }
+
+  private clearAllTrails(): void {
+    for (const [id, trail] of this.activeTrailsByEntityId.entries()) {
+      this.activeTrailsByEntityId.delete(id)
+      this.releaseTrailMesh(trail)
+    }
+    this.positionHistory.clear()
+    this.lastSampleMinuteByEntityId.clear()
+  }
+
+  private isPointInAabb(p: { x: number, y: number }, a: { minX: number, maxX: number, minY: number, maxY: number }): boolean {
+    return p.x >= a.minX && p.x <= a.maxX && p.y >= a.minY && p.y <= a.maxY
+  }
+
+  private loadAndApplyTexture(material: THREE.SpriteMaterial, path: string): void {
+    if (!this.context) return
+    this.context.getTexture(path).then(t => {
+      material.map = t
+      material.needsUpdate = true
+    }).catch(err => {
+      console.warn(`Failed to load planet texture: ${path}`, err)
+    })
+  }
+
   update(ctx: WorldRenderContext, frame: WorldFrameState): void {
-    // TODO: [TASK-2/3] 实现更新逻辑
+    const { entitiesById, selectedIds, cullingAabb, lod, totalDays } = frame
+    const planetLod = lod.planet
+
+    // LOD完全隐藏时回收所有对象
+    if (!planetLod.visible) {
+      this.clearAllTrails()
+      for (const [id, sprite] of this.activePlanetSpritesByEntityId.entries()) {
+        this.activePlanetSpritesByEntityId.delete(id)
+        this.releasePlanetSprite(sprite)
+      }
+      return
+    }
+
+    // 第一遍：检查哪些实体需要渲染
+    const visibleEntityIds = new Set<number>()
+
+    for (const entity of entitiesById.values()) {
+      if (entity.entityType !== 'PLANET') continue
+
+      const isSelected = selectedIds.has(entity.entityId)
+      if (!shouldRender(planetLod, isSelected)) continue
+
+      const planetPos = ctx.getEntityWorldPosGU(entity.entityId)
+      if (!planetPos) continue
+
+      // 剔除检查（选中实体始终显示）
+      if (!isSelected && !this.isPointInAabb(planetPos, cullingAabb)) {
+        continue
+      }
+
+      visibleEntityIds.add(entity.entityId)
+    }
+
+    // 回收不在可见列表中的对象
+    for (const [id, sprite] of this.activePlanetSpritesByEntityId.entries()) {
+      if (!visibleEntityIds.has(id)) {
+        this.activePlanetSpritesByEntityId.delete(id)
+        this.releasePlanetSprite(sprite)
+      }
+    }
+
+    // 第二遍：更新可见实体的渲染数据
+    for (const entityId of visibleEntityIds) {
+      const entity = entitiesById.get(entityId)
+      if (!entity) continue
+
+      const details = entity.details as PlanetDetails
+      const isSelected = selectedIds.has(entityId)
+      const planetPos = ctx.getEntityWorldPosGU(entityId)
+      if (!planetPos) continue
+
+      // 计算实体在屏幕上的实际像素大小
+      const radiusGU = details.radiusGU
+      const diameterPx = (radiusGU * 2) / ctx.zoom.value
+      const MIN_TEXTURE_PIXEL_SIZE = 10
+
+      // 动态决定是否使用真实纹理
+      const useRealTexture = diameterPx >= MIN_TEXTURE_PIXEL_SIZE
+
+      let size: number
+      if (useRealTexture) {
+        size = getLodSize(planetLod, isSelected, radiusGU * 2)
+      } else {
+        size = MIN_TEXTURE_PIXEL_SIZE * ctx.zoom.value
+      }
+
+      let sprite = this.activePlanetSpritesByEntityId.get(entityId)
+      if (!sprite) {
+        sprite = this.acquirePlanetSprite()
+        this.activePlanetSpritesByEntityId.set(entityId, sprite)
+      }
+
+      const material = sprite.material as THREE.SpriteMaterial
+
+      if (useRealTexture) {
+        if (material.map === this.fallbackCircleTexture) {
+          material.map = null
+          material.needsUpdate = true
+        }
+        if (details.surfaceTexturePath && (!material.map || !material.map.image)) {
+          this.loadAndApplyTexture(material, details.surfaceTexturePath)
+        }
+        material.sizeAttenuation = true
+      } else {
+        if (this.fallbackCircleTexture && material.map !== this.fallbackCircleTexture) {
+          material.map = this.fallbackCircleTexture
+          material.needsUpdate = true
+        }
+        material.sizeAttenuation = false
+      }
+
+      // 透明度计算
+      let opacity: number
+      if (useRealTexture) {
+        opacity = 1.0  // 简化版本，实际应使用shouldShowEffects
+      } else {
+        const zoomValue = ctx.zoom.value
+        const FADE_START = 1_000
+        const FADE_END = 100_000
+        if (zoomValue >= FADE_END) {
+          opacity = 0
+        } else if (zoomValue <= FADE_START) {
+          opacity = 1
+        } else {
+          opacity = 1 - (zoomValue - FADE_START) / (FADE_END - FADE_START)
+        }
+      }
+      material.opacity = opacity
+
+      sprite.scale.set(size, size, 1)
+      sprite.position.set(planetPos.x - ctx.cameraWorldPosGU.x, planetPos.y - ctx.cameraWorldPosGU.y, 0)
+      sprite.visible = true
+    }
   }
 
   dispose(): void {
