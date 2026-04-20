@@ -22,6 +22,7 @@
  *
  * @important_notes
  * - 网格使用相机局部坐标（不需要随 cameraWorldPosGU 平移），与旧实现保持一致。
+ * - 当前文件保留是因为网格层尚未迁移到 layer 架构。
  */
 import * as THREE from 'three'
 import type { WorldRenderContext, WorldFrameState } from '../worldRenderManager'
@@ -42,11 +43,8 @@ export class GridRenderer implements WorldRenderSubsystem {
         this.geometry = new THREE.BufferGeometry()
         this.grid = new THREE.LineSegments(this.geometry, this.material)
         this.grid.frustumCulled = false
-        // 设置网格的 z 位置在背景，位于实体（恒星/行星）下方
         this.grid.position.z = -1
         this.grid.renderOrder = -1
-
-        // 添加到 worldGroup 而不是 scene，确保在实体后面渲染
         ctx.worldGroup.add(this.grid)
     }
 
@@ -62,14 +60,10 @@ export class GridRenderer implements WorldRenderSubsystem {
 
         if (!this.geometry || !this.grid) return
 
-        // 网格可见性控制，不参与LOD系统
         this.grid.visible = this.visible
 
-        const camera = ctx.camera
         const zoom = ctx.zoom.value
-
-        const viewWidthGU = (camera.right - camera.left) / camera.zoom
-        const viewHeightGU = (camera.top - camera.bottom) / camera.zoom
+        const { widthGU: viewWidthGU, heightGU: viewHeightGU } = ctx.getViewSizeGU()
 
         const viewMinX = -viewWidthGU / 2
         const viewMaxX = viewWidthGU / 2
@@ -83,7 +77,6 @@ export class GridRenderer implements WorldRenderSubsystem {
         if (stepGU / zoom < 10) stepGU *= 2.5
         if (stepGU / zoom < 10) stepGU *= 2
 
-        // 固定透明度，不参与LOD
         if (this.material) {
             this.material.opacity = 0.5
         }

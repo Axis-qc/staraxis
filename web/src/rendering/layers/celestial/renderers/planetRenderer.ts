@@ -7,7 +7,27 @@
 import * as THREE from 'three'
 import type { WorldRenderContext, WorldFrameState } from '../../../worldRenderManager'
 import type { PlanetDetails } from '../../../../net/snapshotWs'
-import { shouldRender, getLodSize } from '../../../subsystems/lodSystem'
+import { shouldRender, getLodSize, shouldShowEffects } from '../../../subsystems/lodSystem'
+
+const TRAIL_BASE_COLOR = new THREE.Color(0xffffff)
+
+const TRAIL_VERTEX_SHADER = `
+    attribute float aAlpha;
+    varying float vAlpha;
+    void main() {
+        vAlpha = aAlpha;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+`
+
+const TRAIL_FRAGMENT_SHADER = `
+    uniform vec3 uColor;
+    uniform float uOpacity;
+    varying float vAlpha;
+    void main() {
+        gl_FragColor = vec4(uColor, vAlpha * uOpacity);
+    }
+`
 
 export class LayerPlanetRenderer {
   private parentGroup: THREE.Group
@@ -132,6 +152,7 @@ export class LayerPlanetRenderer {
 
   private releaseTrailMesh(mesh: THREE.Mesh): void {
     mesh.visible = false
+    mesh.parent?.remove(mesh)
     this.trailMeshPool.push(mesh)
   }
 
@@ -156,6 +177,169 @@ export class LayerPlanetRenderer {
     }).catch(err => {
       console.warn(`Failed to load planet texture: ${path}`, err)
     })
+  }
+
+  private updateTrail(
+    entityId: number,
+    currentPos: { x: number; y: number },
+    ctx: WorldRenderContext,
+    isSelected: boolean,
+    totalDays: number
+  ): void {
+    const TRAIL_OPACITY_BASE = 0.8
+    const PIXEL_WIDTH = 3
+
+    let history = this.positionHistory.get(entityId)
+    if (!history) {
+      history = []
+      this.positionHistory.set(entityId, history)
+    }
+
+    const currentMinute = Math.floor(totalDays * 1440)
+    const lastMinute = this.lastSampleMinuteByEntityId.get(entityId)
+
+    if (lastMinute !== currentMinute) {
+      this.lastSampleMinuteByEntityId.set(entityId, currentMinute)
+      history.push({ x: currentPos.x, y: currentPos.y })
+
+      if (history.length > LayerPlanetRenderer.MAX_TRAIL_POINTS) {
+        history.shift()
+      }
+    }
+
+    if (history.length < 2) {
+      return
+    }
+
+    let trailMesh = this.activeTrailsByEntityId.get(entityId)
+    if (!trailMesh) {
+      trailMesh = this.acquireTrailMesh()
+      this.activeTrailsByEntityId.set(entityId, trailMesh)
+      this.parentGroup.add(trailMesh)
+    }
+
+    const zoom = ctx.zoom.value
+    const FADE_START = 1_000
+    const FADE_END = 100_000
+    let trailOpacity = zoom < FADE_START
+      ? TRAIL_OPACITY_BASE
+      : zoom >= FADE_END
+        ? 0
+        : TRAIL_OPACITY_BASE * (1 - (zoom - FADE_START) / (FADE_END - FADE_START))
+
+    if (isSelected && trailOpacity > 0) {
+      trailOpacity = Math.min(1.0, trailOpacity * 1.5)
+    }
+
+    if (trailOpacity <= 0.01) {
+      trailMesh.visible = false
+      return
+    }
+
+    const worldWidth = PIXEL_WIDTH * zoom
+    const geometry = trailMesh.geometry
+    const posAttr = geometry.getAttribute('position') as THREE.BufferAttribute
+    const positions = posAttr.array as Float32Array
+    const alphaAttr = geometry.getAttribute('aAlpha') as THREE.BufferAttribute
+    const alphas = alphaAttr.array as Float32Array
+
+    for (let i = 0; i < history.length; i++) {
+      const point = history[i]
+      if (!point) break
+
+      let dx = 0
+      let dy = 0
+
+      if (i < history.length - 1) {
+        const nextPoint = history[i + 1]
+        if (nextPoint) {
+          dx = nextPoint.x - point.x
+          dy = nextPoint.y - point.y
+        }
+      } else if (i > 0) {
+        const previousPoint = history[i - 1]
+        if (previousPoint) {
+          dx = point.x - previousPoint.x
+          dy = point.y - previousPoint.y
+        }
+      }
+
+      const length = Math.sqrt(dx * dx + dy * dy) || 1
+      const nx = (-dy / length) * (worldWidth / 2)
+      const ny = (dx / length) * (worldWidth / 2)
+
+      const vertexOffset = i * 6
+      positions[vertexOffset] = point.x - nx
+      positions[vertexOffset + 1] = point.y - ny
+      positions[vertexOffset + 2] = -0.2
+      positions[vertexOffset + 3] = point.x + nx
+      positions[vertexOffset + 4] = point.y + ny
+      positions[vertexOffset + 5] = -0.2
+
+      const vertexAlpha = i / (history.length - 1 || 1)
+      alphas[i * 2] = vertexAlpha
+      alphas[i * 2 + 1] = vertexAlpha
+    }
+
+    posAttr.needsUpdate = true
+    alphaAttr.needsUpdate = true
+    geometry.setDrawRange(0, (history.length - 1) * 6)
+
+    const material = trailMesh.material as THREE.ShaderMaterial & {
+      uniforms: {
+        uOpacity: { value: number }
+        uColor: { value: THREE.Color }
+      }
+    }
+    material.uniforms.uOpacity.value = trailOpacity
+    material.uniforms.uColor.value.copy(TRAIL_BASE_COLOR)
+
+    trailMesh.position.set(-ctx.cameraWorldPosGU.x, -ctx.cameraWorldPosGU.y, 0)
+    trailMesh.visible = true
+  }
+
+  private acquireTrailMesh(): THREE.Mesh {
+    const mesh = this.trailMeshPool.pop()
+    if (mesh) {
+      mesh.visible = true
+      return mesh
+    }
+
+    const geometry = new THREE.BufferGeometry()
+    const maxVertices = LayerPlanetRenderer.MAX_TRAIL_POINTS * 2
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(maxVertices * 3), 3))
+    geometry.setAttribute('aAlpha', new THREE.BufferAttribute(new Float32Array(maxVertices), 1))
+
+    const indices = new Uint16Array((LayerPlanetRenderer.MAX_TRAIL_POINTS - 1) * 6)
+    for (let i = 0; i < LayerPlanetRenderer.MAX_TRAIL_POINTS - 1; i++) {
+      const vertex = i * 2
+      const indexOffset = i * 6
+      indices[indexOffset] = vertex
+      indices[indexOffset + 1] = vertex + 1
+      indices[indexOffset + 2] = vertex + 2
+      indices[indexOffset + 3] = vertex + 2
+      indices[indexOffset + 4] = vertex + 1
+      indices[indexOffset + 5] = vertex + 3
+    }
+    geometry.setIndex(new THREE.BufferAttribute(indices, 1))
+
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        uColor: { value: TRAIL_BASE_COLOR.clone() },
+        uOpacity: { value: 1.0 },
+      },
+      vertexShader: TRAIL_VERTEX_SHADER,
+      fragmentShader: TRAIL_FRAGMENT_SHADER,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+    })
+
+    const trailMesh = new THREE.Mesh(geometry, material)
+    trailMesh.frustumCulled = false
+    trailMesh.renderOrder = -1
+    return trailMesh
   }
 
   update(ctx: WorldRenderContext, frame: WorldFrameState): void {
@@ -253,7 +437,7 @@ export class LayerPlanetRenderer {
       // 透明度计算
       let opacity: number
       if (useRealTexture) {
-        opacity = 1.0  // 简化版本，实际应使用shouldShowEffects
+        opacity = shouldShowEffects(planetLod, isSelected) ? 1.0 : 0.8
       } else {
         const zoomValue = ctx.zoom.value
         const FADE_START = 1_000
@@ -271,7 +455,32 @@ export class LayerPlanetRenderer {
       sprite.scale.set(size, size, 1)
       sprite.position.set(planetPos.x - ctx.cameraWorldPosGU.x, planetPos.y - ctx.cameraWorldPosGU.y, 0)
       sprite.visible = true
+
+      this.updateTrail(entityId, planetPos, ctx, isSelected, totalDays)
     }
+
+    for (const [id, trail] of this.activeTrailsByEntityId.entries()) {
+      if (!visibleEntityIds.has(id)) {
+        this.activeTrailsByEntityId.delete(id)
+        this.positionHistory.delete(id)
+        this.lastSampleMinuteByEntityId.delete(id)
+        this.releaseTrailMesh(trail)
+      }
+    }
+  }
+
+  private disposeSprite(sprite: THREE.Sprite): void {
+    ;(sprite.material as THREE.Material).dispose()
+    this.parentGroup.remove(sprite)
+  }
+
+  private disposeTrailMesh(mesh: THREE.Mesh): void {
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+    for (const material of materials) {
+      material.dispose()
+    }
+    mesh.geometry.dispose()
+    this.parentGroup.remove(mesh)
   }
 
   dispose(): void {
@@ -297,61 +506,25 @@ export class LayerPlanetRenderer {
 
     // 清理对象池中的精灵喵
     for (const sprite of this.planetSpritePool) {
-      if (sprite.material instanceof THREE.SpriteMaterial) {
-        const material = sprite.material
-        // 纹理已统一释放，此处不再单独释放喵
-        material.dispose()
-      } else {
-        console.warn('Unexpected material type in planet sprite pool', sprite.material)
-        sprite.material.dispose()
-      }
-      this.parentGroup.remove(sprite)
+      this.disposeSprite(sprite)
     }
     this.planetSpritePool = []
 
     // 清理活跃精灵喵
     for (const sprite of this.activePlanetSpritesByEntityId.values()) {
-      if (sprite.material instanceof THREE.SpriteMaterial) {
-        const material = sprite.material
-        // 纹理已统一释放，此处不再单独释放喵
-        material.dispose()
-      } else {
-        console.warn('Unexpected material type in active planet sprite', sprite.material)
-        sprite.material.dispose()
-      }
-      this.parentGroup.remove(sprite)
+      this.disposeSprite(sprite)
     }
     this.activePlanetSpritesByEntityId.clear()
 
     // 清理轨迹网格池喵
     for (const mesh of this.trailMeshPool) {
-      if (mesh.material instanceof THREE.Material) {
-        const material = mesh.material
-        const geometry = mesh.geometry
-        material.dispose()
-        geometry.dispose()
-      } else {
-        console.warn('Unexpected material type in trail mesh pool', mesh.material)
-        mesh.material.dispose()
-        mesh.geometry.dispose()
-      }
-      this.parentGroup.remove(mesh)
+      this.disposeTrailMesh(mesh)
     }
     this.trailMeshPool = []
 
     // 清理活跃轨迹喵
     for (const mesh of this.activeTrailsByEntityId.values()) {
-      if (mesh.material instanceof THREE.Material) {
-        const material = mesh.material
-        const geometry = mesh.geometry
-        material.dispose()
-        geometry.dispose()
-      } else {
-        console.warn('Unexpected material type in active trail mesh', mesh.material)
-        mesh.material.dispose()
-        mesh.geometry.dispose()
-      }
-      this.parentGroup.remove(mesh)
+      this.disposeTrailMesh(mesh)
     }
     this.activeTrailsByEntityId.clear()
 

@@ -23,6 +23,7 @@
  * @important_notes
  * - 轮廓线使用相机局部坐标（减去 cameraWorldPosGU）。
  * - 当前实现为每次 update 重建 geometry（最小可用）；后续可做增量更新/缓存。
+ * - 当前文件保留是因为六边形轮廓层尚未迁移到 layer 架构。
  */
 import * as THREE from 'three'
 import type { WorldRenderContext, WorldFrameState } from '../worldRenderManager'
@@ -35,11 +36,10 @@ export class HexOutlineRenderer implements WorldRenderSubsystem {
     private geometry: THREE.BufferGeometry | null = null
     private material: THREE.LineBasicMaterial | null = null
 
-    // 默认颜色配置（后续可移入全局配置系统）喵
     private readonly COLORS = {
-        OWNED_BY_SELF: 0x7fd3ff, // 本国：亮蓝色
-        OWNED_BY_OTHERS: 0xff4d4d, // 他国：红色
-        UNOCCUPIED: 0x444444      // 无人占领：深灰色
+        OWNED_BY_SELF: 0x7fd3ff,
+        OWNED_BY_OTHERS: 0xff4d4d,
+        UNOCCUPIED: 0x444444,
     }
 
     private getNationColor(ownerId: string | null, selfNationId: string | null): number {
@@ -51,9 +51,9 @@ export class HexOutlineRenderer implements WorldRenderSubsystem {
     init(ctx: WorldRenderContext): void {
         this.geometry = new THREE.BufferGeometry()
         this.material = new THREE.LineBasicMaterial({
-            vertexColors: true, // 启用顶点着色以支持不同星区不同颜色喵
+            vertexColors: true,
             transparent: true,
-            opacity: 0.55
+            opacity: 0.55,
         })
         this.line = new THREE.LineSegments(this.geometry, this.material)
         this.line.frustumCulled = false
@@ -63,9 +63,7 @@ export class HexOutlineRenderer implements WorldRenderSubsystem {
     update(ctx: WorldRenderContext, frame: WorldFrameState): void {
         if (!this.geometry || !this.line) return
 
-        const { lod } = frame
-        const hexLod = lod.hexOutline
-
+        const hexLod = frame.lod.hexOutline
         if (!shouldRender(hexLod, false)) {
             this.line.visible = false
             return
@@ -75,29 +73,21 @@ export class HexOutlineRenderer implements WorldRenderSubsystem {
         const positions: number[] = []
         const colors: number[] = []
         const ownerMap = frame.snapshot?.realTimeWorldState?.sectorOwnerNationIdByCoord || {}
-
-        // 获取当前玩家国家ID，用于颜色判定喵
         const selfNationId = frame.visibilityManager?.getCurrentNationId() || null
 
-        for (const s of frame.sectorCenters) {
-            if (isPointInAabb(s, frame.cullingAabb)) {
-                const cameraLocalX = s.x - ctx.cameraWorldPosGU.x
-                const cameraLocalY = s.y - ctx.cameraWorldPosGU.y
+        for (const sector of frame.sectorCenters) {
+            if (!isPointInAabb(sector, frame.cullingAabb)) continue
 
-                // 获取该星区的颜色喵
-                const sectorKey = `${s.q},${s.r}`
-                const ownerId = ownerMap[sectorKey] ?? null
-                const colorHex = this.getNationColor(ownerId, selfNationId)
-                const color = new THREE.Color(colorHex)
+            const cameraLocalX = sector.x - ctx.cameraWorldPosGU.x
+            const cameraLocalY = sector.y - ctx.cameraWorldPosGU.y
+            const sectorKey = `${sector.q},${sector.r}`
+            const ownerId = ownerMap[sectorKey] ?? null
+            const color = new THREE.Color(this.getNationColor(ownerId, selfNationId))
+            const hexSegments = buildHexSegmentPositions([{ x: cameraLocalX, y: cameraLocalY }])
 
-                const hexSegs = buildHexSegmentPositions([{ x: cameraLocalX, y: cameraLocalY }])
-
-                if (hexSegs) {
-                    for (let i = 0; i < hexSegs.length; i += 3) {
-                        positions.push(hexSegs[i] ?? 0, hexSegs[i + 1] ?? 0, hexSegs[i + 2] ?? 0)
-                        colors.push(color.r, color.g, color.b)
-                    }
-                }
+            for (let i = 0; i < hexSegments.length; i += 3) {
+                positions.push(hexSegments[i] ?? 0, hexSegments[i + 1] ?? 0, hexSegments[i + 2] ?? 0)
+                colors.push(color.r, color.g, color.b)
             }
         }
 

@@ -7,16 +7,15 @@
  * 作用：
  * - 管理 requestAnimationFrame 渲染循环。
  * - 处理键盘持续按键（WASD/方向键平移）。
- * - 协调子系统更新和渲染。
+ * - 协调渲染层更新和场景渲染。
  *
  * @usage
  * - 调用 start() 启动渲染循环。
  * - 调用 stop() 停止渲染循环。
- * - 在循环回调中执行子系统更新和场景渲染。
+ * - 在循环回调中执行分层更新和场景渲染。
  */
 import * as THREE from 'three'
 import type { WorldRenderContext } from '../worldRenderManager'
-import type { WorldRenderSubsystem } from '../subsystems/worldRenderSubsystem'
 import type { FrameState } from './frameStateBuilder'
 import type { InputSystem } from '../../input/inputSystem'
 import type { LayerManager } from '../layers'
@@ -35,9 +34,8 @@ export type RenderLoop = {
 export function createRenderLoop(
     renderer: THREE.WebGLRenderer,
     scene: THREE.Scene,
-    camera: THREE.OrthographicCamera,
+    camera: THREE.PerspectiveCamera,
     ctx: WorldRenderContext,
-    subsystems: WorldRenderSubsystem[],
     buildFrameState: () => FrameState,
     inputSystem: InputSystem,
     cameraWorldPosGU: THREE.Vector2,
@@ -80,17 +78,11 @@ export function createRenderLoop(
             applyCameraTransform()
         }
 
-        // 构建帧状态并更新子系统
+        // 构建帧状态并更新渲染层
         const frame = buildFrameState()
 
-        // 优先使用层管理器，如果存在
         if (layerManager) {
             layerManager.updateAll(ctx, frame)
-        } else {
-            // 回退到子系统（兼容模式）
-            for (const s of subsystems) {
-                s.update(ctx, frame)
-            }
         }
 
         // 渲染场景

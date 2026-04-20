@@ -31,7 +31,7 @@ export abstract class BaseLayer implements RenderLayer {
     }
 
     // 抽象方法 - 必须由子类实现
-    abstract init(ctx: WorldRenderContext): Promise<void>
+    abstract init(ctx: WorldRenderContext): void | Promise<void>
     abstract update(ctx: WorldRenderContext, frame: WorldFrameState): void
     abstract dispose(ctx: WorldRenderContext): void
 

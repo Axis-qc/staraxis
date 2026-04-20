@@ -14,12 +14,17 @@ import type * as THREE from 'three'
 import type { WorldRenderContext, WorldFrameState } from '../worldRenderManager'
 
 // 渲染顺序值（越小越先渲染）
+// 设计约定：
+// - EFFECT 用于纯视觉特效（爆炸、光束、拖尾等）喵。
+// - ENTITY_EFFECT 用于附着在实体上的交互/指示/UI效果（选中环、状态标记、实体旁UI、引导箭头等）喵。
+// - UI_OVERLAY 用于纯屏幕空间覆盖UI，不直接锚定实体喵。
 export const RenderOrder = {
     BACKGROUND: 0,    // 背景层：星空、星云等
     CELESTIAL: 1,     // 星体层：恒星、行星等
     ENTITY: 2,        // 实体层：舰船、建筑、空间站
-    EFFECT: 3,        // 实体特效：武器光束、爆炸等
-    SELECTION: 4,     // 选择框：实体选择标记
+    EFFECT: 3,        // 纯视觉特效：武器光束、爆炸、尾迹等
+    ENTITY_EFFECT: 4, // 实体附着效果：选择框、状态标记、跟随实体的UI与交互指示
+    SELECTION: 4,     // 兼容别名：旧的选择层顺序，后续统一归入 ENTITY_EFFECT
     UI_OVERLAY: 5,    // Three.js UI覆盖层
 } as const
 
@@ -45,7 +50,7 @@ export interface RenderLayer {
     readonly group: THREE.Group
 
     // 生命周期方法
-    init(ctx: WorldRenderContext): Promise<void>
+    init(ctx: WorldRenderContext): void | Promise<void>
     update(ctx: WorldRenderContext, frame: WorldFrameState): void
     dispose(ctx: WorldRenderContext): void
 

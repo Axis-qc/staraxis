@@ -2,20 +2,21 @@
  * @file worldRenderManager.ts
  *
  * @description
- * 世界渲染管理器（World Render Manager）- 渲染系统的协调入口。
+ * 世界渲染管理器（World Render Manager）- 分层渲染系统的协调入口。
  *
  * 作用：
- * - 协调各子系统（CameraSystem、FrameStateBuilder、EntityQuerySystem、RenderLoop）。
+ * - 协调相机、帧状态、实体查询、层管理器与渲染循环。
  * - 处理输入事件（通过 InputSystem）。
  * - 提供对外 API（zoom、cameraWorldPosGU、updateFromSnapshot 等）。
  *
  * @important_notes
- * - 本文件为重构后的新入口，功能已下沉到各子系统模块。
+ * - 渲染职责已经下沉到各 layer / system 模块。
  * - 具体实现见：
  *   - systems/cameraSystem.ts - 相机和渲染器管理
  *   - systems/frameStateBuilder.ts - 帧状态构建
  *   - systems/entityQuerySystem.ts - 实体位置查询
  *   - systems/renderLoop.ts - 渲染循环
+ *   - layers/ - 分层渲染实现
  *   - subsystems/lodSystem.ts - LOD系统
  */
 import * as THREE from 'three'
@@ -31,6 +32,7 @@ import type { RenderLayer } from './layers'
 import { CelestialLayer } from './layers/celestial'
 import { EntityLayer } from './layers/entity'
 import { BackgroundLayer } from './layers/background'
+import { EntityEffectsLayer } from './layers/entityEffects'
 import type { LodState, LodOptions } from './subsystems/lodSystem'
 import { createInputSystem } from '../input/inputSystem'
 import { VisibilityStateManager } from './systems/visibilityState'
@@ -44,8 +46,10 @@ export type { EntityQuerySystem } from './systems/entityQuerySystem'
 
 export type WorldRenderer = {
     zoom: { value: number }
+    cameraHeight: { value: number }
     cameraWorldPosGU: THREE.Vector2
     setZoom: (z: number) => void
+    setCameraHeight: (height: number) => void
     applyCameraTransform: () => void
     getCullingAabbGU: () => { minX: number; maxX: number; minY: number; maxY: number }
     setSelectedEntityIds: (ids: number[]) => void
@@ -76,13 +80,17 @@ export type WorldRendererOptions = {
 export type WorldRenderContext = {
     renderer: THREE.WebGLRenderer
     scene: THREE.Scene
-    camera: THREE.OrthographicCamera
+    camera: THREE.PerspectiveCamera
     worldGroup: THREE.Group
     entitiesGroup: THREE.Group
     zoom: { value: number }
+    cameraHeight: { value: number }
     cameraWorldPosGU: THREE.Vector2
     getTexture: (path: string) => Promise<THREE.Texture>
     getEntityWorldPosGU: (entityId: number) => { x: number; y: number } | null
+    getViewSizeGU: () => { widthGU: number; heightGU: number }
+    getWorldUnitsPerPixel: () => number
+    getViewSizeAtDepth: (distanceFromCamera: number) => { widthGU: number; heightGU: number }
     options: WorldRendererOptions
 }
 
@@ -106,6 +114,7 @@ export function createWorldRenderManager(
 
     // 状态
     const zoom = { value: 1 }
+    const cameraHeight = { value: 1 }
     const cameraWorldPosGU = new THREE.Vector2(0, 0)
     const visibilityManager = new VisibilityStateManager()
 
@@ -121,11 +130,14 @@ export function createWorldRenderManager(
     const cameraSystem = createCameraSystem(container)
     const { renderer, scene, camera, worldGroup, entitiesGroup, canvas } = cameraSystem
 
+    cameraHeight.value = cameraSystem.worldUnitsPerPixelToHeight(zoom.value)
+
     // 初始化层管理器
     const layerManager = new SimpleLayerManager()
     layerManager.registerLayer(new BackgroundLayer())
     layerManager.registerLayer(new CelestialLayer())
     layerManager.registerLayer(new EntityLayer())
+    layerManager.registerLayer(new EntityEffectsLayer())
 
     // 初始化纹理管理器
     const textureManager = createTextureManager()
@@ -141,9 +153,19 @@ export function createWorldRenderManager(
         worldGroup,
         entitiesGroup,
         zoom,
+        cameraHeight,
         cameraWorldPosGU,
         getTexture: textureManager.getTexture,
         getEntityWorldPosGU: entityQuery.getEntityWorldPosGU,
+        getViewSizeGU: () => cameraSystem.getViewSizeAtHeight(cameraHeight.value),
+        getWorldUnitsPerPixel: () => zoom.value,
+        getViewSizeAtDepth: (distanceFromCamera: number) => {
+            const heightGU = 2 * distanceFromCamera * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)
+            return {
+                widthGU: heightGU * camera.aspect,
+                heightGU,
+            }
+        },
         options,
     }
 
@@ -153,7 +175,7 @@ export function createWorldRenderManager(
     }
 
     // 初始化帧状态构建器
-    const frameBuilder = createFrameStateBuilder(container, cameraWorldPosGU, zoom, options.lod)
+    const frameBuilder = createFrameStateBuilder(container, cameraWorldPosGU, zoom, options.lod, visibilityManager, ctx.getViewSizeGU)
 
 
     // 初始化输入系统
@@ -169,9 +191,14 @@ export function createWorldRenderManager(
         return () => cameraChangeListeners.delete(cb)
     }
 
+    const updateDerivedZoom = () => {
+        zoom.value = cameraSystem.getWorldUnitsPerPixelAtHeight(cameraHeight.value)
+    }
+
     // 相机控制动作
     const applyCameraTransform = () => {
-        cameraSystem.applyTransform(zoom.value, cameraWorldPosGU)
+        cameraSystem.applyTransform(cameraHeight.value, cameraWorldPosGU)
+        updateDerivedZoom()
         // 触发重建以更新LOD
         const frame = frameBuilder.build(null)
         currentCullingAabb = frame.cullingAabb
@@ -180,7 +207,16 @@ export function createWorldRenderManager(
     }
 
     const setZoom = (z: number) => {
-        zoom.value = Math.max(minZoom, Math.min(maxZoom, z))
+        const clampedZoom = Math.max(minZoom, Math.min(maxZoom, z))
+        cameraHeight.value = cameraSystem.worldUnitsPerPixelToHeight(clampedZoom)
+        zoom.value = clampedZoom
+        applyCameraTransform()
+    }
+
+    const setCameraHeight = (height: number) => {
+        const minHeight = cameraSystem.worldUnitsPerPixelToHeight(minZoom)
+        const maxHeight = cameraSystem.worldUnitsPerPixelToHeight(maxZoom)
+        cameraHeight.value = Math.max(minHeight, Math.min(maxHeight, height))
         applyCameraTransform()
     }
 
@@ -267,7 +303,6 @@ export function createWorldRenderManager(
         scene,
         camera,
         ctx,
-        [], // 子系统已迁移到分层架构
         buildFrameState,
         inputSystem,
         cameraWorldPosGU,
@@ -352,6 +387,7 @@ export function createWorldRenderManager(
         renderLoop.stop()
         inputSystem.dispose()
 
+        layerManager.disposeAll(ctx)
         textureManager.dispose()
         cameraSystem.dispose()
     }
@@ -371,8 +407,10 @@ export function createWorldRenderManager(
 
     return {
         zoom,
+        cameraHeight,
         cameraWorldPosGU,
         setZoom,
+        setCameraHeight,
         applyCameraTransform,
         getCullingAabbGU,
         setSelectedEntityIds,

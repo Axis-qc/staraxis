@@ -43,7 +43,8 @@ export function createFrameStateBuilder(
     cameraWorldPosGU: THREE.Vector2,
     zoom: { value: number },
     lodOptions?: LodOptions,
-    visibilityManager?: VisibilityStateManager
+    visibilityManager?: VisibilityStateManager,
+    getViewSizeGU?: () => { widthGU: number; heightGU: number },
 ): FrameStateBuilder {
     let sectorCenters: { q: number; r: number; x: number; y: number }[] = []
     const entitiesById = new Map<number, EntitySnapshot>()
@@ -87,15 +88,14 @@ export function createFrameStateBuilder(
     }
 
     const build = (snapshot: SnapshotMessage | null): FrameState => {
-        // 基于屏幕像素计算世界范围（2D游戏优化）
-        // 使用屏幕宽高的 1.2 倍作为剔除范围
+        // 基于相机投影到 z=0 平面的可见范围计算世界包围盒喵。
+        // 使用屏幕宽高的 1.2 倍作为剔除范围喵。
         const CULLING_SCALE = 1.2
-        const screenWidthPx = container.clientWidth
-        const screenHeightPx = container.clientHeight
-
-        // 将屏幕像素转换为世界单位（GU）
-        const viewWidthGU = screenWidthPx * zoom.value
-        const viewHeightGU = screenHeightPx * zoom.value
+        const fallbackWidthGU = container.clientWidth * zoom.value
+        const fallbackHeightGU = container.clientHeight * zoom.value
+        const viewSize = getViewSizeGU?.() ?? { widthGU: fallbackWidthGU, heightGU: fallbackHeightGU }
+        const viewWidthGU = viewSize.widthGU
+        const viewHeightGU = viewSize.heightGU
 
         const cullingAabb = {
             minX: cameraWorldPosGU.x - (viewWidthGU * CULLING_SCALE) / 2,

@@ -667,7 +667,7 @@ git commit -m "feat: 创建SelectionLayer基础结构（选择层+渲染器）�
 **文件：**
 - 修改：`web/src/rendering/layers/selection/renderers/selectionRenderer.ts`
 
-- [ ] **步骤1: 添加常量定义**
+- [x] **步骤1: 添加常量定义**
 
 ```typescript
 // 技术参数
@@ -681,7 +681,7 @@ const DEFAULT_SHIP_SIZE = 20
 const DEFAULT_SIZE = 15
 ```
 
-- [ ] **步骤2: 实现虚线环创建方法**
+- [x] **步骤2: 实现虚线环创建方法**
 
 ```typescript
 private createDashedRing(radius: number = 1.0): THREE.Line {
@@ -715,7 +715,7 @@ private createDashedRing(radius: number = 1.0): THREE.Line {
 }
 ```
 
-- [ ] **步骤3: 实现对象池管理方法**
+- [x] **步骤3: 实现对象池管理方法**
 
 ```typescript
 private acquireLine(): THREE.Line {
@@ -736,7 +736,7 @@ private releaseLine(line: THREE.Line): void {
 }
 ```
 
-- [ ] **步骤4: 实现实体尺寸获取方法**
+- [x] **步骤4: 实现实体尺寸获取方法**
 
 ```typescript
 private getEntitySize(entity: any): number {
@@ -757,7 +757,7 @@ private getEntitySize(entity: any): number {
 }
 ```
 
-- [ ] **步骤5: 验证虚线环实现**
+- [x] **步骤5: 验证虚线环实现**
 
 ```bash
 cd "G:\games\staraxis\web"
@@ -766,7 +766,7 @@ npm run type-check
 
 期望输出：编译通过
 
-- [ ] **步骤6: 提交绿色虚线环渲染器基础**
+- [x] **步骤6: 提交绿色虚线环渲染器基础**
 
 ```bash
 git add "web/src/rendering/layers/selection/renderers/selectionRenderer.ts"
@@ -778,7 +778,7 @@ git commit -m "feat: 实现绿色虚线环渲染器基础（虚线材质、对�
 **文件：**
 - 修改：`web/src/rendering/layers/selection/renderers/selectionRenderer.ts`
 
-- [ ] **步骤1: 实现init方法**
+- [x] **步骤1: 实现init方法**
 
 ```typescript
 init(ctx: WorldRenderContext): void {
@@ -796,7 +796,7 @@ init(ctx: WorldRenderContext): void {
 }
 ```
 
-- [ ] **步骤2: 实现update方法主体**
+- [x] **步骤2: 实现update方法主体**
 
 ```typescript
 update(ctx: WorldRenderContext, frame: WorldFrameState): void {
@@ -922,7 +922,7 @@ git commit -m "feat: 实现选中环更新逻辑（LOD、尺寸计算、对象�
 - 修改：`web/src/rendering/layers/index.ts`
 - 修改：`web/src/rendering/worldRenderManager.ts`
 
-- [ ] **步骤1: 检查现有渲染顺序常量**
+- [x] **步骤1: 检查现有渲染顺序常量**
 
 ```bash
 grep -n "RenderOrder" "web/src/rendering/layers/index.ts"
@@ -930,7 +930,7 @@ grep -n "RenderOrder" "web/src/rendering/layers/index.ts"
 
 期望输出：显示现有的RenderOrder定义
 
-- [ ] **步骤2: 添加SELECTION渲染顺序**
+- [x] **步骤2: 添加SELECTION渲染顺序**
 
 ```typescript
 // 如果文件不存在或结构不同，创建/更新index.ts
@@ -944,14 +944,14 @@ export const RenderOrder = {
 } as const
 ```
 
-- [ ] **步骤3: 导入SelectionLayer**
+- [x] **步骤3: 导入SelectionLayer**
 
 ```typescript
 // 在worldRenderManager.ts中，找到层导入部分
 import { SelectionLayer } from './layers/selection'  // 新增
 ```
 
-- [ ] **步骤4: 注册SelectionLayer**
+- [x] **步骤4: 注册SelectionLayer**
 
 ```typescript
 // 在createWorldRenderManager函数中，找到层注册部分
@@ -961,7 +961,7 @@ layerManager.registerLayer(new EntityLayer())
 layerManager.registerLayer(new SelectionLayer()) // 新增选择层
 ```
 
-- [ ] **步骤5: 验证编译通过**
+- [x] **步骤5: 验证编译通过**
 
 ```bash
 cd "G:\games\staraxis\web"
@@ -970,7 +970,7 @@ npm run type-check
 
 期望输出：编译通过
 
-- [ ] **步骤6: 验证SelectionLayer导入和注册**
+- [x] **步骤6: 验证SelectionLayer导入和注册**
 
 ```bash
 # 检查导入
@@ -982,7 +982,7 @@ grep -n "new SelectionLayer()" "web/src/rendering/worldRenderManager.ts"
 
 期望输出：显示导入和注册行
 
-- [ ] **步骤7: 提交层管理器更新**
+- [x] **步骤7: 提交层管理器更新**
 
 ```bash
 git add "web/src/rendering/layers/index.ts" "web/src/rendering/worldRenderManager.ts"
