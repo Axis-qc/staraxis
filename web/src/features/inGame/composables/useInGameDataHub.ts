@@ -41,7 +41,7 @@ import type { WorldRenderer as ThreeWorldRenderer } from '../../../rendering/wor
 type Vec2 = { x: number; y: number }
 
 type DebugUiModel = {
-    zoomText: Ref<string>
+    cameraPoseText: Ref<string>
     cameraCenterText: Ref<string>
     mouseWorldText: Ref<string>
     worldStateText: Ref<string>
@@ -262,11 +262,11 @@ export function useInGameDataHub() {
         return ownedEntities.value.filter(e => e.entityType === 'STATION')
     })
 
-    const debugZoomText = computed(() => {
+    const debugCameraPoseText = computed(() => {
         void debugUiTick.value
         const r = renderer.value
         if (!r) return '-'
-        return String(r.zoom.value)
+        return `(${r.cameraWorldPosGU.x.toFixed(2)}, ${r.cameraWorldPosGU.y.toFixed(2)}, ${r.cameraHeight.value.toFixed(2)}) (zoom=${r.zoom.value.toFixed(4)})`
     })
 
     const debugCameraCenterText = computed(() => {
@@ -301,7 +301,7 @@ export function useInGameDataHub() {
             ownedStations: ownedStations,
         },
         debug: {
-            zoomText: debugZoomText,
+            cameraPoseText: debugCameraPoseText,
             cameraCenterText: debugCameraCenterText,
             mouseWorldText: debugMouseWorldText,
             worldStateText: debugWorldStateText,

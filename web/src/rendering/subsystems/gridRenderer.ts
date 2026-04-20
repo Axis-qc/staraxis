@@ -21,7 +21,7 @@
  * - dispose(ctx): void
  *
  * @important_notes
- * - 网格使用相机局部坐标（不需要随 cameraWorldPosGU 平移），与旧实现保持一致。
+ * - 网格现在直接使用世界坐标，并围绕 cameraWorldPosGU（相机世界坐标）生成当前视口范围喵。
  * - 当前文件保留是因为网格层尚未迁移到 layer 架构。
  */
 import * as THREE from 'three'
@@ -65,10 +65,10 @@ export class GridRenderer implements WorldRenderSubsystem {
         const zoom = ctx.zoom.value
         const { widthGU: viewWidthGU, heightGU: viewHeightGU } = ctx.getViewSizeGU()
 
-        const viewMinX = -viewWidthGU / 2
-        const viewMaxX = viewWidthGU / 2
-        const viewMinY = -viewHeightGU / 2
-        const viewMaxY = viewHeightGU / 2
+        const viewMinX = ctx.cameraWorldPosGU.x - viewWidthGU / 2
+        const viewMaxX = ctx.cameraWorldPosGU.x + viewWidthGU / 2
+        const viewMinY = ctx.cameraWorldPosGU.y - viewHeightGU / 2
+        const viewMaxY = ctx.cameraWorldPosGU.y + viewHeightGU / 2
 
         const minStepGU = 10 * zoom
         const powerOf10 = 10 ** Math.floor(Math.log10(minStepGU))

@@ -294,7 +294,7 @@ export class LayerPlanetRenderer {
     material.uniforms.uOpacity.value = trailOpacity
     material.uniforms.uColor.value.copy(TRAIL_BASE_COLOR)
 
-    trailMesh.position.set(-ctx.cameraWorldPosGU.x, -ctx.cameraWorldPosGU.y, 0)
+    trailMesh.position.set(0, 0, 0)
     trailMesh.visible = true
   }
 
@@ -431,7 +431,7 @@ export class LayerPlanetRenderer {
           material.map = this.fallbackCircleTexture
           material.needsUpdate = true
         }
-        material.sizeAttenuation = false
+        material.sizeAttenuation = true
       }
 
       // 透明度计算
@@ -453,7 +453,7 @@ export class LayerPlanetRenderer {
       material.opacity = opacity
 
       sprite.scale.set(size, size, 1)
-      sprite.position.set(planetPos.x - ctx.cameraWorldPosGU.x, planetPos.y - ctx.cameraWorldPosGU.y, 0)
+      sprite.position.set(planetPos.x, planetPos.y, 0)
       sprite.visible = true
 
       this.updateTrail(entityId, planetPos, ctx, isSelected, totalDays)

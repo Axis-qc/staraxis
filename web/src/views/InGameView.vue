@@ -587,8 +587,8 @@ onUnmounted(() => {
       </div>
       <div class="debug-window-body">
         <div class="kv">
-          <div class="k">缩放倍率</div>
-          <div class="v">{{ hub.debug.zoomText }}</div>
+          <div class="k">镜头坐标(GU)</div>
+          <div class="v">{{ hub.debug.cameraPoseText }}</div>
         </div>
         <div class="kv">
           <div class="k">世界状态</div>

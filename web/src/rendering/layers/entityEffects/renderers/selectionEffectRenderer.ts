@@ -79,8 +79,8 @@ export class SelectionEffectRenderer {
       const worldSize = spriteSizePx * ctx.zoom.value
       ring.scale.set(worldSize, worldSize, 1)
       ring.position.set(
-        entityPos.x - ctx.cameraWorldPosGU.x,
-        entityPos.y - ctx.cameraWorldPosGU.y,
+        entityPos.x,
+        entityPos.y,
         0.4
       )
       ring.visible = true
@@ -114,7 +114,7 @@ export class SelectionEffectRenderer {
       opacity: 0.95,
       depthWrite: false,
       depthTest: false,
-      sizeAttenuation: false,
+      sizeAttenuation: true,
     })
     const sprite = new THREE.Sprite(material)
     sprite.frustumCulled = false

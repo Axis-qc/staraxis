@@ -21,7 +21,7 @@
  * - dispose(ctx): void
  *
  * @important_notes
- * - 轮廓线使用相机局部坐标（减去 cameraWorldPosGU）。
+ * - 轮廓线现在直接使用世界坐标，不再减去 cameraWorldPosGU（相机世界坐标）喵。
  * - 当前实现为每次 update 重建 geometry（最小可用）；后续可做增量更新/缓存。
  * - 当前文件保留是因为六边形轮廓层尚未迁移到 layer 架构。
  */
@@ -78,12 +78,10 @@ export class HexOutlineRenderer implements WorldRenderSubsystem {
         for (const sector of frame.sectorCenters) {
             if (!isPointInAabb(sector, frame.cullingAabb)) continue
 
-            const cameraLocalX = sector.x - ctx.cameraWorldPosGU.x
-            const cameraLocalY = sector.y - ctx.cameraWorldPosGU.y
             const sectorKey = `${sector.q},${sector.r}`
             const ownerId = ownerMap[sectorKey] ?? null
             const color = new THREE.Color(this.getNationColor(ownerId, selfNationId))
-            const hexSegments = buildHexSegmentPositions([{ x: cameraLocalX, y: cameraLocalY }])
+            const hexSegments = buildHexSegmentPositions([{ x: sector.x, y: sector.y }])
 
             for (let i = 0; i < hexSegments.length; i += 3) {
                 positions.push(hexSegments[i] ?? 0, hexSegments[i + 1] ?? 0, hexSegments[i + 2] ?? 0)

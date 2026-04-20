@@ -389,8 +389,8 @@ export class LayerShipRenderer {
 
       // 使用显示位置设置 Mesh 位置喵
       mesh.position.set(
-        renderState.displayPos.x - ctx.cameraWorldPosGU.x,
-        renderState.displayPos.y - ctx.cameraWorldPosGU.y,
+        renderState.displayPos.x,
+        renderState.displayPos.y,
         0.15
       )
       mesh.visible = true
@@ -646,8 +646,8 @@ export class LayerShipRenderer {
 
     // 更新路径几何体（从舰船位置到目标位置）喵
     const positions = new Float32Array([
-      shipPos.x - ctx.cameraWorldPosGU.x, shipPos.y - ctx.cameraWorldPosGU.y, 0.1,
-      targetPos.x - ctx.cameraWorldPosGU.x, targetPos.y - ctx.cameraWorldPosGU.y, 0.1,
+      shipPos.x, shipPos.y, 0.1,
+      targetPos.x, targetPos.y, 0.1,
     ])
     const geometry = line.geometry as THREE.BufferGeometry
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))

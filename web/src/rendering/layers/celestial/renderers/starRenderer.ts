@@ -156,9 +156,9 @@ export class LayerStarRenderer {
 
         mesh.scale.set(size, size, 1)
         mesh.position.set(
-            entity.posWorldGU!.x - ctx.cameraWorldPosGU.x,
-            entity.posWorldGU!.y - ctx.cameraWorldPosGU.y,
-            -0.1,
+            entity.posWorldGU!.x,
+            entity.posWorldGU!.y,
+            0,
         )
         mesh.quaternion.copy(ctx.camera.quaternion)
         mesh.visible = true
@@ -191,12 +191,12 @@ export class LayerStarRenderer {
 
         material.color.copy(profile.baseColor)
         material.opacity = shouldShowEffects(starLod, isSelected) ? 0.95 : 0.82
-        material.sizeAttenuation = false
+        material.sizeAttenuation = true
         sprite.scale.set(fallbackDiameterGU, fallbackDiameterGU, 1)
         sprite.position.set(
-            entity.posWorldGU!.x - ctx.cameraWorldPosGU.x,
-            entity.posWorldGU!.y - ctx.cameraWorldPosGU.y,
-            -0.1,
+            entity.posWorldGU!.x,
+            entity.posWorldGU!.y,
+            0,
         )
         sprite.visible = true
     }
@@ -223,7 +223,7 @@ export class LayerStarRenderer {
     private createStarSprite(): THREE.Sprite {
         const material = new THREE.SpriteMaterial({
             color: 0xffffff,
-            sizeAttenuation: false,
+            sizeAttenuation: true,
             map: this.fallbackCircleTexture ?? undefined,
             transparent: true,
         })
