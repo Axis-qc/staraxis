@@ -42,7 +42,7 @@ public class MoveShipHandler implements CommandHandler<MoveShipCommand> {
         ship.movementCommand = MovementCommand.createMoveTo(
                 ship.movementTarget,
                 ship,
-                worldState.time.getTotalGameSeconds(),
+                worldState.time.totalGameSecondsAcc,
                 simulationTick);
     }
 }

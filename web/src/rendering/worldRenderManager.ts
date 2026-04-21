@@ -1,43 +1,21 @@
-/**
- * @file worldRenderManager.ts
- *
- * @description
- * 世界渲染管理器（World Render Manager）- 分层渲染系统的协调入口。
- *
- * 作用：
- * - 协调相机、帧状态、实体查询、层管理器与渲染循环。
- * - 处理输入事件（通过 InputSystem）。
- * - 提供对外 API（zoom、cameraWorldPosGU、updateFromSnapshot 等）。
- *
- * @important_notes
- * - 渲染职责已经下沉到各 layer / system 模块。
- * - 具体实现见：
- *   - systems/cameraSystem.ts - 相机和渲染器管理
- *   - systems/frameStateBuilder.ts - 帧状态构建
- *   - systems/entityQuerySystem.ts - 实体位置查询
- *   - systems/renderLoop.ts - 渲染循环
- *   - layers/ - 分层渲染实现
- *   - subsystems/lodSystem.ts - LOD系统
- */
 import * as THREE from 'three'
-import type { SnapshotMessage } from '../net/snapshotWs'
+import type { SnapshotMessage, EntitySnapshot } from '../net/snapshotWs'
 
-import { createCameraSystem } from './systems/cameraSystem'
-import { createFrameStateBuilder } from './systems/frameStateBuilder'
-import { createEntityQuerySystem } from './systems/entityQuerySystem'
-import { createRenderLoop } from './systems/renderLoop'
-import { createTextureManager } from './subsystems/textureManager'
-import { SimpleLayerManager } from './layers/layerManager'
-import type { RenderLayer } from './layers'
+import { createInputSystem } from '../input/inputSystem'
+import { BackgroundLayer } from './layers/background'
 import { CelestialLayer } from './layers/celestial'
 import { EntityLayer } from './layers/entity'
-import { BackgroundLayer } from './layers/background'
 import { EntityEffectsLayer } from './layers/entityEffects'
-import type { LodState, LodOptions } from './subsystems/lodSystem'
-import { createInputSystem } from '../input/inputSystem'
+import type { RenderLayer } from './layers'
+import { SimpleLayerManager } from './layers/layerManager'
+import { createCameraSystem } from './systems/cameraSystem'
+import { createEntityQuerySystem } from './systems/entityQuerySystem'
+import { createFrameStateBuilder } from './systems/frameStateBuilder'
+import { createRenderLoop } from './systems/renderLoop'
 import { VisibilityStateManager } from './systems/visibilityState'
+import type { LodOptions, LodState } from './subsystems/lodSystem'
+import { createTextureManager } from './subsystems/textureManager'
 
-// 重新导出类型供外部使用
 export type { LodState, LodOptions } from './subsystems/lodSystem'
 export { LodLevel } from './subsystems/lodSystem'
 export type { FrameState } from './systems/frameStateBuilder'
@@ -62,7 +40,6 @@ export type WorldRenderer = {
     setGridVisible: (visible: boolean) => void
     onCameraChanged: (cb: () => void) => () => void
     dispose: () => void
-    // 新增层控制API
     getLayer: (name: string) => RenderLayer | null
     setLayerVisible: (name: string, visible: boolean) => void
     setLayerQuality: (name: string, quality: number) => void
@@ -96,7 +73,7 @@ export type WorldRenderContext = {
 
 export type WorldFrameState = {
     snapshot: SnapshotMessage | null
-    entitiesById: Map<number, import('../net/snapshotWs').EntitySnapshot>
+    entitiesById: Map<number, EntitySnapshot>
     sectorCenters: { q: number; r: number; x: number; y: number }[]
     selectedIds: Set<number>
     cullingAabb: { minX: number; maxX: number; minY: number; maxY: number }
@@ -107,45 +84,40 @@ export type WorldFrameState = {
 
 export function createWorldRenderManager(
     container: HTMLDivElement,
-    options: WorldRendererOptions = {}
+    options: WorldRendererOptions = {},
 ): WorldRenderer {
     const minZoom = options.minZoom ?? 0.1
     const maxZoom = options.maxZoom ?? 2_000_000
 
-    // 状态
     const zoom = { value: 1 }
     const cameraHeight = { value: 1 }
     const cameraWorldPosGU = new THREE.Vector2(0, 0)
     const visibilityManager = new VisibilityStateManager()
 
-    // 应用初始相机状态（若提供）喵
     if (typeof options.initialZoom === 'number' && Number.isFinite(options.initialZoom)) {
         zoom.value = Math.max(minZoom, Math.min(maxZoom, options.initialZoom))
     }
-    if (options.initialCameraPos && Number.isFinite(options.initialCameraPos.x) && Number.isFinite(options.initialCameraPos.y)) {
+    if (
+        options.initialCameraPos &&
+        Number.isFinite(options.initialCameraPos.x) &&
+        Number.isFinite(options.initialCameraPos.y)
+    ) {
         cameraWorldPosGU.set(options.initialCameraPos.x, options.initialCameraPos.y)
     }
 
-    // 初始化相机系统
     const cameraSystem = createCameraSystem(container)
     const { renderer, scene, camera, worldGroup, entitiesGroup, canvas } = cameraSystem
-
     cameraHeight.value = cameraSystem.worldUnitsPerPixelToHeight(zoom.value)
 
-    // 初始化层管理器
     const layerManager = new SimpleLayerManager()
     layerManager.registerLayer(new BackgroundLayer())
     layerManager.registerLayer(new CelestialLayer())
     layerManager.registerLayer(new EntityLayer())
     layerManager.registerLayer(new EntityEffectsLayer())
 
-    // 初始化纹理管理器
     const textureManager = createTextureManager()
-
-    // 初始化实体查询系统
     const entityQuery = createEntityQuerySystem()
 
-    // 初始化渲染上下文
     const ctx: WorldRenderContext = {
         renderer,
         scene,
@@ -160,7 +132,8 @@ export function createWorldRenderManager(
         getViewSizeGU: () => cameraSystem.getViewSizeAtHeight(cameraHeight.value),
         getWorldUnitsPerPixel: () => zoom.value,
         getViewSizeAtDepth: (distanceFromCamera: number) => {
-            const heightGU = 2 * distanceFromCamera * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)
+            const heightGU =
+                2 * distanceFromCamera * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)
             return {
                 widthGU: heightGU * camera.aspect,
                 heightGU,
@@ -169,22 +142,23 @@ export function createWorldRenderManager(
         options,
     }
 
-    // 初始化所有渲染层
     for (const layer of layerManager.layers.values()) {
         layer.init(ctx)
     }
 
-    // 初始化帧状态构建器
-    const frameBuilder = createFrameStateBuilder(container, cameraWorldPosGU, zoom, options.lod, visibilityManager, ctx.getViewSizeGU)
-
-
-    // 初始化输入系统
+    const frameBuilder = createFrameStateBuilder(
+        container,
+        cameraWorldPosGU,
+        zoom,
+        options.lod,
+        visibilityManager,
+        ctx.getViewSizeGU,
+    )
     const inputSystem = createInputSystem(canvas)
 
-    // 缓存当前剔除范围（cullingAabb），供订阅星区与其它系统复用喵
     let currentCullingAabb = { minX: 0, maxX: 0, minY: 0, maxY: 0 }
+    let latestSnapshot: SnapshotMessage | null = null
 
-    // 相机变化监听喵
     const cameraChangeListeners = new Set<() => void>()
     const onCameraChanged = (cb: () => void) => {
         cameraChangeListeners.add(cb)
@@ -195,14 +169,11 @@ export function createWorldRenderManager(
         zoom.value = cameraSystem.getWorldUnitsPerPixelAtHeight(cameraHeight.value)
     }
 
-    // 相机控制动作
     const applyCameraTransform = () => {
         cameraSystem.applyTransform(cameraHeight.value, cameraWorldPosGU)
         updateDerivedZoom()
-        // 触发重建以更新LOD
-        const frame = frameBuilder.build(null)
+        const frame = frameBuilder.build(latestSnapshot)
         currentCullingAabb = frame.cullingAabb
-        // 通知外部相机已变化喵
         for (const cb of cameraChangeListeners) cb()
     }
 
@@ -220,7 +191,6 @@ export function createWorldRenderManager(
         applyCameraTransform()
     }
 
-    // 注册输入动作
     inputSystem.onAction('CAMERA_ZOOM_IN', () => setZoom(zoom.value * 0.9))
     inputSystem.onAction('CAMERA_ZOOM_OUT', () => setZoom(zoom.value * 1.1))
     inputSystem.onAction('CAMERA_ZOOM_RESET', () => {
@@ -229,12 +199,10 @@ export function createWorldRenderManager(
         applyCameraTransform()
     })
 
-    // 鼠标拖拽状态
     let isDragging = false
     const dragStartClient = new THREE.Vector2(0, 0)
     const dragStartCamera = new THREE.Vector2(0, 0)
 
-    // 保留原有的 pointer 事件监听（与 InputSystem 并存）
     const onPointerDown = (e: PointerEvent) => {
         if (e.button === 2) {
             e.preventDefault()
@@ -266,15 +234,16 @@ export function createWorldRenderManager(
         isDragging = false
         try {
             canvas.releasePointerCapture(e.pointerId)
-        } catch { }
+        } catch {
+            // Ignore already-released pointers.
+        }
         e.preventDefault()
     }
 
     const onWheel = (e: WheelEvent) => {
         e.preventDefault()
         const zoomDelta = e.deltaY * 0.001
-        const next = zoom.value * (1 + zoomDelta)
-        setZoom(next)
+        setZoom(zoom.value * (1 + zoomDelta))
     }
 
     const onContextMenu = (e: MouseEvent) => {
@@ -289,65 +258,55 @@ export function createWorldRenderManager(
     canvas.addEventListener('pointerleave', endDrag)
     canvas.addEventListener('wheel', onWheel, { passive: false })
 
-    // ResizeObserver
     const resizeObserver = new ResizeObserver(() => {
         cameraSystem.updateFrustum()
         applyCameraTransform()
     })
     resizeObserver.observe(container)
 
-    // 初始化渲染循环
-    const buildFrameState = () => frameBuilder.build(null)
     const renderLoop = createRenderLoop(
         renderer,
         scene,
         camera,
         ctx,
-        buildFrameState,
+        () => frameBuilder.build(latestSnapshot),
         inputSystem,
         cameraWorldPosGU,
         zoom,
         applyCameraTransform,
-        { layerManager } // 新增层管理器参数
+        { layerManager },
     )
 
-    // 启动渲染循环
     cameraSystem.updateFrustum()
     applyCameraTransform()
     renderLoop.start()
 
-    // API
     const setSelectedEntityIds = (ids: number[]) => {
         frameBuilder.setSelectedIds(ids)
-        void frameBuilder.build(null) // 触发帧状态更新，供层管理器使用
+        void frameBuilder.build(latestSnapshot)
     }
 
     const updateFromSnapshot = (snapshot: SnapshotMessage) => {
         if (!snapshot.ok || !snapshot.realTimeWorldState) return
+        latestSnapshot = snapshot
 
-        // 合并公开实体与私有实体（按情报等级分层）喵。
-        // 说明：SHIP（舰船实体）通常走 privateEntitiesByIntelLevel（私有实体分层）下发，
-        // 若只读取 entities（公开实体）会导致前端“无舰船可渲染”喵。
         const publicEntities = snapshot.realTimeWorldState.entities ?? []
         const privateTierMap = snapshot.realTimeWorldState.privateEntitiesByIntelLevel ?? {}
         const privateEntities = Object.values(privateTierMap).flatMap((arr) => arr ?? [])
 
-        // 去重：同一 entityId 以后出现者覆盖前者（通常 private 精度更高）喵。
-        const mergedById = new Map<number, import('../net/snapshotWs').EntitySnapshot>()
-        for (const e of publicEntities) {
-            mergedById.set(e.entityId, e)
+        const mergedById = new Map<number, EntitySnapshot>()
+        for (const entity of publicEntities) {
+            mergedById.set(entity.entityId, entity)
         }
-        for (const e of privateEntities) {
-            mergedById.set(e.entityId, e)
+        for (const entity of privateEntities) {
+            mergedById.set(entity.entityId, entity)
         }
         const mergedEntities = Array.from(mergedById.values())
 
-        // 更新可见性状态
-        const currentTime = Date.now()
         visibilityManager.updateFromSnapshot(
             mergedEntities,
             snapshot.realTimeWorldState.sectorCenters ?? [],
-            currentTime
+            Date.now(),
         )
 
         frameBuilder.updateSectorCenters(snapshot.realTimeWorldState.sectorCenters ?? [])
@@ -355,14 +314,11 @@ export function createWorldRenderManager(
         entityQuery.updateSnapshot(snapshot)
         entityQuery.updateEntities(mergedEntities)
 
-        void frameBuilder.build(snapshot) // 触发帧状态更新，供层管理器使用
+        void frameBuilder.build(latestSnapshot)
     }
-
-    const getEntityWorldPosGU = entityQuery.getEntityWorldPosGU
 
     const removeEntitiesFromCache = (entityIds: number[]) => {
         frameBuilder.removeEntities(entityIds)
-        // 实体查询系统不需要 hub，它自己维护了快照状态喵
     }
 
     const removeSectorsFromCache = (sectorKeys: string[]) => {
@@ -392,17 +348,13 @@ export function createWorldRenderManager(
         cameraSystem.dispose()
     }
 
-    const getCullingAabbGU = () => currentCullingAabb
-
     const setCurrentNationId = (nationId: string | null) => {
         visibilityManager.setCurrentNationId(nationId)
-        // 国家变更后需要重新构建帧状态
-        void frameBuilder.build(null) // 触发帧状态更新，供层管理器使用
+        void frameBuilder.build(latestSnapshot)
     }
 
     const setGridVisible = (visible: boolean) => {
-        // TODO: 实现网格层后重新启用网格可见性控制喵
-        console.log(`setGridVisible(${visible}) - 网格层尚未实现`)
+        console.log(`setGridVisible(${visible}) - grid layer not implemented`)
     }
 
     return {
@@ -412,18 +364,17 @@ export function createWorldRenderManager(
         setZoom,
         setCameraHeight,
         applyCameraTransform,
-        getCullingAabbGU,
+        getCullingAabbGU: () => currentCullingAabb,
         setSelectedEntityIds,
         updateFromSnapshot,
         removeEntitiesFromCache,
         removeSectorsFromCache,
         clearAllSectorsFromCache,
-        getEntityWorldPosGU,
+        getEntityWorldPosGU: entityQuery.getEntityWorldPosGU,
         setCurrentNationId,
         setGridVisible,
         onCameraChanged,
         dispose,
-        // 层控制API
         getLayer: (name: string) => layerManager.getLayer(name),
         setLayerVisible: (name: string, visible: boolean) => {
             const layer = layerManager.getLayer(name)

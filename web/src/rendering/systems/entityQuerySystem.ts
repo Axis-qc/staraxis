@@ -34,7 +34,12 @@ export function createEntityQuerySystem(): EntityQuerySystem {
         for (const e of entities) {
             entitiesById.set(e.entityId, e)
         }
-        syncEstimatedShips(entities, lastSnapshot?.realTimeWorldState?.totalGameSeconds ?? 0)
+        syncEstimatedShips(
+            entities,
+            lastSnapshot?.realTimeWorldState?.totalGameSecondsExact ??
+                lastSnapshot?.realTimeWorldState?.totalGameSeconds ??
+                0,
+        )
     }
 
     const getEntityWorldPosGU = (entityId: number): { x: number; y: number } | null => {

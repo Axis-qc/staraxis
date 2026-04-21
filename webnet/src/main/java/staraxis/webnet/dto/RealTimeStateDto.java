@@ -24,6 +24,7 @@ public class RealTimeStateDto {
 
     /** 权威累计游戏秒时间戳（向下取整）喵。 */
     public final long totalGameSeconds;
+    public final double totalGameSecondsExact;
 
     /** 本 tick 推进的游戏秒数（Δt）喵。 */
     public final double deltaGameSeconds;
@@ -80,7 +81,7 @@ public class RealTimeStateDto {
      */
     public final Map<Integer, List<EntitySnapshot>> privateEntitiesByIntelLevel;
 
-    public RealTimeStateDto(long simulationTick, long totalGameSeconds, double deltaGameSeconds,
+    public RealTimeStateDto(long simulationTick, long totalGameSeconds, double totalGameSecondsExact, double deltaGameSeconds,
             int worldRadius,
             String worldType, double gameSecondsPerRealSecond, double timeScale,
             int year, int month, int day, int hour, int minute, int second,
@@ -89,6 +90,7 @@ public class RealTimeStateDto {
             Map<Integer, List<EntitySnapshot>> privateEntitiesByIntelLevel) {
         this.simulationTick = simulationTick;
         this.totalGameSeconds = totalGameSeconds;
+        this.totalGameSecondsExact = totalGameSecondsExact;
         this.deltaGameSeconds = deltaGameSeconds;
         this.worldRadius = worldRadius;
         this.worldType = worldType;

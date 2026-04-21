@@ -293,6 +293,7 @@ public final class SnapshotMessageFactory {
         RealTimeStateDto realTime = new RealTimeStateDto(
                 rt.simulationTick,
                 rt.totalGameSeconds,
+                rt.totalGameSecondsExact,
                 rt.deltaGameSeconds,
                 rt.worldRadius,
                 rt.worldType.name(),

@@ -142,6 +142,42 @@ function advanceEstimatorState(state: ShipEstimatorState, targetGameSeconds: num
     state.lastSimulatedGameSeconds = targetGameSeconds
 }
 
+function getOrCreateEstimatorState(
+    entity: EntitySnapshot,
+    snapshotGameSeconds: number,
+): ShipEstimatorState {
+    const details = (entity.details ?? {}) as ShipDetails
+    const command = details.movementCommand
+    const existing = statesByEntityId.get(entity.entityId)
+
+    if (hasMoveSeed(command)) {
+        const commandKey = buildCommandKey(command)
+        if (existing && existing.lastCommandKey === commandKey) {
+            return existing
+        }
+
+        const state = {
+            shipState: createShipStateFromCommand(entity, command),
+            lastSimulatedGameSeconds: command.startGameSeconds,
+            lastCommandKey: commandKey,
+        }
+        statesByEntityId.set(entity.entityId, state)
+        return state
+    }
+
+    if (existing) {
+        return existing
+    }
+
+    const state = {
+        shipState: createShipStateFromEntity(entity),
+        lastSimulatedGameSeconds: snapshotGameSeconds,
+        lastCommandKey: null,
+    }
+    statesByEntityId.set(entity.entityId, state)
+    return state
+}
+
 export function syncEstimatedShips(entities: EntitySnapshot[], snapshotGameSeconds: number): void {
     const nextIds = new Set<number>()
 
@@ -152,58 +188,45 @@ export function syncEstimatedShips(entities: EntitySnapshot[], snapshotGameSecon
         const details = (entity.details ?? {}) as ShipDetails
         const command = details.movementCommand
         const existing = statesByEntityId.get(entity.entityId)
+        const state = getOrCreateEstimatorState(entity, snapshotGameSeconds)
 
         if (hasMoveSeed(command)) {
             const commandKey = buildCommandKey(command)
-            let state = existing
-            if (!state || state.lastCommandKey !== commandKey) {
-                state = {
-                    shipState: createShipStateFromCommand(entity, command),
-                    lastSimulatedGameSeconds: command.startGameSeconds,
-                    lastCommandKey: commandKey,
-                }
-                statesByEntityId.set(entity.entityId, state)
+            const isNewCommandSeed = !existing || existing.lastCommandKey !== commandKey
+            if (isNewCommandSeed) {
+                advanceEstimatorState(state, snapshotGameSeconds)
             }
-            advanceEstimatorState(state, snapshotGameSeconds)
             continue
         }
 
-        if (!existing) {
-            statesByEntityId.set(entity.entityId, {
-                shipState: createShipStateFromEntity(entity),
-                lastSimulatedGameSeconds: snapshotGameSeconds,
-                lastCommandKey: null,
-            })
-            continue
-        }
-
-        existing.shipState.maxSpeed = clampNumber(details.maxSpeed, existing.shipState.maxSpeed)
-        existing.shipState.baseAcceleration = clampNumber(details.baseAcceleration, existing.shipState.baseAcceleration)
-        existing.shipState.bowAccelerationBonus = clampNumber(
+        state.shipState.maxSpeed = clampNumber(details.maxSpeed, state.shipState.maxSpeed)
+        state.shipState.baseAcceleration = clampNumber(details.baseAcceleration, state.shipState.baseAcceleration)
+        state.shipState.bowAccelerationBonus = clampNumber(
             details.bowAccelerationBonus,
-            existing.shipState.bowAccelerationBonus,
+            state.shipState.bowAccelerationBonus,
         )
-        existing.shipState.turnRate = clampNumber(details.turnRate, existing.shipState.turnRate)
-        existing.shipState.lateralSpeedPenalty = clampNumber(
+        state.shipState.turnRate = clampNumber(details.turnRate, state.shipState.turnRate)
+        state.shipState.lateralSpeedPenalty = clampNumber(
             details.lateralSpeedPenalty,
-            existing.shipState.lateralSpeedPenalty,
+            state.shipState.lateralSpeedPenalty,
         )
-        existing.shipState.reverseSpeedPenalty = clampNumber(
+        state.shipState.reverseSpeedPenalty = clampNumber(
             details.reverseSpeedPenalty,
-            existing.shipState.reverseSpeedPenalty,
+            state.shipState.reverseSpeedPenalty,
         )
-        existing.shipState.isMoving = details.isMoving === true
-        existing.shipState.movementTarget = cloneVec2(details.movementTarget)
-        existing.shipState.velocity = cloneVec2(details.velocity)
-        existing.shipState.currentHeadingDeg = clampNumber(
+        state.shipState.isMoving = details.isMoving === true
+        state.shipState.movementTarget = cloneVec2(details.movementTarget)
+        state.shipState.velocity = cloneVec2(details.velocity)
+        state.shipState.currentHeadingDeg = clampNumber(
             details.headingDeg,
-            getHeadingFromVelocity(existing.shipState.velocity, existing.shipState.currentHeadingDeg),
+            getHeadingFromVelocity(state.shipState.velocity, state.shipState.currentHeadingDeg),
         )
-        existing.shipState.targetHeadingDeg = existing.shipState.movementTarget
-            ? getHeadingToTarget(existing.shipState.position, existing.shipState.movementTarget)
-            : existing.shipState.currentHeadingDeg
-        existing.lastCommandKey = null
-        advanceEstimatorState(existing, snapshotGameSeconds)
+        state.shipState.targetHeadingDeg = state.shipState.movementTarget
+            ? getHeadingToTarget(state.shipState.position, state.shipState.movementTarget)
+            : state.shipState.currentHeadingDeg
+        state.lastCommandKey = null
+
+        advanceEstimatorState(state, snapshotGameSeconds)
     }
 
     for (const entityId of Array.from(statesByEntityId.keys())) {
@@ -213,13 +236,41 @@ export function syncEstimatedShips(entities: EntitySnapshot[], snapshotGameSecon
     }
 }
 
+export function advanceEstimatedShips(
+    entities: Iterable<EntitySnapshot>,
+    currentGameSeconds = defaultGameTimeManager.getCurrentGameSeconds(),
+): void {
+    for (const entity of entities) {
+        if (entity.entityType !== 'SHIP') continue
+        const state = statesByEntityId.get(entity.entityId)
+        if (!state) continue
+        advanceEstimatorState(state, currentGameSeconds)
+    }
+}
+
+export function advanceEstimatedShipsByDelta(
+    entities: Iterable<EntitySnapshot>,
+    deltaGameSeconds: number,
+    currentGameSeconds = defaultGameTimeManager.getCurrentGameSeconds(),
+): void {
+    if (!Number.isFinite(deltaGameSeconds) || deltaGameSeconds <= 0) {
+        return
+    }
+
+    for (const entity of entities) {
+        if (entity.entityType !== 'SHIP') continue
+        const state = getOrCreateEstimatorState(entity, currentGameSeconds - deltaGameSeconds)
+        advanceEstimatorState(state, state.lastSimulatedGameSeconds + deltaGameSeconds)
+    }
+}
+
 export function getEstimatedShipPose(
     entity: EntitySnapshot | null | undefined,
     currentGameSeconds = defaultGameTimeManager.getCurrentGameSeconds(),
 ): EstimatedShipPose | null {
     if (!entity || entity.entityType !== 'SHIP') return null
 
-    const state = statesByEntityId.get(entity.entityId)
+    const state = getOrCreateEstimatorState(entity, currentGameSeconds)
     if (!state) {
         const details = (entity.details ?? {}) as ShipDetails
         return entity.posWorldGU

@@ -6,7 +6,7 @@
  * 舰船信息面板 - 显示选中舰船的详细信息，并提供基础操作喵。
  */
 import type { EntitySnapshot, ShipDetails } from '../../../net/snapshotWs'
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { getEstimatedShipPose } from '../../../game/shipPositionEstimator'
 
 const props = defineProps<{
@@ -19,7 +19,30 @@ const emit = defineEmits<{
   (e: 'focus'): void
 }>()
 
-const estimatedPose = computed(() => getEstimatedShipPose(props.ship))
+const poseTick = ref(0)
+let poseRafId = 0
+
+const estimatedPose = computed(() => {
+  void poseTick.value
+  return getEstimatedShipPose(props.ship)
+})
+
+onMounted(() => {
+  const tickPose = () => {
+    if (props.isOpen && props.ship) {
+      poseTick.value++
+    }
+    poseRafId = requestAnimationFrame(tickPose)
+  }
+  poseRafId = requestAnimationFrame(tickPose)
+})
+
+onUnmounted(() => {
+  if (poseRafId) {
+    cancelAnimationFrame(poseRafId)
+    poseRafId = 0
+  }
+})
 
 function getShipName(): string {
   if (!props.ship) return '未知舰船'

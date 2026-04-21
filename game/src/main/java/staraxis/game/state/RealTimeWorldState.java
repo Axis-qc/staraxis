@@ -22,6 +22,7 @@ public class RealTimeWorldState {
 
     /** 权威累计游戏秒（向下取整）喵。 */
     public long totalGameSeconds;
+    public double totalGameSecondsExact;
 
     /** 本 tick 推进的游戏秒数（Δt）喵。 */
     public double deltaGameSeconds;
@@ -74,6 +75,7 @@ public class RealTimeWorldState {
     public void resetForFill() {
         simulationTick = 0;
         totalGameSeconds = 0;
+        totalGameSecondsExact = 0;
         deltaGameSeconds = 0;
         worldRadius = 0;
         worldType = null;

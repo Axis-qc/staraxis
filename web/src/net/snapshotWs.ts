@@ -98,6 +98,7 @@ export type SnapshotMessage = {
     realTimeWorldState?: {
         simulationTick: number
         totalGameSeconds: number
+        totalGameSecondsExact?: number
         deltaGameSeconds: number
         gameDatetimeDay?: number
         accGameHoursInDay?: number

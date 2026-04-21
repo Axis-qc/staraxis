@@ -414,6 +414,7 @@ public class StarAxisGameRuntime implements GameRuntime {
 
         s.simulationTick = worldState.time.simulationTick;
         s.totalGameSeconds = worldState.time.getTotalGameSeconds();
+        s.totalGameSecondsExact = worldState.time.totalGameSecondsAcc;
         s.deltaGameSeconds = worldState.time.lastDeltaGameSeconds;
         s.worldRadius = worldState.worldMap.radius;
         s.worldType = worldState.time.worldType;
