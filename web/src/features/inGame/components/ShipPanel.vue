@@ -6,6 +6,8 @@
  * 舰船信息面板 - 显示选中舰船的详细信息，并提供基础操作喵。
  */
 import type { EntitySnapshot, ShipDetails } from '../../../net/snapshotWs'
+import { computed } from 'vue'
+import { getEstimatedShipPose } from '../../../game/shipPositionEstimator'
 
 const props = defineProps<{
   ship: EntitySnapshot | null
@@ -16,6 +18,8 @@ const emit = defineEmits<{
   (e: 'close'): void
   (e: 'focus'): void
 }>()
+
+const estimatedPose = computed(() => getEstimatedShipPose(props.ship))
 
 function getShipName(): string {
   if (!props.ship) return '未知舰船'
@@ -74,11 +78,11 @@ function onFocus() {
           <div class="coord-display">
             <div class="coord-row">
               <span class="coord-label">X:</span>
-              <span class="coord-value">{{ ship ? Math.round(ship.posWorldGU.x) : '-' }}</span>
+              <span class="coord-value">{{ ship ? Math.round(estimatedPose?.position.x ?? ship.posWorldGU.x) : '-' }}</span>
             </div>
             <div class="coord-row">
               <span class="coord-label">Y:</span>
-              <span class="coord-value">{{ ship ? Math.round(ship.posWorldGU.y) : '-' }}</span>
+              <span class="coord-value">{{ ship ? Math.round(estimatedPose?.position.y ?? ship.posWorldGU.y) : '-' }}</span>
             </div>
           </div>
         </div>

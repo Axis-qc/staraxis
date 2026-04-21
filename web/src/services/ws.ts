@@ -79,7 +79,6 @@ function createWsClient(path: string = '/ws'): WsClient {
             ws.onopen = () => {
                 notifyState('connected')
                 // 连接成功后自动发送订阅快照请求喵
-                subscribeSnapshot()
             }
             ws.onmessage = (evt) => {
                 const text = String(evt.data)

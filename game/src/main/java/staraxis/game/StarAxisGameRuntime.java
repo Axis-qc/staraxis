@@ -24,6 +24,7 @@ import staraxis.game.command.SetSystemTimeScaleCommand;
 import staraxis.game.command.SetSystemTimeScaleHandler;
 import staraxis.game.entity.Entity;
 import staraxis.game.entity.EntityType;
+import staraxis.game.ship.MovementCommand;
 import staraxis.game.ship.ShipBody;
 import staraxis.game.ship.ShipMovementSystem;
 import staraxis.game.sim.SimulationTime;
@@ -603,12 +604,6 @@ public class StarAxisGameRuntime implements GameRuntime {
                     worldState.intelSystem.getRequiredIntelLevel(entity.entityType) : 4;
 
             // 调试日志：只在舰船正在移动时记录（降低日志频率）喵
-            if (isMoving) {
-                System.out.println("[ShipSnapshot-Trace] ship=" + entity.entityId + " isMoving=true headingDeg=" + String.format("%.1f", headingDeg) +
-                    " target=" + (movementTarget != null ? "(" + Math.round(movementTarget.x()) + "," + Math.round(movementTarget.y()) + ")" : "null") +
-                    " tick=" + worldState.time.simulationTick);
-            }
-
             s.putEntitySnapshot(new EntitySnapshot(
                     entity.entityId,
                     entity.entityType,
@@ -620,7 +615,8 @@ public class StarAxisGameRuntime implements GameRuntime {
                     false,
                     new EntitySnapshot.ShipDetails(customFlags, headingDeg, isMoving, movementTarget, velocity,
                             maxSpeed, baseAcceleration, bowAccelerationBonus, turnRate,
-                            lateralSpeedPenalty, reverseSpeedPenalty),
+                            lateralSpeedPenalty, reverseSpeedPenalty,
+                            toMovementCommandDetails(entity instanceof ShipBody shipBody ? shipBody.movementCommand : null)),
                     intelRequiredLevel));
         }
 
@@ -628,5 +624,35 @@ public class StarAxisGameRuntime implements GameRuntime {
         s.sortEntitySnapshotsByIntelLevel();
 
         realTimeBuffer.swapPublish();
+    }
+
+    private EntitySnapshot.MovementCommandDetails toMovementCommandDetails(MovementCommand command) {
+        if (command == null) {
+            return null;
+        }
+        return new EntitySnapshot.MovementCommandDetails(
+                toMovementCommandType(command.commandType),
+                command.targetPosition,
+                command.startPosition,
+                command.startVelocity,
+                command.startHeadingDeg,
+                command.startGameSeconds,
+                command.startSimulationTick,
+                command.maxSpeed,
+                command.baseAcceleration,
+                command.bowAccelerationBonus,
+                command.turnRate,
+                command.lateralSpeedPenalty,
+                command.reverseSpeedPenalty);
+    }
+
+    private String toMovementCommandType(int commandType) {
+        if (commandType == MovementCommand.TYPE_MOVE_TO) {
+            return "MOVE_TO";
+        }
+        if (commandType == MovementCommand.TYPE_STOP) {
+            return "STOP";
+        }
+        return "UNKNOWN";
     }
 }

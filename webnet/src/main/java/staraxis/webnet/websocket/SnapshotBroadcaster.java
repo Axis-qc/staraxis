@@ -29,6 +29,7 @@ public class SnapshotBroadcaster {
     private final WsConnectionManager connMgr;
     private final AtomicLong lastTickCostMs;
     private final Map<String, Long> lastAutoSaveTickByWorldId = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, Boolean> hadSnapshotSubscriberByWorldId = new java.util.concurrent.ConcurrentHashMap<>();
 
     public SnapshotBroadcaster(ObjectMapper objectMapper, WsConnectionManager connMgr, AtomicLong lastTickCostMs) {
         this.objectMapper = objectMapper;
@@ -45,6 +46,7 @@ public class SnapshotBroadcaster {
         if (runtime == null) {
             return;
         }
+        Set<WebSocketChannel> snapshotSubscribers = connMgr.getSnapshotSubscribers();
 
         // 世界推进策略（tickPolicy）喵：
         // - ALWAYS_RUN：始终推进权威时间轴喵。
@@ -52,8 +54,21 @@ public class SnapshotBroadcaster {
         String tickPolicy = GameSessions.getActiveTickPolicy();
         boolean shouldAdvance = true;
         if ("RUN_WHEN_ONLINE".equals(tickPolicy)) {
-            int joinedPlayers = GameSessions.getJoinedPlayerCount(activeWorldId);
-            shouldAdvance = joinedPlayers > 0;
+            boolean hasSubscribers = !snapshotSubscribers.isEmpty();
+            if (hasSubscribers) {
+                hadSnapshotSubscriberByWorldId.put(activeWorldId, true);
+            }
+            shouldAdvance = hasSubscribers;
+            if (!shouldAdvance) {
+                lastTickCostMs.set(0);
+                if (Boolean.TRUE.equals(hadSnapshotSubscriberByWorldId.get(activeWorldId))) {
+                    WorldSavesApi.tryAutoSave(objectMapper, activeWorldId);
+                    GameSessions.unregisterRuntime(activeWorldId);
+                }
+                lastAutoSaveTickByWorldId.remove(activeWorldId);
+                hadSnapshotSubscriberByWorldId.remove(activeWorldId);
+                return;
+            }
         }
 
         if (shouldAdvance) {
@@ -82,7 +97,6 @@ public class SnapshotBroadcaster {
         }
 
         try {
-            Set<WebSocketChannel> snapshotSubscribers = connMgr.getSnapshotSubscribers();
             if (snapshotSubscribers.isEmpty()) {
                 return;
             }

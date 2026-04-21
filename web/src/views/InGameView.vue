@@ -345,6 +345,29 @@ async function requestManualSave() {
   }
 }
 
+async function quitToMainMenu() {
+  const worldId = worldSession.selectedWorldId
+
+  if (worldId) {
+    try {
+      const resp = await manualSaveWorld(worldId)
+      if (!resp.ok) {
+        throw new Error(resp.error || 'manual_save_failed')
+      }
+    } catch (e) {
+      console.warn('[QuitToMainMenu] Manual save failed before exit', e)
+    }
+  }
+
+  try {
+    wsClient.value?.close()
+  } catch {
+  }
+  wsClient.value = null
+  worldSession.clear()
+  await router.push('/main-menu')
+}
+
 function dispatch(action: GameAction) {
   switch (action.type) {
     case 'ToggleEscMenu':
@@ -364,7 +387,7 @@ function dispatch(action: GameAction) {
       showDevelopingHintAtCenter()
       return
     case 'QuitToMainMenu':
-      router.push('/main-menu')
+      void quitToMainMenu()
       return
   }
 }
@@ -470,8 +493,9 @@ onMounted(async () => {
             return e.ownerNationId === nationId && flags.includes('INITIAL_SPAWN_SHIP')
           })
 
-          if (initialShip && initialShip.posWorldGU) {
-            r.cameraWorldPosGU.set(initialShip.posWorldGU.x, initialShip.posWorldGU.y)
+          const initialShipPos = initialShip ? r.getEntityWorldPosGU(initialShip.entityId) : null
+          if (initialShipPos) {
+            r.cameraWorldPosGU.set(initialShipPos.x, initialShipPos.y)
             r.applyCameraTransform()
             hasAppliedInitialShipFocus = true
             needsInitialFocusOnInitialShip = false
@@ -516,6 +540,10 @@ onUnmounted(() => {
   window.removeEventListener('popstate', onPopState)
   inputController.detach()
 
+  try {
+    wsClient.value?.close()
+  } catch {
+  }
   wsClient.value = null
 
   cameraPersister.detach()

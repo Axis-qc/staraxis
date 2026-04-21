@@ -30,39 +30,32 @@ export type PlanetDetails = {
 }
 
 export type ShipDetails = {
-    /** 舰船自定义标记集合（customFlags），例如 INITIAL_SPAWN_SHIP（初始出生舰船）喵。 */
     customFlags?: string[]
-    /** 舰船朝向角（headingDeg，角度制）：0 度朝 +X，逆时针为正喵。 */
     headingDeg?: number
-    /** 是否正在移动喵。 */
     isMoving?: boolean
-    /** 移动目标位置（世界坐标 GU），仅当 isMoving=true 时有效喵。 */
     movementTarget?: { x: number; y: number }
-    /** 当前速度矢量（GU/游戏秒）喵。 */
     velocity?: { x: number; y: number }
-    /** 最大速度（GU/游戏秒）喵。 */
     maxSpeed?: number
-    /** 基础加速度（GU/游戏秒²）喵。 */
     baseAcceleration?: number
-    /** 舰首朝向加速度加成（GU/游戏秒²）喵。 */
     bowAccelerationBonus?: number
-    /** 转向角速度（度/游戏秒）喵。 */
     turnRate?: number
-    /** 侧向移动速度惩罚系数（0.0~1.0）喵。 */
     lateralSpeedPenalty?: number
-    /** 反向移动速度惩罚系数（0.0~1.0）喵。 */
     reverseSpeedPenalty?: number
-    /** 移动指令信息（简化计算模式）喵。 */
     movementCommand?: {
-        /** 指令类型：'MOVE_TO' | 'STOP' 喵。 */
         commandType: string
-        /** 目标位置（仅当 commandType === 'MOVE_TO' 时有效）喵。 */
-        targetPosition?: { x: number; y: number }
-        /** 起始游戏时间（游戏秒）喵。 */
+        targetPosition?: { x: number; y: number } | null
+        startPosition?: { x: number; y: number } | null
+        startVelocity?: { x: number; y: number } | null
+        startHeadingDeg?: number
         startGameSeconds?: number
-        /** 起始模拟 tick 喵。 */
         startSimulationTick?: number
-    }
+        maxSpeed?: number
+        baseAcceleration?: number
+        bowAccelerationBonus?: number
+        turnRate?: number
+        lateralSpeedPenalty?: number
+        reverseSpeedPenalty?: number
+    } | null
 }
 
 export type SystemBarycenterDetails = {}
@@ -103,15 +96,10 @@ export type SnapshotMessage = {
     error?: string
     tickCostMs?: number
     realTimeWorldState?: {
-        /** 权威模拟 tick。 */
         simulationTick: number
-        /** 权威时间轴：累计游戏秒（向下取整）。 */
         totalGameSeconds: number
-        /** 权威时间轴：本次快照对应 tick 的推进秒数（Δt）。 */
         deltaGameSeconds: number
-        /** 游戏日期天（整数）。 */
         gameDatetimeDay?: number
-        /** 当前游戏日内累计游戏小时数（用于跨日结算）。 */
         accGameHoursInDay?: number
         worldRadius: number
         worldType?: string
@@ -146,16 +134,21 @@ export type SnapshotWsClient = {
 
 export function connectSnapshotWs(options: SnapshotWsOptions = {}): SnapshotWsClient {
     const unsubs: Array<() => void> = []
+    let subscribed = false
 
     const applyStatus = () => {
         const s = sharedWsClient.getState()
+        if (s !== 'connected') {
+            subscribed = false
+        } else if (!subscribed) {
+            sharedWsClient.subscribeSnapshot()
+            subscribed = true
+        }
         options.onStatus?.({ connected: s === 'connected' })
     }
 
-    // 连接状态同步喵
     unsubs.push(sharedWsClient.onStateChange(() => applyStatus()))
 
-    // 订阅 snapshot 消息喵
     if (options.onSnapshot) {
         unsubs.push(sharedWsClient.onMessage((text) => {
             try {
@@ -172,7 +165,13 @@ export function connectSnapshotWs(options: SnapshotWsOptions = {}): SnapshotWsCl
 
     return {
         close: () => {
-            // 这里只解绑监听，不主动断开全局 WS，避免影响其他模块喵
+            if (subscribed) {
+                try {
+                    sharedWsClient.unsubscribeSnapshot()
+                } catch {
+                }
+                subscribed = false
+            }
             for (const u of unsubs) {
                 try {
                     u()

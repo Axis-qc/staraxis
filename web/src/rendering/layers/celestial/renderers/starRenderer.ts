@@ -28,7 +28,7 @@ const DEFAULT_POOL_SIZE = 50
 const MIN_PROCEDURAL_PIXEL_SIZE = 10
 const MIN_FALLBACK_PIXEL_SIZE = 10
 
-type StarMesh = THREE.Mesh<THREE.PlaneGeometry, ProceduralStarMaterial>
+type StarMesh = THREE.Mesh<THREE.SphereGeometry, ProceduralStarMaterial>
 
 /**
  * LayerStarRenderer（恒星层渲染器）负责维护恒星网格对象池与逐帧更新喵。
@@ -40,7 +40,7 @@ export class LayerStarRenderer {
     private readonly activeStarSpritesByEntityId = new Map<number, THREE.Sprite>()
     private readonly layerGroup: THREE.Group
     private fallbackCircleTexture: THREE.CanvasTexture | null = null
-    private sharedGeometry: THREE.PlaneGeometry | null = null
+    private sharedGeometry: THREE.SphereGeometry | null = null
     private disposed = false
 
     constructor(layerGroup: THREE.Group) {
@@ -48,7 +48,7 @@ export class LayerStarRenderer {
     }
 
     init(): void {
-        this.sharedGeometry = new THREE.PlaneGeometry(1, 1)
+        this.sharedGeometry = new THREE.SphereGeometry(1, 32, 16)
         this.fallbackCircleTexture = this.createCircleTexture()
 
         // 预热对象池，避免初次缩放进入恒星密集区域时集中分配喵。
@@ -130,6 +130,7 @@ export class LayerStarRenderer {
 
         const clampedDiameterGU = Math.max(diameterGU, MIN_PROCEDURAL_PIXEL_SIZE * ctx.zoom.value)
         const size = getLodSize(starLod, isSelected, clampedDiameterGU)
+        const scaledRadiusGU = size * 0.5
 
         let mesh = this.activeStarMeshesByEntityId.get(entityId)
         if (!mesh) {
@@ -154,13 +155,12 @@ export class LayerStarRenderer {
             material.uniforms.uGlowIntensity.value *= 0.86
         }
 
-        mesh.scale.set(size, size, 1)
+        mesh.scale.set(scaledRadiusGU, scaledRadiusGU, scaledRadiusGU)
         mesh.position.set(
             entity.posWorldGU!.x,
             entity.posWorldGU!.y,
-            0,
+            -scaledRadiusGU,
         )
-        mesh.quaternion.copy(ctx.camera.quaternion)
         mesh.visible = true
     }
 
@@ -226,8 +226,11 @@ export class LayerStarRenderer {
             sizeAttenuation: true,
             map: this.fallbackCircleTexture ?? undefined,
             transparent: true,
+            depthWrite: false,
+            depthTest: false,
         })
         const sprite = new THREE.Sprite(material)
+        sprite.frustumCulled = false
         sprite.visible = false
         sprite.renderOrder = -1
         return sprite

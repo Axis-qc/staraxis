@@ -13,6 +13,7 @@
  * - 传入实体数据和快照信息，返回世界坐标。
  */
 import type { EntitySnapshot, PlanetDetails, SnapshotMessage } from '../../net/snapshotWs'
+import { getEstimatedShipPose, syncEstimatedShips } from '@/game/shipPositionEstimator'
 
 export type EntityQuerySystem = {
     getEntityWorldPosGU: (entityId: number) => { x: number; y: number } | null
@@ -33,6 +34,7 @@ export function createEntityQuerySystem(): EntityQuerySystem {
         for (const e of entities) {
             entitiesById.set(e.entityId, e)
         }
+        syncEstimatedShips(entities, lastSnapshot?.realTimeWorldState?.totalGameSeconds ?? 0)
     }
 
     const getEntityWorldPosGU = (entityId: number): { x: number; y: number } | null => {
@@ -40,8 +42,12 @@ export function createEntityQuerySystem(): EntityQuerySystem {
         if (!e) return null
 
         // 恒星和舰船直接返回位置喵
-        if (e.entityType === 'STAR' || e.entityType === 'SHIP') {
+        if (e.entityType === 'STAR') {
             return e.posWorldGU ?? null
+        }
+
+        if (e.entityType === 'SHIP') {
+            return getEstimatedShipPose(e)?.position ?? e.posWorldGU ?? null
         }
 
         if (e.entityType === 'PLANET') {
