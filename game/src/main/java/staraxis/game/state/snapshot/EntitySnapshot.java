@@ -162,6 +162,7 @@ public class EntitySnapshot {
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public static class MovementCommandDetails {
         public final String commandType;
+        public final String clientCommandId;
         public final Vec2d targetPosition;
         public final Vec2d startPosition;
         public final Vec2d startVelocity;
@@ -177,6 +178,7 @@ public class EntitySnapshot {
 
         public MovementCommandDetails(
                 String commandType,
+                String clientCommandId,
                 Vec2d targetPosition,
                 Vec2d startPosition,
                 Vec2d startVelocity,
@@ -190,6 +192,7 @@ public class EntitySnapshot {
                 double lateralSpeedPenalty,
                 double reverseSpeedPenalty) {
             this.commandType = commandType;
+            this.clientCommandId = clientCommandId;
             this.targetPosition = targetPosition;
             this.startPosition = startPosition;
             this.startVelocity = startVelocity;

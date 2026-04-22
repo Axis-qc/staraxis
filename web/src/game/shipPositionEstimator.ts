@@ -158,7 +158,7 @@ function getOrCreateEstimatorState(
 
         const state = {
             shipState: createShipStateFromCommand(entity, command),
-            lastSimulatedGameSeconds: command.startGameSeconds,
+            lastSimulatedGameSeconds: command.startGameSeconds!,
             lastCommandKey: commandKey,
         }
         statesByEntityId.set(entity.entityId, state)

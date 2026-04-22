@@ -43,6 +43,7 @@ export type ShipDetails = {
     reverseSpeedPenalty?: number
     movementCommand?: {
         commandType: string
+        clientCommandId?: string
         targetPosition?: { x: number; y: number } | null
         startPosition?: { x: number; y: number } | null
         startVelocity?: { x: number; y: number } | null

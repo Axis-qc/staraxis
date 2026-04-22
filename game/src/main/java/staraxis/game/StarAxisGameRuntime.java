@@ -214,6 +214,7 @@ public class StarAxisGameRuntime implements GameRuntime {
     @Override
     public void start() {
         publishRealTimeSnapshot();
+        worldState.markRealtimeRevisionPublished();
         // 开局先发布一份低频基线快照：使用当前游戏总秒数作为时间戳喵
         publishBaselineSnapshot();
     }
@@ -242,13 +243,12 @@ public class StarAxisGameRuntime implements GameRuntime {
             publishBaselineSnapshot();
             worldState.lastBaselinePublishGameSeconds = currentGameSeconds;
             worldState.baselineDirty = false;
+            worldState.markRealtimeDirty();
         }
 
         if (tickAdvance.dayChanged) {
             // 跨日逻辑可在此保留，用于未来的统计等，当前由定时/脏标记统一驱动低频快照发布喵
         }
-
-        publishRealTimeSnapshot();
 
         // 记录性能数据喵
         long tickEndTime = System.nanoTime();
@@ -282,6 +282,23 @@ public class StarAxisGameRuntime implements GameRuntime {
 
     public DailySettlementStateBuffer getDailySettlementStateBufferForReadonly() {
         return dailySettlementBuffer;
+    }
+
+    public boolean hasPendingRealtimeSnapshotChanges() {
+        return worldState.hasUnpublishedRealtimeChanges();
+    }
+
+    public long getRealtimeStateRevision() {
+        return worldState.getRealtimeStateRevision();
+    }
+
+    public void publishRealtimeSnapshotIfNeeded() {
+        if (!worldState.hasUnpublishedRealtimeChanges()) {
+            return;
+        }
+
+        publishRealTimeSnapshot();
+        worldState.markRealtimeRevisionPublished();
     }
 
     /**
@@ -633,6 +650,7 @@ public class StarAxisGameRuntime implements GameRuntime {
         }
         return new EntitySnapshot.MovementCommandDetails(
                 toMovementCommandType(command.commandType),
+                command.clientCommandId,
                 command.targetPosition,
                 command.startPosition,
                 command.startVelocity,

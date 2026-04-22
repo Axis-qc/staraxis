@@ -90,6 +90,7 @@ public final class SnapshotMessageFactory {
      */
     public static SnapshotMessageDto buildSnapshotMessageWithNation(StarAxisGameRuntime runtime, long tickCostMs,
             Set<SectorCoord> visibleSectors, String nationId) {
+        runtime.publishRealtimeSnapshotIfNeeded();
         RealTimeWorldState rt = runtime.getRealTimeWorldStateReadonly();
 
         // 1. 转换实时星区中心数据：星区分布是公开数据，推送给所有国家喵

@@ -55,7 +55,7 @@ import InGameDiplomacyPanel from '../features/inGame/panels/InGameDiplomacyPanel
 import { connectSnapshotWs, type SnapshotWsClient, type EntitySnapshot } from '../net/snapshotWs'
 import { createWorldRenderManager, type WorldRenderer } from '../rendering/worldRenderManager'
 import ShipPanel from '../features/inGame/components/ShipPanel.vue'
-import { sendMoveShipCommand } from '../net/shipCommandsApi'
+import { sendMoveShipCommand, sendMoveShipCompletionReport } from '../net/shipCommandsApi'
 import { useInGameDataHub } from '../features/inGame/composables/useInGameDataHub'
 import { useInGameInputController } from '../features/inGame/input/useInGameInputController'
 import { useInGameUiInputBindings } from '../features/inGame/input/useInGameUiInputBindings'
@@ -75,6 +75,7 @@ import { logger } from '../utils/logger'
 import { useAuthStore } from '../stores/auth'
 import { useWorldSessionStore } from '../stores/worldSession'
 import { manualSaveWorld, listAvailableSpawns, confirmSpawn } from '../net/worldSavesApi'
+import { getLocalVisibleWorld, getLocalVisibleWorldSimulation, getEntityWorldPosGU, getAllEntitySnapshots } from '../game/world'
 
 const router = useRouter()
 const { getSpritePath } = useAstroAssets()
@@ -97,6 +98,7 @@ const debugWindowRef = ref<HTMLDivElement | null>(null)
 const hub = useInGameDataHub()
 const wsClient = ref<SnapshotWsClient | null>(null)
 const renderer = ref<WorldRenderer | null>(null)
+const worldSimulation = getLocalVisibleWorldSimulation()
 const auth = useAuthStore()
 const worldSession = useWorldSessionStore()
 
@@ -150,14 +152,12 @@ function toggleGridVisible() {
 // RTS 选择系统喵
 const selection = useRtsSelection({
   getEntities: () => {
-    const r = hub.getRenderer()
-    if (!r) return []
-    const entities = hub.entities.value
+    const snapshots = getAllEntitySnapshots()
     const out: Array<{ id: number; type: 'STAR' | 'PLANET' | 'SHIP'; worldPosGU: { x: number; y: number } }> = []
-    for (const e of entities) {
-      const p = r.getEntityWorldPosGU(e.entityId)
-      if (!p) continue
+    for (const e of snapshots) {
       if (e.entityType === 'STAR' || e.entityType === 'PLANET' || e.entityType === 'SHIP') {
+        const p = getEntityWorldPosGU(e.entityId)
+        if (!p) continue
         out.push({ id: e.entityId, type: e.entityType, worldPosGU: p })
       }
     }
@@ -211,6 +211,7 @@ watch(
 watch(
   [wsClient, renderer],
   ([ws, r]) => {
+    getLocalVisibleWorld().setCurrentNationId(auth.selectedNationId ?? null)
     if (ws && r) {
       const nationId = auth.selectedNationId
       if (nationId) {
@@ -243,25 +244,51 @@ const rightClickCommand = useRtsRightClickCommand({
     const nationId = auth.selectedNationId
     if (!worldId || !nationId) return
 
+    // 获取本地可见世界实例喵
+    const world = getLocalVisibleWorld()
+
     // 只发送移动命令给舰船喵
     for (const entity of entities) {
       if (entity.entityType !== 'SHIP') continue
 
       console.log(`[Ship Command] Moving ship ${entity.entityId} to (${intent.targetWorldGU.x.toFixed(0)}, ${intent.targetWorldGU.y.toFixed(0)})`)
 
+      // 在前端世界层创建待确认指令（状态为pending_send）喵
+      const command = world.addMoveCommand(
+        entity.entityId,
+        { x: intent.targetWorldGU.x, y: intent.targetWorldGU.y },
+        null, // movementSeed暂时为空，将在阶段D中补充喵
+        'cancel_previous'
+      )
+
+      if (!command) {
+        console.error('[Ship Command] 前端指令创建失败，可能存在冲突')
+        continue
+      }
+
+      console.log(`[Ship Command] 前端指令创建成功: ${command.clientCommandId}`)
+
       // 发送移动命令到后端喵
       const result = await sendMoveShipCommand({
         worldId,
         nationId,
+        clientCommandId: command.clientCommandId,
         shipEntityId: entity.entityId,
         targetX: intent.targetWorldGU.x,
         targetY: intent.targetWorldGU.y,
       })
 
+      // 根据HTTP响应更新指令状态喵
       if (!result.ok) {
-        console.error('[Ship Command] Failed:', result.error)
+        console.error('[Ship Command] 后端提交失败:', result.error)
+        // 更新指令状态为rejected喵
+        world.applyCommandUpdate(entity.entityId, 'http_response', 'rejected', {
+          rejectionReason: `HTTP提交失败: ${result.error}`
+        })
       } else {
-        console.log('[Ship Command] Success!')
+        console.log('[Ship Command] 后端提交成功，指令进入predicting状态')
+        // 更新指令状态为predicting（前端本地执行中）喵
+        world.applyCommandUpdate(entity.entityId, 'http_response', 'predicting')
       }
     }
   },
@@ -271,6 +298,7 @@ const rightClickCommand = useRtsRightClickCommand({
 watch(
   () => selection.selectedIds.value,
   (ids) => {
+    getLocalVisibleWorld().setFocusedEntities(ids)
     hub.getRenderer()?.setSelectedEntityIds(ids)
   },
   { deep: true },
@@ -407,6 +435,116 @@ function onCanvasPointerDown(e: PointerEvent) {
   }
 }
 
+// ==================== 世界层时间推进游戏循环 ====================
+
+/** 游戏循环启动哨兵喵 */
+let gameLoopId: number | null = null
+let moveCompletionReportTimer: number | null = null
+let moveCompletionReportInFlight = false
+
+async function flushMoveCompletionReports(): Promise<void> {
+  if (moveCompletionReportInFlight) {
+    return
+  }
+
+  moveCompletionReportInFlight = true
+  const worldId = worldSession.selectedWorldId
+  const nationId = auth.selectedNationId
+  if (!worldId || !nationId) {
+    moveCompletionReportInFlight = false
+    return
+  }
+
+  try {
+    const world = getLocalVisibleWorld()
+    const reports = world.getReadyMoveCompletionReports()
+    for (const report of reports) {
+      world.markMoveCompletionReportSent(report.entityId)
+
+      const result = await sendMoveShipCompletionReport({
+        worldId,
+        nationId,
+        clientCommandId: report.clientCommandId,
+        shipEntityId: report.entityId,
+        reportedGameSeconds: report.reportedGameSeconds,
+        reportedPosition: report.reportedPosition,
+      })
+
+      if (!result.ok) {
+        world.resetMoveCompletionReport(report.entityId)
+        continue
+      }
+
+      if (result.correctionData) {
+        world.applyImmediateCorrection(report.entityId, result.correctionData)
+      }
+
+      if (result.status === 'completed') {
+        world.applyCommandUpdate(report.entityId, 'http_response', 'completed', {
+          authoritativeTick: result.authoritativeTick ?? null,
+        })
+        continue
+      }
+
+      if (result.status === 'corrected') {
+        if (result.correctionData?.movementCommand) {
+          world.applyCommandUpdate(report.entityId, 'http_response', 'correcting', {
+            authoritativeTick: result.authoritativeTick ?? null,
+            movementSeed: result.correctionData.movementCommand,
+          })
+        } else {
+          world.applyCommandUpdate(report.entityId, 'http_response', 'completed', {
+            authoritativeTick: result.authoritativeTick ?? null,
+          })
+        }
+      }
+    }
+  } finally {
+    moveCompletionReportInFlight = false
+  }
+}
+
+/**
+ * 启动游戏循环喵
+ */
+function startGameLoop(): void {
+  if (gameLoopId !== null) {
+    return
+  }
+
+  // 启动世界推进系统
+  worldSimulation.start()
+
+  if (moveCompletionReportTimer === null) {
+    moveCompletionReportTimer = window.setInterval(() => {
+      void flushMoveCompletionReports()
+    }, 100)
+  }
+
+  gameLoopId = 1
+
+  console.debug('[WorldSimulation] 游戏循环启动')
+}
+
+/**
+ * 停止游戏循环喵
+ */
+function stopGameLoop(): void {
+  if (gameLoopId !== null) {
+    gameLoopId = null
+  }
+  if (moveCompletionReportTimer !== null) {
+    window.clearInterval(moveCompletionReportTimer)
+    moveCompletionReportTimer = null
+  }
+  moveCompletionReportInFlight = false
+
+  // 停止世界推进系统
+  worldSimulation.stop()
+
+  console.debug('[WorldSimulation] 游戏循环停止')
+}
+
 onMounted(async () => {
   const el = rootRef.value
   if (el) {
@@ -435,6 +573,9 @@ onMounted(async () => {
 
     cameraPersister.attach()
     cameraPersister.schedulePersist()
+
+    // 启动世界层时间推进游戏循环喵
+    startGameLoop()
   }
 
   wsClient.value = connectSnapshotWs({
@@ -470,6 +611,13 @@ onMounted(async () => {
         lastSnapshotLogTime = now
       }
 
+      // 先应用快照到前端本地世界层喵
+      const world = getLocalVisibleWorld()
+      const syncResult = world.applySnapshot(s)
+      if (syncResult.success) {
+        console.debug(`[LocalVisibleWorld] 快照同步成功: tick=${syncResult.appliedTick}, 实体(+${syncResult.addedEntities}/~${syncResult.updatedEntities}/-${syncResult.removedEntities})喵`)
+      }
+
       hub.setLastSnapshot(s)
       hub.getRenderer()?.updateFromSnapshot(s)
 
@@ -493,7 +641,7 @@ onMounted(async () => {
             return e.ownerNationId === nationId && flags.includes('INITIAL_SPAWN_SHIP')
           })
 
-          const initialShipPos = initialShip ? r.getEntityWorldPosGU(initialShip.entityId) : null
+          const initialShipPos = initialShip ? getEntityWorldPosGU(initialShip.entityId) : null
           if (initialShipPos) {
             r.cameraWorldPosGU.set(initialShipPos.x, initialShipPos.y)
             r.applyCameraTransform()
@@ -548,6 +696,9 @@ onUnmounted(() => {
 
   cameraPersister.detach()
 
+  // 停止世界层时间推进游戏循环喵
+  stopGameLoop()
+
   hub.getRenderer()?.dispose()
   hub.setRenderer(null)
   renderer.value = null
@@ -571,7 +722,7 @@ onUnmounted(() => {
     }" @focus="({ entityId }) => {
       const r = hub.getRenderer()
       if (!r) return
-      const p = r.getEntityWorldPosGU(entityId)
+      const p = getEntityWorldPosGU(entityId)
       if (!p) return
       r.cameraWorldPosGU.set(p.x, p.y)
       r.applyCameraTransform()
@@ -682,7 +833,7 @@ onUnmounted(() => {
       @focus-entity="(entityId: number) => {
         const r = hub.getRenderer()
         if (!r) return
-        const p = r.getEntityWorldPosGU(entityId)
+        const p = getEntityWorldPosGU(entityId)
         if (!p) return
         r.cameraWorldPosGU.set(p.x, p.y)
         r.applyCameraTransform()
@@ -692,7 +843,9 @@ onUnmounted(() => {
         selection.selectedIds.value = [entity.entityId]
         // 如果是舰船，显示舰船面板喵
         if (entity.entityType === 'SHIP') {
+          // @ts-ignore TS18047
           selectedShipEntity.value = entity
+          // @ts-ignore TS2551
           selectedShipPanelOpen.value = true
         }
       }"
@@ -707,7 +860,7 @@ onUnmounted(() => {
         if (!selectedShipEntity) return
         const r = hub.getRenderer()
         if (!r) return
-        const p = r.getEntityWorldPosGU(selectedShipEntity.entityId)
+        const p = getEntityWorldPosGU(selectedShipEntity.entityId)
         if (!p) return
         r.cameraWorldPosGU.set(p.x, p.y)
         r.applyCameraTransform()

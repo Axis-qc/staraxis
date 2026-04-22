@@ -18,6 +18,7 @@ public class MoveShipHandler implements CommandHandler<MoveShipCommand> {
         }
 
         String nationId = command.getNationId();
+        String clientCommandId = command.getClientCommandId();
         long shipEntityId = command.getShipEntityId();
         double targetX = command.getTargetX();
         double targetY = command.getTargetY();
@@ -35,6 +36,7 @@ public class MoveShipHandler implements CommandHandler<MoveShipCommand> {
         ship.targetHeadingDeg = Math.toDegrees(Math.atan2(
                 targetY - ship.posWorldGU.y(),
                 targetX - ship.posWorldGU.x()));
+        ship.activeClientCommandId = clientCommandId;
 
         int simulationTick = worldState.time.simulationTick > Integer.MAX_VALUE
                 ? Integer.MAX_VALUE
@@ -42,7 +44,9 @@ public class MoveShipHandler implements CommandHandler<MoveShipCommand> {
         ship.movementCommand = MovementCommand.createMoveTo(
                 ship.movementTarget,
                 ship,
+                clientCommandId,
                 worldState.time.totalGameSecondsAcc,
                 simulationTick);
+        worldState.markRealtimeDirty();
     }
 }

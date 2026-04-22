@@ -41,5 +41,6 @@ public class SetPlayerTimeStepHandler implements CommandHandler<SetPlayerTimeSte
 
         // 保留旧字段用于兼容 UI/协议展示喵。
         worldState.time.playerTimeStep = (gsprs / SimulationClock.SECONDS_PER_MINUTE);
+        worldState.markRealtimeDirty();
     }
 }

@@ -8,19 +8,22 @@ package staraxis.game.command;
 public class MoveShipCommand extends Command {
 
     private final String nationId;
+    private final String clientCommandId;
     private final long shipEntityId;
     private final double targetX;
     private final double targetY;
 
-    public MoveShipCommand(String nationId, long shipEntityId, double targetX, double targetY) {
+    public MoveShipCommand(String nationId, String clientCommandId, long shipEntityId, double targetX, double targetY) {
         super("moveShip");
         this.nationId = nationId;
+        this.clientCommandId = clientCommandId;
         this.shipEntityId = shipEntityId;
         this.targetX = targetX;
         this.targetY = targetY;
     }
 
     public String getNationId() { return nationId; }
+    public String getClientCommandId() { return clientCommandId; }
     public long getShipEntityId() { return shipEntityId; }
     public double getTargetX() { return targetX; }
     public double getTargetY() { return targetY; }

@@ -1,8 +1,7 @@
 import * as THREE from 'three'
 import type { WorldRenderContext, WorldFrameState } from '../../../worldRenderManager'
 import { shouldRender } from '@/rendering/subsystems/lodSystem'
-import { advanceEstimatedShipsByDelta, getEstimatedShipPose } from '@/game/shipPositionEstimator'
-import { defaultGameTimeManager } from '@/game/time/GameTimeManager'
+import { getLocalVisibleWorld } from '@/game/world'
 
 const INITIAL_SPAWN_SHIP_FLAG = 'INITIAL_SPAWN_SHIP'
 
@@ -23,28 +22,15 @@ export class LayerShipRenderer {
   private readonly activeByEntityId = new Map<number, THREE.Mesh>()
   private readonly pathLinePool: THREE.Line[] = []
   private readonly activePathByEntityId = new Map<number, THREE.Line>()
-  private readonly timeManager = defaultGameTimeManager
-  private lastProcessedTick = 0
-  private lastRenderedGameSeconds: number | null = null
   private shipTriangleGeometry: THREE.BufferGeometry | null = null
   private pathLineMaterial: THREE.LineBasicMaterial | null = null
+  private readonly layerGroup: THREE.Group
 
-  constructor(private readonly layerGroup: THREE.Group) {}
-
-  enablePrediction(_enabled: boolean): void {
-    // The renderer now always consumes frontend-simulated poses directly.
+  constructor(layerGroup: THREE.Group) {
+    this.layerGroup = layerGroup
   }
 
-  updateTimeSnapshot(snapshot: {
-    simulationTick: number
-    totalGameSeconds: number
-    totalGameSecondsExact?: number
-    deltaGameSeconds: number
-    timeScale?: number
-    gameSecondsPerRealSecond?: number
-  }): void {
-    this.timeManager.updateSnapshot(snapshot)
-  }
+  enablePrediction(_enabled: boolean): void {}
 
   init(): void {
     const geometry = new THREE.BufferGeometry()
@@ -76,28 +62,8 @@ export class LayerShipRenderer {
 
   update(ctx: WorldRenderContext, frame: WorldFrameState): void {
     const { entitiesById, selectedIds, cullingAabb } = frame
-
-    const snapshot = frame.snapshot?.realTimeWorldState
-    if (snapshot && snapshot.simulationTick !== this.lastProcessedTick) {
-      this.updateTimeSnapshot({
-        simulationTick: snapshot.simulationTick,
-        totalGameSeconds: snapshot.totalGameSeconds,
-        totalGameSecondsExact: snapshot.totalGameSecondsExact,
-        deltaGameSeconds: snapshot.deltaGameSeconds,
-        timeScale: snapshot.timeScale,
-        gameSecondsPerRealSecond: snapshot.gameSecondsPerRealSecond,
-      })
-      this.lastProcessedTick = snapshot.simulationTick
-    }
-
-    const currentGameSeconds = this.timeManager.update().currentGameSeconds
-    const deltaGameSeconds =
-      this.lastRenderedGameSeconds === null
-        ? 0
-        : Math.max(0, currentGameSeconds - this.lastRenderedGameSeconds)
-    this.lastRenderedGameSeconds = currentGameSeconds
-
-    advanceEstimatedShipsByDelta(entitiesById.values(), deltaGameSeconds, currentGameSeconds)
+    const world = getLocalVisibleWorld()
+    const visibleIds = new Set<number>()
 
     const shipLod: import('@/rendering/subsystems/lodSystem').EntityLodState = {
       level: 0,
@@ -111,24 +77,30 @@ export class LayerShipRenderer {
       },
     }
 
-    const visibleIds = new Set<number>()
-
     for (const entity of entitiesById.values()) {
-      if (entity.entityType !== 'SHIP') continue
+      if (entity.entityType !== 'SHIP') {
+        continue
+      }
 
       const isSelected = selectedIds.has(entity.entityId)
-      if (!shouldRender(shipLod, isSelected)) continue
+      if (!shouldRender(shipLod, isSelected)) {
+        continue
+      }
 
-      const estimatedPose = getEstimatedShipPose(entity, currentGameSeconds)
-      const shipPos = estimatedPose?.position ?? entity.posWorldGU
-      if (!shipPos) continue
+      const displayPose = world.getEntityDisplayPosition(entity.entityId)
+      const shipPos = displayPose?.position ?? entity.posWorldGU
+      if (!shipPos) {
+        continue
+      }
 
-      if (!isSelected && !isPointInAabb(shipPos, cullingAabb)) continue
+      if (!isSelected && !isPointInAabb(shipPos, cullingAabb)) {
+        continue
+      }
 
-      const detailAny: any = entity.details
-      const headingDeg = Number(estimatedPose?.headingDeg ?? detailAny?.headingDeg ?? 0)
-      const isMoving = estimatedPose?.isMoving ?? (detailAny?.isMoving === true)
-      const movementTarget = estimatedPose?.movementTarget ?? detailAny?.movementTarget
+      const details = entity.details as any
+      const headingDeg = Number(displayPose?.headingDeg ?? details?.headingDeg ?? 0)
+      const isMoving = displayPose?.isMoving ?? (details?.isMoving === true)
+      const movementTarget = displayPose?.movementTarget ?? details?.movementTarget
 
       visibleIds.add(entity.entityId)
 
@@ -139,7 +111,7 @@ export class LayerShipRenderer {
         this.layerGroup.add(mesh)
       }
 
-      const flags: string[] = Array.isArray(detailAny?.customFlags) ? detailAny.customFlags : []
+      const flags: string[] = Array.isArray(details?.customFlags) ? details.customFlags : []
       const isInitialShip = flags.includes(INITIAL_SPAWN_SHIP_FLAG)
       const material = mesh.material as THREE.MeshBasicMaterial
       material.color.set(isInitialShip ? 0x56d7ff : 0xc8d0d8)
@@ -164,7 +136,9 @@ export class LayerShipRenderer {
     }
 
     for (const [entityId, mesh] of this.activeByEntityId.entries()) {
-      if (visibleIds.has(entityId)) continue
+      if (visibleIds.has(entityId)) {
+        continue
+      }
       this.activeByEntityId.delete(entityId)
       this.releaseShipMesh(mesh)
     }
@@ -254,7 +228,9 @@ export class LayerShipRenderer {
 
   private removePathLine(_ctx: WorldRenderContext, entityId: number): void {
     const line = this.activePathByEntityId.get(entityId)
-    if (!line) return
+    if (!line) {
+      return
+    }
     this.activePathByEntityId.delete(entityId)
     this.releasePathLine(line)
     line.parent?.remove(line)

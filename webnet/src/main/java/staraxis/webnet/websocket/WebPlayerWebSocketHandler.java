@@ -169,6 +169,7 @@ public class WebPlayerWebSocketHandler {
         }
 
         try {
+            runtime.publishRealtimeSnapshotIfNeeded();
             String nationId = null;
             try {
                 String pid = connMgr.getPlayerIdByChannel(channel);

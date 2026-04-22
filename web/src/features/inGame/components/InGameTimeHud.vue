@@ -1,107 +1,180 @@
 <script setup lang="ts">
-/**
- * @file InGameTimeHud.vue
- *
- * @description
- * 游戏内“时间”HUD（右上角）。
- *
- * 功能：
- * - 基于后端快照中的权威时间（`gameDatetimeDay` + `accGameHoursInDay`）展示当前游戏时间。
- * - 显示格式：`年-月-日-时`。
- * - 日历口径：1年=360天，1月=30天，1天=24时。
- *
- * 说明：
- * - 本组件只做展示，不负责推进时间。
- * - 若快照为空/未就绪，显示占位 `--年--月--日--时`。
- *
- * @usage
- * - 在 InGameView 中使用：`<InGameTimeHud :snapshot="hub.lastSnapshot.value" />`。
- *
- * @provides
- * - **时间显示**：右上角显示游戏时间字符串。
- * 
- */
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import type { SnapshotMessage, SnapshotWsClient } from '../../../net/snapshotWs'
+import { defaultGameTimeManager } from '../../../game/time/GameTimeManager'
 
 const props = defineProps<{ snapshot: SnapshotMessage | null; wsClient?: SnapshotWsClient | null }>()
 
 const SPEED_OPTIONS = [
-  1, // 1 游戏秒 / 现实秒（1:1）喵
+  1,
   5,
   10,
   30,
-  60, // 1 游戏分钟 / 现实秒喵
-  300, // 5 游戏分钟 / 现实秒喵
-  600, // 10 游戏分钟 / 现实秒喵
-  1800, // 30 游戏分钟 / 现实秒喵
-  3600, // 1 游戏小时 / 现实秒喵
-  43200, // 12 游戏小时 / 现实秒喵
-  86400 // 1 游戏日 / 现实秒喵
+  60,
+  300,
+  600,
+  1800,
+  3600,
+  43200,
+  86400,
 ] as const
 
 type SpeedOption = (typeof SPEED_OPTIONS)[number]
 
-// 移除本地维护的 speedIndex ref，改为基于快照同步的 computed 索引喵
+const SECONDS_PER_MINUTE = 60
+const SECONDS_PER_HOUR = 60 * SECONDS_PER_MINUTE
+const SECONDS_PER_DAY = 24 * SECONDS_PER_HOUR
+const DAYS_PER_MONTH = 30
+const MONTHS_PER_YEAR = 12
+const DAYS_PER_YEAR = DAYS_PER_MONTH * MONTHS_PER_YEAR
+const SECONDS_PER_MONTH = DAYS_PER_MONTH * SECONDS_PER_DAY
+const SECONDS_PER_YEAR = DAYS_PER_YEAR * SECONDS_PER_DAY
+
+const currentGameSeconds = ref(defaultGameTimeManager.getCurrentGameSeconds())
+let hudClockTimer: number | null = null
+
+function refreshCurrentGameSeconds(): void {
+  currentGameSeconds.value = defaultGameTimeManager.getCurrentGameSeconds()
+}
+
+onMounted(() => {
+  refreshCurrentGameSeconds()
+  hudClockTimer = window.setInterval(() => {
+    refreshCurrentGameSeconds()
+  }, 100)
+})
+
+onUnmounted(() => {
+  if (hudClockTimer !== null) {
+    window.clearInterval(hudClockTimer)
+    hudClockTimer = null
+  }
+})
+
 const currentGsprs = computed(() => props.snapshot?.realTimeWorldState?.gameSecondsPerRealSecond ?? 1.0)
 
 const speedIndex = computed(() => {
   const current = currentGsprs.value
-  // 寻找最接近的档位索引，默认 0 档喵
-  const idx = SPEED_OPTIONS.findIndex(s => Math.abs(s - current) < 0.1)
+  const idx = SPEED_OPTIONS.findIndex((speed) => Math.abs(speed - current) < 0.1)
   return idx === -1 ? 0 : idx
 })
 
-function getSpeedLabel(s: number) {
-  if (s === 1) return '1s/s'
-  if (s === 60) return '1m/s'
-  if (s === 300) return '5m/s'
-  if (s === 600) return '10m/s'
-  if (s === 1800) return '30m/s'
-  if (s === 3600) return '1h/s'
-  if (s === 43200) return '12h/s'
-  if (s === 86400) return '1d/s'
-  return `${s}s/s`
+function getSpeedLabel(speed: number): string {
+  if (speed === 1) return '1s/s'
+  if (speed === 60) return '1m/s'
+  if (speed === 300) return '5m/s'
+  if (speed === 600) return '10m/s'
+  if (speed === 1800) return '30m/s'
+  if (speed === 3600) return '1h/s'
+  if (speed === 43200) return '12h/s'
+  if (speed === 86400) return '1d/s'
+  return `${speed}s/s`
 }
 
-function sendSimTimeSpeed(gameSecondsPerRealSecond: SpeedOption) {
-  // 复用快照 WS 连接发送命令，避免短连接频繁建立/关闭导致 WS 不稳定。
+function sendSimTimeSpeed(gameSecondsPerRealSecond: SpeedOption): void {
   try {
     props.wsClient?.send({ type: 'setSimTimeSpeed', gameSecondsPerRealSecond })
   } catch {
   }
 }
 
-function onClickSpeedPrev() {
+function onClickSpeedPrev(): void {
   const prevIndex = (speedIndex.value - 1 + SPEED_OPTIONS.length) % SPEED_OPTIONS.length
   const prevScale = SPEED_OPTIONS[prevIndex]
-  if (prevScale != null) sendSimTimeSpeed(prevScale)
+  if (prevScale != null) {
+    sendSimTimeSpeed(prevScale)
+  }
 }
 
-function onClickSpeedNext() {
+function onClickSpeedNext(): void {
   const nextIndex = (speedIndex.value + 1) % SPEED_OPTIONS.length
   const nextScale = SPEED_OPTIONS[nextIndex]
-  if (nextScale != null) sendSimTimeSpeed(nextScale)
+  if (nextScale != null) {
+    sendSimTimeSpeed(nextScale)
+  }
 }
 
 const canAdjustSpeed = computed(() => {
-  const wt = props.snapshot?.realTimeWorldState?.worldType
-  return wt === 'SINGLE_PLAYER' || wt === 'MULTI_PLAYER'
+  const worldType = props.snapshot?.realTimeWorldState?.worldType
+  return worldType === 'SINGLE_PLAYER' || worldType === 'MULTI_PLAYER'
 })
 
+function getSnapshotBaseGameSeconds(snapshot: SnapshotMessage | null): number | null {
+  const realTimeState = snapshot?.realTimeWorldState
+  if (!snapshot?.ok || !realTimeState) {
+    return null
+  }
+
+  if (Number.isFinite(realTimeState.totalGameSecondsExact)) {
+    return realTimeState.totalGameSecondsExact
+  }
+  if (Number.isFinite(realTimeState.totalGameSeconds)) {
+    return realTimeState.totalGameSeconds
+  }
+  if (
+    realTimeState.year === undefined ||
+    realTimeState.month === undefined ||
+    realTimeState.day === undefined ||
+    realTimeState.hour === undefined ||
+    realTimeState.minute === undefined ||
+    realTimeState.second === undefined
+  ) {
+    return null
+  }
+
+  const yearIndex = Math.max(0, realTimeState.year - 1)
+  const monthIndex = Math.max(0, realTimeState.month - 1)
+  const dayIndex = Math.max(0, realTimeState.day - 1)
+  return (
+    yearIndex * SECONDS_PER_YEAR +
+    monthIndex * SECONDS_PER_MONTH +
+    dayIndex * SECONDS_PER_DAY +
+    realTimeState.hour * SECONDS_PER_HOUR +
+    realTimeState.minute * SECONDS_PER_MINUTE +
+    realTimeState.second
+  )
+}
+
+function decomposeGameSeconds(totalGameSeconds: number): {
+  year: number
+  month: number
+  day: number
+  hour: number
+  minute: number
+  second: number
+} {
+  const safeSeconds = Math.max(0, Math.floor(totalGameSeconds))
+  const year = Math.floor(safeSeconds / SECONDS_PER_YEAR) + 1
+  const secondsInYear = safeSeconds % SECONDS_PER_YEAR
+  const month = Math.floor(secondsInYear / SECONDS_PER_MONTH) + 1
+  const secondsInMonth = secondsInYear % SECONDS_PER_MONTH
+  const day = Math.floor(secondsInMonth / SECONDS_PER_DAY) + 1
+  const secondsInDay = secondsInMonth % SECONDS_PER_DAY
+  const hour = Math.floor(secondsInDay / SECONDS_PER_HOUR)
+  const minute = Math.floor((secondsInDay % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE)
+  const second = secondsInDay % SECONDS_PER_MINUTE
+  return { year, month, day, hour, minute, second }
+}
+
 const text = computed(() => {
-  const s = props.snapshot
-  const rts = s?.realTimeWorldState
-  if (!s || !s.ok || !rts || rts.year === undefined) return '--.--.--.--:--'
+  const snapshot = props.snapshot
+  const realTimeState = snapshot?.realTimeWorldState
+  if (!snapshot || !snapshot.ok || !realTimeState || realTimeState.year === undefined) {
+    return '--.--.-- --:--:--'
+  }
 
-  const year = rts.year
-  const month = String(rts.month).padStart(2, '0')
-  const day = String(rts.day).padStart(2, '0')
-  const hour = String(rts.hour).padStart(2, '0')
-  const minute = String(rts.minute).padStart(2, '0')
-  const second = String(rts.second).padStart(2, '0')
-
-  return `${year}-${month}-${day}日-${hour}:${minute}:${second}`
+  const snapshotBaseGameSeconds = getSnapshotBaseGameSeconds(snapshot)
+  const displayGameSeconds = snapshotBaseGameSeconds === null
+    ? currentGameSeconds.value
+    : Math.max(snapshotBaseGameSeconds, currentGameSeconds.value)
+  const displayTime = decomposeGameSeconds(displayGameSeconds)
+  const year = displayTime.year
+  const month = String(displayTime.month).padStart(2, '0')
+  const day = String(displayTime.day).padStart(2, '0')
+  const hour = String(displayTime.hour).padStart(2, '0')
+  const minute = String(displayTime.minute).padStart(2, '0')
+  const second = String(displayTime.second).padStart(2, '0')
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`
 })
 </script>
 

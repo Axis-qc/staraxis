@@ -40,6 +40,16 @@ public class WorldState {
     public boolean baselineDirty = false;
 
     /**
+     * 实时状态修订号：只有真正影响前端同步的数据变化时才递增喵。
+     */
+    private long realtimeStateRevision = 1L;
+
+    /**
+     * 最近一次已经写入实时快照缓冲的修订号喵。
+     */
+    private long publishedRealtimeStateRevision = 0L;
+
+    /**
      * 实体总表（entityId -> Entity）。
      */
     public final Map<Long, Entity> entitiesById = new HashMap<>();
@@ -201,5 +211,25 @@ public class WorldState {
         if (value > nextEntityId) {
             nextEntityId = value;
         }
+    }
+
+    public synchronized long markRealtimeDirty() {
+        return ++realtimeStateRevision;
+    }
+
+    public synchronized long getRealtimeStateRevision() {
+        return realtimeStateRevision;
+    }
+
+    public synchronized long getPublishedRealtimeStateRevision() {
+        return publishedRealtimeStateRevision;
+    }
+
+    public synchronized boolean hasUnpublishedRealtimeChanges() {
+        return realtimeStateRevision != publishedRealtimeStateRevision;
+    }
+
+    public synchronized void markRealtimeRevisionPublished() {
+        publishedRealtimeStateRevision = realtimeStateRevision;
     }
 }

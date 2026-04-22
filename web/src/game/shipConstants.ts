@@ -25,7 +25,7 @@ export const SHIP_CONSTANTS = {
     REVERSE_SPEED_PENALTY: 0.3,
 
     /** 到达目标的距离阈值（GU）喵。 */
-    TARGET_ARRIVAL_THRESHOLD: 20.0,
+    TARGET_ARRIVAL_THRESHOLD: 0.5,
 
     /** 停止检查的最小速度阈值（GU/秒）喵。 */
     MIN_SPEED_THRESHOLD: 0.01,

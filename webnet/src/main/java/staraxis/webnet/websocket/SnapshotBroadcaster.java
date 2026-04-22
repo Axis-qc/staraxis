@@ -24,12 +24,15 @@ public class SnapshotBroadcaster {
 
     /** 自动存档间隔（tick）：300 tick 约 5 分钟（按 1Hz tick）喵。 */
     private static final long AUTO_SAVE_INTERVAL_TICKS = 300L;
+    private static final long SNAPSHOT_SYNC_INTERVAL_MS = 200L;
 
     private final ObjectMapper objectMapper;
     private final WsConnectionManager connMgr;
     private final AtomicLong lastTickCostMs;
     private final Map<String, Long> lastAutoSaveTickByWorldId = new java.util.concurrent.ConcurrentHashMap<>();
     private final Map<String, Boolean> hadSnapshotSubscriberByWorldId = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, Long> lastSnapshotSyncAtMsByWorldId = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, Long> lastBroadcastRevisionByWorldId = new java.util.concurrent.ConcurrentHashMap<>();
 
     public SnapshotBroadcaster(ObjectMapper objectMapper, WsConnectionManager connMgr, AtomicLong lastTickCostMs) {
         this.objectMapper = objectMapper;
@@ -67,6 +70,8 @@ public class SnapshotBroadcaster {
                 }
                 lastAutoSaveTickByWorldId.remove(activeWorldId);
                 hadSnapshotSubscriberByWorldId.remove(activeWorldId);
+                lastSnapshotSyncAtMsByWorldId.remove(activeWorldId);
+                lastBroadcastRevisionByWorldId.remove(activeWorldId);
                 return;
             }
         }
@@ -100,6 +105,26 @@ public class SnapshotBroadcaster {
             if (snapshotSubscribers.isEmpty()) {
                 return;
             }
+
+            long nowMs = System.currentTimeMillis();
+            long lastSyncAtMs = lastSnapshotSyncAtMsByWorldId.getOrDefault(activeWorldId, 0L);
+            if (nowMs - lastSyncAtMs < SNAPSHOT_SYNC_INTERVAL_MS) {
+                return;
+            }
+
+            if (!runtime.hasPendingRealtimeSnapshotChanges()) {
+                return;
+            }
+
+            runtime.publishRealtimeSnapshotIfNeeded();
+            long currentRevision = runtime.getRealtimeStateRevision();
+            long lastBroadcastRevision = lastBroadcastRevisionByWorldId.getOrDefault(activeWorldId, 0L);
+            if (currentRevision == lastBroadcastRevision) {
+                return;
+            }
+
+            lastSnapshotSyncAtMsByWorldId.put(activeWorldId, nowMs);
+            lastBroadcastRevisionByWorldId.put(activeWorldId, currentRevision);
 
             for (WebSocketChannel ch : snapshotSubscribers) {
                 if (ch != null && ch.isOpen()) {

@@ -13,7 +13,7 @@
  * - 传入实体数据和快照信息，返回世界坐标。
  */
 import type { EntitySnapshot, PlanetDetails, SnapshotMessage } from '../../net/snapshotWs'
-import { getEstimatedShipPose, syncEstimatedShips } from '@/game/shipPositionEstimator'
+import { getLocalVisibleWorld } from '@/game/world'
 
 export type EntityQuerySystem = {
     getEntityWorldPosGU: (entityId: number) => { x: number; y: number } | null
@@ -24,6 +24,7 @@ export type EntityQuerySystem = {
 export function createEntityQuerySystem(): EntityQuerySystem {
     const entitiesById = new Map<number, EntitySnapshot>()
     let lastSnapshot: SnapshotMessage | null = null
+    const world = getLocalVisibleWorld()
 
     const updateSnapshot = (snapshot: SnapshotMessage | null) => {
         lastSnapshot = snapshot
@@ -34,12 +35,7 @@ export function createEntityQuerySystem(): EntityQuerySystem {
         for (const e of entities) {
             entitiesById.set(e.entityId, e)
         }
-        syncEstimatedShips(
-            entities,
-            lastSnapshot?.realTimeWorldState?.totalGameSecondsExact ??
-                lastSnapshot?.realTimeWorldState?.totalGameSeconds ??
-                0,
-        )
+        // 舰船预测状态现在由世界层统一管理，不再需要手动同步喵
     }
 
     const getEntityWorldPosGU = (entityId: number): { x: number; y: number } | null => {
@@ -52,7 +48,8 @@ export function createEntityQuerySystem(): EntityQuerySystem {
         }
 
         if (e.entityType === 'SHIP') {
-            return getEstimatedShipPose(e)?.position ?? e.posWorldGU ?? null
+            const displayPose = world.getEntityDisplayPosition(e.entityId)
+            return displayPose?.position ?? e.posWorldGU ?? null
         }
 
         if (e.entityType === 'PLANET') {

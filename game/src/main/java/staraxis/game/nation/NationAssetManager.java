@@ -81,6 +81,7 @@ public class NationAssetManager {
                 worldState.intelSystem.markDirty(oldNation.nationId);
             }
         }
+        worldState.markRealtimeDirty();
     }
 
     /**
@@ -132,6 +133,7 @@ public class NationAssetManager {
         if (worldState.intelSystem != null && oldNationId != null) {
             worldState.intelSystem.markDirty(oldNationId);
         }
+        worldState.markRealtimeDirty();
     }
 
     /**

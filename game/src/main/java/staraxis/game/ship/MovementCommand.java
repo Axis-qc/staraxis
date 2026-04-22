@@ -22,6 +22,7 @@ public class MovementCommand {
 
     /** 指令类型喵。 */
     public final int commandType;
+    public final String clientCommandId;
 
     /** 目标位置（世界坐标 GU），仅当 commandType == TYPE_MOVE_TO 时有效喵。 */
     public final Vec2d targetPosition;
@@ -62,6 +63,7 @@ public class MovementCommand {
     /** 私有构造函数，使用 Builder 模式创建实例喵。 */
     private MovementCommand(Builder builder) {
         this.commandType = builder.commandType;
+        this.clientCommandId = builder.clientCommandId;
         this.targetPosition = builder.targetPosition;
         this.startPosition = builder.startPosition;
         this.startVelocity = builder.startVelocity;
@@ -86,8 +88,9 @@ public class MovementCommand {
      * @return 移动指令
      */
     public static MovementCommand createMoveTo(Vec2d targetPosition, ShipBody ship,
-                                               double gameSeconds, int simulationTick) {
+                                               String clientCommandId, double gameSeconds, int simulationTick) {
         return new Builder(TYPE_MOVE_TO)
+                .clientCommandId(clientCommandId)
                 .targetPosition(targetPosition)
                 .startPosition(ship.posWorldGU != null ? ship.posWorldGU : new Vec2d(0, 0))
                 .startVelocity(ship.velWorldGU != null ? ship.velWorldGU : new Vec2d(0, 0))
@@ -111,8 +114,9 @@ public class MovementCommand {
      * @param simulationTick 当前模拟 tick
      * @return 停止指令
      */
-    public static MovementCommand createStop(ShipBody ship, double gameSeconds, int simulationTick) {
+    public static MovementCommand createStop(ShipBody ship, String clientCommandId, double gameSeconds, int simulationTick) {
         return new Builder(TYPE_STOP)
+                .clientCommandId(clientCommandId)
                 .targetPosition(null)
                 .startPosition(ship.posWorldGU != null ? ship.posWorldGU : new Vec2d(0, 0))
                 .startVelocity(ship.velWorldGU != null ? ship.velWorldGU : new Vec2d(0, 0))
@@ -165,6 +169,7 @@ public class MovementCommand {
      */
     public static class Builder {
         private final int commandType;
+        private String clientCommandId;
         private Vec2d targetPosition;
         private Vec2d startPosition = new Vec2d(0, 0);
         private Vec2d startVelocity = new Vec2d(0, 0);
@@ -180,6 +185,11 @@ public class MovementCommand {
 
         public Builder(int commandType) {
             this.commandType = commandType;
+        }
+
+        public Builder clientCommandId(String clientCommandId) {
+            this.clientCommandId = clientCommandId;
+            return this;
         }
 
         public Builder targetPosition(Vec2d targetPosition) {

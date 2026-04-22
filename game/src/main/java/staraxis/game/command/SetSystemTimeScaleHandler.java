@@ -31,5 +31,6 @@ public class SetSystemTimeScaleHandler implements CommandHandler<SetSystemTimeSc
         }
 
         worldState.time.timeScale = scale;
+        worldState.markRealtimeDirty();
     }
 }

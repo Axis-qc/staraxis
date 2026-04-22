@@ -7,6 +7,7 @@
 import * as THREE from 'three'
 import type { WorldRenderContext, WorldFrameState } from '../../../worldRenderManager'
 import type { EntitySnapshot, PlanetDetails, StarDetails } from '../../../../net/snapshotWs'
+import { getEntityWorldPosGU } from '@/game/world'
 
 const SELECTION_COLOR = 'rgba(76, 175, 80, 0.96)'
 const LINE_WIDTH_PX = 12
@@ -53,7 +54,7 @@ export class SelectionEffectRenderer {
       const entity = frame.entitiesById.get(entityId)
       if (!entity) continue
 
-      const entityPos = ctx.getEntityWorldPosGU(entityId) ?? entity.posWorldGU
+      const entityPos = getEntityWorldPosGU(entityId) ?? entity.posWorldGU
       if (!entityPos) continue
 
       visibleIds.add(entityId)

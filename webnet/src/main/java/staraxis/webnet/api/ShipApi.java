@@ -67,6 +67,8 @@ public class ShipApi {
             } else if (relativePath.equals("/move")) {
                 // 处理舰船移动命令喵
                 handleMoveShip(exchange);
+            } else if (relativePath.equals("/move/complete")) {
+                handleMoveShipCompletion(exchange);
             } else if (relativePath.startsWith("/modules/by-texture")) {
                 handleFindModuleByTexture(exchange);
             } else if (relativePath.startsWith("/modules/") && relativePath.endsWith("/mount-points")) {
@@ -111,6 +113,55 @@ public class ShipApi {
 
                 // 调用 ShipCommandApi 处理移动命令喵
                 Map<String, Object> result = ShipCommandApi.handleMoveShip(objectMapper, worldId, req);
+
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                exchange.getResponseSender().send(objectMapper.writeValueAsString(result));
+            } catch (Exception e) {
+                exchange.setStatusCode(500);
+                try {
+                    exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                    exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                            "ok", false,
+                            "error", String.valueOf(e.getMessage()))));
+                } catch (Exception ignored) {
+                    exchange.endExchange();
+                }
+            }
+        });
+    }
+
+    /**
+     * POST /api/ship/move/complete
+     * 处理前端本地模拟结束后的移动完成回报喵。
+     */
+    private void handleMoveShipCompletion(HttpServerExchange exchange) {
+        if (!exchange.getRequestMethod().equalToString("POST")) {
+            exchange.setStatusCode(405).endExchange();
+            return;
+        }
+
+        exchange.dispatch(() -> {
+            try {
+                exchange.startBlocking();
+                String body = new String(exchange.getInputStream().readAllBytes());
+                @SuppressWarnings("unchecked")
+                Map<String, Object> req = objectMapper.readValue(body, Map.class);
+
+                String worldId = getQueryParam(exchange, "worldId");
+                if (worldId == null && req.containsKey("worldId")) {
+                    worldId = String.valueOf(req.get("worldId"));
+                }
+
+                if (worldId == null || worldId.isBlank()) {
+                    exchange.setStatusCode(400);
+                    exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+                    exchange.getResponseSender().send(objectMapper.writeValueAsString(Map.of(
+                            "ok", false,
+                            "error", "worldId_required")));
+                    return;
+                }
+
+                Map<String, Object> result = ShipCommandApi.handleMoveShipCompletion(objectMapper, worldId, req);
 
                 exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
                 exchange.getResponseSender().send(objectMapper.writeValueAsString(result));

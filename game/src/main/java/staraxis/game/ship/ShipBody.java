@@ -137,6 +137,10 @@ public class ShipBody extends Entity {
      */
     public MovementCommand movementCommand;
 
+    public String activeClientCommandId;
+
+    public String lastCompletedClientCommandId;
+
     /**
      * 是否启用简化计算模式喵。
      * 为 true 时，ShipMovementSystem 使用基于指令的推测计算喵。
