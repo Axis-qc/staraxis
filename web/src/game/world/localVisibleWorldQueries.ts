@@ -10,7 +10,7 @@
 
 import { getLocalVisibleWorld } from './localVisibleWorld'
 import type { EntityDisplayPosition } from './localVisibleWorldTypes'
-import type { EntitySnapshot } from '../../net/snapshotWs'
+import type { DailySettlementState, EntitySnapshot, SectorCenter } from '../../net/snapshotWs'
 
 /**
  * 获取实体显示位置喵
@@ -28,6 +28,18 @@ import type { EntitySnapshot } from '../../net/snapshotWs'
 export function getEntityDisplayPosition(entityId: number): EntityDisplayPosition | null {
   const world = getLocalVisibleWorld()
   return world.getEntityDisplayPosition(entityId)
+}
+
+/**
+ * 获取实体插值后显示位置喵。
+ *
+ * 该接口面向渲染层和需要平滑显示的位置读取喵。
+ */
+export function getInterpolatedEntityDisplayPosition(
+  entityId: number,
+): EntityDisplayPosition | null {
+  const world = getLocalVisibleWorld()
+  return world.getInterpolatedEntityDisplayPosition(entityId)
 }
 
 /**
@@ -57,6 +69,25 @@ export function getEntityDisplayPositions(entityIds: number[]): Map<number, Enti
 
   for (const entityId of entityIds) {
     const position = world.getEntityDisplayPosition(entityId)
+    if (position) {
+      result.set(entityId, position)
+    }
+  }
+
+  return result
+}
+
+/**
+ * 批量获取实体插值后显示位置喵。
+ */
+export function getInterpolatedEntityDisplayPositions(
+  entityIds: number[],
+): Map<number, EntityDisplayPosition> {
+  const world = getLocalVisibleWorld()
+  const result = new Map<number, EntityDisplayPosition>()
+
+  for (const entityId of entityIds) {
+    const position = world.getInterpolatedEntityDisplayPosition(entityId)
     if (position) {
       result.set(entityId, position)
     }
@@ -203,7 +234,8 @@ export function getWorldStats() {
   const world = getLocalVisibleWorld()
   return {
     visibleEntities: world.getVisibleEntityCount(),
-    predictedShips: world.getPredictedShipCount(),
+    highFreqFrames: world.getHighFreqFrameCount(),
+    lastAppliedVersion: world.getLastAppliedVersion(),
     pendingCommands: world.getPendingCommandCount(),
     lastAppliedTick: world.getLastAppliedTick(),
     focusedEntities: world.getAllFocusedEntityIds().length
@@ -211,15 +243,56 @@ export function getWorldStats() {
 }
 
 /**
+ * 获取最新低频状态喵
+ *
+ * 供面板和低频 UI 查询喵。
+ */
+export function getLatestLowFreqState() {
+  const world = getLocalVisibleWorld()
+  return world.getLatestLowFreqState()
+}
+
+/**
+ * 获取最新结算状态喵
+ */
+export function getLatestDailySettlementState(): DailySettlementState | null {
+  return getLatestLowFreqState()?.dailySettlementState ?? null
+}
+
+/**
+ * 获取最新星区中心喵
+ */
+export function getLatestSectorCenters(): SectorCenter[] {
+  return getLatestLowFreqState()?.sectorCenters ?? []
+}
+
+/**
+ * 获取最新星区归属喵
+ */
+export function getLatestSectorOwnerNationIdByCoord(): Record<string, string> {
+  return getLatestLowFreqState()?.sectorOwnerNationIdByCoord ?? {}
+}
+
+/**
  * 获取实体世界坐标喵
  *
- * 兼容旧接口的便捷方法，用于平滑迁移喵。
+ * 权威缓存位置查询的便捷包装喵。
  *
  * @param entityId 实体ID喵
  * @returns 实体世界坐标（GU），如果不存在则返回null喵
  */
 export function getEntityWorldPosGU(entityId: number): { x: number; y: number } | null {
   const position = getEntityDisplayPosition(entityId)
+  return position ? position.position : null
+}
+
+/**
+ * 获取实体插值后世界坐标喵。
+ */
+export function getInterpolatedEntityWorldPosGU(
+  entityId: number,
+): { x: number; y: number } | null {
+  const position = getInterpolatedEntityDisplayPosition(entityId)
   return position ? position.position : null
 }
 
@@ -235,6 +308,14 @@ export function getEntityHeadingDeg(entityId: number): number {
 }
 
 /**
+ * 获取实体插值后航向角度喵。
+ */
+export function getInterpolatedEntityHeadingDeg(entityId: number): number {
+  const position = getInterpolatedEntityDisplayPosition(entityId)
+  return position ? position.headingDeg : 0
+}
+
+/**
  * 检查实体是否正在移动喵
  *
  * @param entityId 实体ID喵
@@ -242,5 +323,13 @@ export function getEntityHeadingDeg(entityId: number): number {
  */
 export function isEntityMoving(entityId: number): boolean {
   const position = getEntityDisplayPosition(entityId)
+  return position ? position.isMoving : false
+}
+
+/**
+ * 检查实体插值显示是否处于移动中喵。
+ */
+export function isInterpolatedEntityMoving(entityId: number): boolean {
+  const position = getInterpolatedEntityDisplayPosition(entityId)
   return position ? position.isMoving : false
 }

@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import type { SnapshotMessage, SnapshotWsClient } from '../../../net/snapshotWs'
+import type { SnapshotWsClient } from '../../../net/snapshotWs'
 import { defaultGameTimeManager } from '../../../game/time/GameTimeManager'
+import type { LowFreqWorldState } from '../../../game/world'
 
-const props = defineProps<{ snapshot: SnapshotMessage | null; wsClient?: SnapshotWsClient | null }>()
+const props = defineProps<{ lowFreqState: LowFreqWorldState | null; wsClient?: SnapshotWsClient | null }>()
 
 const SPEED_OPTIONS = [
   1,
@@ -34,6 +35,7 @@ const currentGameSeconds = ref(defaultGameTimeManager.getCurrentGameSeconds())
 let hudClockTimer: number | null = null
 
 function refreshCurrentGameSeconds(): void {
+  defaultGameTimeManager.update()
   currentGameSeconds.value = defaultGameTimeManager.getCurrentGameSeconds()
 }
 
@@ -51,7 +53,7 @@ onUnmounted(() => {
   }
 })
 
-const currentGsprs = computed(() => props.snapshot?.realTimeWorldState?.gameSecondsPerRealSecond ?? 1.0)
+const currentGsprs = computed(() => props.lowFreqState?.gameSecondsPerRealSecond ?? 1.0)
 
 const speedIndex = computed(() => {
   const current = currentGsprs.value
@@ -95,43 +97,36 @@ function onClickSpeedNext(): void {
 }
 
 const canAdjustSpeed = computed(() => {
-  const worldType = props.snapshot?.realTimeWorldState?.worldType
+  const worldType = props.lowFreqState?.worldType
   return worldType === 'SINGLE_PLAYER' || worldType === 'MULTI_PLAYER'
 })
 
-function getSnapshotBaseGameSeconds(snapshot: SnapshotMessage | null): number | null {
-  const realTimeState = snapshot?.realTimeWorldState
-  if (!snapshot?.ok || !realTimeState) {
+function getSnapshotBaseGameSeconds(lowFreqState: LowFreqWorldState | null): number | null {
+  if (!lowFreqState) {
     return null
   }
 
-  if (Number.isFinite(realTimeState.totalGameSecondsExact)) {
-    return realTimeState.totalGameSecondsExact
-  }
-  if (Number.isFinite(realTimeState.totalGameSeconds)) {
-    return realTimeState.totalGameSeconds
-  }
   if (
-    realTimeState.year === undefined ||
-    realTimeState.month === undefined ||
-    realTimeState.day === undefined ||
-    realTimeState.hour === undefined ||
-    realTimeState.minute === undefined ||
-    realTimeState.second === undefined
+    lowFreqState.year == null ||
+    lowFreqState.month == null ||
+    lowFreqState.day == null ||
+    lowFreqState.hour == null ||
+    lowFreqState.minute == null ||
+    lowFreqState.second == null
   ) {
     return null
   }
 
-  const yearIndex = Math.max(0, realTimeState.year - 1)
-  const monthIndex = Math.max(0, realTimeState.month - 1)
-  const dayIndex = Math.max(0, realTimeState.day - 1)
+  const yearIndex = Math.max(0, lowFreqState.year - 1)
+  const monthIndex = Math.max(0, lowFreqState.month - 1)
+  const dayIndex = Math.max(0, lowFreqState.day - 1)
   return (
     yearIndex * SECONDS_PER_YEAR +
     monthIndex * SECONDS_PER_MONTH +
     dayIndex * SECONDS_PER_DAY +
-    realTimeState.hour * SECONDS_PER_HOUR +
-    realTimeState.minute * SECONDS_PER_MINUTE +
-    realTimeState.second
+    lowFreqState.hour * SECONDS_PER_HOUR +
+    lowFreqState.minute * SECONDS_PER_MINUTE +
+    lowFreqState.second
   )
 }
 
@@ -157,13 +152,12 @@ function decomposeGameSeconds(totalGameSeconds: number): {
 }
 
 const text = computed(() => {
-  const snapshot = props.snapshot
-  const realTimeState = snapshot?.realTimeWorldState
-  if (!snapshot || !snapshot.ok || !realTimeState || realTimeState.year === undefined) {
+  const lowFreqState = props.lowFreqState
+  if (!lowFreqState || lowFreqState.year == null) {
     return '--.--.-- --:--:--'
   }
 
-  const snapshotBaseGameSeconds = getSnapshotBaseGameSeconds(snapshot)
+  const snapshotBaseGameSeconds = getSnapshotBaseGameSeconds(lowFreqState)
   const displayGameSeconds = snapshotBaseGameSeconds === null
     ? currentGameSeconds.value
     : Math.max(snapshotBaseGameSeconds, currentGameSeconds.value)

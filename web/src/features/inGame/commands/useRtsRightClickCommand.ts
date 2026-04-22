@@ -5,9 +5,9 @@
  * RTS 右键命令入口（右键点击 → 命令意图）。
  *
  * 说明：
- * - 当前阶段仅实现“右键触发”的输入逻辑与坐标换算，并在存在选中实体时产出命令意图。
- * - 由于当前项目尚未接入实体系统，通常不会有 `selectedIds`，因此不会触发命令。
- * - 未来接入后端 Command 时，可在 `issueMoveCommand` 处将命令通过 WS/HTTP 发往服务端。
+ * - 当前阶段只负责“右键触发”的输入逻辑与坐标换算，并在存在选中实体时产出命令意图喵。
+ * - 命令发出后可立即显示目标点和路径标记，但不能在这里直接改实体权威位置喵。
+ * - 真正命令状态由 `command_result`（命令结果消息）驱动，下层发送器只负责 transport ack（传输确认）记录喵。
  */
 
 import type { WorldRenderer as ThreeWorldRenderer } from '../../../rendering/worldRenderManager'

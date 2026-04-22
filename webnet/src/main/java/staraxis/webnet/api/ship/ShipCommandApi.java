@@ -48,6 +48,15 @@ public final class ShipCommandApi {
             return Map.of("ok", false, "error", "world_not_found");
         }
 
+        WorldState worldState = runtime.getWorldStateForSimOnly();
+        Entity entity = worldState.entitiesById.get(shipEntityId);
+        if (!(entity instanceof ShipBody ship)) {
+            return buildRejectedMoveResult(clientCommandId, shipEntityId, worldState, "ship_not_found");
+        }
+        if (!nationId.equals(ship.ownerNationId)) {
+            return buildRejectedMoveResult(clientCommandId, shipEntityId, worldState, "ship_not_owned_by_nation");
+        }
+
         runtime.submitCommand(new MoveShipCommand(nationId, clientCommandId, shipEntityId, targetX, targetY));
 
         return Map.of(
@@ -56,6 +65,8 @@ public final class ShipCommandApi {
                 "message", "move_command_submitted",
                 "clientCommandId", clientCommandId,
                 "shipEntityId", shipEntityId,
+                "authoritativeTick", worldState.time.simulationTick,
+                "gameSeconds", worldState.time.totalGameSecondsAcc,
                 "target", Map.of("x", targetX, "y", targetY));
     }
 
@@ -133,6 +144,23 @@ public final class ShipCommandApi {
         response.put("gameSeconds", authoritativeGameSeconds);
         response.put("reason", reason);
         response.put("correctionData", buildCorrectionData(ship));
+        return response;
+    }
+
+    private static Map<String, Object> buildRejectedMoveResult(
+            String clientCommandId,
+            long shipEntityId,
+            WorldState worldState,
+            String reason) {
+        LinkedHashMap<String, Object> response = new LinkedHashMap<>();
+        response.put("ok", false);
+        response.put("status", "rejected");
+        response.put("error", reason);
+        response.put("reason", reason);
+        response.put("clientCommandId", clientCommandId);
+        response.put("shipEntityId", shipEntityId);
+        response.put("authoritativeTick", worldState.time.simulationTick);
+        response.put("gameSeconds", worldState.time.totalGameSecondsAcc);
         return response;
     }
 

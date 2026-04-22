@@ -250,6 +250,35 @@ public class WsConnectionManager {
         return snapshotSubscribers;
     }
 
+    public WebSocketChannel getPlayerChannel(String playerId) {
+        if (playerId == null || playerId.isBlank()) {
+            return null;
+        }
+        return playerSessions.get(playerId);
+    }
+
+    public void sendTextToNation(String nationId, String text) {
+        if (nationId == null || nationId.isBlank() || text == null) {
+            return;
+        }
+
+        for (var entry : playerToNationId.entrySet()) {
+            if (!nationId.equals(entry.getValue())) {
+                continue;
+            }
+
+            WebSocketChannel channel = playerSessions.get(entry.getKey());
+            if (channel == null || !channel.isOpen()) {
+                continue;
+            }
+
+            try {
+                WebSockets.sendText(text, channel, null);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
     /**
      * 每分钟打印当前连接详情到 webnet.log 喵。
      */

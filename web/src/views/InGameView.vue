@@ -52,10 +52,15 @@ import InGameTechPanel from '../features/inGame/panels/InGameTechPanel.vue'
 import InGameMilitaryPanel from '../features/inGame/panels/InGameMilitaryPanel.vue'
 import InGameDomesticPanel from '../features/inGame/panels/InGameDomesticPanel.vue'
 import InGameDiplomacyPanel from '../features/inGame/panels/InGameDiplomacyPanel.vue'
-import { connectSnapshotWs, type SnapshotWsClient, type EntitySnapshot } from '../net/snapshotWs'
+import {
+  connectSnapshotWs,
+  type SnapshotWsClient,
+  type EntitySnapshot,
+  type CommandResultMessage,
+} from '../net/snapshotWs'
 import { createWorldRenderManager, type WorldRenderer } from '../rendering/worldRenderManager'
 import ShipPanel from '../features/inGame/components/ShipPanel.vue'
-import { sendMoveShipCommand, sendMoveShipCompletionReport } from '../net/shipCommandsApi'
+import { sendMoveShipCommand } from '../net/shipCommandsApi'
 import { useInGameDataHub } from '../features/inGame/composables/useInGameDataHub'
 import { useInGameInputController } from '../features/inGame/input/useInGameInputController'
 import { useInGameUiInputBindings } from '../features/inGame/input/useInGameUiInputBindings'
@@ -75,7 +80,13 @@ import { logger } from '../utils/logger'
 import { useAuthStore } from '../stores/auth'
 import { useWorldSessionStore } from '../stores/worldSession'
 import { manualSaveWorld, listAvailableSpawns, confirmSpawn } from '../net/worldSavesApi'
-import { getLocalVisibleWorld, getLocalVisibleWorldSimulation, getEntityWorldPosGU, getAllEntitySnapshots } from '../game/world'
+import {
+  getLocalVisibleWorld,
+  getInterpolatedEntityWorldPosGU,
+  getAllEntitySnapshots,
+  getLatestDailySettlementState,
+  getLatestLowFreqState,
+} from '../game/world'
 
 const router = useRouter()
 const { getSpritePath } = useAstroAssets()
@@ -98,7 +109,6 @@ const debugWindowRef = ref<HTMLDivElement | null>(null)
 const hub = useInGameDataHub()
 const wsClient = ref<SnapshotWsClient | null>(null)
 const renderer = ref<WorldRenderer | null>(null)
-const worldSimulation = getLocalVisibleWorldSimulation()
 const auth = useAuthStore()
 const worldSession = useWorldSessionStore()
 
@@ -116,6 +126,51 @@ const cameraPersister = createCameraStatePersister(renderer, playerId)
 
 let lastSnapshotLogTime = 0
 let isFirstSnapshotLog = true
+
+function handleCommandResult(result: CommandResultMessage) {
+  const world = getLocalVisibleWorld()
+  const correctionData = result.correctionData ?? null
+
+  if (correctionData) {
+    world.applyImmediateCorrection(result.entityId, correctionData)
+  }
+
+  if (result.resultType === 'submitted') {
+    // submitted 只是后端收到命令的传输确认，不代表命令已被权威接受喵
+    world.recordCommandTransportAck(result.entityId, 'submitted')
+    return
+  }
+
+  if (result.resultType === 'accepted') {
+    world.applyCommandUpdate(result.entityId, 'websocket_result', 'confirmed', {
+      authoritativeTick: result.simulationTick,
+      movementSeed: correctionData?.movementCommand,
+    })
+    return
+  }
+
+  if (result.resultType === 'rejected') {
+    world.applyCommandUpdate(result.entityId, 'websocket_result', 'rejected', {
+      authoritativeTick: result.simulationTick,
+      rejectionReason: result.reason ?? null,
+    })
+    return
+  }
+
+  if (result.resultType === 'completed') {
+    world.applyCommandUpdate(result.entityId, 'websocket_result', 'completed', {
+      authoritativeTick: result.simulationTick,
+    })
+    return
+  }
+
+  if (result.resultType === 'corrected') {
+    world.applyCommandUpdate(result.entityId, 'websocket_result', 'correcting', {
+      authoritativeTick: result.simulationTick,
+      movementSeed: correctionData?.movementCommand,
+    })
+  }
+}
 
 const activeBottomTab = ref<InGameBottomTab | null>(null)
 
@@ -156,7 +211,7 @@ const selection = useRtsSelection({
     const out: Array<{ id: number; type: 'STAR' | 'PLANET' | 'SHIP'; worldPosGU: { x: number; y: number } }> = []
     for (const e of snapshots) {
       if (e.entityType === 'STAR' || e.entityType === 'PLANET' || e.entityType === 'SHIP') {
-        const p = getEntityWorldPosGU(e.entityId)
+        const p = getInterpolatedEntityWorldPosGU(e.entityId)
         if (!p) continue
         out.push({ id: e.entityId, type: e.entityType, worldPosGU: p })
       }
@@ -257,7 +312,7 @@ const rightClickCommand = useRtsRightClickCommand({
       const command = world.addMoveCommand(
         entity.entityId,
         { x: intent.targetWorldGU.x, y: intent.targetWorldGU.y },
-        null, // movementSeed暂时为空，将在阶段D中补充喵
+        null, // 由世界层基于当前权威缓存生成命令种子喵
         'cancel_previous'
       )
 
@@ -278,17 +333,16 @@ const rightClickCommand = useRtsRightClickCommand({
         targetY: intent.targetWorldGU.y,
       })
 
-      // 根据HTTP响应更新指令状态喵
-      if (!result.ok) {
-        console.error('[Ship Command] 后端提交失败:', result.error)
-        // 更新指令状态为rejected喵
-        world.applyCommandUpdate(entity.entityId, 'http_response', 'rejected', {
-          rejectionReason: `HTTP提交失败: ${result.error}`
+      // 根据 HTTP 回包记录 transport ack（传输确认），不推进权威命令状态喵
+      if (!result.ok || result.status === 'rejected') {
+        const transportError = result.reason ?? result.error ?? 'HTTP提交失败'
+        console.error('[Ship Command] 后端提交失败:', transportError)
+        world.recordCommandTransportAck(entity.entityId, 'failed', {
+          transportError,
         })
       } else {
-        console.log('[Ship Command] 后端提交成功，指令进入predicting状态')
-        // 更新指令状态为predicting（前端本地执行中）喵
-        world.applyCommandUpdate(entity.entityId, 'http_response', 'predicting')
+        console.log('[Ship Command] 后端提交成功，等待命令结果消息推进状态喵')
+        world.recordCommandTransportAck(entity.entityId, 'submitted')
       }
     }
   },
@@ -435,116 +489,6 @@ function onCanvasPointerDown(e: PointerEvent) {
   }
 }
 
-// ==================== 世界层时间推进游戏循环 ====================
-
-/** 游戏循环启动哨兵喵 */
-let gameLoopId: number | null = null
-let moveCompletionReportTimer: number | null = null
-let moveCompletionReportInFlight = false
-
-async function flushMoveCompletionReports(): Promise<void> {
-  if (moveCompletionReportInFlight) {
-    return
-  }
-
-  moveCompletionReportInFlight = true
-  const worldId = worldSession.selectedWorldId
-  const nationId = auth.selectedNationId
-  if (!worldId || !nationId) {
-    moveCompletionReportInFlight = false
-    return
-  }
-
-  try {
-    const world = getLocalVisibleWorld()
-    const reports = world.getReadyMoveCompletionReports()
-    for (const report of reports) {
-      world.markMoveCompletionReportSent(report.entityId)
-
-      const result = await sendMoveShipCompletionReport({
-        worldId,
-        nationId,
-        clientCommandId: report.clientCommandId,
-        shipEntityId: report.entityId,
-        reportedGameSeconds: report.reportedGameSeconds,
-        reportedPosition: report.reportedPosition,
-      })
-
-      if (!result.ok) {
-        world.resetMoveCompletionReport(report.entityId)
-        continue
-      }
-
-      if (result.correctionData) {
-        world.applyImmediateCorrection(report.entityId, result.correctionData)
-      }
-
-      if (result.status === 'completed') {
-        world.applyCommandUpdate(report.entityId, 'http_response', 'completed', {
-          authoritativeTick: result.authoritativeTick ?? null,
-        })
-        continue
-      }
-
-      if (result.status === 'corrected') {
-        if (result.correctionData?.movementCommand) {
-          world.applyCommandUpdate(report.entityId, 'http_response', 'correcting', {
-            authoritativeTick: result.authoritativeTick ?? null,
-            movementSeed: result.correctionData.movementCommand,
-          })
-        } else {
-          world.applyCommandUpdate(report.entityId, 'http_response', 'completed', {
-            authoritativeTick: result.authoritativeTick ?? null,
-          })
-        }
-      }
-    }
-  } finally {
-    moveCompletionReportInFlight = false
-  }
-}
-
-/**
- * 启动游戏循环喵
- */
-function startGameLoop(): void {
-  if (gameLoopId !== null) {
-    return
-  }
-
-  // 启动世界推进系统
-  worldSimulation.start()
-
-  if (moveCompletionReportTimer === null) {
-    moveCompletionReportTimer = window.setInterval(() => {
-      void flushMoveCompletionReports()
-    }, 100)
-  }
-
-  gameLoopId = 1
-
-  console.debug('[WorldSimulation] 游戏循环启动')
-}
-
-/**
- * 停止游戏循环喵
- */
-function stopGameLoop(): void {
-  if (gameLoopId !== null) {
-    gameLoopId = null
-  }
-  if (moveCompletionReportTimer !== null) {
-    window.clearInterval(moveCompletionReportTimer)
-    moveCompletionReportTimer = null
-  }
-  moveCompletionReportInFlight = false
-
-  // 停止世界推进系统
-  worldSimulation.stop()
-
-  console.debug('[WorldSimulation] 游戏循环停止')
-}
-
 onMounted(async () => {
   const el = rootRef.value
   if (el) {
@@ -573,13 +517,29 @@ onMounted(async () => {
 
     cameraPersister.attach()
     cameraPersister.schedulePersist()
-
-    // 启动世界层时间推进游戏循环喵
-    startGameLoop()
   }
 
   wsClient.value = connectSnapshotWs({
     reconnectDelayMs: 3000,
+    onHighFreqSnapshot: (s) => {
+      const world = getLocalVisibleWorld()
+      const syncResult = world.applyHighFreqSnapshot(s)
+      if (syncResult.success) {
+        hub.setLastHighFreqSnapshot(s)
+        hub.syncEntitiesFromWorld()
+        hub.getRenderer()?.updateFromHighFreqSnapshot(s)
+      }
+    },
+    onLowFreqSnapshot: (s) => {
+      const world = getLocalVisibleWorld()
+      if (world.applyLowFreqSnapshot(s)) {
+        hub.syncLowFreqStateFromWorld()
+        hub.getRenderer()?.updateLowFreqState(getLatestLowFreqState())
+      }
+    },
+    onCommandResult: (result) => {
+      handleCommandResult(result)
+    },
     onSnapshot: (s) => {
       const now = Date.now()
       if (isFirstSnapshotLog || now - lastSnapshotLogTime >= 60000) {
@@ -616,22 +576,32 @@ onMounted(async () => {
       const syncResult = world.applySnapshot(s)
       if (syncResult.success) {
         console.debug(`[LocalVisibleWorld] 快照同步成功: tick=${syncResult.appliedTick}, 实体(+${syncResult.addedEntities}/~${syncResult.updatedEntities}/-${syncResult.removedEntities})喵`)
+        hub.syncEntitiesFromWorld()
+        hub.syncLowFreqStateFromWorld()
+        hub.setLastHighFreqSnapshot({
+          type: 'snapshot_high_freq',
+          ok: s.ok,
+          error: s.error,
+          tickCostMs: s.tickCostMs,
+          simulationTick: s.realTimeWorldState?.simulationTick ?? 0,
+          totalGameSeconds: s.realTimeWorldState?.totalGameSeconds ?? 0,
+          totalGameSecondsExact: s.realTimeWorldState?.totalGameSecondsExact ?? s.realTimeWorldState?.totalGameSeconds ?? 0,
+          deltaGameSeconds: s.realTimeWorldState?.deltaGameSeconds ?? 0,
+          syncMode: 'full',
+          entities: s.realTimeWorldState?.entities ?? [],
+          privateEntitiesByIntelLevel: s.realTimeWorldState?.privateEntitiesByIntelLevel ?? {},
+          playerNationId: s.playerNationId,
+        })
+        hub.getRenderer()?.updateFromSnapshot(s)
       }
-
-      hub.setLastSnapshot(s)
-      hub.getRenderer()?.updateFromSnapshot(s)
 
       // 若本会话没有镜头缓存，则扫描本国实体列表找到初始舰船并做一次初始聚焦喵。
       if (!hasAppliedInitialShipFocus && needsInitialFocusOnInitialShip) {
         const r = hub.getRenderer()
-        const entities = s.realTimeWorldState?.entities ?? []
         const nationId = auth.selectedNationId
 
         if (r && nationId) {
-          // 合并公开和私有实体来查找初始舰船喵
-          const privateTiers = s.realTimeWorldState?.privateEntitiesByIntelLevel ?? {}
-          const privateEntities = Object.values(privateTiers).flatMap(arr => arr ?? [])
-          const allEntities = [...entities, ...privateEntities]
+          const allEntities = getAllEntitySnapshots()
 
           // 新策略：优先聚焦携带固定 flag 的初始出生舰船喵。
           const initialShip = allEntities.find((e) => {
@@ -641,7 +611,7 @@ onMounted(async () => {
             return e.ownerNationId === nationId && flags.includes('INITIAL_SPAWN_SHIP')
           })
 
-          const initialShipPos = initialShip ? getEntityWorldPosGU(initialShip.entityId) : null
+          const initialShipPos = initialShip ? getInterpolatedEntityWorldPosGU(initialShip.entityId) : null
           if (initialShipPos) {
             r.cameraWorldPosGU.set(initialShipPos.x, initialShipPos.y)
             r.applyCameraTransform()
@@ -696,9 +666,6 @@ onUnmounted(() => {
 
   cameraPersister.detach()
 
-  // 停止世界层时间推进游戏循环喵
-  stopGameLoop()
-
   hub.getRenderer()?.dispose()
   hub.setRenderer(null)
   renderer.value = null
@@ -722,16 +689,16 @@ onUnmounted(() => {
     }" @focus="({ entityId }) => {
       const r = hub.getRenderer()
       if (!r) return
-      const p = getEntityWorldPosGU(entityId)
+      const p = getInterpolatedEntityWorldPosGU(entityId)
       if (!p) return
       r.cameraWorldPosGU.set(p.x, p.y)
       r.applyCameraTransform()
     }" />
 
-    <InGameTimeHud :snapshot="hub.lastSnapshot.value" :ws-client="wsClient" />
+    <InGameTimeHud :low-freq-state="hub.lowFreqState.value" :ws-client="wsClient" />
 
     <InGamePlanetWindow v-if="planetWindowOpen && planetEntity" :entity="planetEntity"
-      :snapshot="hub.lastSnapshot.value" @close="closePlanetWindow" />
+      :daily-settlement-state="getLatestDailySettlementState()" @close="closePlanetWindow" />
 
     <InGameSelectionRect :rect="selection.selectionRect.value" />
 
@@ -833,7 +800,7 @@ onUnmounted(() => {
       @focus-entity="(entityId: number) => {
         const r = hub.getRenderer()
         if (!r) return
-        const p = getEntityWorldPosGU(entityId)
+        const p = getInterpolatedEntityWorldPosGU(entityId)
         if (!p) return
         r.cameraWorldPosGU.set(p.x, p.y)
         r.applyCameraTransform()
@@ -860,7 +827,7 @@ onUnmounted(() => {
         if (!selectedShipEntity) return
         const r = hub.getRenderer()
         if (!r) return
-        const p = getEntityWorldPosGU(selectedShipEntity.entityId)
+        const p = getInterpolatedEntityWorldPosGU(selectedShipEntity.entityId)
         if (!p) return
         r.cameraWorldPosGU.set(p.x, p.y)
         r.applyCameraTransform()

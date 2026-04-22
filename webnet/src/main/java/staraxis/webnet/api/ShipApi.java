@@ -28,6 +28,9 @@ import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 import io.undertow.util.PathTemplateMatch;
 import staraxis.webnet.api.ship.ShipCommandApi;
+import staraxis.webnet.core.WsConnectionManager;
+import staraxis.webnet.dto.CommandResultMessageDto;
+import staraxis.webnet.websocket.SnapshotMessageFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -51,9 +54,11 @@ public class ShipApi {
     private static final String SHIP_MODULES_ROOT = "assets/ship/modules";
 
     private final ObjectMapper objectMapper;
+    private final WsConnectionManager connMgr;
 
-    public ShipApi(ObjectMapper objectMapper) {
+    public ShipApi(ObjectMapper objectMapper, WsConnectionManager connMgr) {
         this.objectMapper = objectMapper;
+        this.connMgr = connMgr;
     }
 
     /**
@@ -113,6 +118,7 @@ public class ShipApi {
 
                 // 调用 ShipCommandApi 处理移动命令喵
                 Map<String, Object> result = ShipCommandApi.handleMoveShip(objectMapper, worldId, req);
+                emitCommandResultIfPresent(req, result);
 
                 exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
                 exchange.getResponseSender().send(objectMapper.writeValueAsString(result));
@@ -162,6 +168,7 @@ public class ShipApi {
                 }
 
                 Map<String, Object> result = ShipCommandApi.handleMoveShipCompletion(objectMapper, worldId, req);
+                emitCommandResultIfPresent(req, result);
 
                 exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
                 exchange.getResponseSender().send(objectMapper.writeValueAsString(result));
@@ -185,6 +192,62 @@ public class ShipApi {
     private String getQueryParam(HttpServerExchange exchange, String name) {
         var deque = exchange.getQueryParameters().get(name);
         return deque == null || deque.isEmpty() ? null : deque.getFirst();
+    }
+
+    private void emitCommandResultIfPresent(Map<String, Object> req, Map<String, Object> result) {
+        if (req == null || result == null) {
+            return;
+        }
+
+        String nationId = req.get("nationId") == null ? null : String.valueOf(req.get("nationId"));
+        String clientCommandId = result.get("clientCommandId") == null
+                ? (req.get("clientCommandId") == null ? null : String.valueOf(req.get("clientCommandId")))
+                : String.valueOf(result.get("clientCommandId"));
+        Long entityId = result.get("shipEntityId") instanceof Number n
+                ? n.longValue()
+                : (req.get("shipEntityId") instanceof Number n ? n.longValue() : null);
+        Long simulationTick = result.get("authoritativeTick") instanceof Number n ? n.longValue() : null;
+        Double gameSeconds = result.get("gameSeconds") instanceof Number n ? n.doubleValue() : null;
+        String resultType = result.get("status") == null ? null : String.valueOf(result.get("status"));
+        String reason = result.get("reason") == null ? null : String.valueOf(result.get("reason"));
+        String error = result.get("error") == null ? null : String.valueOf(result.get("error"));
+        Boolean ok = result.get("ok") instanceof Boolean value ? value : null;
+
+        // HTTP submit 的 ok 只表示后端已收到命令，不应在这里擅自提升为 accepted 喵。
+        if ("rejected".equals(resultType) || ok == null || !ok) {
+            resultType = "rejected";
+        }
+
+        if (reason == null || reason.isBlank()) {
+            reason = error;
+        }
+
+        if (nationId == null || nationId.isBlank()
+                || clientCommandId == null || clientCommandId.isBlank()
+                || entityId == null
+                || simulationTick == null
+                || resultType == null || resultType.isBlank()) {
+            return;
+        }
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> correctionData = result.get("correctionData") instanceof Map<?, ?>
+                ? (Map<String, Object>) result.get("correctionData")
+                : null;
+
+        CommandResultMessageDto message = SnapshotMessageFactory.buildCommandResultMessage(
+                clientCommandId,
+                entityId,
+                simulationTick,
+                resultType,
+                gameSeconds == null ? 0.0 : gameSeconds,
+                reason,
+                correctionData);
+
+        try {
+            connMgr.sendTextToNation(nationId, objectMapper.writeValueAsString(message));
+        } catch (Exception ignored) {
+        }
     }
 
     /**

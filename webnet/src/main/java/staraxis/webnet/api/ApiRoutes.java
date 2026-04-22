@@ -88,7 +88,7 @@ public final class ApiRoutes {
         apiHandler.addPrefixPath("/i18n", i18nHandler);
 
         // --- Ship ---
-        ShipApi shipApi = new ShipApi(objectMapper);
+        ShipApi shipApi = new ShipApi(objectMapper, connMgr);
         apiHandler.addPrefixPath("/ship", shipApi.createHandler());
 
         // --- AI Proxy ---

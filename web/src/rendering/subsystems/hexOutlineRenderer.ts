@@ -5,7 +5,7 @@
  * 六边形星区轮廓渲染器。
  *
  * 作用：
- * - 根据快照中的 sectorCenters，构建可见星区的六边形边界线段。
+ * - 根据低频缓存中的 `sectorCenters`（星区中心）构建可见星区的六边形边界线段喵。
  * - 使用 buildHexSegmentPositions 生成线段点集。
  *
  * @usage
@@ -72,7 +72,7 @@ export class HexOutlineRenderer implements WorldRenderSubsystem {
 
         const positions: number[] = []
         const colors: number[] = []
-        const ownerMap = frame.snapshot?.realTimeWorldState?.sectorOwnerNationIdByCoord || {}
+        const ownerMap = frame.sectorOwnerNationIdByCoord
         const selfNationId = frame.visibilityManager?.getCurrentNationId() || null
 
         for (const sector of frame.sectorCenters) {

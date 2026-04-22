@@ -22,7 +22,7 @@
  * @api
  * - props:
  *   - entity: EntitySnapshot（必须是 PLANET）
- *   - snapshot: SnapshotMessage | null（同步快照数据）
+ *   - dailySettlementState: DailySettlementState | null（低频面板数据）
  * - emits:
  *   - close(): 请求关闭窗口
  *
@@ -31,11 +31,11 @@
  * - 拖动使用 Pointer Events，并对窗口位置做屏幕边界钳制。
  */
 import { computed, ref, watch } from 'vue'
-import type { DailySettlementState, EntitySnapshot, SnapshotMessage, SurfaceRegionSnapshot } from '../../../net/snapshotWs'
+import type { DailySettlementState, EntitySnapshot, SurfaceRegionSnapshot } from '../../../net/snapshotWs'
 
 const props = defineProps<{
   entity: EntitySnapshot
-  snapshot: SnapshotMessage | null
+  dailySettlementState: DailySettlementState | null
 }>()
 
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -121,9 +121,7 @@ const planetDetails = computed(() => {
 })
 
 const dailySettlement = computed<DailySettlementState | null>(() => {
-  const s = props.snapshot
-  if (!s || !s.ok || !s.dailySettlementState) return null
-  return s.dailySettlementState
+  return props.dailySettlementState
 })
 
 const surfaceRegions = computed<SurfaceRegionSnapshot[]>(() => {

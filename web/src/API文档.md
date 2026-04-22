@@ -14,7 +14,7 @@
 ### 1.2 前端发送消息（Client -> Server）
 
 #### subscribeSnapshot（订阅快照）
-- **用途**：请求服务端开始推送 `snapshot` 消息喵。
+- **用途**：请求服务端开始推送快照通道消息喵，当前主通道为 `snapshot_high_freq`（高频快照）、`snapshot_low_freq`（低频快照）和 `command_result`（命令结果）喵。
 - **发送**：WS `onopen` 后自动发送喵。
 ```json
 { "type": "subscribeSnapshot" }
@@ -54,14 +54,38 @@
 { "type": "ping" }
 ```
 
-#### snapshot（世界快照）
-- **用途**：渲染与 UI 所需的实时数据与日结算数据喵。
-- **接收位置**：`connectSnapshotWs({ onSnapshot })` 回调喵。
+#### snapshot_high_freq（高频快照）
+- **用途**：只服务实时渲染与实体缓存喵。
+- **接收位置**：`connectSnapshotWs({ onHighFreqSnapshot })` 回调喵。
 - **关键字段**：
-  - `realTimeWorldState.sectorCenters`：当前订阅星区中心点（`q,r,x,y`）喵。
-  - `realTimeWorldState.entities`：当前订阅星区内的实体快照列表（已按 sector 过滤）喵。
+  - `simulationTick`：高频权威 Tick 喵。
+  - `totalGameSecondsExact`：高频连续时间基线喵。
+  - `entities`：当前订阅范围内的高频实体快照喵。
+  - `privateEntitiesByIntelLevel`：私有情报实体分层喵。
 
-`SnapshotMessage`（简化结构）喵：
+#### snapshot_low_freq（低频快照）
+- **用途**：只服务时间 HUD、星区元数据、地表/面板等低频 UI 喵。
+- **接收位置**：`connectSnapshotWs({ onLowFreqSnapshot })` 回调喵。
+- **关键字段**：
+  - `version`：低频状态版本号喵。
+  - `sectorCenters`：当前订阅星区中心点（`q,r,x,y`）喵。
+  - `sectorOwnerNationIdByCoord`：星区归属喵。
+  - `dailySettlementState`：结算/地表等面板数据喵。
+
+#### command_result（命令结果）
+- **用途**：推进命令 UI 状态喵。
+- **接收位置**：`connectSnapshotWs({ onCommandResult })` 回调喵。
+- **关键字段**：
+  - `clientCommandId`：前端命令 ID 喵。
+  - `entityId`：命令目标实体喵。
+  - `resultType`：`submitted/accepted/rejected/completed/corrected` 喵。
+  - `simulationTick`：该结果对应的权威 Tick 喵。
+
+#### snapshot（兼容整包快照）
+- **用途**：旧协议兼容兜底喵，不再是前端主更新链路喵。
+- **接收位置**：`connectSnapshotWs({ onSnapshot })` 回调喵。
+
+`SnapshotMessage`（兼容结构）喵：
 ```json
 {
   "type": "snapshot",

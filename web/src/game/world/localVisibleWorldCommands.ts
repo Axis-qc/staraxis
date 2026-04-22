@@ -4,13 +4,18 @@
  * @description
  * 前端本地可见世界的指令状态机管理喵。
  *
- * 实现“发指令 -> 本地执行 -> 后端验证 -> 对账结束”的完整状态机喵。
- * 核心状态：pending_send → predicting → confirmed/rejected → completed/correcting 喵。
+ * 实现“发指令 -> 等待命令结果消息 -> 后端验证 -> 对账结束”的命令 UI 状态机喵。
+ * 核心约束：HTTP 回包只记录 transport ack（传输确认），真正命令状态只由 `command_result`（命令结果消息）推进喵。
  *
- * 遵循“前端本地模拟与后端权威校验重构计划”中的指令状态机设计要求喵。
+ * 遵循“纯快照缓存与插值渲染重构计划”中的指令状态机设计要求喵。
  */
 
-import type { PendingCommandRecord, PendingCommandStatus, LocalVisibleWorld } from './localVisibleWorldTypes'
+import type {
+  PendingCommandRecord,
+  PendingCommandStatus,
+  CommandTransportStatus,
+  LocalVisibleWorld,
+} from './localVisibleWorldTypes'
 import type { ShipDetails } from '../../net/snapshotWs'
 
 // ==================== 指令结果消息协议 ====================
@@ -22,10 +27,11 @@ import type { ShipDetails } from '../../net/snapshotWs'
  * 用于补充 HTTP 提交回执的不足，提供完整的指令生命周期喵。
  */
 export type CommandResultType =
+  | 'submitted'    // 命令已送达后端接口，但尚未形成权威结论
   | 'accepted'     // 指令已被后端接受并开始执行
   | 'rejected'     // 指令被后端拒绝
   | 'completed'    // 指令执行完成
-  | 'corrected'    // 指令需要纠偏（前端预测与后端权威状态不一致）
+  | 'corrected'    // 指令需要纠偏（前端缓存与后端权威状态不一致）
 
 /**
  * 指令结果消息喵
@@ -42,7 +48,7 @@ export type CommandResultMessage = {
   /** 结果类型喵 */
   resultType: CommandResultType
   /** 结果发生时的权威模拟Tick喵 */
-  authoritativeTick: number
+  simulationTick: number
   /** 结果时间戳（游戏秒数）喵 */
   gameSeconds: number
   /** 拒绝或纠偏原因喵 */
@@ -64,11 +70,10 @@ export type CommandResultMessage = {
  * 定义每个状态允许转移到哪些状态喵。
  */
 const ALLOWED_TRANSITIONS: Record<PendingCommandStatus, PendingCommandStatus[]> = {
-  pending_send: ['predicting', 'rejected'],
-  predicting: ['confirmed', 'rejected', 'correcting', 'completed'],
-  confirmed: ['completed', 'correcting'],
+  pending_send: ['confirmed', 'rejected', 'correcting', 'completed'],
+  confirmed: ['rejected', 'correcting', 'completed'],
   rejected: [], // 拒绝是终态
-  correcting: ['completed'],
+  correcting: ['rejected', 'completed'],
   completed: [] // 完成是终态
 }
 
@@ -120,10 +125,12 @@ export function createPendingCommand(
     commandType,
     issuedAtClientMs: Date.now(),
     status: 'pending_send',
+    transportStatus: 'pending',
+    lastTransportAckAtClientMs: null,
+    transportError: null,
     movementSeed: normalizedMovementSeed,
     lastAuthoritativeAckTick: null,
     rejectionReason: null,
-    completionReportSentAtClientMs: null,
   }
 }
 
@@ -167,6 +174,33 @@ export function updateCommandStatus(
 }
 
 /**
+ * 更新指令传输状态喵
+ *
+ * 该更新只反映 HTTP 送达情况，不改变权威命令状态喵。
+ */
+export function updateCommandTransport(
+  command: PendingCommandRecord,
+  transportStatus: CommandTransportStatus,
+  options: {
+    transportError?: string | null
+    acknowledgedAtClientMs?: number
+  } = {},
+): PendingCommandRecord {
+  const acknowledgedAtClientMs = options.acknowledgedAtClientMs ?? Date.now()
+  const nextTransportError =
+    transportStatus === 'failed'
+      ? options.transportError ?? command.transportError
+      : null
+
+  return {
+    ...command,
+    transportStatus,
+    lastTransportAckAtClientMs: acknowledgedAtClientMs,
+    transportError: nextTransportError,
+  }
+}
+
+/**
  * 处理指令结果消息喵
  *
  * 将后端推送的指令结果消息转换为前端指令状态更新喵。
@@ -180,26 +214,29 @@ export function processCommandResult(
   result: CommandResultMessage
 ): PendingCommandRecord | null {
   switch (result.resultType) {
+    case 'submitted':
+      return updateCommandTransport(command, 'submitted')
+
     case 'accepted':
       return updateCommandStatus(command, 'confirmed', {
-        authoritativeTick: result.authoritativeTick,
+        authoritativeTick: result.simulationTick,
         movementSeed: result.correctionData?.movementCommand ?? command.movementSeed
       })
 
     case 'rejected':
       return updateCommandStatus(command, 'rejected', {
-        authoritativeTick: result.authoritativeTick,
+        authoritativeTick: result.simulationTick,
         rejectionReason: result.reason ?? '未知原因'
       })
 
     case 'completed':
       return updateCommandStatus(command, 'completed', {
-        authoritativeTick: result.authoritativeTick
+        authoritativeTick: result.simulationTick
       })
 
     case 'corrected':
       return updateCommandStatus(command, 'correcting', {
-        authoritativeTick: result.authoritativeTick,
+        authoritativeTick: result.simulationTick,
         movementSeed: result.correctionData?.movementCommand ?? command.movementSeed
       })
 
@@ -242,69 +279,9 @@ export function addPendingCommandToWorld(
 export function removeCommandFromWorld(
   world: LocalVisibleWorld,
   entityId: number,
-  status: 'completed' | 'rejected'
+  _status: 'completed' | 'rejected'
 ): void {
   world.pendingCommandsByEntityId.delete(entityId)
-
-  // 如果是拒绝状态，可能需要触发纠偏喵
-  if (status === 'rejected') {
-    const predictedState = world.predictedShipsById.get(entityId)
-    if (predictedState) {
-      // 标记为纠偏中喵
-      predictedState.isCorrecting = true
-    }
-  }
-}
-
-/**
- * 根据快照更新指令状态喵
- *
- * 分析快照中的 movementCommand 字段，更新对应实体的指令状态喵。
- *
- * @param world 本地可见世界喵
- * @param snapshotTick 快照Tick喵
- * @param entityId 实体ID喵
- * @param movementCommand 移动指令种子喵
- * @returns 是否触发了状态更新喵
- */
-export function updateCommandFromSnapshot(
-  world: LocalVisibleWorld,
-  snapshotTick: number,
-  entityId: number,
-  movementCommand: ShipDetails['movementCommand'] | null
-): boolean {
-  const command = world.pendingCommandsByEntityId.get(entityId)
-  if (!command) {
-    // 没有待确认指令，无需处理喵
-    return false
-  }
-
-  if (movementCommand) {
-    if (movementCommand.clientCommandId && movementCommand.clientCommandId !== command.clientCommandId) {
-      return false
-    }
-    // 快照中包含移动指令，表示后端已接受并正在执行喵
-    if (command.status === 'pending_send' || command.status === 'predicting') {
-      const updated = updateCommandStatus(command, 'confirmed', {
-        authoritativeTick: snapshotTick,
-        movementSeed: command.movementSeed ?? movementCommand
-      })
-      world.pendingCommandsByEntityId.set(entityId, updated)
-      return true
-    }
-  } else {
-    // 快照中没有移动指令喵
-    if (command.status === 'confirmed' || command.status === 'predicting') {
-      // 指令可能已执行完成喵
-      const updated = updateCommandStatus(command, 'completed', {
-        authoritativeTick: snapshotTick
-      })
-      world.pendingCommandsByEntityId.set(entityId, updated)
-      return true
-    }
-  }
-
-  return false
 }
 
 /**
@@ -393,9 +370,7 @@ export function resolveCommandConflict(
  * 指令更新来源喵
  */
 export type CommandUpdateSource =
-  | 'http_response'     // HTTP提交回执
   | 'websocket_result'  // WebSocket结果消息
-  | 'snapshot_state'    // 快照状态
 
 /**
  * 指令更新数据喵
@@ -424,12 +399,8 @@ export type CommandUpdateData = {
 /**
  * 应用带优先级的指令更新喵
  *
- * 优先级规则喵：
- * 1. WebSocket结果消息优先级最高（明确的指令结果）喵
- * 2. 快照状态次之（反映权威世界状态）喵
- * 3. HTTP提交回执优先级最低（仅确认提交）喵
- *
- * 相同来源内，按权威Tick和时间戳排序喵。
+ * 阶段 F 后，真正命令状态只允许由 `websocket_result`（命令结果消息）推进喵。
+ * 同一实体仅按权威 Tick 去重，避免旧结果覆盖新结果喵。
  *
  * @param world 本地可见世界喵
  * @param entityId 实体ID喵
@@ -447,37 +418,22 @@ export function applyCommandUpdateWithPriority(
     return false
   }
 
-  // 计算更新优先级分数喵
-  const priorityScore = (source: CommandUpdateSource): number => {
-    switch (source) {
-      case 'websocket_result': return 3
-      case 'snapshot_state': return 2
-      case 'http_response': return 1
-      default: return 0
-    }
-  }
-
-  // 计算现有指令的优先级（基于最后确认来源）喵
-  const existingPriority = existing.lastAuthoritativeAckTick !== null ? 2 : 1 // 简化逻辑喵
-
-  const updatePriority = priorityScore(update.source)
-
-  // 只有更高优先级的更新才应用喵
-  if (updatePriority < existingPriority) {
+  if (update.source !== 'websocket_result') {
+    console.warn('[CommandPriority] 非命令结果消息的状态推进已被禁用喵')
     return false
   }
 
-  // 相同优先级时，按权威Tick和时间戳判断喵
-  if (updatePriority === existingPriority) {
-    if (update.authoritativeTick !== undefined && update.authoritativeTick !== null) {
-      if (existing.lastAuthoritativeAckTick !== null && update.authoritativeTick <= existing.lastAuthoritativeAckTick) {
-        // 旧权威Tick，忽略喵
-        return false
-      }
-    } else if (update.clientTimestamp <= existing.issuedAtClientMs) {
-      // 旧时间戳，忽略喵
+  if (update.authoritativeTick !== undefined && update.authoritativeTick !== null) {
+    if (
+      existing.lastAuthoritativeAckTick !== null &&
+      update.authoritativeTick <= existing.lastAuthoritativeAckTick
+    ) {
+      // 旧权威Tick，忽略喵
       return false
     }
+  } else if (update.clientTimestamp <= existing.issuedAtClientMs) {
+    // 没有权威Tick时，至少不接受早于创建时刻的旧更新喵
+    return false
   }
 
   // 应用更新喵

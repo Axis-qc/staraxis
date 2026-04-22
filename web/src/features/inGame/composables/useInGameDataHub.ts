@@ -1,8 +1,8 @@
 import { computed, onUnmounted, ref, shallowRef, type Ref } from 'vue'
 import { useAuthStore } from '../../../stores/auth'
-import type { EntitySnapshot, SnapshotMessage } from '../../../net/snapshotWs'
+import type { EntitySnapshot, SnapshotHighFreqMessage } from '../../../net/snapshotWs'
 import type { WorldRenderer as ThreeWorldRenderer } from '../../../rendering/worldRenderManager'
-import { getLocalVisibleWorld } from '../../../game/world'
+import { getLocalVisibleWorld, type LowFreqWorldState } from '../../../game/world'
 
 type Vec2 = { x: number; y: number }
 
@@ -31,30 +31,38 @@ type OverviewUiModel = {
 export type InGameDataHub = {
   setRenderer: (r: ThreeWorldRenderer | null) => void
   getRenderer: () => ThreeWorldRenderer | null
-  setLastSnapshot: (s: SnapshotMessage | null) => void
+  setLastHighFreqSnapshot: (s: SnapshotHighFreqMessage | null) => void
+  syncLowFreqStateFromWorld: () => void
   syncEntitiesFromWorld: () => void
   onCanvasPointerMove: (e: PointerEvent) => void
   entities: Ref<EntitySnapshot[]>
-  lastSnapshot: Ref<SnapshotMessage | null>
+  lastHighFreqSnapshot: Ref<SnapshotHighFreqMessage | null>
+  lowFreqState: Ref<LowFreqWorldState | null>
   overview: OverviewUiModel
   debug: DebugUiModel
   performance: PerformanceUiModel
   setPerformanceTracking: (active: boolean) => void
 }
 
-function buildDebugSnapshotText(snapshot: SnapshotMessage | null) {
-  if (!snapshot || !snapshot.ok || !snapshot.realTimeWorldState) {
+function buildDebugSnapshotText(
+  highFreqSnapshot: SnapshotHighFreqMessage | null,
+  lowFreqState: LowFreqWorldState | null,
+  entityCount: number,
+) {
+  if (!highFreqSnapshot || !highFreqSnapshot.ok) {
     return 'no_snapshot'
   }
 
-  const entityCount = snapshot.realTimeWorldState.entities?.length ?? 0
-  const tickCost = snapshot.tickCostMs == null ? '' : `${snapshot.tickCostMs}ms`
-  return `ok=${snapshot.ok} ${tickCost} entities=${entityCount} ${snapshot.error ?? ''}`.trim()
+  const tickCost = highFreqSnapshot.tickCostMs == null ? '' : `${highFreqSnapshot.tickCostMs}ms`
+  const highFreqTick = highFreqSnapshot.simulationTick
+  const lowFreqVersion = lowFreqState?.version ?? '-'
+  return `hf=${highFreqTick} lf=${lowFreqVersion} ${tickCost} entities=${entityCount} ${highFreqSnapshot.error ?? ''}`.trim()
 }
 
 export function useInGameDataHub() {
   const renderer = ref<ThreeWorldRenderer | null>(null)
-  const lastSnapshot = ref<SnapshotMessage | null>(null)
+  const lastHighFreqSnapshot = ref<SnapshotHighFreqMessage | null>(null)
+  const lowFreqState = ref<LowFreqWorldState | null>(null)
   const entities = shallowRef<EntitySnapshot[]>([])
   const mouseWorldPosGU = ref<Vec2 | null>(null)
   const debugUiTick = ref(0)
@@ -119,6 +127,10 @@ export function useInGameDataHub() {
     entities.value = getLocalVisibleWorld().getAllEntitySnapshots()
   }
 
+  function syncLowFreqStateFromWorld() {
+    lowFreqState.value = getLocalVisibleWorld().getLatestLowFreqState()
+  }
+
   function setRenderer(r: ThreeWorldRenderer | null) {
     renderer.value = r
   }
@@ -127,9 +139,9 @@ export function useInGameDataHub() {
     return renderer.value
   }
 
-  function setLastSnapshot(s: SnapshotMessage | null) {
-    lastSnapshot.value = s
-    if (s?.ok && s.realTimeWorldState) {
+  function setLastHighFreqSnapshot(s: SnapshotHighFreqMessage | null) {
+    lastHighFreqSnapshot.value = s
+    if (s?.ok) {
       syncEntitiesFromWorld()
     }
   }
@@ -152,17 +164,24 @@ export function useInGameDataHub() {
   }
 
   const overviewDayText = computed(() => {
-    const snapshot = lastSnapshot.value
-    if (!snapshot || !snapshot.ok || !snapshot.realTimeWorldState) {
+    const latestLowFreqState = lowFreqState.value
+    if (
+      !latestLowFreqState ||
+      latestLowFreqState.year == null ||
+      latestLowFreqState.month == null ||
+      latestLowFreqState.day == null
+    ) {
       return '-'
     }
 
-    const totalGameSeconds = snapshot.realTimeWorldState.totalGameSeconds ?? 0
-    return `Day ${Math.floor(totalGameSeconds / 86400) + 1}`
+    const year = latestLowFreqState.year
+    const month = String(latestLowFreqState.month).padStart(2, '0')
+    const day = String(latestLowFreqState.day).padStart(2, '0')
+    return `${year}-${month}-${day}`
   })
 
   const overviewTickCostText = computed(() => {
-    const snapshot = lastSnapshot.value
+    const snapshot = lastHighFreqSnapshot.value
     if (!snapshot || !snapshot.ok || snapshot.tickCostMs == null) {
       return '-'
     }
@@ -170,11 +189,11 @@ export function useInGameDataHub() {
   })
 
   const overviewSectorCountText = computed(() => {
-    const snapshot = lastSnapshot.value
-    if (!snapshot || !snapshot.ok) {
+    const latestLowFreqState = lowFreqState.value
+    if (!latestLowFreqState) {
       return '-'
     }
-    return String(snapshot.realTimeWorldState?.sectorCenters?.length ?? '-')
+    return String(latestLowFreqState.sectorCenters.length)
   })
 
   const auth = useAuthStore()
@@ -215,16 +234,20 @@ export function useInGameDataHub() {
     return `(${position.x.toFixed(2)}, ${position.y.toFixed(2)})`
   })
 
-  const debugWorldStateText = computed(() => buildDebugSnapshotText(lastSnapshot.value))
+  const debugWorldStateText = computed(() =>
+    buildDebugSnapshotText(lastHighFreqSnapshot.value, lowFreqState.value, entities.value.length),
+  )
 
   return {
     setRenderer,
     getRenderer,
-    setLastSnapshot,
+    setLastHighFreqSnapshot,
+    syncLowFreqStateFromWorld,
     syncEntitiesFromWorld,
     onCanvasPointerMove,
     entities,
-    lastSnapshot,
+    lastHighFreqSnapshot,
+    lowFreqState,
     overview: {
       dayText: overviewDayText,
       tickCostText: overviewTickCostText,

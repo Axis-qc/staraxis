@@ -14,6 +14,9 @@ import staraxis.webnet.ai.WebAiAutoStarter;
 import staraxis.webnet.auth.AuthStore;
 import staraxis.webnet.command.WebCommandRegistry;
 import staraxis.webnet.core.WsConnectionManager;
+import staraxis.webnet.dto.SnapshotHighFreqMessageDto;
+import staraxis.webnet.dto.SnapshotLowFreqMessageDto;
+import staraxis.webnet.dto.SnapshotMessageDto;
 import staraxis.webnet.game.GameSessions;
 
 import java.util.List;
@@ -80,20 +83,18 @@ public class WebPlayerWebSocketHandler {
 
                     if ("subscribeSnapshot".equals(type)) {
                         connMgr.subscribeSnapshot(channel);
-                        if (!GameSessions.hasRuntime()) {
-                            WebSockets.sendText(
-                                    "{\"type\":\"snapshot\",\"ok\":false,\"error\":\"world_not_created\"}",
-                                    channel,
-                                    null);
-                        } else {
-                            sendSnapshotToChannel(channel);
-                        }
+                        sendSnapshotToChannel(channel);
                         return;
                     }
 
                     if ("unsubscribeSnapshot".equals(type)) {
                         connMgr.unsubscribeSnapshot(channel);
                         WebSockets.sendText("{\"type\":\"unsubscribed\",\"ok\":true}", channel, null);
+                        return;
+                    }
+
+                    if ("requestFullSync".equals(type)) {
+                        sendSnapshotToChannel(channel);
                         return;
                     }
 
@@ -159,6 +160,12 @@ public class WebPlayerWebSocketHandler {
         if (runtime == null) {
             try {
                 WebSockets.sendText(
+                        objectMapper.writeValueAsString(SnapshotHighFreqMessageDto.forError("world_not_created")),
+                        channel, null);
+                WebSockets.sendText(
+                        objectMapper.writeValueAsString(SnapshotLowFreqMessageDto.forError("world_not_created")),
+                        channel, null);
+                WebSockets.sendText(
                         objectMapper.writeValueAsString(SnapshotMessageFactory.buildWorldNotCreatedMessage()),
                         channel, null);
             } catch (Exception e) {
@@ -194,9 +201,14 @@ public class WebPlayerWebSocketHandler {
                         .computeIntelVisibleSectorsForNation(nationId);
             }
 
-            String json = objectMapper.writeValueAsString(
-                    SnapshotMessageFactory.buildSnapshotMessageWithNation(runtime, 0, visible, nationId));
-            WebSockets.sendText(json, channel, null);
+            SnapshotMessageDto snapshotDto = SnapshotMessageFactory.buildSnapshotMessageWithNation(runtime, 0, visible,
+                    nationId);
+            SnapshotHighFreqMessageDto highFreqDto = SnapshotMessageFactory.buildHighFreqSnapshotMessage(snapshotDto);
+            SnapshotLowFreqMessageDto lowFreqDto = SnapshotMessageFactory.buildLowFreqSnapshotMessage(snapshotDto);
+
+            WebSockets.sendText(objectMapper.writeValueAsString(highFreqDto), channel, null);
+            WebSockets.sendText(objectMapper.writeValueAsString(lowFreqDto), channel, null);
+            WebSockets.sendText(objectMapper.writeValueAsString(snapshotDto), channel, null);
         } catch (Exception e) {
             WebSockets.sendText("{\"type\":\"snapshot\",\"ok\":false,\"error\":\"snapshot_build_failed\"}",
                     channel, null);

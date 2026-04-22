@@ -1,5 +1,6 @@
 import * as THREE from 'three'
-import type { SnapshotMessage, EntitySnapshot } from '../net/snapshotWs'
+import type { SnapshotMessage, SnapshotHighFreqMessage, EntitySnapshot } from '../net/snapshotWs'
+import type { LowFreqWorldState } from '../game/world'
 
 import { createInputSystem } from '../input/inputSystem'
 import { BackgroundLayer } from './layers/background'
@@ -31,6 +32,8 @@ export type WorldRenderer = {
     applyCameraTransform: () => void
     getCullingAabbGU: () => { minX: number; maxX: number; minY: number; maxY: number }
     setSelectedEntityIds: (ids: number[]) => void
+    updateFromHighFreqSnapshot: (snapshot: SnapshotHighFreqMessage) => void
+    updateLowFreqState: (state: LowFreqWorldState | null) => void
     updateFromSnapshot: (snapshot: SnapshotMessage) => void
     removeEntitiesFromCache: (entityIds: number[]) => void
     removeSectorsFromCache: (sectorKeys: string[]) => void
@@ -72,9 +75,9 @@ export type WorldRenderContext = {
 }
 
 export type WorldFrameState = {
-    snapshot: SnapshotMessage | null
     entitiesById: Map<number, EntitySnapshot>
     sectorCenters: { q: number; r: number; x: number; y: number }[]
+    sectorOwnerNationIdByCoord: Record<string, string>
     selectedIds: Set<number>
     cullingAabb: { minX: number; maxX: number; minY: number; maxY: number }
     lod: LodState
@@ -157,7 +160,7 @@ export function createWorldRenderManager(
     const inputSystem = createInputSystem(canvas)
 
     let currentCullingAabb = { minX: 0, maxX: 0, minY: 0, maxY: 0 }
-    let latestSnapshot: SnapshotMessage | null = null
+    let latestSectorCenters: LowFreqWorldState['sectorCenters'] = []
 
     const cameraChangeListeners = new Set<() => void>()
     const onCameraChanged = (cb: () => void) => {
@@ -172,7 +175,7 @@ export function createWorldRenderManager(
     const applyCameraTransform = () => {
         cameraSystem.applyTransform(cameraHeight.value, cameraWorldPosGU)
         updateDerivedZoom()
-        const frame = frameBuilder.build(latestSnapshot)
+        const frame = frameBuilder.build()
         currentCullingAabb = frame.cullingAabb
         for (const cb of cameraChangeListeners) cb()
     }
@@ -269,7 +272,7 @@ export function createWorldRenderManager(
         scene,
         camera,
         ctx,
-        () => frameBuilder.build(latestSnapshot),
+        () => frameBuilder.build(),
         inputSystem,
         cameraWorldPosGU,
         zoom,
@@ -283,15 +286,14 @@ export function createWorldRenderManager(
 
     const setSelectedEntityIds = (ids: number[]) => {
         frameBuilder.setSelectedIds(ids)
-        void frameBuilder.build(latestSnapshot)
+        void frameBuilder.build()
     }
 
-    const updateFromSnapshot = (snapshot: SnapshotMessage) => {
-        if (!snapshot.ok || !snapshot.realTimeWorldState) return
-        latestSnapshot = snapshot
+    const updateFromHighFreqSnapshot = (snapshot: SnapshotHighFreqMessage) => {
+        if (!snapshot.ok) return
 
-        const publicEntities = snapshot.realTimeWorldState.entities ?? []
-        const privateTierMap = snapshot.realTimeWorldState.privateEntitiesByIntelLevel ?? {}
+        const publicEntities = snapshot.entities ?? []
+        const privateTierMap = snapshot.privateEntitiesByIntelLevel ?? {}
         const privateEntities = Object.values(privateTierMap).flatMap((arr) => arr ?? [])
 
         const mergedById = new Map<number, EntitySnapshot>()
@@ -305,16 +307,61 @@ export function createWorldRenderManager(
 
         visibilityManager.updateFromSnapshot(
             mergedEntities,
-            snapshot.realTimeWorldState.sectorCenters ?? [],
+            latestSectorCenters,
             Date.now(),
         )
 
-        frameBuilder.updateSectorCenters(snapshot.realTimeWorldState.sectorCenters ?? [])
         frameBuilder.updateEntities(mergedEntities)
-        entityQuery.updateSnapshot(snapshot)
         entityQuery.updateEntities(mergedEntities)
+        void frameBuilder.build()
+    }
 
-        void frameBuilder.build(latestSnapshot)
+    const updateLowFreqState = (state: LowFreqWorldState | null) => {
+        latestSectorCenters = state?.sectorCenters ?? []
+        frameBuilder.replaceSectorCenters(latestSectorCenters)
+        frameBuilder.updateSectorOwnerNationIdByCoord(state?.sectorOwnerNationIdByCoord ?? {})
+        void frameBuilder.build()
+    }
+
+    const updateFromSnapshot = (snapshot: SnapshotMessage) => {
+        if (!snapshot.ok || !snapshot.realTimeWorldState) return
+
+        updateLowFreqState({
+            simulationTick: snapshot.realTimeWorldState.simulationTick,
+            version: snapshot.realTimeWorldState.simulationTick,
+            syncMode: 'full',
+            baseVersion: null,
+            worldRadius: snapshot.realTimeWorldState.worldRadius,
+            worldType: snapshot.realTimeWorldState.worldType ?? null,
+            gameSecondsPerRealSecond: snapshot.realTimeWorldState.gameSecondsPerRealSecond ?? null,
+            timeScale: snapshot.realTimeWorldState.timeScale ?? null,
+            year: snapshot.realTimeWorldState.year ?? null,
+            month: snapshot.realTimeWorldState.month ?? null,
+            day: snapshot.realTimeWorldState.day ?? null,
+            hour: snapshot.realTimeWorldState.hour ?? null,
+            minute: snapshot.realTimeWorldState.minute ?? null,
+            second: snapshot.realTimeWorldState.second ?? null,
+            sectorCenters: snapshot.realTimeWorldState.sectorCenters ?? [],
+            sectorOwnerNationIdByCoord: snapshot.realTimeWorldState.sectorOwnerNationIdByCoord ?? {},
+            dailySettlementState: snapshot.dailySettlementState ?? null,
+            playerNationId: snapshot.playerNationId ?? null,
+            receivedAtClientMs: Date.now(),
+        })
+
+        updateFromHighFreqSnapshot({
+            type: 'snapshot_high_freq',
+            ok: snapshot.ok,
+            error: snapshot.error,
+            tickCostMs: snapshot.tickCostMs,
+            simulationTick: snapshot.realTimeWorldState.simulationTick,
+            totalGameSeconds: snapshot.realTimeWorldState.totalGameSeconds,
+            totalGameSecondsExact: snapshot.realTimeWorldState.totalGameSecondsExact ?? snapshot.realTimeWorldState.totalGameSeconds,
+            deltaGameSeconds: snapshot.realTimeWorldState.deltaGameSeconds,
+            syncMode: 'full',
+            entities: snapshot.realTimeWorldState.entities ?? [],
+            privateEntitiesByIntelLevel: snapshot.realTimeWorldState.privateEntitiesByIntelLevel ?? {},
+            playerNationId: snapshot.playerNationId,
+        })
     }
 
     const removeEntitiesFromCache = (entityIds: number[]) => {
@@ -350,7 +397,7 @@ export function createWorldRenderManager(
 
     const setCurrentNationId = (nationId: string | null) => {
         visibilityManager.setCurrentNationId(nationId)
-        void frameBuilder.build(latestSnapshot)
+        void frameBuilder.build()
     }
 
     const setGridVisible = (visible: boolean) => {
@@ -366,6 +413,8 @@ export function createWorldRenderManager(
         applyCameraTransform,
         getCullingAabbGU: () => currentCullingAabb,
         setSelectedEntityIds,
+        updateFromHighFreqSnapshot,
+        updateLowFreqState,
         updateFromSnapshot,
         removeEntitiesFromCache,
         removeSectorsFromCache,

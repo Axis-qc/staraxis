@@ -7,7 +7,7 @@
  */
 import type { EntitySnapshot, ShipDetails } from '../../../net/snapshotWs'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { getEntityDisplayPosition } from '../../../game/world'
+import { getInterpolatedEntityDisplayPosition } from '../../../game/world'
 
 const props = defineProps<{
   ship: EntitySnapshot | null
@@ -24,7 +24,7 @@ let poseRafId = 0
 
 const estimatedPose = computed(() => {
   void poseTick.value
-  return props.ship ? getEntityDisplayPosition(props.ship.entityId) : null
+  return props.ship ? getInterpolatedEntityDisplayPosition(props.ship.entityId) : null
 })
 
 onMounted(() => {

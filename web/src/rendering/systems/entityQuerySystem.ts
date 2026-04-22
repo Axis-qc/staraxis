@@ -7,35 +7,29 @@
  * 作用：
  * - 查询恒星、行星等实体的世界坐标位置。
  * - 计算行星的实时轨道位置。
- * - 供 SelectionRenderer 和外部 API 使用。
+ * - 供 SelectionRenderer 和外部 API 使用喵。
  *
  * @usage
- * - 传入实体数据和快照信息，返回世界坐标。
+ * - 传入实体数据后返回世界坐标喵。
  */
-import type { EntitySnapshot, PlanetDetails, SnapshotMessage } from '../../net/snapshotWs'
-import { getLocalVisibleWorld } from '@/game/world'
+import type { EntitySnapshot, PlanetDetails } from '../../net/snapshotWs'
+import { getInterpolatedEntityDisplayPosition } from '@/game/world'
+import { defaultGameTimeManager } from '@/game/time/GameTimeManager'
 
 export type EntityQuerySystem = {
     getEntityWorldPosGU: (entityId: number) => { x: number; y: number } | null
-    updateSnapshot: (snapshot: SnapshotMessage | null) => void
     updateEntities: (entities: EntitySnapshot[]) => void
 }
 
 export function createEntityQuerySystem(): EntityQuerySystem {
     const entitiesById = new Map<number, EntitySnapshot>()
-    let lastSnapshot: SnapshotMessage | null = null
-    const world = getLocalVisibleWorld()
-
-    const updateSnapshot = (snapshot: SnapshotMessage | null) => {
-        lastSnapshot = snapshot
-    }
 
     const updateEntities = (entities: EntitySnapshot[]) => {
         entitiesById.clear()
         for (const e of entities) {
             entitiesById.set(e.entityId, e)
         }
-        // 舰船预测状态现在由世界层统一管理，不再需要手动同步喵
+        // 实体缓存由高频快照链路统一刷新喵
     }
 
     const getEntityWorldPosGU = (entityId: number): { x: number; y: number } | null => {
@@ -48,7 +42,7 @@ export function createEntityQuerySystem(): EntityQuerySystem {
         }
 
         if (e.entityType === 'SHIP') {
-            const displayPose = world.getEntityDisplayPosition(e.entityId)
+            const displayPose = getInterpolatedEntityDisplayPosition(e.entityId)
             return displayPose?.position ?? e.posWorldGU ?? null
         }
 
@@ -59,9 +53,8 @@ export function createEntityQuerySystem(): EntityQuerySystem {
             const center = entitiesById.get(details.orbitCenterEntityId)
             if (!center) return null
 
-            const totalDays =
-                (lastSnapshot?.realTimeWorldState?.gameDatetimeDay ?? 0) +
-                (lastSnapshot?.realTimeWorldState?.accGameHoursInDay ?? 0) / 24
+            defaultGameTimeManager.update()
+            const totalDays = defaultGameTimeManager.getCurrentGameSeconds() / 86400
 
             // 计算行星轨道位置
             const meanAnomaly = (Number(details.meanAnomalyDegAtEpoch ?? 0) * Math.PI) / 180
@@ -90,7 +83,6 @@ export function createEntityQuerySystem(): EntityQuerySystem {
 
     return {
         getEntityWorldPosGU,
-        updateSnapshot,
         updateEntities,
     }
 }

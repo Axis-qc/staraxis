@@ -16,11 +16,18 @@ export { LocalVisibleWorldImpl, getLocalVisibleWorld, resetLocalVisibleWorld } f
 // 查询接口喵
 export * from './localVisibleWorldQueries'
 
+// 插值层喵
+export * from './interpolation'
+
 // Vue组合式函数喵
 export { useLocalVisibleWorld, createWorldReactiveWrapper, useEntityPosition } from './useLocalVisibleWorld'
 
-// 时间推进系统喵
-export { LocalVisibleWorldSimulation, getLocalVisibleWorldSimulation, resetLocalVisibleWorldSimulation } from './localVisibleWorldSimulation'
-
 // 快捷导入喵
-export { getEntityDisplayPosition, getEntityWorldPosGU } from './localVisibleWorldQueries'
+export {
+  getEntityDisplayPosition,
+  getInterpolatedEntityDisplayPosition,
+  getEntityWorldPosGU,
+  getInterpolatedEntityWorldPosGU,
+  getInterpolatedEntityHeadingDeg,
+  isInterpolatedEntityMoving,
+} from './localVisibleWorldQueries'

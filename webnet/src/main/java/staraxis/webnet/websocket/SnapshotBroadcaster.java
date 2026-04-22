@@ -6,6 +6,9 @@ import io.undertow.websockets.core.WebSockets;
 import staraxis.game.StarAxisGameRuntime;
 import staraxis.game.world.hex.SectorCoord;
 import staraxis.webnet.core.WsConnectionManager;
+import staraxis.webnet.dto.SnapshotHighFreqMessageDto;
+import staraxis.webnet.dto.SnapshotLowFreqMessageDto;
+import staraxis.webnet.dto.SnapshotMessageDto;
 import staraxis.webnet.game.GameSessions;
 import staraxis.webnet.api.joingame.WorldSavesApi;
 
@@ -32,6 +35,7 @@ public class SnapshotBroadcaster {
     private final Map<String, Long> lastAutoSaveTickByWorldId = new java.util.concurrent.ConcurrentHashMap<>();
     private final Map<String, Boolean> hadSnapshotSubscriberByWorldId = new java.util.concurrent.ConcurrentHashMap<>();
     private final Map<String, Long> lastSnapshotSyncAtMsByWorldId = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, Long> lastLowFreqBroadcastAtMsByWorldId = new java.util.concurrent.ConcurrentHashMap<>();
     private final Map<String, Long> lastBroadcastRevisionByWorldId = new java.util.concurrent.ConcurrentHashMap<>();
 
     public SnapshotBroadcaster(ObjectMapper objectMapper, WsConnectionManager connMgr, AtomicLong lastTickCostMs) {
@@ -71,6 +75,7 @@ public class SnapshotBroadcaster {
                 lastAutoSaveTickByWorldId.remove(activeWorldId);
                 hadSnapshotSubscriberByWorldId.remove(activeWorldId);
                 lastSnapshotSyncAtMsByWorldId.remove(activeWorldId);
+                lastLowFreqBroadcastAtMsByWorldId.remove(activeWorldId);
                 lastBroadcastRevisionByWorldId.remove(activeWorldId);
                 return;
             }
@@ -146,17 +151,32 @@ public class SnapshotBroadcaster {
 
                     // 记录快照生成时间喵
                     long snapshotStartTime = System.nanoTime();
-                    var snapshotDto = SnapshotMessageFactory.buildSnapshotMessageWithNation(runtime,
+                    SnapshotMessageDto snapshotDto = SnapshotMessageFactory.buildSnapshotMessageWithNation(runtime,
                             lastTickCostMs.get(),
                             visible, nationId);
-                    String json = objectMapper.writeValueAsString(snapshotDto);
+                    SnapshotHighFreqMessageDto highFreqDto = SnapshotMessageFactory.buildHighFreqSnapshotMessage(snapshotDto);
+                    boolean shouldSendLowFreq = nowMs
+                            - lastLowFreqBroadcastAtMsByWorldId.getOrDefault(activeWorldId, 0L) >= 1000L;
+                    SnapshotLowFreqMessageDto lowFreqDto = shouldSendLowFreq
+                            ? SnapshotMessageFactory.buildLowFreqSnapshotMessage(snapshotDto)
+                            : null;
+                    String highFreqJson = objectMapper.writeValueAsString(highFreqDto);
+                    String lowFreqJson = lowFreqDto == null ? null : objectMapper.writeValueAsString(lowFreqDto);
+                    String legacyJson = objectMapper.writeValueAsString(snapshotDto);
                     long snapshotBuildTimeMs = (System.nanoTime() - snapshotStartTime) / 1_000_000L;
 
                     // 更新性能监测器中的快照生成时间喵
                     staraxis.game.log.PerformanceMonitor.getInstance().updateLastSnapshotBuildTime(snapshotBuildTimeMs);
 
-                    WebSockets.sendText(json, ch, null);
+                    WebSockets.sendText(highFreqJson, ch, null);
+                    if (lowFreqJson != null) {
+                        WebSockets.sendText(lowFreqJson, ch, null);
+                    }
+                    WebSockets.sendText(legacyJson, ch, null);
                 }
+            }
+            if (nowMs - lastLowFreqBroadcastAtMsByWorldId.getOrDefault(activeWorldId, 0L) >= 1000L) {
+                lastLowFreqBroadcastAtMsByWorldId.put(activeWorldId, nowMs);
             }
         } catch (Exception e) {
             try {

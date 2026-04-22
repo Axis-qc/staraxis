@@ -54,16 +54,6 @@ export class GameTimeManager {
         return this.state;
     }
 
-    advanceByGameSeconds(deltaGameSeconds: number): number {
-        if (!Number.isFinite(deltaGameSeconds) || deltaGameSeconds <= 0) {
-            return 0;
-        }
-
-        this.state.currentGameSeconds += deltaGameSeconds;
-        this.state.snapshotTimestampMs = performance.now();
-        return deltaGameSeconds;
-    }
-
     getCurrentState(): GameTimeState {
         return { ...this.state };
     }

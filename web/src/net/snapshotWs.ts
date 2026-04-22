@@ -1,5 +1,25 @@
 import { wsClient as sharedWsClient } from '../services/ws'
 
+/**
+ * 快照WebSocket协议规则喵：
+ *
+ * 消息类型喵：
+ * 1. 高频快照：type = 'snapshot_high_freq'，用于实时实体状态同步喵。
+ * 2. 低频快照：type = 'snapshot_low_freq'，用于经济/建筑/面板等低频数据喵。
+ * 3. 命令结果：type = 'command_result'，用于命令处理结果通知喵。
+ * 4. 兼容整包快照：type = 'snapshot'，仅保留兜底兼容入口，不再作为前端主链路喵。
+ *
+ * 同步模式喵：
+ * - 全量同步（full）：包含完整状态，用于初始连接或恢复同步喵。
+ * - 增量同步（delta）：仅包含自基线以来的变化，需要客户端有正确的基线状态喵。
+ *
+ * 恢复规则喵：
+ * 1. 客户端重连时，应主动请求全量同步喵。
+ * 2. 客户端收到delta包时，必须检查baseTick/baseVersion与本地最后应用的一致喵。
+ * 3. 如果基线不连续，客户端应丢弃增量包并请求全量重同步喵。
+ * 4. 客户端可主动发送 `{"type":"requestFullSync"}` 请求全量同步喵。
+ */
+
 export type SectorCenter = { q: number; r: number; x: number; y: number }
 
 export type EntityType = 'STAR' | 'PLANET' | 'SYSTEM_BARYCENTER' | 'SHIP' | 'STATION'
@@ -121,10 +141,70 @@ export type SnapshotMessage = {
     dailySettlementState?: DailySettlementState
 }
 
+export type SnapshotHighFreqMessage = {
+    type: 'snapshot_high_freq'
+    ok: boolean
+    error?: string
+    tickCostMs?: number
+    simulationTick: number
+    totalGameSeconds: number
+    totalGameSecondsExact: number
+    deltaGameSeconds: number
+    syncMode: 'full' | 'delta'
+    baseTick?: number
+    entities: EntitySnapshot[]
+    privateEntitiesByIntelLevel?: Record<string, EntitySnapshot[]>
+    playerNationId?: string
+}
+
+export type SnapshotLowFreqMessage = {
+    type: 'snapshot_low_freq'
+    ok: boolean
+    error?: string
+    simulationTick: number
+    version: number
+    syncMode: 'full' | 'delta'
+    baseVersion?: number
+    worldRadius?: number
+    worldType?: string
+    gameSecondsPerRealSecond?: number
+    timeScale?: number
+    year?: number
+    month?: number
+    day?: number
+    hour?: number
+    minute?: number
+    second?: number
+    sectorCenters?: SectorCenter[]
+    sectorOwnerNationIdByCoord?: Record<string, string>
+    dailySettlementState?: DailySettlementState
+    playerNationId?: string
+}
+
+export type CommandResultMessage = {
+    type: 'command_result'
+    clientCommandId: string
+    entityId: number
+    simulationTick: number
+    // submitted 仅表示后端已收到命令，accepted 才表示权威接受喵
+    resultType: 'submitted' | 'accepted' | 'rejected' | 'completed' | 'corrected'
+    gameSeconds: number
+    reason?: string
+    correctionData?: {
+        position: { x: number; y: number }
+        velocity?: { x: number; y: number } | null
+        headingDeg?: number
+        movementCommand?: ShipDetails['movementCommand'] | null
+    }
+}
+
 export type SnapshotWsOptions = {
     reconnectDelayMs?: number
     onStatus?: (s: { connected: boolean }) => void
     onSnapshot?: (snapshot: SnapshotMessage) => void
+    onHighFreqSnapshot?: (snapshot: SnapshotHighFreqMessage) => void
+    onLowFreqSnapshot?: (snapshot: SnapshotLowFreqMessage) => void
+    onCommandResult?: (result: CommandResultMessage) => void
 }
 
 export type SnapshotWsClient = {
@@ -132,6 +212,7 @@ export type SnapshotWsClient = {
     send: (data: any) => void
     updateVisibleSectors: (sectors: { q: number; r: number }[]) => void
     setNationId: (nationId: string) => void
+    requestFullSync: () => void
 }
 
 export function connectSnapshotWs(options: SnapshotWsOptions = {}): SnapshotWsClient {
@@ -151,17 +232,23 @@ export function connectSnapshotWs(options: SnapshotWsOptions = {}): SnapshotWsCl
 
     unsubs.push(sharedWsClient.onStateChange(() => applyStatus()))
 
-    if (options.onSnapshot) {
-        unsubs.push(sharedWsClient.onMessage((text) => {
-            try {
-                const data = JSON.parse(text)
-                if (data?.type === 'snapshot') {
-                    options.onSnapshot?.(data)
-                }
-            } catch {
+    unsubs.push(sharedWsClient.onMessage((text) => {
+        try {
+            const data = JSON.parse(text)
+            const type = data?.type
+
+            if (type === 'snapshot') {
+                options.onSnapshot?.(data)
+            } else if (type === 'snapshot_high_freq') {
+                options.onHighFreqSnapshot?.(data)
+            } else if (type === 'snapshot_low_freq') {
+                options.onLowFreqSnapshot?.(data)
+            } else if (type === 'command_result') {
+                options.onCommandResult?.(data)
             }
-        }))
-    }
+        } catch {
+        }
+    }))
 
     applyStatus()
 
@@ -193,6 +280,9 @@ export function connectSnapshotWs(options: SnapshotWsOptions = {}): SnapshotWsCl
         },
         setNationId: (nationId: string) => {
             sharedWsClient.setNationId(nationId)
+        },
+        requestFullSync: () => {
+            sharedWsClient.sendText(JSON.stringify({ type: 'requestFullSync' }))
         }
     }
 }

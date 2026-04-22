@@ -7,20 +7,21 @@
  * 作用：
  * - 基于屏幕像素计算剔除范围（cullingAabb）。
  * - 使用LOD系统计算各渲染类型的LOD状态。
- * - 整合快照数据、选择状态、时间信息。
+ * - 整合缓存实体、低频元数据、选择状态和渲染时间信息喵。
  *
  * @usage
  * - 每帧调用 buildFrameState() 获取当前帧的完整状态。
  */
 import * as THREE from 'three'
-import type { EntitySnapshot, SnapshotMessage } from '../../net/snapshotWs'
+import type { EntitySnapshot } from '../../net/snapshotWs'
 import { computeLodState, type LodState, type LodOptions } from '../subsystems/lodSystem'
 import type { VisibilityStateManager } from './visibilityState'
+import { defaultGameTimeManager } from '../../game/time/GameTimeManager'
 
 export type FrameState = {
-    snapshot: SnapshotMessage | null
     entitiesById: Map<number, EntitySnapshot>
     sectorCenters: { q: number; r: number; x: number; y: number }[]
+    sectorOwnerNationIdByCoord: Record<string, string>
     selectedIds: Set<number>
     cullingAabb: { minX: number; maxX: number; minY: number; maxY: number }
     lod: LodState
@@ -29,8 +30,9 @@ export type FrameState = {
 }
 
 export type FrameStateBuilder = {
-    build: (snapshot: SnapshotMessage | null) => FrameState
-    updateSectorCenters: (centers: { q: number; r: number; x: number; y: number }[]) => void
+    build: () => FrameState
+    replaceSectorCenters: (centers: { q: number; r: number; x: number; y: number }[]) => void
+    updateSectorOwnerNationIdByCoord: (ownerMap: Record<string, string>) => void
     updateEntities: (entities: EntitySnapshot[]) => void
     removeEntities: (entityIds: number[]) => void
     removeSectors: (sectorKeys: string[]) => void
@@ -47,18 +49,17 @@ export function createFrameStateBuilder(
     getViewSizeGU?: () => { widthGU: number; heightGU: number },
 ): FrameStateBuilder {
     let sectorCenters: { q: number; r: number; x: number; y: number }[] = []
+    let sectorOwnerNationIdByCoord: Record<string, string> = {}
     const entitiesById = new Map<number, EntitySnapshot>()
     let selectedIds = new Set<number>()
     const visibilityMgr = visibilityManager || null
 
-    const updateSectorCenters = (centers: { q: number; r: number; x: number; y: number }[]) => {
-        // 增量更新星区中心喵
-        for (const c of centers) {
-            const existing = sectorCenters.find(sc => sc.q === c.q && sc.r === c.r)
-            if (!existing) {
-                sectorCenters.push(c)
-            }
-        }
+    const replaceSectorCenters = (centers: { q: number; r: number; x: number; y: number }[]) => {
+        sectorCenters = [...centers]
+    }
+
+    const updateSectorOwnerNationIdByCoord = (ownerMap: Record<string, string>) => {
+        sectorOwnerNationIdByCoord = { ...ownerMap }
     }
 
     const updateEntities = (entities: EntitySnapshot[]) => {
@@ -81,13 +82,17 @@ export function createFrameStateBuilder(
     const removeSectors = (keys: string[]) => {
         const keySet = new Set(keys)
         sectorCenters = sectorCenters.filter(sc => !keySet.has(`${sc.q},${sc.r}`))
+        for (const key of keySet) {
+            delete sectorOwnerNationIdByCoord[key]
+        }
     }
 
     const clearAllSectors = () => {
         sectorCenters = []
+        sectorOwnerNationIdByCoord = {}
     }
 
-    const build = (snapshot: SnapshotMessage | null): FrameState => {
+    const build = (): FrameState => {
         // 基于相机投影到 z=0 平面的可见范围计算世界包围盒喵。
         // 使用屏幕宽高的 1.2 倍作为剔除范围喵。
         const CULLING_SCALE = 1.2
@@ -104,17 +109,16 @@ export function createFrameStateBuilder(
             maxY: cameraWorldPosGU.y + (viewHeightGU * CULLING_SCALE) / 2,
         }
 
-        const totalDays =
-            (snapshot?.realTimeWorldState?.gameDatetimeDay ?? 0) +
-            (snapshot?.realTimeWorldState?.accGameHoursInDay ?? 0) / 24
+        defaultGameTimeManager.update()
+        const totalDays = defaultGameTimeManager.getCurrentGameSeconds() / 86400
 
         // 使用LOD系统统一计算所有渲染类型的LOD状态
         const lod = computeLodState(zoom.value, lodOptions)
 
         return {
-            snapshot,
             entitiesById: new Map(entitiesById),
             sectorCenters: [...sectorCenters],
+            sectorOwnerNationIdByCoord: { ...sectorOwnerNationIdByCoord },
             selectedIds: new Set(selectedIds),
             cullingAabb,
             lod,
@@ -125,7 +129,8 @@ export function createFrameStateBuilder(
 
     return {
         build,
-        updateSectorCenters,
+        replaceSectorCenters,
+        updateSectorOwnerNationIdByCoord,
         updateEntities,
         removeEntities,
         removeSectors,

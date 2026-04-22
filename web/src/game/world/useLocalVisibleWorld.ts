@@ -23,7 +23,9 @@ export type UseLocalVisibleWorldReturn = {
   getAllEntitySnapshots: typeof queries.getAllEntitySnapshots
   getEntitySnapshot: typeof queries.getEntitySnapshot
   getEntityDisplayPosition: typeof queries.getEntityDisplayPosition
+  getInterpolatedEntityDisplayPosition: typeof queries.getInterpolatedEntityDisplayPosition
   getEntityWorldPosGU: typeof queries.getEntityWorldPosGU
+  getInterpolatedEntityWorldPosGU: typeof queries.getInterpolatedEntityWorldPosGU
 
   // 快捷查询喵
   getAllShipSnapshots: typeof queries.getAllShipSnapshots
@@ -96,7 +98,9 @@ export function useLocalVisibleWorld(): UseLocalVisibleWorldReturn {
     getAllEntitySnapshots: queries.getAllEntitySnapshots,
     getEntitySnapshot: queries.getEntitySnapshot,
     getEntityDisplayPosition: queries.getEntityDisplayPosition,
+    getInterpolatedEntityDisplayPosition: queries.getInterpolatedEntityDisplayPosition,
     getEntityWorldPosGU: queries.getEntityWorldPosGU,
+    getInterpolatedEntityWorldPosGU: queries.getInterpolatedEntityWorldPosGU,
 
     // 快捷查询喵
     getAllShipSnapshots: queries.getAllShipSnapshots,
@@ -162,9 +166,9 @@ export function createWorldReactiveWrapper() {
  * @returns 实体世界坐标喵
  */
 export function useEntityPosition(entityId: number) {
-  const position = ref(queries.getEntityWorldPosGU(entityId))
-  const heading = ref(queries.getEntityHeadingDeg(entityId))
-  const isMoving = ref(queries.isEntityMoving(entityId))
+  const position = ref(queries.getInterpolatedEntityWorldPosGU(entityId))
+  const heading = ref(queries.getInterpolatedEntityHeadingDeg(entityId))
+  const isMoving = ref(queries.isInterpolatedEntityMoving(entityId))
 
   // TODO: 监听实体位置变化的机制
 

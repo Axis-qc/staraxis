@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import type { WorldRenderContext, WorldFrameState } from '../../../worldRenderManager'
 import { shouldRender } from '@/rendering/subsystems/lodSystem'
-import { getLocalVisibleWorld } from '@/game/world'
+import { getInterpolatedEntityDisplayPosition } from '@/game/world'
 
 const INITIAL_SPAWN_SHIP_FLAG = 'INITIAL_SPAWN_SHIP'
 
@@ -62,7 +62,6 @@ export class LayerShipRenderer {
 
   update(ctx: WorldRenderContext, frame: WorldFrameState): void {
     const { entitiesById, selectedIds, cullingAabb } = frame
-    const world = getLocalVisibleWorld()
     const visibleIds = new Set<number>()
 
     const shipLod: import('@/rendering/subsystems/lodSystem').EntityLodState = {
@@ -87,7 +86,7 @@ export class LayerShipRenderer {
         continue
       }
 
-      const displayPose = world.getEntityDisplayPosition(entity.entityId)
+      const displayPose = getInterpolatedEntityDisplayPosition(entity.entityId)
       const shipPos = displayPose?.position ?? entity.posWorldGU
       if (!shipPos) {
         continue

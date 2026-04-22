@@ -5,9 +5,12 @@ import staraxis.game.state.RealTimeWorldState;
 import staraxis.game.state.DailySettlementState;
 import staraxis.game.world.Vec2d;
 import staraxis.game.world.hex.SectorCoord;
+import staraxis.webnet.dto.CommandResultMessageDto;
 import staraxis.webnet.dto.DailySettlementStateDto;
 import staraxis.webnet.dto.RealTimeStateDto;
 import staraxis.webnet.dto.SectorCenterDto;
+import staraxis.webnet.dto.SnapshotHighFreqMessageDto;
+import staraxis.webnet.dto.SnapshotLowFreqMessageDto;
 import staraxis.webnet.dto.SnapshotMessageDto;
 import staraxis.webnet.dto.WorldSummaryDto;
 import staraxis.game.entity.EntityType;
@@ -28,6 +31,9 @@ import java.util.stream.Collectors;
  * 负责将 game 模块的权威状态快照转换为 webnet 模块的 DTO 并打包为消息喵。
  */
 public final class SnapshotMessageFactory {
+
+    public static final String SNAPSHOT_SYNC_MODE_FULL = "full";
+    public static final String SNAPSHOT_SYNC_MODE_DELTA = "delta";
 
     private SnapshotMessageFactory() {
     }
@@ -366,6 +372,71 @@ public final class SnapshotMessageFactory {
         }
 
         return SnapshotMessageDto.forSuccess(tickCostMs, realTime, daily, nationId);
+    }
+
+    public static SnapshotHighFreqMessageDto buildHighFreqSnapshotMessage(SnapshotMessageDto legacySnapshot) {
+        if (legacySnapshot == null || !legacySnapshot.ok || legacySnapshot.realTimeWorldState == null) {
+            String error = legacySnapshot == null ? "snapshot_missing" : legacySnapshot.error;
+            return SnapshotHighFreqMessageDto.forError(error == null ? "snapshot_invalid" : error);
+        }
+
+        RealTimeStateDto rt = legacySnapshot.realTimeWorldState;
+        return SnapshotHighFreqMessageDto.forFull(
+                legacySnapshot.tickCostMs,
+                rt.simulationTick,
+                rt.totalGameSeconds,
+                rt.totalGameSecondsExact,
+                rt.deltaGameSeconds,
+                rt.entities,
+                rt.privateEntitiesByIntelLevel,
+                legacySnapshot.playerNationId);
+    }
+
+    public static SnapshotLowFreqMessageDto buildLowFreqSnapshotMessage(SnapshotMessageDto legacySnapshot) {
+        if (legacySnapshot == null || !legacySnapshot.ok || legacySnapshot.realTimeWorldState == null) {
+            String error = legacySnapshot == null ? "snapshot_missing" : legacySnapshot.error;
+            return SnapshotLowFreqMessageDto.forError(error == null ? "snapshot_invalid" : error);
+        }
+
+        RealTimeStateDto rt = legacySnapshot.realTimeWorldState;
+        long version = legacySnapshot.dailySettlementState != null
+                ? legacySnapshot.dailySettlementState.settledAtGameSeconds
+                : rt.simulationTick;
+        return SnapshotLowFreqMessageDto.forFull(
+                rt.simulationTick,
+                version,
+                rt.worldRadius,
+                rt.worldType,
+                rt.gameSecondsPerRealSecond,
+                rt.timeScale,
+                rt.year,
+                rt.month,
+                rt.day,
+                rt.hour,
+                rt.minute,
+                rt.second,
+                rt.sectorCenters,
+                rt.sectorOwnerNationIdByCoord,
+                legacySnapshot.dailySettlementState,
+                legacySnapshot.playerNationId);
+    }
+
+    public static CommandResultMessageDto buildCommandResultMessage(
+            String clientCommandId,
+            long entityId,
+            long simulationTick,
+            String resultType,
+            double gameSeconds,
+            String reason,
+            Map<String, Object> correctionData) {
+        return new CommandResultMessageDto(
+                clientCommandId,
+                entityId,
+                simulationTick,
+                resultType,
+                gameSeconds,
+                reason,
+                correctionData);
     }
 
     /**
