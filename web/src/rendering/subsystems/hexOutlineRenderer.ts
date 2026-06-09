@@ -81,7 +81,10 @@ export class HexOutlineRenderer implements WorldRenderSubsystem {
             const sectorKey = `${sector.q},${sector.r}`
             const ownerId = ownerMap[sectorKey] ?? null
             const color = new THREE.Color(this.getNationColor(ownerId, selfNationId))
-            const hexSegments = buildHexSegmentPositions([{ x: sector.x, y: sector.y }])
+            // 星区顶点使用相机相对坐标，避免 float32 精度问题喵
+            const relX = sector.x - ctx.cameraWorldPosGU.x
+            const relY = sector.y - ctx.cameraWorldPosGU.y
+            const hexSegments = buildHexSegmentPositions([{ x: relX, y: relY }])
 
             for (let i = 0; i < hexSegments.length; i += 3) {
                 positions.push(hexSegments[i] ?? 0, hexSegments[i + 1] ?? 0, hexSegments[i + 2] ?? 0)

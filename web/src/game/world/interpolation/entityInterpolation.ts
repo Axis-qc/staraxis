@@ -44,45 +44,41 @@ export function sampleInterpolatedEntityDisplayPosition(params: {
     ? buildAuthoritativeDisplayPosition(params.fallbackEntity, 'fallback')
     : null
 
-  const previousEntity = params.window.previousFrame
-    ? getEntityFromFrame(params.window.previousFrame, params.entityId)
-    : null
-  const nextEntity = params.window.nextFrame
-    ? getEntityFromFrame(params.window.nextFrame, params.entityId)
+  const currentEntity = getEntityFromFrame(params.window.currentSnapshot, params.entityId)
+  const nextEntity = params.window.nextSnapshotBuffer
+    ? getEntityFromFrame(params.window.nextSnapshotBuffer, params.entityId)
     : null
 
   if (params.window.didResetWindow) {
-    return nextEntity
-      ? buildAuthoritativeDisplayPosition(nextEntity, 'snapped')
-      : previousEntity
-        ? buildAuthoritativeDisplayPosition(previousEntity, 'snapped')
-        : fallbackPose
+    return currentEntity
+      ? buildAuthoritativeDisplayPosition(currentEntity, 'snapped')
+      : fallbackPose
   }
 
-  if (params.window.mode === 'interpolate' && previousEntity && nextEntity) {
+  if (params.window.mode === 'interpolate' && currentEntity && nextEntity) {
     return interpolateEntityStates(
-      previousEntity,
+      currentEntity,
+      params.window.currentSnapshot,
       nextEntity,
-      params.window.previousFrame,
-      params.window.nextFrame,
-      params.window.targetGameSeconds,
+      params.window.nextSnapshotBuffer,
+      params.window.renderAlpha,
       params.teleportThresholdGU,
     )
   }
 
-  if (params.window.mode === 'extrapolate' && previousEntity && params.window.previousFrame) {
+  if (params.window.mode === 'extrapolate' && currentEntity) {
     return extrapolateEntityState(
-      previousEntity,
-      params.window.previousFrame,
-      params.window.targetGameSeconds,
+      currentEntity,
+      params.window.currentSnapshot,
+      params.window.renderGameSeconds,
     )
   }
 
+  if (currentEntity) {
+    return buildAuthoritativeDisplayPosition(currentEntity, 'authoritative')
+  }
   if (nextEntity) {
     return buildAuthoritativeDisplayPosition(nextEntity, 'authoritative')
-  }
-  if (previousEntity) {
-    return buildAuthoritativeDisplayPosition(previousEntity, 'authoritative')
   }
   return fallbackPose
 }
@@ -101,46 +97,158 @@ function getEntityFromFrame(
  * 对两个权威状态做位置和朝向插值喵。
  */
 function interpolateEntityStates(
-  previousEntity: EntitySnapshot,
+  currentEntity: EntitySnapshot,
+  currentFrame: HighFreqSnapshotFrame,
   nextEntity: EntitySnapshot,
-  previousFrame: HighFreqSnapshotFrame,
   nextFrame: HighFreqSnapshotFrame,
-  targetGameSeconds: number,
+  renderAlpha: number,
   teleportThresholdGU: number,
 ): EntityDisplayPosition {
-  const previousState = extractEntityMotionState(previousEntity)
+  const currentState = extractEntityMotionState(currentEntity)
   const nextState = extractEntityMotionState(nextEntity)
-  const distance = getDistance(previousState.position, nextState.position)
+  const distance = getDistance(currentState.position, nextState.position)
 
   if (distance > teleportThresholdGU) {
     return buildDisplayPosition(nextState, 'snapped')
   }
 
-  const totalDeltaSeconds = nextFrame.totalGameSecondsExact - previousFrame.totalGameSecondsExact
-  if (!Number.isFinite(totalDeltaSeconds) || totalDeltaSeconds <= 0) {
-    return buildDisplayPosition(nextState, 'snapped')
-  }
-
-  const t = clamp01(
-    (targetGameSeconds - previousFrame.totalGameSecondsExact) / totalDeltaSeconds,
+  const t = clamp01(renderAlpha)
+  const frameDeltaGameSeconds = Math.max(
+    0,
+    nextFrame.totalGameSecondsExact - currentFrame.totalGameSecondsExact,
   )
 
   return buildDisplayPosition(
     {
-      position: {
-        x: lerp(previousState.position.x, nextState.position.x, t),
-        y: lerp(previousState.position.y, nextState.position.y, t),
-      },
-      velocity: lerpVec2(previousState.velocity, nextState.velocity, t),
-      headingDeg: lerpAngleDeg(previousState.headingDeg, nextState.headingDeg, t),
-      isMoving: t < 0.5 ? previousState.isMoving : nextState.isMoving,
+      // 使用快照里的速度向量做受限 Hermite 插值喵，
+      // 这样能让逻辑段边界的速度变化更连续喵。
+      // 同时继续做单调约束喵，避免之前样条过冲造成的回弹喵。
+      position: interpolatePositionWithVelocity(
+        currentState,
+        nextState,
+        frameDeltaGameSeconds,
+        t,
+      ),
+      velocity: lerpVec2(currentState.velocity, nextState.velocity, t),
+      headingDeg: lerpAngleDeg(currentState.headingDeg, nextState.headingDeg, t),
+      isMoving: t < 0.5 ? currentState.isMoving : nextState.isMoving,
       movementTarget:
         t < 0.5
-          ? cloneVec2(previousState.movementTarget ?? nextState.movementTarget)
-          : cloneVec2(nextState.movementTarget ?? previousState.movementTarget),
+          ? cloneVec2(currentState.movementTarget ?? nextState.movementTarget)
+          : cloneVec2(nextState.movementTarget ?? currentState.movementTarget),
     },
     'interpolated',
   )
+}
+
+/**
+ * 使用前后快照速度做受限位置插值喵。
+ *
+ * 这里仍然要求同一逻辑段内的每个坐标分量保持单调喵，
+ * 不能因为切线太大导致渲染帧在中间“回头”喵。
+ */
+function interpolatePositionWithVelocity(
+  currentState: EntityMotionState,
+  nextState: EntityMotionState,
+  frameDeltaGameSeconds: number,
+  t: number,
+): { x: number; y: number } {
+  if (
+    frameDeltaGameSeconds <= 0.000001
+    || !currentState.velocity
+    || !nextState.velocity
+  ) {
+    return {
+      x: lerp(currentState.position.x, nextState.position.x, t),
+      y: lerp(currentState.position.y, nextState.position.y, t),
+    }
+  }
+
+  return {
+    x: interpolateMonotoneHermiteAxis(
+      currentState.position.x,
+      nextState.position.x,
+      currentState.velocity.x * frameDeltaGameSeconds,
+      nextState.velocity.x * frameDeltaGameSeconds,
+      t,
+    ),
+    y: interpolateMonotoneHermiteAxis(
+      currentState.position.y,
+      nextState.position.y,
+      currentState.velocity.y * frameDeltaGameSeconds,
+      nextState.velocity.y * frameDeltaGameSeconds,
+      t,
+    ),
+  }
+}
+
+/**
+ * 单轴受限 Hermite 插值喵。
+ *
+ * 参考单调三次插值的切线限制喵：
+ * - 端点切线若与段方向相反，则直接压到 0 喵。
+ * - 两端切线总量若过大，则整体缩放到 `3 * 段位移` 以内喵。
+ * 这样可以保住速度连续感喵，同时尽量避免过冲回弹喵。
+ */
+function interpolateMonotoneHermiteAxis(
+  from: number,
+  to: number,
+  tangentFrom: number,
+  tangentTo: number,
+  t: number,
+): number {
+  const delta = to - from
+  if (Math.abs(delta) <= 0.000001) {
+    return lerp(from, to, t)
+  }
+
+  let m0 = sanitizeTangentForDelta(tangentFrom, delta)
+  let m1 = sanitizeTangentForDelta(tangentTo, delta)
+
+  const maxCombinedTangent = Math.abs(delta) * 3
+  const combinedMagnitude = Math.abs(m0) + Math.abs(m1)
+  if (combinedMagnitude > maxCombinedTangent && combinedMagnitude > 0.000001) {
+    const scale = maxCombinedTangent / combinedMagnitude
+    m0 *= scale
+    m1 *= scale
+  }
+
+  return hermite(from, to, m0, m1, t)
+}
+
+/**
+ * 将与段方向相反的切线压到 0 喵。
+ */
+function sanitizeTangentForDelta(tangent: number, delta: number): number {
+  if (!Number.isFinite(tangent)) {
+    return 0
+  }
+  if (delta > 0 && tangent < 0) {
+    return 0
+  }
+  if (delta < 0 && tangent > 0) {
+    return 0
+  }
+  return tangent
+}
+
+/**
+ * 三次 Hermite 基函数喵。
+ */
+function hermite(
+  from: number,
+  to: number,
+  tangentFrom: number,
+  tangentTo: number,
+  t: number,
+): number {
+  const t2 = t * t
+  const t3 = t2 * t
+  const h00 = 2 * t3 - 3 * t2 + 1
+  const h10 = t3 - 2 * t2 + t
+  const h01 = -2 * t3 + 3 * t2
+  const h11 = t3 - t2
+  return h00 * from + h10 * tangentFrom + h01 * to + h11 * tangentTo
 }
 
 /**
@@ -167,7 +275,10 @@ function extrapolateEntityState(
     {
       position: nextPosition,
       velocity: cloneVec2(baseState.velocity),
-      headingDeg: getHeadingFromVelocity(baseState.velocity, baseState.headingDeg),
+      // 外推阶段只能继续推进位置喵，
+      // 朝向必须保持后端权威快照里的旋转结果喵，
+      // 不能在前端擅自把舰船朝向掰成速度方向喵。
+      headingDeg: baseState.headingDeg,
       isMoving: baseState.isMoving,
       movementTarget: cloneVec2(baseState.movementTarget),
     },
@@ -323,6 +434,7 @@ function cloneVec2(
     y: Number(value.y),
   }
 }
+
 
 /**
  * 安全地读取数值喵。

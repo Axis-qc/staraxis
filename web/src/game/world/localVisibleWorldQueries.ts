@@ -8,8 +8,17 @@
  * 所有UI、选择、聚焦、面板等模块都应通过此模块查询实体状态喵。
  */
 
-import { getLocalVisibleWorld } from './localVisibleWorld'
-import type { EntityDisplayPosition } from './localVisibleWorldTypes'
+import {
+  beginLocalVisibleWorldRenderFrame,
+  getLocalVisibleWorld,
+  recordLocalVisibleWorldRenderedEntityPose,
+} from './localVisibleWorld'
+import type {
+  EntityDisplayPosition,
+  InterpolationDebugState,
+  EntityInterpolationDebugState,
+  EntityInterpolationCaptureState,
+} from './localVisibleWorldTypes'
 import type { DailySettlementState, EntitySnapshot, SectorCenter } from '../../net/snapshotWs'
 
 /**
@@ -94,6 +103,64 @@ export function getInterpolatedEntityDisplayPositions(
   }
 
   return result
+}
+
+/**
+ * 获取当前双逻辑帧插值调试状态喵。
+ */
+export function getInterpolationDebugState(): InterpolationDebugState | null {
+  const world = getLocalVisibleWorld()
+  return world.getInterpolationDebugState()
+}
+
+/**
+ * 获取指定实体当前渲染帧的插值调试状态喵。
+ */
+export function getEntityInterpolationDebugState(
+  entityId: number,
+): EntityInterpolationDebugState | null {
+  const world = getLocalVisibleWorld()
+  return world.getEntityInterpolationDebugState(entityId)
+}
+
+/**
+ * 启动指定实体的连续渲染帧捕获喵。
+ */
+export function startEntityInterpolationCapture(entityId: number, frameCount = 30): void {
+  const world = getLocalVisibleWorld()
+  world.startEntityInterpolationCapture(entityId, frameCount)
+}
+
+/**
+ * 获取当前实体插值捕获状态喵。
+ */
+export function getEntityInterpolationCaptureState(): EntityInterpolationCaptureState {
+  const world = getLocalVisibleWorld()
+  return world.getEntityInterpolationCaptureState()
+}
+
+/**
+ * 告知本地可见世界开始一个新的渲染帧喵。
+ *
+ * 这样插值层就能和浏览器 `RAF`（渲染帧回调）严格对齐喵。
+ */
+export function beginRenderFrame(renderTimestampMs: number): void {
+  beginLocalVisibleWorldRenderFrame(renderTimestampMs)
+}
+
+/**
+ * 记录渲染器最终应用到网格的姿态喵。
+ */
+export function recordRenderedEntityPose(
+  entityId: number,
+  renderedMeshPosition: { x: number; y: number },
+  renderedMeshHeadingDeg: number,
+): void {
+  recordLocalVisibleWorldRenderedEntityPose(
+    entityId,
+    renderedMeshPosition,
+    renderedMeshHeadingDeg,
+  )
 }
 
 /**

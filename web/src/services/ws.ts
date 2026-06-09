@@ -44,6 +44,8 @@ export type WsClient = {
     disconnect: () => void
     sendText: (text: string) => void
     updateVisibleSectors: (sectors: { q: number; r: number }[]) => void
+    updateInterestEntities: (entityIds: number[]) => void
+    startSnapshotTickTrace: (durationMs: number) => void
     setNationId: (nationId: string) => void
     subscribeSnapshot: () => void
     unsubscribeSnapshot: () => void
@@ -55,13 +57,34 @@ export type WsClient = {
 function createWsClient(path: string = '/ws'): WsClient {
     let ws: WebSocket | null = null
     let state: WsState = 'disconnected'
+    let reconnectTimerId = 0
+    let shouldReconnect = true
     const stateListeners = new Set<(s: WsState) => void>()
     const msgListeners = new Set<(m: string) => void>()
     const errListeners = new Set<(e: string) => void>()
+    const RECONNECT_DELAY_MS = 1500
 
     function notifyState(s: WsState) {
         state = s
         for (const cb of stateListeners) cb(s)
+    }
+
+    function clearReconnectTimer() {
+        if (reconnectTimerId) {
+            window.clearTimeout(reconnectTimerId)
+            reconnectTimerId = 0
+        }
+    }
+
+    function scheduleReconnect() {
+        if (!shouldReconnect || reconnectTimerId || state === 'connected' || state === 'connecting') {
+            return
+        }
+
+        reconnectTimerId = window.setTimeout(() => {
+            reconnectTimerId = 0
+            connect()
+        }, RECONNECT_DELAY_MS)
     }
 
     function wsUrl(): string {
@@ -73,10 +96,13 @@ function createWsClient(path: string = '/ws'): WsClient {
 
     function connect() {
         if (state === 'connecting' || state === 'connected') return
+        shouldReconnect = true
+        clearReconnectTimer()
         notifyState('connecting')
         try {
             ws = new WebSocket(wsUrl())
             ws.onopen = () => {
+                clearReconnectTimer()
                 notifyState('connected')
                 // 连接成功后自动发送订阅快照请求喵
             }
@@ -107,6 +133,7 @@ function createWsClient(path: string = '/ws'): WsClient {
                             }
                         }, 100)
 
+                        shouldReconnect = false
                         disconnect()
                         return
                     }
@@ -119,19 +146,24 @@ function createWsClient(path: string = '/ws'): WsClient {
             ws.onerror = () => {
                 notifyState('error')
                 for (const cb of errListeners) cb('WebSocket error')
+                scheduleReconnect()
             }
             ws.onclose = () => {
                 ws = null
                 notifyState('disconnected')
+                scheduleReconnect()
             }
         } catch (e) {
             ws = null
             notifyState('error')
             for (const cb of errListeners) cb((e as Error).message)
+            scheduleReconnect()
         }
     }
 
     function disconnect() {
+        shouldReconnect = false
+        clearReconnectTimer()
         try {
             ws?.close()
         } catch {
@@ -167,6 +199,20 @@ function createWsClient(path: string = '/ws'): WsClient {
     }
 
     /**
+     * 更新当前快照订阅连接的兴趣实体集合喵。
+     */
+    function updateInterestEntities(entityIds: number[]) {
+        sendText(JSON.stringify({ type: 'updateInterestEntities', entityIds }))
+    }
+
+    /**
+     * 请求前后端同时开始一段限定时长的快照 Tick 对时录制喵。
+     */
+    function startSnapshotTickTrace(durationMs: number) {
+        sendText(JSON.stringify({ type: 'startSnapshotTickTrace', durationMs }))
+    }
+
+    /**
      * 设置玩家所属国家 ID 喵
      */
     function setNationId(nationId: string) {
@@ -180,6 +226,8 @@ function createWsClient(path: string = '/ws'): WsClient {
         disconnect,
         sendText,
         updateVisibleSectors,
+        updateInterestEntities,
+        startSnapshotTickTrace,
         setNationId,
         subscribeSnapshot,
         unsubscribeSnapshot,

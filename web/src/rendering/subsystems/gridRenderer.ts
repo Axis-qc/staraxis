@@ -65,6 +65,7 @@ export class GridRenderer implements WorldRenderSubsystem {
         const zoom = ctx.zoom.value
         const { widthGU: viewWidthGU, heightGU: viewHeightGU } = ctx.getViewSizeGU()
 
+        // 计算可见范围的世界坐标（用于确定哪些网格线可见）喵
         const viewMinX = ctx.cameraWorldPosGU.x - viewWidthGU / 2
         const viewMaxX = ctx.cameraWorldPosGU.x + viewWidthGU / 2
         const viewMinY = ctx.cameraWorldPosGU.y - viewHeightGU / 2
@@ -83,16 +84,23 @@ export class GridRenderer implements WorldRenderSubsystem {
 
         const vertices: number[] = []
 
+        // 世界坐标计算网格线位置，然后转为相机相对坐标写入 float32 喵
         const startX = Math.floor(viewMinX / stepGU) * stepGU
         const endX = Math.ceil(viewMaxX / stepGU) * stepGU
+        const relMinY = viewMinY - ctx.cameraWorldPosGU.y
+        const relMaxY = viewMaxY - ctx.cameraWorldPosGU.y
         for (let x = startX; x <= endX; x += stepGU) {
-            vertices.push(x, viewMinY, 0, x, viewMaxY, 0)
+            const rx = x - ctx.cameraWorldPosGU.x
+            vertices.push(rx, relMinY, 0, rx, relMaxY, 0)
         }
 
         const startY = Math.floor(viewMinY / stepGU) * stepGU
         const endY = Math.ceil(viewMaxY / stepGU) * stepGU
+        const relMinX = viewMinX - ctx.cameraWorldPosGU.x
+        const relMaxX = viewMaxX - ctx.cameraWorldPosGU.x
         for (let y = startY; y <= endY; y += stepGU) {
-            vertices.push(viewMinX, y, 0, viewMaxX, y, 0)
+            const ry = y - ctx.cameraWorldPosGU.y
+            vertices.push(relMinX, ry, 0, relMaxX, ry, 0)
         }
 
         this.geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))

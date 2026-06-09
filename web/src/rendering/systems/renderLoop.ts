@@ -19,10 +19,13 @@ import type { WorldRenderContext } from '../worldRenderManager'
 import type { FrameState } from './frameStateBuilder'
 import type { InputSystem } from '../../input/inputSystem'
 import type { LayerManager } from '../layers'
+import { beginRenderFrame } from '@/game/world'
 
 export type RenderLoopOptions = {
     keyboardPanSpeed?: number
     layerManager?: LayerManager
+    /** 每帧 layerManager.updateAll 之后调用的子系统回调喵 */
+    onFrameUpdate?: (ctx: WorldRenderContext, frame: FrameState) => void
 }
 
 export type RenderLoop = {
@@ -48,10 +51,11 @@ export function createRenderLoop(
     let rafId = 0
     let isRunning = false
 
-    const tick = () => {
+    const tick = (timestampMs: number) => {
         if (!isRunning) return
 
         rafId = requestAnimationFrame(tick)
+        beginRenderFrame(timestampMs)
 
         // 处理键盘持续平移（WASD/方向键）
         const inputState = inputSystem.getState()
@@ -83,6 +87,11 @@ export function createRenderLoop(
 
         if (layerManager) {
             layerManager.updateAll(ctx, frame)
+        }
+
+        // 更新遗留子系统（网格、六边形轮廓等）喵
+        if (options.onFrameUpdate) {
+            options.onFrameUpdate(ctx, frame)
         }
 
         // 渲染场景

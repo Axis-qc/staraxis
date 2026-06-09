@@ -12,6 +12,9 @@ import type {
   LowFreqWorldState,
   WorldSyncResult,
   EntityDisplayPosition,
+  InterpolationDebugState,
+  EntityInterpolationDebugState,
+  EntityInterpolationCaptureState,
   PendingCommandRecord,
   PendingCommandStatus,
   CommandTransportStatus,
@@ -35,6 +38,7 @@ import {
   DEFAULT_SNAPSHOT_INTERPOLATION_CONFIG,
   buildAuthoritativeDisplayPosition,
   sampleInterpolatedEntityDisplayPosition,
+  type SnapshotInterpolationWindow,
 } from './interpolation'
 
 type MoveSeed = NonNullable<ShipDetails['movementCommand']>
@@ -44,6 +48,17 @@ const ENTITY_RETENTION_MS = 5_000
 export class LocalVisibleWorldImpl {
   private readonly state: LocalVisibleWorld
   private readonly interpolationBuffer = new SnapshotInterpolationBuffer()
+  private activeRenderFrameTimestampMs: number | null = null
+  private lastRenderFrameTimestampMs: number | null = null
+  private activeRenderFrameDeltaMs = 0
+  private activeRenderFrameWindow: SnapshotInterpolationWindow | null = null
+  private activeRenderFrameDebugState: InterpolationDebugState | null = null
+  private readonly activeRenderFrameDisplayPositionsByEntityId = new Map<number, EntityDisplayPosition | null>()
+  private readonly lastPresentedDisplayPositionsByEntityId = new Map<number, EntityDisplayPosition>()
+  private readonly entityInterpolationDebugById = new Map<number, EntityInterpolationDebugState>()
+  private captureEntityId: number | null = null
+  private captureRemainingFrames = 0
+  private captureFrames: EntityInterpolationDebugState[] = []
 
   constructor() {
     this.state = {
@@ -103,26 +118,140 @@ export class LocalVisibleWorldImpl {
       return null
     }
 
-    return buildAuthoritativeDisplayPosition(entity)
+    return this.applyPendingCommandFeedback(
+      entityId,
+      buildAuthoritativeDisplayPosition(entity),
+    )
   }
 
   getInterpolatedEntityDisplayPosition(entityId: number): EntityDisplayPosition | null {
-    const authoritativeEntity = this.getEntitySnapshot(entityId)
-    const interpolationWindow = this.interpolationBuffer.getWindow({
-      frames: this.state.highFreqFrames,
-      realMsToGameSeconds: realMs => defaultGameTimeManager.realMsToGameSeconds(realMs),
-    })
+    this.ensureRenderFramePrepared()
 
-    if (!interpolationWindow) {
-      return authoritativeEntity ? buildAuthoritativeDisplayPosition(authoritativeEntity) : null
+    const cachedDisplayPosition = this.activeRenderFrameDisplayPositionsByEntityId.get(entityId)
+    if (cachedDisplayPosition !== undefined) {
+      return cachedDisplayPosition
     }
 
-    return sampleInterpolatedEntityDisplayPosition({
+    const authoritativeEntity = this.getEntitySnapshot(entityId)
+    const interpolationWindow = this.activeRenderFrameWindow
+    const previousDisplayPosition = this.lastPresentedDisplayPositionsByEntityId.get(entityId) ?? null
+
+    if (!interpolationWindow) {
+      const fallbackDisplayPosition = authoritativeEntity
+        ? this.applyPendingCommandFeedback(
+            entityId,
+            buildAuthoritativeDisplayPosition(authoritativeEntity),
+          )
+        : null
+      this.activeRenderFrameDisplayPositionsByEntityId.set(entityId, fallbackDisplayPosition)
+      if (fallbackDisplayPosition) {
+        this.lastPresentedDisplayPositionsByEntityId.set(entityId, fallbackDisplayPosition)
+      }
+      this.recordEntityInterpolationDebug(
+        entityId,
+        previousDisplayPosition,
+        fallbackDisplayPosition,
+        fallbackDisplayPosition,
+        fallbackDisplayPosition ? 1 : 0,
+        null,
+      )
+      return fallbackDisplayPosition
+    }
+
+    const displayPosition = sampleInterpolatedEntityDisplayPosition({
       entityId,
       fallbackEntity: authoritativeEntity,
       window: interpolationWindow,
       teleportThresholdGU: this.interpolationBuffer.getConfig().teleportThresholdGU,
     })
+    const displayPositionWithCommandFeedback = this.applyPendingCommandFeedback(
+      entityId,
+      displayPosition,
+    )
+    this.activeRenderFrameDisplayPositionsByEntityId.set(
+      entityId,
+      displayPositionWithCommandFeedback,
+    )
+    if (displayPositionWithCommandFeedback) {
+      this.lastPresentedDisplayPositionsByEntityId.set(
+        entityId,
+        displayPositionWithCommandFeedback,
+      )
+    } else {
+      this.lastPresentedDisplayPositionsByEntityId.delete(entityId)
+    }
+    this.recordEntityInterpolationDebug(
+      entityId,
+      previousDisplayPosition,
+      displayPositionWithCommandFeedback,
+      displayPositionWithCommandFeedback,
+      interpolationWindow.nextSnapshotBuffer ? interpolationWindow.renderAlpha : 1,
+      interpolationWindow,
+    )
+    return displayPositionWithCommandFeedback
+  }
+
+  getInterpolationDebugState(): InterpolationDebugState | null {
+    this.ensureRenderFramePrepared()
+    return this.activeRenderFrameDebugState
+  }
+
+  getEntityInterpolationDebugState(entityId: number): EntityInterpolationDebugState | null {
+    this.ensureRenderFramePrepared()
+    return this.entityInterpolationDebugById.get(entityId) ?? null
+  }
+
+  startEntityInterpolationCapture(entityId: number, frameCount = 30): void {
+    if (!Number.isFinite(entityId) || entityId <= 0) {
+      return
+    }
+    this.captureEntityId = entityId
+    this.captureRemainingFrames = Math.max(1, Math.floor(frameCount))
+    this.captureFrames = []
+  }
+
+  getEntityInterpolationCaptureState(): EntityInterpolationCaptureState {
+    return {
+      entityId: this.captureEntityId,
+      remainingFrames: this.captureRemainingFrames,
+      frames: this.captureFrames.slice(),
+    }
+  }
+
+  beginRenderFrame(renderTimestampMs: number): void {
+    if (
+      this.activeRenderFrameTimestampMs !== null &&
+      Math.abs(this.activeRenderFrameTimestampMs - renderTimestampMs) <= 0.001
+    ) {
+      return
+    }
+
+    const currentGameTimeState = defaultGameTimeManager.update()
+    this.activeRenderFrameDeltaMs =
+      this.lastRenderFrameTimestampMs === null
+        ? 0
+        : Math.max(0, renderTimestampMs - this.lastRenderFrameTimestampMs)
+    this.lastRenderFrameTimestampMs = renderTimestampMs
+    this.activeRenderFrameTimestampMs = renderTimestampMs
+    this.activeRenderFrameDisplayPositionsByEntityId.clear()
+    this.entityInterpolationDebugById.clear()
+    this.activeRenderFrameWindow = this.interpolationBuffer.getWindow({
+      frames: this.state.highFreqFrames,
+      currentGameSeconds: currentGameTimeState.currentGameSeconds,
+      nowMs: renderTimestampMs,
+      realMsToGameSeconds: realMs => defaultGameTimeManager.realMsToGameSeconds(realMs),
+    })
+    this.activeRenderFrameDebugState = this.activeRenderFrameWindow
+      ? {
+          currentTick: this.activeRenderFrameWindow.currentSnapshot.simulationTick,
+          nextTick: this.activeRenderFrameWindow.nextSnapshotBuffer?.simulationTick ?? null,
+          latestTick: this.activeRenderFrameWindow.latestFrame.simulationTick,
+          renderAlpha: this.activeRenderFrameWindow.renderAlpha,
+          renderGameSeconds: this.activeRenderFrameWindow.renderGameSeconds,
+          mode: this.activeRenderFrameWindow.mode,
+          didResetWindow: this.activeRenderFrameWindow.didResetWindow,
+        }
+      : null
   }
 
   reset(): void {
@@ -142,6 +271,9 @@ export class LocalVisibleWorldImpl {
     this.state.lastAppliedHighFreqTick = null
     this.state.lastAppliedLowFreqVersion = null
     this.interpolationBuffer.reset()
+    this.resetRenderFrameState()
+    this.lastRenderFrameTimestampMs = null
+    this.lastPresentedDisplayPositionsByEntityId.clear()
   }
 
   applySnapshot(snapshot: SnapshotMessage): WorldSyncResult {
@@ -217,6 +349,7 @@ export class LocalVisibleWorldImpl {
       snapshot.baseTick !== undefined &&
       snapshot.baseTick !== null &&
       this.state.lastAppliedHighFreqTick !== null &&
+      snapshotTick > this.state.lastAppliedHighFreqTick &&
       snapshot.baseTick !== this.state.lastAppliedHighFreqTick
     ) {
       return result
@@ -224,7 +357,7 @@ export class LocalVisibleWorldImpl {
 
     if (
       this.state.lastAppliedHighFreqTick !== null &&
-      snapshotTick <= this.state.lastAppliedHighFreqTick
+      snapshotTick < this.state.lastAppliedHighFreqTick
     ) {
       return result
     }
@@ -609,15 +742,21 @@ export class LocalVisibleWorldImpl {
       baseTick: snapshot.baseTick ?? null,
       entitiesById: frameEntitiesById,
       privateEntityIdsByLevel,
-      receivedAtClientMs: Date.now(),
+      receivedAtClientMs: performance.now(),
     }
 
-    this.state.highFreqFrames.push(frame)
+    const existingFrameIndex = this.state.highFreqFrames.findIndex(
+      existingFrame => existingFrame.simulationTick === frame.simulationTick,
+    )
+    if (existingFrameIndex >= 0) {
+      this.state.highFreqFrames[existingFrameIndex] = frame
+    } else {
+      this.state.highFreqFrames.push(frame)
+    }
+
+    this.state.highFreqFrames.sort((left, right) => left.simulationTick - right.simulationTick)
     if (this.state.highFreqFrames.length > MAX_HIGH_FREQ_FRAME_CACHE_SIZE) {
-      this.state.highFreqFrames.splice(
-        0,
-        this.state.highFreqFrames.length - MAX_HIGH_FREQ_FRAME_CACHE_SIZE,
-      )
+      this.state.highFreqFrames.splice(0, this.state.highFreqFrames.length - MAX_HIGH_FREQ_FRAME_CACHE_SIZE)
     }
   }
 
@@ -684,6 +823,57 @@ export class LocalVisibleWorldImpl {
     return false
   }
 
+  /**
+   * 把待确认移动命令的本地目标点叠加到显示姿态里喵。
+   *
+   * 这里只补即时命令反馈喵。
+   * 不改权威位置、不改插值结果，只让右键后的路径线和目标点立即可见喵。
+   */
+  private applyPendingCommandFeedback(
+    entityId: number,
+    displayPosition: EntityDisplayPosition | null,
+  ): EntityDisplayPosition | null {
+    if (!displayPosition) {
+      return null
+    }
+
+    const command = this.state.pendingCommandsByEntityId.get(entityId)
+    if (!command || !this.shouldUsePendingMoveCommandFeedback(command)) {
+      return displayPosition
+    }
+
+    const targetPosition = command.movementSeed?.targetPosition
+    if (!targetPosition) {
+      return displayPosition
+    }
+
+    return {
+      ...displayPosition,
+      isMoving: true,
+      movementTarget: {
+        x: targetPosition.x,
+        y: targetPosition.y,
+      },
+      usesCommandSeed: true,
+    }
+  }
+
+  /**
+   * 判断待确认命令是否仍应提供本地移动反馈喵。
+   */
+  private shouldUsePendingMoveCommandFeedback(command: PendingCommandRecord): boolean {
+    if (command.commandType !== 'MOVE_TO') {
+      return false
+    }
+    if (command.status === 'completed' || command.status === 'rejected') {
+      return false
+    }
+    if (command.transportStatus === 'failed') {
+      return false
+    }
+    return Boolean(command.movementSeed?.targetPosition)
+  }
+
   private createLocalMoveSeed(
     entity: EntitySnapshot,
     targetPosition: { x: number; y: number },
@@ -731,6 +921,84 @@ export class LocalVisibleWorldImpl {
     return { x: Number(value.x), y: Number(value.y) }
   }
 
+  private ensureRenderFramePrepared(): void {
+    if (this.activeRenderFrameTimestampMs !== null) {
+      return
+    }
+
+    // 非渲染主循环的查询方喵，例如调试面板或属性面板喵，
+    // 仍然需要一个当前时刻的插值窗口作为兜底喵。
+    this.beginRenderFrame(performance.now())
+  }
+
+  private resetRenderFrameState(): void {
+    this.activeRenderFrameTimestampMs = null
+    this.activeRenderFrameWindow = null
+    this.activeRenderFrameDebugState = null
+    this.activeRenderFrameDeltaMs = 0
+    this.activeRenderFrameDisplayPositionsByEntityId.clear()
+    this.entityInterpolationDebugById.clear()
+  }
+
+  private recordEntityInterpolationDebug(
+    entityId: number,
+    previousDisplayPosition: EntityDisplayPosition | null,
+    targetDisplayPosition: EntityDisplayPosition | null,
+    presentedDisplayPosition: EntityDisplayPosition | null,
+    frameBlendAlpha: number,
+    window: SnapshotInterpolationWindow | null,
+  ): void {
+    const debugState: EntityInterpolationDebugState = {
+      entityId,
+      previousRenderPosition: previousDisplayPosition?.position ?? null,
+      targetRenderPosition: targetDisplayPosition?.position ?? null,
+      presentedRenderPosition: presentedDisplayPosition?.position ?? null,
+      renderedMeshPosition: null,
+      previousRenderHeadingDeg: previousDisplayPosition?.headingDeg ?? null,
+      targetRenderHeadingDeg: targetDisplayPosition?.headingDeg ?? null,
+      presentedRenderHeadingDeg: presentedDisplayPosition?.headingDeg ?? null,
+      renderedMeshHeadingDeg: null,
+      frameBlendAlpha,
+      renderFrameDeltaMs: this.activeRenderFrameDeltaMs,
+      currentTick: window?.currentSnapshot.simulationTick ?? -1,
+      nextTick: window?.nextSnapshotBuffer?.simulationTick ?? null,
+      renderGameSeconds: window?.renderGameSeconds ?? defaultGameTimeManager.getCurrentGameSeconds(),
+      targetSource: targetDisplayPosition?.source ?? 'none',
+    }
+
+    this.entityInterpolationDebugById.set(entityId, debugState)
+
+    if (this.captureEntityId === entityId && this.captureRemainingFrames > 0) {
+      this.captureFrames.push(debugState)
+      this.captureRemainingFrames -= 1
+      if (this.captureRemainingFrames <= 0) {
+        this.captureEntityId = entityId
+      }
+    }
+  }
+
+  /**
+   * 记录渲染器最终写入网格的姿态喵。
+   *
+   * 用于对比“插值显示姿态”和“真正画出去的网格姿态”是否一致喵。
+   */
+  recordRenderedEntityPose(
+    entityId: number,
+    renderedMeshPosition: { x: number; y: number },
+    renderedMeshHeadingDeg: number,
+  ): void {
+    const debugState = this.entityInterpolationDebugById.get(entityId)
+    if (!debugState) {
+      return
+    }
+
+    debugState.renderedMeshPosition = {
+      x: renderedMeshPosition.x,
+      y: renderedMeshPosition.y,
+    }
+    debugState.renderedMeshHeadingDeg = renderedMeshHeadingDeg
+  }
+
 }
 
 let globalInstance: LocalVisibleWorldImpl | null = null
@@ -744,4 +1012,20 @@ export function getLocalVisibleWorld(): LocalVisibleWorldImpl {
 
 export function resetLocalVisibleWorld(): void {
   globalInstance = null
+}
+
+export function beginLocalVisibleWorldRenderFrame(renderTimestampMs: number): void {
+  getLocalVisibleWorld().beginRenderFrame(renderTimestampMs)
+}
+
+export function recordLocalVisibleWorldRenderedEntityPose(
+  entityId: number,
+  renderedMeshPosition: { x: number; y: number },
+  renderedMeshHeadingDeg: number,
+): void {
+  getLocalVisibleWorld().recordRenderedEntityPose(
+    entityId,
+    renderedMeshPosition,
+    renderedMeshHeadingDeg,
+  )
 }

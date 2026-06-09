@@ -252,6 +252,55 @@ export type EntityDisplayPosition = {
     | 'snapped'
 }
 
+/**
+ * 双逻辑帧插值调试状态喵。
+ *
+ * 用于调试面板解释当前渲染窗口喵。
+ */
+export type InterpolationDebugState = {
+  currentTick: number
+  nextTick: number | null
+  latestTick: number
+  renderAlpha: number
+  renderGameSeconds: number
+  mode: 'freeze' | 'interpolate' | 'extrapolate'
+  didResetWindow: boolean
+}
+
+/**
+ * 单个实体当前渲染帧的插值调试状态喵。
+ *
+ * 用于直接观察“上一渲染帧位置 / 本帧目标位置 / 本帧推进比例”喵。
+ */
+export type EntityInterpolationDebugState = {
+  entityId: number
+  previousRenderPosition: { x: number; y: number } | null
+  targetRenderPosition: { x: number; y: number } | null
+  presentedRenderPosition: { x: number; y: number } | null
+  renderedMeshPosition: { x: number; y: number } | null
+  previousRenderHeadingDeg: number | null
+  targetRenderHeadingDeg: number | null
+  presentedRenderHeadingDeg: number | null
+  renderedMeshHeadingDeg: number | null
+  frameBlendAlpha: number
+  renderFrameDeltaMs: number
+  currentTick: number
+  nextTick: number | null
+  renderGameSeconds: number
+  targetSource: EntityDisplayPosition['source'] | 'none'
+}
+
+/**
+ * 实体插值调试捕获状态喵。
+ *
+ * 支持对当前选中实体连续抓取若干渲染帧喵。
+ */
+export type EntityInterpolationCaptureState = {
+  entityId: number | null
+  remainingFrames: number
+  frames: EntityInterpolationDebugState[]
+}
+
 // ==================== 同步结果类型 ====================
 
 /**

@@ -6,6 +6,7 @@ import io.undertow.websockets.core.BufferedTextMessage;
 import io.undertow.websockets.core.WebSocketChannel;
 import io.undertow.websockets.core.WebSockets;
 import io.undertow.websockets.spi.WebSocketHttpExchange;
+import staraxis.game.log.GameLog;
 import staraxis.game.StarAxisGameRuntime;
 import staraxis.game.intel.IntelSystem;
 import staraxis.game.nation.VisibilitySystem;
@@ -21,6 +22,7 @@ import staraxis.webnet.game.GameSessions;
 
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -95,6 +97,31 @@ public class WebPlayerWebSocketHandler {
 
                     if ("requestFullSync".equals(type)) {
                         sendSnapshotToChannel(channel);
+                        return;
+                    }
+
+                    if ("updateInterestEntities".equals(type)) {
+                        connMgr.updateSnapshotInterestEntityIds(
+                                channel,
+                                parseInterestEntityIds(m.get("entityIds")));
+                        WebSockets.sendText("{\"type\":\"interestEntitiesUpdated\",\"ok\":true}", channel, null);
+                        return;
+                    }
+
+                    if ("startSnapshotTickTrace".equals(type)) {
+                        long durationMs = parseDurationMs(m.get("durationMs"));
+                        long traceUntilMs = connMgr.startSnapshotTickTrace(durationMs);
+                        String connectionId = connMgr.getConnectionIdByChannel(channel);
+                        GameLog.log(
+                                "SnapshotTraceStart"
+                                        + " player=" + playerId
+                                        + " connectionId=" + connectionId
+                                        + " durationMs=" + durationMs
+                                        + " traceUntilRealMs=" + traceUntilMs);
+                        WebSockets.sendText(
+                                "{\"type\":\"snapshotTickTraceStarted\",\"ok\":true,\"durationMs\":" + durationMs
+                                        + ",\"traceUntilRealMs\":" + traceUntilMs + "}",
+                                channel, null);
                         return;
                     }
 
@@ -213,5 +240,45 @@ public class WebPlayerWebSocketHandler {
             WebSockets.sendText("{\"type\":\"snapshot\",\"ok\":false,\"error\":\"snapshot_build_failed\"}",
                     channel, null);
         }
+    }
+
+    /**
+     * 解析前端上报的兴趣实体ID集合喵。
+     */
+    private Set<Long> parseInterestEntityIds(Object rawEntityIds) {
+        Set<Long> entityIds = new HashSet<>();
+        if (!(rawEntityIds instanceof List<?> rawList)) {
+            return entityIds;
+        }
+
+        for (Object rawId : rawList) {
+            if (rawId instanceof Number number) {
+                entityIds.add(number.longValue());
+                continue;
+            }
+            if (rawId instanceof String text) {
+                try {
+                    entityIds.add(Long.parseLong(text));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+        return entityIds;
+    }
+
+    /**
+     * 解析前端上报的录制时长喵。
+     */
+    private long parseDurationMs(Object rawDurationMs) {
+        if (rawDurationMs instanceof Number number) {
+            return Math.max(1000L, Math.min(30_000L, number.longValue()));
+        }
+        if (rawDurationMs instanceof String text) {
+            try {
+                return Math.max(1000L, Math.min(30_000L, Long.parseLong(text)));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return 10_000L;
     }
 }

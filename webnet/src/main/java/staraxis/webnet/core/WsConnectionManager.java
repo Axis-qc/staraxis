@@ -21,6 +21,8 @@ public class WsConnectionManager {
 
     private final Set<WebSocketChannel> allChannels = ConcurrentHashMap.newKeySet();
     private final Set<WebSocketChannel> snapshotSubscribers = ConcurrentHashMap.newKeySet();
+    private final ConcurrentHashMap<WebSocketChannel, Set<Long>> snapshotInterestEntityIdsByChannel = new ConcurrentHashMap<>();
+    private final AtomicLong snapshotTickTraceUntilMs = new AtomicLong(0L);
 
     // 可见星区由服务端权威计算，不再由客户端上报与存储喵。
 
@@ -198,6 +200,7 @@ public class WsConnectionManager {
 
     private void cleanupChannel(WebSocketChannel channel) {
         snapshotSubscribers.remove(channel);
+        snapshotInterestEntityIdsByChannel.remove(channel);
         playerLastPongMs.remove(channel);
         channelToNationId.remove(channel);
         channelToConnectionId.remove(channel);
@@ -233,10 +236,58 @@ public class WsConnectionManager {
 
     public void subscribeSnapshot(WebSocketChannel channel) {
         snapshotSubscribers.add(channel);
+        snapshotInterestEntityIdsByChannel.putIfAbsent(channel, ConcurrentHashMap.newKeySet());
     }
 
     public void unsubscribeSnapshot(WebSocketChannel channel) {
         snapshotSubscribers.remove(channel);
+        snapshotInterestEntityIdsByChannel.remove(channel);
+    }
+
+    /**
+     * 更新某个快照订阅连接上报的兴趣实体集合喵。
+     */
+    public void updateSnapshotInterestEntityIds(WebSocketChannel channel, Set<Long> entityIds) {
+        if (channel == null) {
+            return;
+        }
+
+        Set<Long> nextIds = ConcurrentHashMap.newKeySet();
+        if (entityIds != null) {
+            nextIds.addAll(entityIds);
+        }
+        snapshotInterestEntityIdsByChannel.put(channel, nextIds);
+    }
+
+    /**
+     * 获取当前世界所有快照订阅连接的兴趣实体并集喵。
+     */
+    public Set<Long> getWorldUnionSnapshotInterestEntityIds() {
+        Set<Long> unionIds = new java.util.HashSet<>();
+        for (Set<Long> entityIds : snapshotInterestEntityIdsByChannel.values()) {
+            if (entityIds == null || entityIds.isEmpty()) {
+                continue;
+            }
+            unionIds.addAll(entityIds);
+        }
+        return unionIds;
+    }
+
+    /**
+     * 启动一次限定时长的快照 Tick 对时录制喵。
+     */
+    public long startSnapshotTickTrace(long durationMs) {
+        long safeDurationMs = Math.max(1000L, Math.min(30_000L, durationMs));
+        long untilMs = System.currentTimeMillis() + safeDurationMs;
+        snapshotTickTraceUntilMs.updateAndGet(previous -> Math.max(previous, untilMs));
+        return untilMs;
+    }
+
+    /**
+     * 判断当前是否处于快照 Tick 对时录制窗口内喵。
+     */
+    public boolean isSnapshotTickTraceActive(long nowMs) {
+        return nowMs <= snapshotTickTraceUntilMs.get();
     }
 
     /**

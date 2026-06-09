@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import type { WorldRenderContext, WorldFrameState } from '../../../worldRenderManager'
 import { shouldRender } from '@/rendering/subsystems/lodSystem'
-import { getInterpolatedEntityDisplayPosition } from '@/game/world'
+import { getInterpolatedEntityDisplayPosition, recordRenderedEntityPose } from '@/game/world'
 
 const INITIAL_SPAWN_SHIP_FLAG = 'INITIAL_SPAWN_SHIP'
 
@@ -30,7 +30,7 @@ export class LayerShipRenderer {
     this.layerGroup = layerGroup
   }
 
-  enablePrediction(_enabled: boolean): void {}
+  enablePrediction(_enabled: boolean): void { }
 
   init(): void {
     const geometry = new THREE.BufferGeometry()
@@ -116,8 +116,10 @@ export class LayerShipRenderer {
       material.color.set(isInitialShip ? 0x56d7ff : 0xc8d0d8)
       mesh.scale.set(isInitialShip ? 1.2 : 1, isInitialShip ? 1.2 : 1, 1)
       mesh.rotation.z = THREE.MathUtils.degToRad(headingDeg - 90)
-      mesh.position.set(shipPos.x, shipPos.y, 0.15)
+      const rp = ctx.toRenderPos(shipPos)
+      mesh.position.set(rp.x, rp.y, 0)
       mesh.visible = true
+      recordRenderedEntityPose(entity.entityId, shipPos, headingDeg)
 
       if (isSelected && isMoving && movementTarget) {
         this.updatePathLine(ctx, entity.entityId, shipPos, movementTarget)
@@ -145,10 +147,10 @@ export class LayerShipRenderer {
 
   dispose(): void {
     for (const mesh of this.shipPool) {
-      ;(mesh.material as THREE.Material).dispose()
+      ; (mesh.material as THREE.Material).dispose()
     }
     for (const mesh of this.activeByEntityId.values()) {
-      ;(mesh.material as THREE.Material).dispose()
+      ; (mesh.material as THREE.Material).dispose()
       mesh.parent?.remove(mesh)
     }
     this.activeByEntityId.clear()
@@ -198,7 +200,7 @@ export class LayerShipRenderer {
   }
 
   private updatePathLine(
-    _ctx: WorldRenderContext,
+    ctx: WorldRenderContext,
     entityId: number,
     shipPos: { x: number; y: number },
     targetPos: { x: number; y: number },
@@ -210,18 +212,21 @@ export class LayerShipRenderer {
       this.layerGroup.add(line)
     }
 
+    // 路径线端点使用相机相对坐标喵
+    const rp = ctx.toRenderPos(shipPos)
+    const tp = ctx.toRenderPos(targetPos)
     const geometry = line.geometry as THREE.BufferGeometry
     geometry.setAttribute(
       'position',
       new THREE.BufferAttribute(
         new Float32Array([
-          shipPos.x, shipPos.y, 0.1,
-          targetPos.x, targetPos.y, 0.1,
+          rp.x, rp.y, 0.1,
+          tp.x, tp.y, 0.1,
         ]),
         3,
       ),
     )
-    geometry.attributes.position.needsUpdate = true
+    geometry.attributes.position!.needsUpdate = true
     line.visible = true
   }
 
@@ -254,12 +259,12 @@ export class LayerShipRenderer {
     const line = new THREE.Line(
       new THREE.BufferGeometry(),
       this.pathLineMaterial ??
-        new THREE.LineBasicMaterial({
-          color: 0x56d7ff,
-          transparent: true,
-          opacity: 0.6,
-          depthWrite: false,
-        }),
+      new THREE.LineBasicMaterial({
+        color: 0x56d7ff,
+        transparent: true,
+        opacity: 0.6,
+        depthWrite: false,
+      }),
     )
     line.frustumCulled = false
     line.visible = false

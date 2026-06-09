@@ -17,6 +17,8 @@ export interface GameTimeState {
     snapshotTimestampMs: number;
 }
 
+export const AUTHORITY_LOGIC_FRAME_DURATION_MS = 50;
+
 export class GameTimeManager {
     private state: GameTimeState = {
         currentTick: 0,
@@ -30,9 +32,18 @@ export class GameTimeManager {
 
     updateSnapshot(snapshot: GameTimeSnapshot): void {
         const now = performance.now();
+        const snapshotGameSeconds = snapshot.totalGameSecondsExact ?? snapshot.totalGameSeconds;
 
         this.state.currentTick = snapshot.simulationTick;
-        this.state.currentGameSeconds = snapshot.totalGameSecondsExact ?? snapshot.totalGameSeconds;
+        // 高频快照到达时间会有网络抖动喵，
+        // 如果这里每次都把连续游戏时间硬重置回快照时间喵，
+        // 渲染侧 `alpha`（插值比例）就会在每次收包时忽快忽慢喵。
+        // 当前先把本地连续时间保持单调不回退喵，
+        // 只在权威时间明显走到更前面时才前推基线喵。
+        this.state.currentGameSeconds = Math.max(
+            this.state.currentGameSeconds,
+            snapshotGameSeconds,
+        );
         this.state.realTimeSinceSnapshotMs = 0;
         this.state.timeScale = snapshot.timeScale ?? 1.0;
         this.state.gameSecondsPerRealSecond = snapshot.gameSecondsPerRealSecond ?? 1.0;
@@ -106,6 +117,10 @@ export class GameTimeManager {
 
     realMsToGameSeconds(realMs: number): number {
         return (realMs / 1000) * this.getEffectiveGameSecondsPerRealSecond();
+    }
+
+    getLogicFrameDurationMs(): number {
+        return AUTHORITY_LOGIC_FRAME_DURATION_MS;
     }
 
     reset(): void {

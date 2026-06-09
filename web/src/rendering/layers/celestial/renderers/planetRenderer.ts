@@ -1,15 +1,29 @@
 /**
  * @file planetRenderer.ts
- * @description 分层行星渲染器 - 适配现有PlanetRenderer逻辑到分层架构喵
- * @usage 在CelestialLayer中初始化并调用update方法喵
+ * @description 分层行星渲染器 - 使用 3D 球体渲染行星喵。
+ *
+ * @设计说明
+ * - 使用 `SphereGeometry`（球体几何）+ `MeshBasicMaterial`（基础网格材质）渲染行星喵。
+ * - 纹理由 `generatePlanetCanvas` 程序化生成，基于 (worldSeed, entityId) 确定性固定喵。
+ * - z 轴位置 = -(ZLayer.CELESTIAL_PLANET_BASE + scaledRadius)，确保行星层与实体层分离喵。
+ * - 后续可替换为 ShaderMaterial 实现实时动态效果喵。
  */
 
 import * as THREE from 'three'
 import type { WorldRenderContext, WorldFrameState } from '../../../worldRenderManager'
 import type { PlanetDetails } from '../../../../net/snapshotWs'
-import { shouldRender, getLodSize, shouldShowEffects } from '../../../subsystems/lodSystem'
+import { shouldRender, getLodSize } from '../../../subsystems/lodSystem'
+import { ZLayer } from '../../index'
+import { getPlanetProfile } from './planetProfile'
+import { generatePlanetCanvas } from './planetTextureGenerator'
 
 const TRAIL_BASE_COLOR = new THREE.Color(0xffffff)
+
+/** 球体细分段数（固定俯视下不需要太高） */
+const PLANET_SPHERE_SEGMENTS = 24
+
+/** 行星球体网格类型 */
+type PlanetMesh = THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>
 
 const TRAIL_VERTEX_SHADER = `
     attribute float aAlpha;
@@ -31,14 +45,19 @@ const TRAIL_FRAGMENT_SHADER = `
 
 export class LayerPlanetRenderer {
   private parentGroup: THREE.Group
-  private planetSpritePool: THREE.Sprite[] = []
-  private activePlanetSpritesByEntityId = new Map<number, THREE.Sprite>()
-  private fallbackCircleTexture: THREE.CanvasTexture | null = null
-  private context: WorldRenderContext | null = null
+
+  // 行星球体对象池
+  private planetMeshPool: PlanetMesh[] = []
+  private activePlanetMeshesByEntityId = new Map<number, PlanetMesh>()
+  private sharedGeometry: THREE.SphereGeometry | null = null
+
+  /** 程序化纹理缓存（entityId → texture），保证同一行星纹理不重复生成喵 */
+  private textureCache = new Map<number, THREE.CanvasTexture>()
+
   private poolSize: number
   private disposed = false
 
-  // 移动轨迹相关（复用现有逻辑）
+  // 移动轨迹相关
   private trailMeshPool: THREE.Mesh[] = []
   private activeTrailsByEntityId = new Map<number, THREE.Mesh>()
   private positionHistory = new Map<number, Array<{ x: number; y: number }>>()
@@ -57,98 +76,88 @@ export class LayerPlanetRenderer {
     this.poolSize = poolSize
   }
 
-  private createCircleTexture(): THREE.CanvasTexture {
-    const canvas = document.createElement('canvas')
-    canvas.width = 64
-    canvas.height = 64
-    const ctx = canvas.getContext('2d')
-    if (!ctx) {
-      // 提供降级方案或抛出明确错误喵
-      console.error('Failed to get 2D context for planet fallback texture')
-      // 创建简单的纯色纹理作为降级喵
-      const fallbackCanvas = document.createElement('canvas')
-      fallbackCanvas.width = 64
-      fallbackCanvas.height = 64
-      const fallbackCtx = fallbackCanvas.getContext('2d')
-      if (fallbackCtx) {
-        fallbackCtx.fillStyle = '#ffffff'
-        fallbackCtx.fillRect(0, 0, 64, 64)
-        const texture = new THREE.CanvasTexture(fallbackCanvas)
-        texture.needsUpdate = true
-        return texture
-      }
-      throw new Error('Canvas 2D context not supported in this environment')
+  // ─── 初始化 ──────────────────────────────────────────────────────
+
+  init(_ctx: WorldRenderContext): void {
+    // 共享球体几何体，所有行星复用同一个喵
+    this.sharedGeometry = new THREE.SphereGeometry(1, PLANET_SPHERE_SEGMENTS, PLANET_SPHERE_SEGMENTS / 2)
+
+    // 预热对象池喵
+    for (let i = 0; i < this.poolSize; i++) {
+      this.planetMeshPool.push(this.createPlanetMesh())
     }
 
-    ctx.clearRect(0, 0, 64, 64)
+    console.log('LayerPlanetRenderer initialized (3D sphere mode)')
+  }
 
-    const centerX = 32
-    const centerY = 32
-    const radius = 30
+  // ─── 对象池管理 ──────────────────────────────────────────────────
 
-    const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius)
-    gradient.addColorStop(0, 'rgba(255, 255, 255, 1)')
-    gradient.addColorStop(0.8, 'rgba(255, 255, 255, 1)')
-    gradient.addColorStop(1, 'rgba(255, 255, 255, 0.8)')
+  /**
+   * 创建一个新的行星球体网格喵。
+   * 使用 MeshBasicMaterial + 顶点颜色实现渐变光照效果喵。
+   */
+  private createPlanetMesh(): PlanetMesh {
+    if (!this.sharedGeometry) {
+      throw new Error('sharedGeometry must be initialized before creating planet mesh')
+    }
 
-    ctx.beginPath()
-    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2)
-    ctx.fillStyle = gradient
-    ctx.fill()
+    const material = new THREE.MeshBasicMaterial({
+      transparent: true,
+      depthWrite: true,
+    })
 
-    const texture = new THREE.CanvasTexture(canvas)
+    const mesh = new THREE.Mesh(this.sharedGeometry, material)
+    mesh.frustumCulled = false
+    mesh.renderOrder = -1
+    mesh.visible = false
+    return mesh
+  }
+
+  private acquirePlanetMesh(): PlanetMesh {
+    const mesh = this.planetMeshPool.pop()
+    if (mesh) {
+      mesh.visible = true
+      return mesh
+    }
+    return this.createPlanetMesh()
+  }
+
+  private releasePlanetMesh(mesh: PlanetMesh): void {
+    // 释放纹理引用（不 dispose，纹理由 textureCache 管理）喵
+    if (mesh.material.map) {
+      mesh.material.map = null
+    }
+    mesh.visible = false
+    this.planetMeshPool.push(mesh)
+  }
+
+  // ─── 纹理管理 ──────────────────────────────────────────────────
+
+  /**
+   * 获取或生成行星纹理喵。
+   * 纹理按 entityId 缓存，相同 (worldSeed, entityId) 永远返回同一纹理喵。
+   */
+  private getOrGenerateTexture(entityId: number, details: PlanetDetails, worldSeed: number): THREE.CanvasTexture {
+    let texture = this.textureCache.get(entityId)
+    if (texture) {
+      return texture
+    }
+
+    const profile = getPlanetProfile(details)
+    const canvas = generatePlanetCanvas(worldSeed, entityId, profile)
+    texture = new THREE.CanvasTexture(canvas)
+    texture.colorSpace = THREE.SRGBColorSpace
     texture.needsUpdate = true
+
+    this.textureCache.set(entityId, texture)
     return texture
   }
 
-  init(ctx: WorldRenderContext): void {
-    this.context = ctx
-    this.fallbackCircleTexture = this.createCircleTexture()
-
-    // 预创建精灵对象池喵
-    for (let i = 0; i < this.poolSize; i++) {
-      const material = new THREE.SpriteMaterial({
-        color: 0xffffff,
-        sizeAttenuation: true,
-        map: this.fallbackCircleTexture || undefined  // 使用后备纹理喵
-      })
-      const sprite = new THREE.Sprite(material)
-      sprite.visible = false
-      this.parentGroup.add(sprite)
-      this.planetSpritePool.push(sprite)
-    }
-
-    console.log('LayerPlanetRenderer initialized')
+  private isPointInAabb(p: { x: number, y: number }, a: { minX: number, maxX: number, minY: number, maxY: number }): boolean {
+    return p.x >= a.minX && p.x <= a.maxX && p.y >= a.minY && p.y <= a.maxY
   }
 
-  private acquirePlanetSprite(): THREE.Sprite {
-    const sprite = this.planetSpritePool.pop()
-    if (sprite) {
-      sprite.visible = true
-      return sprite
-    }
-
-    const material = new THREE.SpriteMaterial({
-      color: 0xffffff,
-      sizeAttenuation: true,
-      map: this.fallbackCircleTexture || undefined  // 使用后备纹理喵
-    })
-    const newSprite = new THREE.Sprite(material)
-    this.parentGroup.add(newSprite)
-    return newSprite
-  }
-
-  private releasePlanetSprite(sprite: THREE.Sprite): void {
-    // 安全的类型检查喵
-    if (sprite.material instanceof THREE.SpriteMaterial) {
-      const material = sprite.material
-      material.map = null
-    } else {
-      console.warn('Unexpected material type in planet sprite', sprite.material)
-    }
-    sprite.visible = false
-    this.planetSpritePool.push(sprite)
-  }
+  // ─── 轨迹管理（保持不变） ────────────────────────────────────────
 
   private releaseTrailMesh(mesh: THREE.Mesh): void {
     mesh.visible = false
@@ -163,20 +172,6 @@ export class LayerPlanetRenderer {
     }
     this.positionHistory.clear()
     this.lastSampleMinuteByEntityId.clear()
-  }
-
-  private isPointInAabb(p: { x: number, y: number }, a: { minX: number, maxX: number, minY: number, maxY: number }): boolean {
-    return p.x >= a.minX && p.x <= a.maxX && p.y >= a.minY && p.y <= a.maxY
-  }
-
-  private loadAndApplyTexture(material: THREE.SpriteMaterial, path: string): void {
-    if (!this.context) return
-    this.context.getTexture(path).then(t => {
-      material.map = t
-      material.needsUpdate = true
-    }).catch(err => {
-      console.warn(`Failed to load planet texture: ${path}`, err)
-    })
   }
 
   private updateTrail(
@@ -247,6 +242,9 @@ export class LayerPlanetRenderer {
       const point = history[i]
       if (!point) break
 
+      // 轨迹顶点使用相机相对坐标，避免 float32 精度问题喵
+      const rp = ctx.toRenderPos(point)
+
       let dx = 0
       let dy = 0
 
@@ -269,11 +267,11 @@ export class LayerPlanetRenderer {
       const ny = (dx / length) * (worldWidth / 2)
 
       const vertexOffset = i * 6
-      positions[vertexOffset] = point.x - nx
-      positions[vertexOffset + 1] = point.y - ny
+      positions[vertexOffset] = rp.x - nx
+      positions[vertexOffset + 1] = rp.y - ny
       positions[vertexOffset + 2] = -0.2
-      positions[vertexOffset + 3] = point.x + nx
-      positions[vertexOffset + 4] = point.y + ny
+      positions[vertexOffset + 3] = rp.x + nx
+      positions[vertexOffset + 4] = rp.y + ny
       positions[vertexOffset + 5] = -0.2
 
       const vertexAlpha = i / (history.length - 1 || 1)
@@ -294,7 +292,8 @@ export class LayerPlanetRenderer {
     material.uniforms.uOpacity.value = trailOpacity
     material.uniforms.uColor.value.copy(TRAIL_BASE_COLOR)
 
-    trailMesh.position.set(0, 0, 0)
+    // 轨迹跟随行星层 z 基准喵
+    trailMesh.position.set(0, 0, -ZLayer.CELESTIAL_PLANET_BASE)
     trailMesh.visible = true
   }
 
@@ -342,21 +341,23 @@ export class LayerPlanetRenderer {
     return trailMesh
   }
 
+  // ─── 主更新逻辑 ──────────────────────────────────────────────────
+
   update(ctx: WorldRenderContext, frame: WorldFrameState): void {
     const { entitiesById, selectedIds, cullingAabb, lod, totalDays } = frame
     const planetLod = lod.planet
 
-    // LOD完全隐藏时回收所有对象
+    // LOD 完全隐藏时回收所有对象喵
     if (!planetLod.visible) {
       this.clearAllTrails()
-      for (const [id, sprite] of this.activePlanetSpritesByEntityId.entries()) {
-        this.activePlanetSpritesByEntityId.delete(id)
-        this.releasePlanetSprite(sprite)
+      for (const [id, mesh] of this.activePlanetMeshesByEntityId.entries()) {
+        this.activePlanetMeshesByEntityId.delete(id)
+        this.releasePlanetMesh(mesh)
       }
       return
     }
 
-    // 第一遍：检查哪些实体需要渲染
+    // 第一遍：检查哪些实体需要渲染喵
     const visibleEntityIds = new Set<number>()
 
     for (const entity of entitiesById.values()) {
@@ -368,7 +369,7 @@ export class LayerPlanetRenderer {
       const planetPos = ctx.getEntityWorldPosGU(entity.entityId)
       if (!planetPos) continue
 
-      // 剔除检查（选中实体始终显示）
+      // 剔除检查（选中实体始终显示）喵
       if (!isSelected && !this.isPointInAabb(planetPos, cullingAabb)) {
         continue
       }
@@ -376,15 +377,15 @@ export class LayerPlanetRenderer {
       visibleEntityIds.add(entity.entityId)
     }
 
-    // 回收不在可见列表中的对象
-    for (const [id, sprite] of this.activePlanetSpritesByEntityId.entries()) {
+    // 回收不在可见列表中的对象喵
+    for (const [id, mesh] of this.activePlanetMeshesByEntityId.entries()) {
       if (!visibleEntityIds.has(id)) {
-        this.activePlanetSpritesByEntityId.delete(id)
-        this.releasePlanetSprite(sprite)
+        this.activePlanetMeshesByEntityId.delete(id)
+        this.releasePlanetMesh(mesh)
       }
     }
 
-    // 第二遍：更新可见实体的渲染数据
+    // 第二遍：更新可见实体的渲染数据喵
     for (const entityId of visibleEntityIds) {
       const entity = entitiesById.get(entityId)
       if (!entity) continue
@@ -394,54 +395,35 @@ export class LayerPlanetRenderer {
       const planetPos = ctx.getEntityWorldPosGU(entityId)
       if (!planetPos) continue
 
-      // 计算实体在屏幕上的实际像素大小
       const radiusGU = details.radiusGU
-      const diameterPx = (radiusGU * 2) / ctx.zoom.value
-      const MIN_TEXTURE_PIXEL_SIZE = 10
 
-      // 动态决定是否使用真实纹理
-      const useRealTexture = diameterPx >= MIN_TEXTURE_PIXEL_SIZE
+      // 计算 LOD 缩放后的渲染直径喵
+      const clampedDiameterGU = Math.max(radiusGU * 2, 10 * ctx.zoom.value)
+      const size = getLodSize(planetLod, isSelected, clampedDiameterGU)
+      const scaledRadius = size * 0.5
 
-      let size: number
-      if (useRealTexture) {
-        size = getLodSize(planetLod, isSelected, radiusGU * 2)
-      } else {
-        size = MIN_TEXTURE_PIXEL_SIZE * ctx.zoom.value
+      // 获取或创建球体网格喵
+      let mesh = this.activePlanetMeshesByEntityId.get(entityId)
+      if (!mesh) {
+        mesh = this.acquirePlanetMesh()
+        this.activePlanetMeshesByEntityId.set(entityId, mesh)
+        this.parentGroup.add(mesh)
       }
 
-      let sprite = this.activePlanetSpritesByEntityId.get(entityId)
-      if (!sprite) {
-        sprite = this.acquirePlanetSprite()
-        this.activePlanetSpritesByEntityId.set(entityId, sprite)
+      // 应用程序化纹理（首次生成，后续从缓存读取）喵
+      const texture = this.getOrGenerateTexture(entityId, details, ctx.worldSeed)
+      if (mesh.material.map !== texture) {
+        mesh.material.map = texture
+        mesh.material.needsUpdate = true
       }
 
-      const material = sprite.material as THREE.SpriteMaterial
-
-      if (useRealTexture) {
-        if (material.map === this.fallbackCircleTexture) {
-          material.map = null
-          material.needsUpdate = true
-        }
-        if (details.surfaceTexturePath && (!material.map || !material.map.image)) {
-          this.loadAndApplyTexture(material, details.surfaceTexturePath)
-        }
-        material.sizeAttenuation = true
-      } else {
-        if (this.fallbackCircleTexture && material.map !== this.fallbackCircleTexture) {
-          material.map = this.fallbackCircleTexture
-          material.needsUpdate = true
-        }
-        material.sizeAttenuation = true
-      }
-
-      // 透明度计算
-      let opacity: number
-      if (useRealTexture) {
-        opacity = shouldShowEffects(planetLod, isSelected) ? 1.0 : 0.8
-      } else {
-        const zoomValue = ctx.zoom.value
+      // 透明度：远景行星淡出喵
+      const diameterPx = size / ctx.zoom.value
+      let opacity = 1.0
+      if (diameterPx < 5) {
         const FADE_START = 1_000
         const FADE_END = 100_000
+        const zoomValue = ctx.zoom.value
         if (zoomValue >= FADE_END) {
           opacity = 0
         } else if (zoomValue <= FADE_START) {
@@ -450,15 +432,25 @@ export class LayerPlanetRenderer {
           opacity = 1 - (zoomValue - FADE_START) / (FADE_END - FADE_START)
         }
       }
-      material.opacity = opacity
+      mesh.material.opacity = opacity
 
-      sprite.scale.set(size, size, 1)
-      sprite.position.set(planetPos.x, planetPos.y, 0)
-      sprite.visible = true
+      // 缩放球体到渲染尺寸喵
+      mesh.scale.set(scaledRadius, scaledRadius, scaledRadius)
 
+      // z 轴位置 = -(层基准 + 半径)，前表面对齐在层基准线喵
+      const rp = ctx.toRenderPos(planetPos)
+      mesh.position.set(
+        rp.x,
+        rp.y,
+        -(ZLayer.CELESTIAL_PLANET_BASE + scaledRadius),
+      )
+      mesh.visible = true
+
+      // 更新移动轨迹（历史点存储世界坐标，渲染时转相机相对）喵
       this.updateTrail(entityId, planetPos, ctx, isSelected, totalDays)
     }
 
+    // 回收不可见实体的轨迹喵
     for (const [id, trail] of this.activeTrailsByEntityId.entries()) {
       if (!visibleEntityIds.has(id)) {
         this.activeTrailsByEntityId.delete(id)
@@ -469,9 +461,12 @@ export class LayerPlanetRenderer {
     }
   }
 
-  private disposeSprite(sprite: THREE.Sprite): void {
-    ;(sprite.material as THREE.Material).dispose()
-    this.parentGroup.remove(sprite)
+  // ─── 清理 ────────────────────────────────────────────────────────
+
+  private disposePlanetMesh(mesh: PlanetMesh): void {
+    // 不 dispose 共享几何体喵
+    mesh.material.dispose()
+    this.parentGroup.remove(mesh)
   }
 
   private disposeTrailMesh(mesh: THREE.Mesh): void {
@@ -489,32 +484,29 @@ export class LayerPlanetRenderer {
       return
     }
 
-    // 首先解除所有材质的纹理引用，防止双重释放喵
-    const allSprites = [...this.planetSpritePool, ...this.activePlanetSpritesByEntityId.values()]
-    for (const sprite of allSprites) {
-      if (sprite.material instanceof THREE.SpriteMaterial) {
-        const material = sprite.material
-        material.map = null
-      }
+    // 清理对象池中的行星网格喵
+    for (const mesh of this.planetMeshPool) {
+      this.disposePlanetMesh(mesh)
     }
+    this.planetMeshPool = []
 
-    // 清理后备纹理喵
-    if (this.fallbackCircleTexture) {
-      this.fallbackCircleTexture.dispose()
-      this.fallbackCircleTexture = null
+    // 清理活跃行星网格喵
+    for (const mesh of this.activePlanetMeshesByEntityId.values()) {
+      this.disposePlanetMesh(mesh)
     }
+    this.activePlanetMeshesByEntityId.clear()
 
-    // 清理对象池中的精灵喵
-    for (const sprite of this.planetSpritePool) {
-      this.disposeSprite(sprite)
+    // 清理纹理缓存喵
+    for (const texture of this.textureCache.values()) {
+      texture.dispose()
     }
-    this.planetSpritePool = []
+    this.textureCache.clear()
 
-    // 清理活跃精灵喵
-    for (const sprite of this.activePlanetSpritesByEntityId.values()) {
-      this.disposeSprite(sprite)
+    // 清理共享几何体喵
+    if (this.sharedGeometry) {
+      this.sharedGeometry.dispose()
+      this.sharedGeometry = null
     }
-    this.activePlanetSpritesByEntityId.clear()
 
     // 清理轨迹网格池喵
     for (const mesh of this.trailMeshPool) {

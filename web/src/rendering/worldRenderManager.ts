@@ -16,6 +16,21 @@ import { createRenderLoop } from './systems/renderLoop'
 import { VisibilityStateManager } from './systems/visibilityState'
 import type { LodOptions, LodState } from './subsystems/lodSystem'
 import { createTextureManager } from './subsystems/textureManager'
+import { GridRenderer } from './subsystems/gridRenderer'
+import { HexOutlineRenderer } from './subsystems/hexOutlineRenderer'
+
+/**
+ * 将 worldId 字符串哈希为数值种子喵。
+ * 使用 FNV-1a 算法，保证相同字符串始终产生相同数值喵。
+ */
+function hashWorldId(worldId: string): number {
+    let h = 0x811c9dc5 // FNV offset basis (32-bit)
+    for (let i = 0; i < worldId.length; i++) {
+        h ^= worldId.charCodeAt(i)
+        h = Math.imul(h, 0x01000193) // FNV prime
+    }
+    return h | 0
+}
 
 export type { LodState, LodOptions } from './subsystems/lodSystem'
 export { LodLevel } from './subsystems/lodSystem'
@@ -55,6 +70,8 @@ export type WorldRendererOptions = {
     initialZoom?: number
     getSpritePath?: (typeId: string) => string | undefined
     lod?: LodOptions
+    /** 世界唯一标识（字符串），用于生成确定性纹理种子喵 */
+    worldId?: string
 }
 
 export type WorldRenderContext = {
@@ -72,6 +89,14 @@ export type WorldRenderContext = {
     getWorldUnitsPerPixel: () => number
     getViewSizeAtDepth: (distanceFromCamera: number) => { widthGU: number; heightGU: number }
     options: WorldRendererOptions
+    /** 世界种子（数值），由 worldId 字符串哈希而来，用于确定性纹理生成喵 */
+    worldSeed: number
+    /**
+     * 将世界坐标转换为相机相对渲染坐标喵。
+     * 所有写入 Three.js position 的值都必须经过此转换，避免 float32 精度问题喵。
+     * 减法在 float64（JS number）端完成，结果（小数值）写入 float32 喵。
+     */
+    toRenderPos: (worldPos: { x: number; y: number }) => { x: number; y: number }
 }
 
 export type WorldFrameState = {
@@ -120,6 +145,11 @@ export function createWorldRenderManager(
 
     const textureManager = createTextureManager()
     const entityQuery = createEntityQuerySystem()
+    const gridRenderer = new GridRenderer()
+    const hexOutlineRenderer = new HexOutlineRenderer()
+
+    // 将 worldId 字符串哈希为数值种子，用于确定性纹理生成喵
+    const worldSeed = hashWorldId(options.worldId ?? '')
 
     const ctx: WorldRenderContext = {
         renderer,
@@ -143,11 +173,18 @@ export function createWorldRenderManager(
             }
         },
         options,
+        worldSeed,
+        toRenderPos: (worldPos: { x: number; y: number }) => ({
+            x: worldPos.x - cameraWorldPosGU.x,
+            y: worldPos.y - cameraWorldPosGU.y,
+        }),
     }
 
     for (const layer of layerManager.layers.values()) {
         layer.init(ctx)
     }
+    gridRenderer.init(ctx)
+    hexOutlineRenderer.init(ctx)
 
     const frameBuilder = createFrameStateBuilder(
         container,
@@ -277,7 +314,13 @@ export function createWorldRenderManager(
         cameraWorldPosGU,
         zoom,
         applyCameraTransform,
-        { layerManager },
+        {
+            layerManager,
+            onFrameUpdate: (renderCtx, frame) => {
+                gridRenderer.update(renderCtx, frame)
+                hexOutlineRenderer.update(renderCtx, frame)
+            },
+        },
     )
 
     cameraSystem.updateFrustum()
@@ -391,6 +434,8 @@ export function createWorldRenderManager(
         inputSystem.dispose()
 
         layerManager.disposeAll(ctx)
+        gridRenderer.dispose(ctx)
+        hexOutlineRenderer.dispose(ctx)
         textureManager.dispose()
         cameraSystem.dispose()
     }
@@ -401,7 +446,7 @@ export function createWorldRenderManager(
     }
 
     const setGridVisible = (visible: boolean) => {
-        console.log(`setGridVisible(${visible}) - grid layer not implemented`)
+        gridRenderer.setVisible(visible)
     }
 
     return {

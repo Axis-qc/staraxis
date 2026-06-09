@@ -78,9 +78,10 @@ export class SelectionEffectRenderer {
 
       const worldSize = spriteSizePx * ctx.zoom.value
       ring.scale.set(worldSize, worldSize, 1)
+      const rp = ctx.toRenderPos(entityPos)
       ring.position.set(
-        entityPos.x,
-        entityPos.y,
+        rp.x,
+        rp.y,
         0.4
       )
       ring.visible = true

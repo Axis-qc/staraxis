@@ -24,10 +24,16 @@ export { useLocalVisibleWorld, createWorldReactiveWrapper, useEntityPosition } f
 
 // 快捷导入喵
 export {
+  beginRenderFrame,
+  getEntityInterpolationCaptureState,
+  getEntityInterpolationDebugState,
   getEntityDisplayPosition,
   getInterpolatedEntityDisplayPosition,
+  getInterpolationDebugState,
   getEntityWorldPosGU,
   getInterpolatedEntityWorldPosGU,
   getInterpolatedEntityHeadingDeg,
   isInterpolatedEntityMoving,
+  recordRenderedEntityPose,
+  startEntityInterpolationCapture,
 } from './localVisibleWorldQueries'

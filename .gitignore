@@ -158,6 +158,17 @@ Thumbs.db
 ## Special cases:
 /jcef-*.jar
 **/jcef-*.jar
+
+## Documentation (not tracked):
+/0-docs/
+/docs/
+/memories/
+/ai_system/
+*.md
+!/README.md
+!web/README.md
+!ui/**/readme.md
+
 **/libcef.dll
 **/lwjgl3/natives/**
 

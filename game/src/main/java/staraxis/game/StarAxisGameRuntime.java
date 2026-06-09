@@ -302,6 +302,24 @@ public class StarAxisGameRuntime implements GameRuntime {
     }
 
     /**
+     * 强制发布一份实时快照喵。
+     *
+     * 用于需要按固定 Tick 节奏稳定广播的场景喵。
+     * 即使当前没有新的 realtime dirty（实时脏标记）喵，也会把最新权威时间与实体状态写入活动缓冲喵。
+     */
+    public void publishRealtimeSnapshotForced() {
+        publishRealTimeSnapshot();
+        worldState.markRealtimeRevisionPublished();
+    }
+
+    /**
+     * 设置当前世界级并集关注实体集合喵。
+     */
+    public void replaceFullRealtimeSimulationEntityIds(java.util.Set<Long> entityIds) {
+        worldState.replaceFullRealtimeSimulationEntityIds(entityIds);
+    }
+
+    /**
      * 发布低频基线快照（原 publishDailySettlementForDay）。
      * 作用：同步国家资产表、行星地表等低频/大体量数据，降低高频同步压力喵。
      */

@@ -211,6 +211,8 @@ export type SnapshotWsClient = {
     close: () => void
     send: (data: any) => void
     updateVisibleSectors: (sectors: { q: number; r: number }[]) => void
+    updateInterestEntities: (entityIds: number[]) => void
+    startSnapshotTickTrace: (durationMs: number) => void
     setNationId: (nationId: string) => void
     requestFullSync: () => void
 }
@@ -277,6 +279,12 @@ export function connectSnapshotWs(options: SnapshotWsOptions = {}): SnapshotWsCl
         },
         updateVisibleSectors: (sectors: { q: number; r: number }[]) => {
             sharedWsClient.updateVisibleSectors(sectors)
+        },
+        updateInterestEntities: (entityIds: number[]) => {
+            sharedWsClient.updateInterestEntities(entityIds)
+        },
+        startSnapshotTickTrace: (durationMs: number) => {
+            sharedWsClient.startSnapshotTickTrace(durationMs)
         },
         setNationId: (nationId: string) => {
             sharedWsClient.setNationId(nationId)

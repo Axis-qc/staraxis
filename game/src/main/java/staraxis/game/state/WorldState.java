@@ -12,6 +12,7 @@ import staraxis.game.nation.VisibilitySystem;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * WorldState
@@ -43,6 +44,15 @@ public class WorldState {
      * 实时状态修订号：只有真正影响前端同步的数据变化时才递增喵。
      */
     private long realtimeStateRevision = 1L;
+
+    /**
+     * 当前世界级并集关注实体集合喵。
+     *
+     * 语义喵：
+     * - 由 webnet 汇总所有快照订阅连接上报的“视野内实体”并集喵。
+     * - 被包含的实体应走逐 Tick 完整计算喵，避免玩家眼前的运动被简化模式打散喵。
+     */
+    private volatile Set<Long> fullRealtimeSimulationEntityIds = Set.of();
 
     /**
      * 最近一次已经写入实时快照缓冲的修订号喵。
@@ -231,5 +241,23 @@ public class WorldState {
 
     public synchronized void markRealtimeRevisionPublished() {
         publishedRealtimeStateRevision = realtimeStateRevision;
+    }
+
+    /**
+     * 替换当前世界级并集关注实体集合喵。
+     */
+    public void replaceFullRealtimeSimulationEntityIds(Set<Long> entityIds) {
+        if (entityIds == null || entityIds.isEmpty()) {
+            fullRealtimeSimulationEntityIds = Set.of();
+            return;
+        }
+        fullRealtimeSimulationEntityIds = Set.copyOf(entityIds);
+    }
+
+    /**
+     * 判断指定实体是否必须走逐 Tick 完整计算喵。
+     */
+    public boolean shouldUseFullRealtimeSimulation(long entityId) {
+        return fullRealtimeSimulationEntityIds.contains(entityId);
     }
 }

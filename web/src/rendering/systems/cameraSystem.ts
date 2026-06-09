@@ -105,9 +105,12 @@ export function createCameraSystem(
         return targetHeightGU / (2 * Math.tan(THREE.MathUtils.degToRad(fovDeg) / 2))
     }
 
-    const applyTransform = (cameraHeight: number, cameraWorldPosGU: THREE.Vector2) => {
-        camera.position.set(cameraWorldPosGU.x, cameraWorldPosGU.y, cameraHeight)
-        camera.lookAt(cameraWorldPosGU.x, cameraWorldPosGU.y, 0)
+    const applyTransform = (cameraHeight: number, _cameraWorldPosGU: THREE.Vector2) => {
+        // 相机固定在渲染原点 (0, 0, cameraHeight)喵。
+        // 所有世界物体通过 toRenderPos() 转换为相机相对坐标后再写入 mesh.position 喵。
+        // worldGroup 不做偏移，保持 (0,0,0) 喵。
+        camera.position.set(0, 0, cameraHeight)
+        camera.lookAt(0, 0, 0)
         camera.updateMatrixWorld()
     }
 

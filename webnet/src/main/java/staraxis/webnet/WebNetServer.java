@@ -143,7 +143,7 @@ public class WebNetServer {
         }
 
         PathHandler routes = Handlers.path();
-        gameTicker.scheduleAtFixedRate(this::tickAndBroadcastSnapshots, 0, 40, TimeUnit.MILLISECONDS);
+        gameTicker.scheduleAtFixedRate(this::tickAndBroadcastSnapshots, 0, 50, TimeUnit.MILLISECONDS);
 
         routes.addExactPath("/ws", Handlers.websocket(playerWebSocketHandler::onConnect));
 

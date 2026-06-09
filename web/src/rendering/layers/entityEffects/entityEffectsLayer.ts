@@ -10,9 +10,11 @@ import type { WorldRenderContext, WorldFrameState } from '../../worldRenderManag
 import { BaseLayer } from '../baseLayer'
 import { RenderOrder } from '../index'
 import { SelectionEffectRenderer } from './renderers/selectionEffectRenderer'
+import { StarInfoLabelRenderer } from './renderers/starInfoLabelRenderer'
 
 export class EntityEffectsLayer extends BaseLayer {
   private _selectionEffectRenderer: SelectionEffectRenderer | null = null
+  private _starInfoLabelRenderer: StarInfoLabelRenderer | null = null
 
   constructor() {
     super('entityEffects', RenderOrder.ENTITY_EFFECT)
@@ -23,6 +25,9 @@ export class EntityEffectsLayer extends BaseLayer {
 
     this._selectionEffectRenderer = new SelectionEffectRenderer(this.group)
     this._selectionEffectRenderer.init(ctx)
+
+    this._starInfoLabelRenderer = new StarInfoLabelRenderer(this.group)
+    this._starInfoLabelRenderer.init(ctx)
   }
 
   update(ctx: WorldRenderContext, frame: WorldFrameState): void {
@@ -32,6 +37,10 @@ export class EntityEffectsLayer extends BaseLayer {
       this._selectionEffectRenderer.update(ctx, frame)
     }
 
+    if (this._starInfoLabelRenderer) {
+      this._starInfoLabelRenderer.update(ctx, frame)
+    }
+
     this.updateTimestamp()
   }
 
@@ -39,6 +48,11 @@ export class EntityEffectsLayer extends BaseLayer {
     if (this._selectionEffectRenderer) {
       this._selectionEffectRenderer.dispose()
       this._selectionEffectRenderer = null
+    }
+
+    if (this._starInfoLabelRenderer) {
+      this._starInfoLabelRenderer.dispose()
+      this._starInfoLabelRenderer = null
     }
 
     ctx.worldGroup.remove(this.group)

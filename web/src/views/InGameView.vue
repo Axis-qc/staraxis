@@ -79,7 +79,7 @@ import { logger } from '../utils/logger'
 
 import { useAuthStore } from '../stores/auth'
 import { useWorldSessionStore } from '../stores/worldSession'
-import { manualSaveWorld, listAvailableSpawns, confirmSpawn } from '../net/worldSavesApi'
+import { manualSaveWorld, listAvailableSpawns, confirmSpawn, joinWorldSave, getWorldPlayerState } from '../net/worldSavesApi'
 import {
   getLocalVisibleWorld,
   getInterpolatedEntityWorldPosGU,
@@ -126,6 +126,66 @@ const cameraPersister = createCameraStatePersister(renderer, playerId)
 
 let lastSnapshotLogTime = 0
 let isFirstSnapshotLog = true
+let interestEntitySyncTimerId = 0
+let detachInterestCameraListener: (() => void) | null = null
+let lastInterestEntitySignature = ''
+
+const INTEREST_ENTITY_SYNC_INTERVAL_MS = 200
+
+function isPointInAabb(
+  point: { x: number; y: number },
+  aabb: { minX: number; maxX: number; minY: number; maxY: number },
+) {
+  return (
+    point.x >= aabb.minX
+    && point.x <= aabb.maxX
+    && point.y >= aabb.minY
+    && point.y <= aabb.maxY
+  )
+}
+
+function collectViewportInterestEntityIds(): number[] {
+  const r = renderer.value
+  if (!r) {
+    return []
+  }
+
+  const cullingAabb = r.getCullingAabbGU()
+  const entityIds = new Set<number>(selection.selectedIds.value)
+
+  for (const entity of hub.entities.value) {
+    if (entity.entityType !== 'SHIP') {
+      continue
+    }
+
+    const worldPos = getInterpolatedEntityWorldPosGU(entity.entityId) ?? entity.posWorldGU
+    if (!worldPos) {
+      continue
+    }
+
+    if (isPointInAabb(worldPos, cullingAabb)) {
+      entityIds.add(entity.entityId)
+    }
+  }
+
+  return Array.from(entityIds).sort((left, right) => left - right)
+}
+
+function syncViewportInterestEntityIds(force = false) {
+  const client = wsClient.value
+  if (!client) {
+    return
+  }
+
+  const entityIds = collectViewportInterestEntityIds()
+  const signature = entityIds.join(',')
+  if (!force && signature === lastInterestEntitySignature) {
+    return
+  }
+
+  lastInterestEntitySignature = signature
+  client.updateInterestEntities(entityIds)
+}
 
 function handleCommandResult(result: CommandResultMessage) {
   const world = getLocalVisibleWorld()
@@ -208,10 +268,13 @@ function toggleGridVisible() {
 const selection = useRtsSelection({
   getEntities: () => {
     const snapshots = getAllEntitySnapshots()
+    const r = hub.getRenderer()
     const out: Array<{ id: number; type: 'STAR' | 'PLANET' | 'SHIP'; worldPosGU: { x: number; y: number } }> = []
     for (const e of snapshots) {
       if (e.entityType === 'STAR' || e.entityType === 'PLANET' || e.entityType === 'SHIP') {
-        const p = getInterpolatedEntityWorldPosGU(e.entityId)
+        // 优先使用渲染器的 getEntityWorldPosGU（含行星轨道计算），
+        // 与实际渲染位置一致，避免选中检测与视觉位置脱节喵。
+        const p = r?.getEntityWorldPosGU(e.entityId) ?? getInterpolatedEntityWorldPosGU(e.entityId)
         if (!p) continue
         out.push({ id: e.entityId, type: e.entityType, worldPosGU: p })
       }
@@ -267,6 +330,8 @@ watch(
   [wsClient, renderer],
   ([ws, r]) => {
     getLocalVisibleWorld().setCurrentNationId(auth.selectedNationId ?? null)
+    detachInterestCameraListener?.()
+    detachInterestCameraListener = null
     if (ws && r) {
       const nationId = auth.selectedNationId
       if (nationId) {
@@ -275,6 +340,10 @@ watch(
           (r as any).setCurrentNationId(nationId)
         }
       }
+      detachInterestCameraListener = r.onCameraChanged(() => {
+        syncViewportInterestEntityIds(false)
+      })
+      syncViewportInterestEntityIds(true)
       // 这里的首次强制上报由 handleRendererChange 内部处理喵
     }
   },
@@ -353,13 +422,71 @@ watch(
   () => selection.selectedIds.value,
   (ids) => {
     getLocalVisibleWorld().setFocusedEntities(ids)
+    hub.setDebugEntityId(ids[0] ?? null)
     hub.getRenderer()?.setSelectedEntityIds(ids)
+    syncViewportInterestEntityIds(false)
   },
   { deep: true },
 )
 
 function onContextMenu(e: MouseEvent) {
   e.preventDefault()
+}
+
+async function copyInterpolationCaptureText() {
+  const captureText = hub.debug.interpolationCaptureText.value
+  if (!captureText || captureText === 'capture_idle') {
+    devTooltip.show(
+      '当前没有可复制的捕获结果喵',
+      new MouseEvent('click', { clientX: window.innerWidth / 2, clientY: 80 }),
+    )
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(captureText)
+    devTooltip.show(
+      '已复制捕获结果到剪贴板喵',
+      new MouseEvent('click', { clientX: window.innerWidth / 2, clientY: 80 }),
+    )
+  } catch (error) {
+    console.error('[DebugCapture] copy to clipboard failed', error)
+    devTooltip.show(
+      '复制失败，请重试喵',
+      new MouseEvent('click', { clientX: window.innerWidth / 2, clientY: 80 }),
+    )
+  }
+}
+
+async function copyReceivedTickSequenceText() {
+  const tickText = hub.debug.receivedTickSequenceText.value
+  if (!tickText || tickText === 'no_received_ticks') {
+    devTooltip.show(
+      '当前没有可复制的 Tick 录制结果喵',
+      new MouseEvent('click', { clientX: window.innerWidth / 2, clientY: 80 }),
+    )
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(tickText)
+    devTooltip.show(
+      '已复制 Tick 录制结果到剪贴板喵',
+      new MouseEvent('click', { clientX: window.innerWidth / 2, clientY: 80 }),
+    )
+  } catch (error) {
+    console.error('[TickTrace] copy to clipboard failed', error)
+    devTooltip.show(
+      '复制 Tick 录制结果失败，请重试喵',
+      new MouseEvent('click', { clientX: window.innerWidth / 2, clientY: 80 }),
+    )
+  }
+}
+
+function startSnapshotTickTraceCapture() {
+  const durationMs = 10_000
+  hub.startReceivedTickSequenceCapture(durationMs)
+  wsClient.value?.startSnapshotTickTrace(durationMs)
 }
 
 function chooseRandomSpawnInGame() {
@@ -500,6 +627,9 @@ onMounted(async () => {
   } catch { }
   window.addEventListener('popstate', onPopState)
   inputController.attach()
+  interestEntitySyncTimerId = window.setInterval(() => {
+    syncViewportInterestEntityIds(false)
+  }, INTEREST_ENTITY_SYNC_INTERVAL_MS)
 
   const container = containerRef.value
   if (container) {
@@ -511,6 +641,7 @@ onMounted(async () => {
       getSpritePath,
       initialCameraPos: persisted?.cameraWorldPosGU,
       initialZoom: persisted?.zoom,
+      worldId: worldSession.selectedWorldId,
     })
     renderer.value = r
     hub.setRenderer(r)
@@ -519,8 +650,39 @@ onMounted(async () => {
     cameraPersister.schedulePersist()
   }
 
+  // 刷新恢复：用持久化的 worldId 重新 HTTP join 世界，确保后端运行时已加载喵。
+  // 这是解决“RUN_WHEN_ONLINE 策略下刷新后运行时被注销”问题的关键链路喵。
+  const resumeWorldId = worldSession.selectedWorldId
+  const resumePlayerId = auth.playerId
+  if (resumeWorldId && resumePlayerId) {
+    try {
+      const joinResp = await joinWorldSave(resumeWorldId, resumePlayerId)
+      if (joinResp.ok) {
+        // 同步后端返回的最新玩家状态和国家ID喵
+        if (joinResp.playerState) {
+          worldSession.setPlayerWorldState(joinResp.playerState as any)
+        }
+        if (joinResp.nationId && String(joinResp.nationId).trim()) {
+          auth.setSelectedNationId(String(joinResp.nationId))
+        }
+        console.log(`[InGameView] 刷新恢复 join 世界成功: worldId=${resumeWorldId}, playerState=${joinResp.playerState} 喵`)
+      } else {
+        console.warn(`[InGameView] 刷新恢复 join 世界失败: ${joinResp.error} 喵`)
+      }
+    } catch (e) {
+      console.warn('[InGameView] 刷新恢复 join 世界异常:', e)
+    }
+  }
+
   wsClient.value = connectSnapshotWs({
     reconnectDelayMs: 3000,
+    onStatus: ({ connected }) => {
+      if (!connected) {
+        lastInterestEntitySignature = ''
+        return
+      }
+      syncViewportInterestEntityIds(true)
+    },
     onHighFreqSnapshot: (s) => {
       const world = getLocalVisibleWorld()
       const syncResult = world.applyHighFreqSnapshot(s)
@@ -528,6 +690,7 @@ onMounted(async () => {
         hub.setLastHighFreqSnapshot(s)
         hub.syncEntitiesFromWorld()
         hub.getRenderer()?.updateFromHighFreqSnapshot(s)
+        syncViewportInterestEntityIds(false)
       }
     },
     onLowFreqSnapshot: (s) => {
@@ -539,6 +702,7 @@ onMounted(async () => {
     },
     onCommandResult: (result) => {
       handleCommandResult(result)
+      syncViewportInterestEntityIds(false)
     },
     onSnapshot: (s) => {
       const now = Date.now()
@@ -657,6 +821,12 @@ onUnmounted(() => {
   }
   window.removeEventListener('popstate', onPopState)
   inputController.detach()
+  detachInterestCameraListener?.()
+  detachInterestCameraListener = null
+  if (interestEntitySyncTimerId) {
+    window.clearInterval(interestEntitySyncTimerId)
+    interestEntitySyncTimerId = 0
+  }
 
   try {
     wsClient.value?.close()
@@ -739,6 +909,48 @@ onUnmounted(() => {
         <div class="kv">
           <div class="k">世界状态</div>
           <div class="v debug-text">{{ hub.debug.worldStateText }}</div>
+        </div>
+        <div class="kv">
+          <div class="k">双帧窗口</div>
+          <div class="v debug-text">{{ hub.debug.interpolationStateText }}</div>
+        </div>
+        <div class="kv kv-stack">
+          <div class="k">实体插值</div>
+          <div class="v debug-panel-block debug-text debug-block">{{ hub.debug.entityInterpolationStateText }}</div>
+        </div>
+        <div class="kv">
+          <div class="k">捕获30帧</div>
+          <div class="v debug-action-row">
+            <button class="debug-toggle-btn" type="button" @click="hub.requestEntityInterpolationCapture()">
+              捕获
+            </button>
+            <button class="debug-toggle-btn" type="button" @click="copyInterpolationCaptureText()">
+              复制
+            </button>
+          </div>
+        </div>
+        <div class="kv kv-stack">
+          <div class="k">捕获结果</div>
+          <div class="v debug-panel-block debug-capture-block debug-text debug-block">{{ hub.debug.interpolationCaptureText }}</div>
+        </div>
+        <div class="kv kv-stack">
+          <div class="k">接收Tick序列</div>
+          <div class="v debug-text">{{ hub.debug.receivedTickSequenceStatusText }}</div>
+        </div>
+        <div class="kv">
+          <div class="k">Tick录制10秒</div>
+          <div class="v debug-action-row">
+            <button class="debug-toggle-btn" type="button" @click="startSnapshotTickTraceCapture()">
+              录制
+            </button>
+            <button class="debug-toggle-btn" type="button" @click="copyReceivedTickSequenceText()">
+              复制Tick
+            </button>
+          </div>
+        </div>
+        <div class="kv kv-stack">
+          <div class="k">Tick录制结果</div>
+          <div class="v debug-panel-block debug-capture-block debug-text debug-block">{{ hub.debug.receivedTickSequenceText }}</div>
         </div>
         <div class="kv">
           <div class="k">性能(FPS)</div>
@@ -849,8 +1061,11 @@ onUnmounted(() => {
   position: absolute;
   left: 0;
   top: 0;
-  width: 320px;
+  width: min(380px, calc(100vw - 16px));
   max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  display: flex;
+  flex-direction: column;
   border-radius: 14px;
   background: color-mix(in srgb, var(--background-color) 65%, rgba(0, 0, 0, 0.35));
   border: 1px solid color-mix(in srgb, var(--glow-color) 25%, transparent);
@@ -899,6 +1114,11 @@ onUnmounted(() => {
 
 .debug-window-body {
   padding: 10px 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
 }
 
 .perf-chart {
@@ -1011,6 +1231,15 @@ onUnmounted(() => {
   justify-content: space-between;
   padding: 6px 0;
   font-size: 12px;
+  gap: 10px;
+}
+
+.kv-stack {
+  display: block;
+}
+
+.kv-stack .k {
+  margin-bottom: 6px;
 }
 
 .k {
@@ -1022,11 +1251,37 @@ onUnmounted(() => {
 }
 
 .debug-text {
-  max-width: 180px;
+  max-width: 220px;
   word-break: break-all;
   text-align: right;
   font-size: 11px;
   color: color-mix(in srgb, var(--text-color) 65%, transparent);
+}
+
+.debug-block {
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+.debug-panel-block {
+  max-width: 100%;
+  min-height: 74px;
+  max-height: 110px;
+  padding: 8px 10px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  text-align: left;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--glow-color) 18%, transparent);
+  background: color-mix(in srgb, var(--background-color) 82%, rgba(0, 0, 0, 0.24));
+}
+
+.debug-capture-block {
+  min-height: 124px;
+  max-height: 124px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 10px;
+  line-height: 1.5;
 }
 
 .debug-toggle-btn {
@@ -1046,5 +1301,12 @@ onUnmounted(() => {
   border-color: color-mix(in srgb, var(--glow-color) 60%, transparent);
   background: color-mix(in srgb, var(--panel-bg) 70%, rgba(0, 0, 0, 0.4));
   color: var(--text-color-hover);
+}
+
+.debug-action-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 </style>

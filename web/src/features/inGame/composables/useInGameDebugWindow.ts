@@ -6,7 +6,13 @@ export function useInGameDebugWindow(hub: any) {
     const debugWindowPos = ref({ x: 0, y: 0 })
     const isDraggingDebugWindow = ref(false)
     const debugDragOffset = ref({ x: 0, y: 0 })
-    const DEBUG_WINDOW_SIZE = { w: 320, h: 220 }
+
+    function getDebugWindowSize() {
+        return {
+            w: Math.min(380, Math.max(320, window.innerWidth - 16)),
+            h: Math.min(860, Math.max(360, window.innerHeight - 16)),
+        }
+    }
 
     function getClampedDebugWindowPos(next: { x: number; y: number }, size: { w: number; h: number }) {
         const margin = 8
@@ -19,9 +25,10 @@ export function useInGameDebugWindow(hub: any) {
     }
 
     function centerDebugWindow() {
-        const x = (window.innerWidth - DEBUG_WINDOW_SIZE.w) / 2
-        const y = (window.innerHeight - DEBUG_WINDOW_SIZE.h) / 2
-        debugWindowPos.value = getClampedDebugWindowPos({ x, y }, DEBUG_WINDOW_SIZE)
+        const size = getDebugWindowSize()
+        const x = (window.innerWidth - size.w) / 2
+        const y = (window.innerHeight - size.h) / 2
+        debugWindowPos.value = getClampedDebugWindowPos({ x, y }, size)
     }
 
     function toggleDebugWindow() {
@@ -52,7 +59,7 @@ export function useInGameDebugWindow(hub: any) {
         if (!isDraggingDebugWindow.value) return
 
         const next = { x: e.clientX - debugDragOffset.value.x, y: e.clientY - debugDragOffset.value.y }
-        debugWindowPos.value = getClampedDebugWindowPos(next, DEBUG_WINDOW_SIZE)
+        debugWindowPos.value = getClampedDebugWindowPos(next, getDebugWindowSize())
 
         e.preventDefault()
     }

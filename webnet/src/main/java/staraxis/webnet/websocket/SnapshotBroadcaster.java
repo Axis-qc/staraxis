@@ -3,6 +3,7 @@ package staraxis.webnet.websocket;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.undertow.websockets.core.WebSocketChannel;
 import io.undertow.websockets.core.WebSockets;
+import staraxis.game.log.GameLog;
 import staraxis.game.StarAxisGameRuntime;
 import staraxis.game.world.hex.SectorCoord;
 import staraxis.webnet.core.WsConnectionManager;
@@ -27,16 +28,14 @@ public class SnapshotBroadcaster {
 
     /** 自动存档间隔（tick）：300 tick 约 5 分钟（按 1Hz tick）喵。 */
     private static final long AUTO_SAVE_INTERVAL_TICKS = 300L;
-    private static final long SNAPSHOT_SYNC_INTERVAL_MS = 200L;
-
     private final ObjectMapper objectMapper;
     private final WsConnectionManager connMgr;
     private final AtomicLong lastTickCostMs;
     private final Map<String, Long> lastAutoSaveTickByWorldId = new java.util.concurrent.ConcurrentHashMap<>();
     private final Map<String, Boolean> hadSnapshotSubscriberByWorldId = new java.util.concurrent.ConcurrentHashMap<>();
-    private final Map<String, Long> lastSnapshotSyncAtMsByWorldId = new java.util.concurrent.ConcurrentHashMap<>();
     private final Map<String, Long> lastLowFreqBroadcastAtMsByWorldId = new java.util.concurrent.ConcurrentHashMap<>();
-    private final Map<String, Long> lastBroadcastRevisionByWorldId = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, Long> lastLoggedHighFreqTickByWorldId = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, Boolean> lastTraceActiveByWorldId = new java.util.concurrent.ConcurrentHashMap<>();
 
     public SnapshotBroadcaster(ObjectMapper objectMapper, WsConnectionManager connMgr, AtomicLong lastTickCostMs) {
         this.objectMapper = objectMapper;
@@ -54,6 +53,8 @@ public class SnapshotBroadcaster {
             return;
         }
         Set<WebSocketChannel> snapshotSubscribers = connMgr.getSnapshotSubscribers();
+        runtime.replaceFullRealtimeSimulationEntityIds(
+                connMgr.getWorldUnionSnapshotInterestEntityIds());
 
         // 世界推进策略（tickPolicy）喵：
         // - ALWAYS_RUN：始终推进权威时间轴喵。
@@ -74,9 +75,7 @@ public class SnapshotBroadcaster {
                 }
                 lastAutoSaveTickByWorldId.remove(activeWorldId);
                 hadSnapshotSubscriberByWorldId.remove(activeWorldId);
-                lastSnapshotSyncAtMsByWorldId.remove(activeWorldId);
                 lastLowFreqBroadcastAtMsByWorldId.remove(activeWorldId);
-                lastBroadcastRevisionByWorldId.remove(activeWorldId);
                 return;
             }
         }
@@ -112,24 +111,10 @@ public class SnapshotBroadcaster {
             }
 
             long nowMs = System.currentTimeMillis();
-            long lastSyncAtMs = lastSnapshotSyncAtMsByWorldId.getOrDefault(activeWorldId, 0L);
-            if (nowMs - lastSyncAtMs < SNAPSHOT_SYNC_INTERVAL_MS) {
-                return;
-            }
-
-            if (!runtime.hasPendingRealtimeSnapshotChanges()) {
-                return;
-            }
-
-            runtime.publishRealtimeSnapshotIfNeeded();
-            long currentRevision = runtime.getRealtimeStateRevision();
-            long lastBroadcastRevision = lastBroadcastRevisionByWorldId.getOrDefault(activeWorldId, 0L);
-            if (currentRevision == lastBroadcastRevision) {
-                return;
-            }
-
-            lastSnapshotSyncAtMsByWorldId.put(activeWorldId, nowMs);
-            lastBroadcastRevisionByWorldId.put(activeWorldId, currentRevision);
+            // 当前阶段用于排查“后端是否偶发漏发 Tick”喵。
+            // 只要存在快照订阅者喵，就强制把本 Tick 的权威状态发布到活动缓冲并广播喵。
+            // 这样前端收到的高频快照就应当严格按 50ms 一个 Tick 连续到达喵。
+            runtime.publishRealtimeSnapshotForced();
 
             for (WebSocketChannel ch : snapshotSubscribers) {
                 if (ch != null && ch.isOpen()) {
@@ -174,6 +159,28 @@ public class SnapshotBroadcaster {
                     }
                     WebSockets.sendText(legacyJson, ch, null);
                 }
+            }
+            boolean traceActive = connMgr.isSnapshotTickTraceActive(nowMs);
+            boolean wasTraceActive = lastTraceActiveByWorldId.getOrDefault(activeWorldId, false);
+            if (traceActive && !wasTraceActive) {
+                lastLoggedHighFreqTickByWorldId.remove(activeWorldId);
+            }
+            lastTraceActiveByWorldId.put(activeWorldId, traceActive);
+
+            if (traceActive) {
+                long sentTick = runtime.getRealTimeWorldStateReadonly().simulationTick;
+                long previousLoggedTick = lastLoggedHighFreqTickByWorldId.getOrDefault(activeWorldId, sentTick);
+                long tickGap = sentTick - previousLoggedTick;
+                GameLog.log(
+                        "SnapshotTx"
+                                + " world=" + activeWorldId
+                                + " tick=" + sentTick
+                                + " tickGap=" + (lastLoggedHighFreqTickByWorldId.containsKey(activeWorldId) ? tickGap : 0)
+                                + " txRealMs=" + nowMs
+                                + " subscriberCount=" + snapshotSubscribers.size()
+                                + " lowFreqSent="
+                                + (nowMs - lastLowFreqBroadcastAtMsByWorldId.getOrDefault(activeWorldId, 0L) >= 1000L));
+                lastLoggedHighFreqTickByWorldId.put(activeWorldId, sentTick);
             }
             if (nowMs - lastLowFreqBroadcastAtMsByWorldId.getOrDefault(activeWorldId, 0L) >= 1000L) {
                 lastLowFreqBroadcastAtMsByWorldId.put(activeWorldId, nowMs);

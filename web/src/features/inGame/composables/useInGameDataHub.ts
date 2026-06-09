@@ -2,7 +2,14 @@ import { computed, onUnmounted, ref, shallowRef, type Ref } from 'vue'
 import { useAuthStore } from '../../../stores/auth'
 import type { EntitySnapshot, SnapshotHighFreqMessage } from '../../../net/snapshotWs'
 import type { WorldRenderer as ThreeWorldRenderer } from '../../../rendering/worldRenderManager'
-import { getLocalVisibleWorld, type LowFreqWorldState } from '../../../game/world'
+import {
+  getEntityInterpolationCaptureState,
+  getEntityInterpolationDebugState,
+  getInterpolationDebugState,
+  getLocalVisibleWorld,
+  startEntityInterpolationCapture,
+  type LowFreqWorldState,
+} from '../../../game/world'
 
 type Vec2 = { x: number; y: number }
 
@@ -11,6 +18,11 @@ type DebugUiModel = {
   cameraCenterText: Ref<string>
   mouseWorldText: Ref<string>
   worldStateText: Ref<string>
+  interpolationStateText: Ref<string>
+  entityInterpolationStateText: Ref<string>
+  interpolationCaptureText: Ref<string>
+  receivedTickSequenceText: Ref<string>
+  receivedTickSequenceStatusText: Ref<string>
 }
 
 type PerformanceUiModel = {
@@ -28,6 +40,12 @@ type OverviewUiModel = {
   ownedStations: Ref<EntitySnapshot[]>
 }
 
+type ReceivedHighFreqTickSample = {
+  simulationTick: number
+  totalGameSecondsExact: number
+  receivedAtRealMs: number
+}
+
 export type InGameDataHub = {
   setRenderer: (r: ThreeWorldRenderer | null) => void
   getRenderer: () => ThreeWorldRenderer | null
@@ -42,6 +60,9 @@ export type InGameDataHub = {
   debug: DebugUiModel
   performance: PerformanceUiModel
   setPerformanceTracking: (active: boolean) => void
+  setDebugEntityId: (entityId: number | null) => void
+  requestEntityInterpolationCapture: () => void
+  startReceivedTickSequenceCapture: (durationMs?: number) => void
 }
 
 function buildDebugSnapshotText(
@@ -66,8 +87,11 @@ export function useInGameDataHub() {
   const entities = shallowRef<EntitySnapshot[]>([])
   const mouseWorldPosGU = ref<Vec2 | null>(null)
   const debugUiTick = ref(0)
+  const debugEntityId = ref<number | null>(null)
   const fpsText = ref('-')
   const fpsHistory = shallowRef<number[]>([])
+  const receivedHighFreqTickSamples = shallowRef<ReceivedHighFreqTickSample[]>([])
+  const receivedTickTraceEndAtRealMs = ref<number | null>(null)
 
   const FPS_HISTORY_MAX_SECONDS = 60
 
@@ -142,6 +166,24 @@ export function useInGameDataHub() {
   function setLastHighFreqSnapshot(s: SnapshotHighFreqMessage | null) {
     lastHighFreqSnapshot.value = s
     if (s?.ok) {
+      const nowMs = Date.now()
+      if (
+        receivedTickTraceEndAtRealMs.value !== null
+        && nowMs <= receivedTickTraceEndAtRealMs.value
+      ) {
+        const nextSamples = receivedHighFreqTickSamples.value.slice()
+        nextSamples.push({
+          simulationTick: s.simulationTick,
+          totalGameSecondsExact: s.totalGameSecondsExact,
+          receivedAtRealMs: nowMs,
+        })
+        receivedHighFreqTickSamples.value = nextSamples
+      } else if (
+        receivedTickTraceEndAtRealMs.value !== null
+        && nowMs > receivedTickTraceEndAtRealMs.value
+      ) {
+        receivedTickTraceEndAtRealMs.value = null
+      }
       syncEntitiesFromWorld()
     }
   }
@@ -237,6 +279,151 @@ export function useInGameDataHub() {
   const debugWorldStateText = computed(() =>
     buildDebugSnapshotText(lastHighFreqSnapshot.value, lowFreqState.value, entities.value.length),
   )
+  const debugInterpolationStateText = computed(() => {
+    void debugUiTick.value
+
+    const interpolationState = getInterpolationDebugState()
+    if (!interpolationState) {
+      return 'no_window'
+    }
+
+    const nextTickText = interpolationState.nextTick == null ? '-' : String(interpolationState.nextTick)
+    const resetTag = interpolationState.didResetWindow ? ' reset' : ''
+    return `cur=${interpolationState.currentTick} next=${nextTickText} latest=${interpolationState.latestTick} alpha=${interpolationState.renderAlpha.toFixed(2)} mode=${interpolationState.mode}${resetTag}`
+  })
+
+  const debugEntityInterpolationStateText = computed(() => {
+    void debugUiTick.value
+
+    if (debugEntityId.value == null) {
+      return 'no_selected_entity'
+    }
+
+    const debugState = getEntityInterpolationDebugState(debugEntityId.value)
+    if (!debugState) {
+      return 'no_entity_debug'
+    }
+
+    const formatVec = (value: Vec2 | null) =>
+      value ? `(${value.x.toFixed(2)}, ${value.y.toFixed(2)})` : '-'
+    const formatHeading = (value: number | null) =>
+      value == null ? '-' : value.toFixed(2)
+
+    return [
+      `entity=${debugState.entityId}`,
+      `prev=${formatVec(debugState.previousRenderPosition)}`,
+      `target=${formatVec(debugState.targetRenderPosition)}`,
+      `shown=${formatVec(debugState.presentedRenderPosition)}`,
+      `mesh=${formatVec(debugState.renderedMeshPosition)}`,
+      `prevHeading=${formatHeading(debugState.previousRenderHeadingDeg)}`,
+      `targetHeading=${formatHeading(debugState.targetRenderHeadingDeg)}`,
+      `shownHeading=${formatHeading(debugState.presentedRenderHeadingDeg)}`,
+      `meshHeading=${formatHeading(debugState.renderedMeshHeadingDeg)}`,
+      `blend=${debugState.frameBlendAlpha.toFixed(3)}`,
+      `dt=${debugState.renderFrameDeltaMs.toFixed(2)}ms`,
+      `tick=${debugState.currentTick}->${debugState.nextTick ?? '-'}`,
+      `src=${debugState.targetSource}`,
+    ].join('\n')
+  })
+
+  const debugInterpolationCaptureText = computed(() => {
+    void debugUiTick.value
+
+    const captureState = getEntityInterpolationCaptureState()
+    if (!captureState.frames.length) {
+      if (captureState.entityId == null) {
+        return 'capture_idle'
+      }
+      return `capturing entity=${captureState.entityId} remaining=${captureState.remainingFrames}`
+    }
+
+    return captureState.frames
+      .map((frame, index) => {
+        const formatVec = (value: Vec2 | null) =>
+          value ? `(${value.x.toFixed(2)},${value.y.toFixed(2)})` : '-'
+        const formatHeading = (value: number | null) =>
+          value == null ? '-' : value.toFixed(2)
+        return [
+          `#${index + 1}`,
+          `prev=${formatVec(frame.previousRenderPosition)}`,
+          `target=${formatVec(frame.targetRenderPosition)}`,
+          `shown=${formatVec(frame.presentedRenderPosition)}`,
+          `mesh=${formatVec(frame.renderedMeshPosition)}`,
+          `prevHeading=${formatHeading(frame.previousRenderHeadingDeg)}`,
+          `targetHeading=${formatHeading(frame.targetRenderHeadingDeg)}`,
+          `shownHeading=${formatHeading(frame.presentedRenderHeadingDeg)}`,
+          `meshHeading=${formatHeading(frame.renderedMeshHeadingDeg)}`,
+          `blend=${frame.frameBlendAlpha.toFixed(3)}`,
+          `dt=${frame.renderFrameDeltaMs.toFixed(2)}ms`,
+          `tick=${frame.currentTick}->${frame.nextTick ?? '-'}`,
+        ].join(' ')
+      })
+      .join('\n')
+  })
+
+  const debugReceivedTickSequenceText = computed(() => {
+    const samples = receivedHighFreqTickSamples.value
+    if (!samples.length) {
+      return 'no_received_ticks'
+    }
+
+    return samples
+      .map((sample, index) => {
+        const clock = new Date(sample.receivedAtRealMs).toLocaleTimeString('zh-CN', {
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          fractionalSecondDigits: 3,
+        })
+        const prev = index > 0 ? samples[index - 1] : null
+        const tickGap = prev ? sample.simulationTick - prev.simulationTick : 0
+        const realGapMs = prev ? sample.receivedAtRealMs - prev.receivedAtRealMs : 0
+        return [
+          `#${index + 1}`,
+          `tick=${sample.simulationTick}`,
+          `rxClock=${clock}`,
+          `rxRealMs=${sample.receivedAtRealMs}`,
+          `tickGap=${prev ? tickGap : '-'}`,
+          `realGapMs=${prev ? realGapMs : '-'}`,
+          `gameSec=${sample.totalGameSecondsExact.toFixed(3)}`,
+        ].join(' ')
+      })
+      .join('\n')
+  })
+
+  const debugReceivedTickSequenceStatusText = computed(() => {
+    void debugUiTick.value
+
+    if (receivedTickTraceEndAtRealMs.value !== null) {
+      const remainingMs = Math.max(0, receivedTickTraceEndAtRealMs.value - Date.now())
+      return `recording remaining=${(remainingMs / 1000).toFixed(1)}s samples=${receivedHighFreqTickSamples.value.length}`
+    }
+
+    if (!receivedHighFreqTickSamples.value.length) {
+      return 'idle'
+    }
+
+    const first = receivedHighFreqTickSamples.value[0]
+    const last = receivedHighFreqTickSamples.value[receivedHighFreqTickSamples.value.length - 1]
+    return `recorded samples=${receivedHighFreqTickSamples.value.length} range=${first.simulationTick}->${last.simulationTick}`
+  })
+
+  function setDebugEntityId(entityId: number | null) {
+    debugEntityId.value = entityId
+  }
+
+  function requestEntityInterpolationCapture() {
+    if (debugEntityId.value == null) {
+      return
+    }
+    startEntityInterpolationCapture(debugEntityId.value, 30)
+  }
+
+  function startReceivedTickSequenceCapture(durationMs = 10_000) {
+    receivedHighFreqTickSamples.value = []
+    receivedTickTraceEndAtRealMs.value = Date.now() + Math.max(1000, Math.floor(durationMs))
+  }
 
   return {
     setRenderer,
@@ -262,11 +449,19 @@ export function useInGameDataHub() {
       cameraCenterText: debugCameraCenterText,
       mouseWorldText: debugMouseWorldText,
       worldStateText: debugWorldStateText,
+      interpolationStateText: debugInterpolationStateText,
+      entityInterpolationStateText: debugEntityInterpolationStateText,
+      interpolationCaptureText: debugInterpolationCaptureText,
+      receivedTickSequenceText: debugReceivedTickSequenceText,
+      receivedTickSequenceStatusText: debugReceivedTickSequenceStatusText,
     },
     performance: {
       fpsText,
       fpsHistory,
     },
     setPerformanceTracking,
+    setDebugEntityId,
+    requestEntityInterpolationCapture,
+    startReceivedTickSequenceCapture,
   } satisfies InGameDataHub
 }

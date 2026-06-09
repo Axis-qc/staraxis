@@ -15,6 +15,7 @@ import type { WorldRenderContext, WorldFrameState } from '../../../worldRenderMa
 import type { EntitySnapshot, StarDetails } from '../../../../net/snapshotWs'
 import type { EntityLodState } from '../../../subsystems/lodSystem'
 import { getLodSize, LodLevel, shouldRender, shouldShowEffects } from '../../../subsystems/lodSystem'
+import { ZLayer } from '../../index'
 import { getStarProfile } from './starProfile'
 import {
     applyStarProfileToMaterial,
@@ -156,10 +157,11 @@ export class LayerStarRenderer {
         }
 
         mesh.scale.set(scaledRadiusGU, scaledRadiusGU, scaledRadiusGU)
+        const rp = ctx.toRenderPos(entity.posWorldGU!)
         mesh.position.set(
-            entity.posWorldGU!.x,
-            entity.posWorldGU!.y,
-            -scaledRadiusGU,
+            rp.x,
+            rp.y,
+            -(ZLayer.CELESTIAL_STAR_BASE + scaledRadiusGU),
         )
         mesh.visible = true
     }
@@ -193,10 +195,11 @@ export class LayerStarRenderer {
         material.opacity = shouldShowEffects(starLod, isSelected) ? 0.95 : 0.82
         material.sizeAttenuation = true
         sprite.scale.set(fallbackDiameterGU, fallbackDiameterGU, 1)
+        const rp = ctx.toRenderPos(entity.posWorldGU!)
         sprite.position.set(
-            entity.posWorldGU!.x,
-            entity.posWorldGU!.y,
-            0,
+            rp.x,
+            rp.y,
+            -ZLayer.CELESTIAL_STAR_BASE,
         )
         sprite.visible = true
     }
@@ -369,7 +372,7 @@ export class LayerStarRenderer {
         this.starMeshPool.length = 0
 
         for (const sprite of this.starSpritePool) {
-            ;(sprite.material as THREE.Material).dispose()
+            ; (sprite.material as THREE.Material).dispose()
         }
         this.starSpritePool.length = 0
 
