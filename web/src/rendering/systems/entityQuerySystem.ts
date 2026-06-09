@@ -18,6 +18,8 @@ import { defaultGameTimeManager } from '@/game/time/GameTimeManager'
 
 export type EntityQuerySystem = {
     getEntityWorldPosGU: (entityId: number) => { x: number; y: number } | null
+    /** 获取实体快照（含 details），供外部读取实体属性喵 */
+    getEntitySnapshot: (entityId: number) => EntitySnapshot | null
     updateEntities: (entities: EntitySnapshot[]) => void
 }
 
@@ -81,8 +83,13 @@ export function createEntityQuerySystem(): EntityQuerySystem {
         return null
     }
 
+    const getEntitySnapshot = (entityId: number): EntitySnapshot | null => {
+        return entitiesById.get(entityId) ?? null
+    }
+
     return {
         getEntityWorldPosGU,
+        getEntitySnapshot,
         updateEntities,
     }
 }

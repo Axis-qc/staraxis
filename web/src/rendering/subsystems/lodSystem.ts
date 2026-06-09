@@ -114,11 +114,12 @@ export const DEFAULT_LOD_CONFIG: Required<LodOptions> = {
         hiddenThreshold: 100_000,
     },
     orbit: {
-        // zoom > 200 时开始简化
-        // zoom > 1_000 时完全隐藏
-        thresholds: [200, 500],
+        // 与行星圆形图标消失条件一致
+        // zoom > 1_000 时开始淡出
+        // zoom >= 100_000 时完全隐藏
+        thresholds: [200, 1_000, 10_000, 50_000],
         allowHidden: true,
-        hiddenThreshold: 1_000,
+        hiddenThreshold: 100_000,
     },
     grid: {
         // 网格不参与LOD隐藏，但参与LOD参数调整

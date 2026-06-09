@@ -26,6 +26,10 @@ export type RenderLoopOptions = {
     layerManager?: LayerManager
     /** 每帧 layerManager.updateAll 之后调用的子系统回调喵 */
     onFrameUpdate?: (ctx: WorldRenderContext, frame: FrameState) => void
+    /** 相机动画是否正在进行中（WASD 平移应跳过）喵 */
+    isCameraAnimating?: () => boolean
+    /** 取消相机动画（WASD 按下时调用）喵 */
+    cancelCameraAnimation?: () => void
 }
 
 export type RenderLoop = {
@@ -58,28 +62,32 @@ export function createRenderLoop(
         beginRenderFrame(timestampMs)
 
         // 处理键盘持续平移（WASD/方向键）
-        const inputState = inputSystem.getState()
-        let panX = 0
-        let panY = 0
+        // 相机动画期间跳过，避免与动画抢夺镜头控制权喵
+        if (!options.isCameraAnimating?.()) {
+            const inputState = inputSystem.getState()
+            let panX = 0
+            let panY = 0
 
-        if (inputState.pressedKeys.has('KeyW') || inputState.pressedKeys.has('ArrowUp')) {
-            panY += KEYBOARD_PAN_SPEED
-        }
-        if (inputState.pressedKeys.has('KeyS') || inputState.pressedKeys.has('ArrowDown')) {
-            panY -= KEYBOARD_PAN_SPEED
-        }
-        if (inputState.pressedKeys.has('KeyA') || inputState.pressedKeys.has('ArrowLeft')) {
-            panX -= KEYBOARD_PAN_SPEED
-        }
-        if (inputState.pressedKeys.has('KeyD') || inputState.pressedKeys.has('ArrowRight')) {
-            panX += KEYBOARD_PAN_SPEED
-        }
+            if (inputState.pressedKeys.has('KeyW') || inputState.pressedKeys.has('ArrowUp')) {
+                panY += KEYBOARD_PAN_SPEED
+            }
+            if (inputState.pressedKeys.has('KeyS') || inputState.pressedKeys.has('ArrowDown')) {
+                panY -= KEYBOARD_PAN_SPEED
+            }
+            if (inputState.pressedKeys.has('KeyA') || inputState.pressedKeys.has('ArrowLeft')) {
+                panX -= KEYBOARD_PAN_SPEED
+            }
+            if (inputState.pressedKeys.has('KeyD') || inputState.pressedKeys.has('ArrowRight')) {
+                panX += KEYBOARD_PAN_SPEED
+            }
 
-        // 如果有键盘平移输入，更新相机位置
-        if (panX !== 0 || panY !== 0) {
-            cameraWorldPosGU.x += panX * zoom.value
-            cameraWorldPosGU.y += panY * zoom.value
-            applyCameraTransform()
+            if (panX !== 0 || panY !== 0) {
+                // WASD 按下时取消正在进行的飞行动画喵
+                options.cancelCameraAnimation?.()
+                cameraWorldPosGU.x += panX * zoom.value
+                cameraWorldPosGU.y += panY * zoom.value
+                applyCameraTransform()
+            }
         }
 
         // 构建帧状态并更新渲染层

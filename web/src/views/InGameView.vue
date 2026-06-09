@@ -269,18 +269,24 @@ const selection = useRtsSelection({
   getEntities: () => {
     const snapshots = getAllEntitySnapshots()
     const r = hub.getRenderer()
-    const out: Array<{ id: number; type: 'STAR' | 'PLANET' | 'SHIP'; worldPosGU: { x: number; y: number } }> = []
+    const out: Array<{ id: number; type: 'STAR' | 'PLANET' | 'SHIP'; worldPosGU: { x: number; y: number }; screenRadiusGU?: number }> = []
     for (const e of snapshots) {
       if (e.entityType === 'STAR' || e.entityType === 'PLANET' || e.entityType === 'SHIP') {
         // 优先使用渲染器的 getEntityWorldPosGU（含行星轨道计算），
         // 与实际渲染位置一致，避免选中检测与视觉位置脱节喵。
         const p = r?.getEntityWorldPosGU(e.entityId) ?? getInterpolatedEntityWorldPosGU(e.entityId)
         if (!p) continue
-        out.push({ id: e.entityId, type: e.entityType, worldPosGU: p })
+        // 提取实体视觉半径（世界单位），用于点击碰撞检测喵
+        const d = e.details as any
+        const screenRadiusGU = (e.entityType === 'STAR' || e.entityType === 'PLANET')
+          ? (d?.radiusGU ?? 0)
+          : 0
+        out.push({ id: e.entityId, type: e.entityType, worldPosGU: p, screenRadiusGU })
       }
     }
     return out
   },
+  getZoom: () => hub.getRenderer()?.zoom.value ?? 1,
   worldToClient: (world) => {
     const el = containerRef.value
     const r = hub.getRenderer()
@@ -616,6 +622,51 @@ function onCanvasPointerDown(e: PointerEvent) {
   }
 }
 
+// 双击聚焦到实体喵
+function onCanvasDblClick(e: MouseEvent) {
+  const r = hub.getRenderer()
+  if (!r) return
+  const el = containerRef.value
+  if (!el) return
+
+  // canvas 像素坐标 → 世界坐标喵
+  const rect = el.getBoundingClientRect()
+  const canvasX = e.clientX - rect.left
+  const canvasY = e.clientY - rect.top
+  const worldX = r.cameraWorldPosGU.x + (canvasX - rect.width / 2) * r.zoom.value
+  const worldY = r.cameraWorldPosGU.y - (canvasY - rect.height / 2) * r.zoom.value
+
+  // 找最近的实体（圆形碰撞）喵
+  const MIN_HIT_RADIUS_PX = 20
+  const hitRadiusGU = Math.max(MIN_HIT_RADIUS_PX * r.zoom.value, 1)
+  let closestId: number | null = null
+  let closestDistSq = Infinity
+
+  for (const entity of getAllEntitySnapshots()) {
+    if (entity.entityType !== 'STAR' && entity.entityType !== 'PLANET' && entity.entityType !== 'SHIP') continue
+    const p = r.getEntityWorldPosGU(entity.entityId) ?? entity.posWorldGU
+    if (!p) continue
+
+    const d = entity.details as any
+    const entityRadiusGU = (entity.entityType === 'STAR' || entity.entityType === 'PLANET') ? (d?.radiusGU ?? 0) : 0
+    const effectiveRadius = Math.max(entityRadiusGU, hitRadiusGU)
+    const dx = worldX - p.x
+    const dy = worldY - p.y
+    const distSq = dx * dx + dy * dy
+    if (distSq <= effectiveRadius * effectiveRadius && distSq < closestDistSq) {
+      closestDistSq = distSq
+      closestId = entity.entityId
+    }
+  }
+
+  if (closestId !== null) {
+    const p = r.getEntityWorldPosGU(closestId) ?? getAllEntitySnapshots().find(e => e.entityId === closestId)?.posWorldGU
+    if (p) {
+      r.focusOnWorldPos(p)
+    }
+  }
+}
+
 onMounted(async () => {
   const el = rootRef.value
   if (el) {
@@ -845,7 +896,7 @@ onUnmounted(() => {
 <template>
   <div ref="rootRef" class="in-game-root">
     <div ref="containerRef" class="render-container" @pointermove="hub.onCanvasPointerMove"
-      @pointerdown="onCanvasPointerDown"
+      @pointerdown="onCanvasPointerDown" @dblclick="onCanvasDblClick"
       @pointermove.capture="selection.onPointerMove" @pointerup.capture="selection.onPointerUp"
       @pointercancel.capture="selection.cancelSelection"></div>
 

@@ -27,11 +27,15 @@ export type SelectableEntity = {
     id: number
     type: 'STAR' | 'PLANET' | 'SHIP'
     worldPosGU: { x: number; y: number }
+    /** 实体视觉半径（世界单位 GU），用于点击碰撞检测喵 */
+    screenRadiusGU?: number
 }
 
 export function useRtsSelection(opts: {
     getEntities: () => SelectableEntity[]
     worldToClient: (world: { x: number; y: number }) => { x: number; y: number }
+    /** 当前缩放值（世界单位/像素），用于将 screenRadiusGU 转为屏幕像素喵 */
+    getZoom?: () => number
     onSelectionChange?: (selectedIds: number[]) => void
 }) {
     const isSelecting = ref(false)
@@ -81,15 +85,21 @@ export function useRtsSelection(opts: {
 
             // 检查框选范围大小，小于阈值视为点击（单选）
             const isClick = rect.w < 5 && rect.h < 5
+            // 最小点击半径（屏幕像素），确保小实体也能被点中喵
+            const MIN_HIT_RADIUS_PX = 20
 
             const hits: number[] = []
             for (const e of opts.getEntities()) {
                 const p = opts.worldToClient(e.worldPosGU)
                 if (isClick) {
-                    // 点击模式：使用圆形碰撞检测（20像素半径）
+                    // 点击模式：圆形碰撞检测，半径基于实体视觉大小喵
                     const dx = p.x - (x1 + x2) / 2
                     const dy = p.y - (y1 + y2) / 2
-                    if (dx * dx + dy * dy <= 400) { // 20^2 = 400
+                    // screenRadiusGU 转屏幕像素（除以 zoom），取最小值保底喵
+                    const zoom = opts.getZoom?.() ?? 1
+                    const entityRadiusPx = (e.screenRadiusGU ?? 0) / zoom
+                    const hitRadius = Math.max(entityRadiusPx, MIN_HIT_RADIUS_PX)
+                    if (dx * dx + dy * dy <= hitRadius * hitRadius) {
                         hits.push(e.id)
                         break // 点击只选第一个
                     }

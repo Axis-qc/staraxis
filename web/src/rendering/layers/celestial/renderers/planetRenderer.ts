@@ -16,8 +16,19 @@ import { shouldRender, getLodSize } from '../../../subsystems/lodSystem'
 import { ZLayer } from '../../index'
 import { getPlanetProfile } from './planetProfile'
 import { generatePlanetCanvas } from './planetTextureGenerator'
+import { SECTOR_SIZE_GU } from '../../../hexSectorGeometry'
+import { defaultGameTimeManager } from '../../../../game/time/GameTimeManager'
 
-const TRAIL_BASE_COLOR = new THREE.Color(0xffffff)
+/** 轨道环采样点数（椭圆平滑度） */
+const ORBIT_SEGMENTS = 512
+/** 轨道环基础透明度 */
+const ORBIT_BASE_OPACITY = 0.45
+/** 轨道环淡出起始 zoom（超过此值开始淡出） */
+const ORBIT_FADE_START_ZOOM = 1_000
+/** 轨道环淡出结束 zoom（超过此值完全隐藏） */
+const ORBIT_FADE_END_ZOOM = 100_000
+/** 判定行星"在星区内"的距离阈值倍数（× SECTOR_SIZE_GU） */
+const SECTOR_IN_RANGE_FACTOR = 1.5
 
 /** 球体细分段数（固定俯视下不需要太高） */
 const PLANET_SPHERE_SEGMENTS = 24
@@ -25,23 +36,8 @@ const PLANET_SPHERE_SEGMENTS = 24
 /** 行星球体网格类型 */
 type PlanetMesh = THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>
 
-const TRAIL_VERTEX_SHADER = `
-    attribute float aAlpha;
-    varying float vAlpha;
-    void main() {
-        vAlpha = aAlpha;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    }
-`
-
-const TRAIL_FRAGMENT_SHADER = `
-    uniform vec3 uColor;
-    uniform float uOpacity;
-    varying float vAlpha;
-    void main() {
-        gl_FragColor = vec4(uColor, vAlpha * uOpacity);
-    }
-`
+/** 轨道环类型（LineLoop 自动闭合首尾） */
+type OrbitRing = THREE.LineLoop<THREE.BufferGeometry, THREE.LineBasicMaterial>
 
 export class LayerPlanetRenderer {
   private parentGroup: THREE.Group
@@ -57,12 +53,10 @@ export class LayerPlanetRenderer {
   private poolSize: number
   private disposed = false
 
-  // 移动轨迹相关
-  private trailMeshPool: THREE.Mesh[] = []
-  private activeTrailsByEntityId = new Map<number, THREE.Mesh>()
-  private positionHistory = new Map<number, Array<{ x: number; y: number }>>()
-  private lastSampleMinuteByEntityId = new Map<number, number>()
-  private static readonly MAX_TRAIL_POINTS = 1000
+  // 轨道环相关
+  private orbitRingPool: OrbitRing[] = []
+  private activeOrbitRingsByEntityId = new Map<number, OrbitRing>()
+
   private static readonly DEFAULT_POOL_SIZE = 20
 
   constructor(parentGroup: THREE.Group, poolSize: number = LayerPlanetRenderer.DEFAULT_POOL_SIZE) {
@@ -157,199 +151,182 @@ export class LayerPlanetRenderer {
     return p.x >= a.minX && p.x <= a.maxX && p.y >= a.minY && p.y <= a.maxY
   }
 
-  // ─── 轨迹管理（保持不变） ────────────────────────────────────────
+  // ─── 轨道环管理 ────────────────────────────────────────────────
 
-  private releaseTrailMesh(mesh: THREE.Mesh): void {
-    mesh.visible = false
-    mesh.parent?.remove(mesh)
-    this.trailMeshPool.push(mesh)
-  }
-
-  private clearAllTrails(): void {
-    for (const [id, trail] of this.activeTrailsByEntityId.entries()) {
-      this.activeTrailsByEntityId.delete(id)
-      this.releaseTrailMesh(trail)
+  /** 判断轨道中心是否处于某个星区范围内喵 */
+  private isInSector(orbitCenter: { x: number; y: number }, sectorCenters: { x: number; y: number }[]): boolean {
+    const threshold = SECTOR_SIZE_GU * SECTOR_IN_RANGE_FACTOR
+    const thresholdSq = threshold * threshold
+    for (const sc of sectorCenters) {
+      const dx = orbitCenter.x - sc.x
+      const dy = orbitCenter.y - sc.y
+      if (dx * dx + dy * dy <= thresholdSq) return true
     }
-    this.positionHistory.clear()
-    this.lastSampleMinuteByEntityId.clear()
+    return false
   }
 
-  private updateTrail(
+  private releaseOrbitRing(ring: OrbitRing): void {
+    ring.visible = false
+    this.orbitRingPool.push(ring)
+  }
+
+  private clearAllOrbitRings(): void {
+    for (const [id, ring] of this.activeOrbitRingsByEntityId.entries()) {
+      this.activeOrbitRingsByEntityId.delete(id)
+      this.releaseOrbitRing(ring)
+    }
+  }
+
+  private acquireOrbitRing(): OrbitRing {
+    const ring = this.orbitRingPool.pop()
+    if (ring) {
+      ring.visible = true
+      return ring
+    }
+
+    const positions = new Float32Array(ORBIT_SEGMENTS * 3)
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+
+    const material = new THREE.LineBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: ORBIT_BASE_OPACITY,
+      depthWrite: false,
+      depthTest: false,
+    })
+
+    const line = new THREE.LineLoop(geometry, material)
+    line.frustumCulled = false
+    line.renderOrder = -2
+    return line
+  }
+
+  /**
+   * 更新行星轨道环喵。
+   * 根据开普勒轨道参数生成椭圆轨道，仅在星区内显示喵。
+   */
+  private updateOrbitRing(
     entityId: number,
-    currentPos: { x: number; y: number },
+    details: PlanetDetails,
     ctx: WorldRenderContext,
-    isSelected: boolean,
-    totalDays: number
+    frame: WorldFrameState,
   ): void {
-    const TRAIL_OPACITY_BASE = 0.8
-    const PIXEL_WIDTH = 3
-
-    let history = this.positionHistory.get(entityId)
-    if (!history) {
-      history = []
-      this.positionHistory.set(entityId, history)
-    }
-
-    const currentMinute = Math.floor(totalDays * 1440)
-    const lastMinute = this.lastSampleMinuteByEntityId.get(entityId)
-
-    if (lastMinute !== currentMinute) {
-      this.lastSampleMinuteByEntityId.set(entityId, currentMinute)
-      history.push({ x: currentPos.x, y: currentPos.y })
-
-      if (history.length > LayerPlanetRenderer.MAX_TRAIL_POINTS) {
-        history.shift()
+    const orbitLod = frame.lod.orbit
+    // LOD 完全隐藏时回收喵
+    if (!orbitLod.visible) {
+      const existing = this.activeOrbitRingsByEntityId.get(entityId)
+      if (existing) {
+        this.activeOrbitRingsByEntityId.delete(entityId)
+        this.releaseOrbitRing(existing)
       }
-    }
-
-    if (history.length < 2) {
       return
     }
 
-    let trailMesh = this.activeTrailsByEntityId.get(entityId)
-    if (!trailMesh) {
-      trailMesh = this.acquireTrailMesh()
-      this.activeTrailsByEntityId.set(entityId, trailMesh)
-      this.parentGroup.add(trailMesh)
-    }
+    // 获取轨道中心（恒星）位置喵
+    const centerEntity = frame.entitiesById.get(details.orbitCenterEntityId)
+    const centerPos = centerEntity?.posWorldGU
+    if (!centerPos) return
 
-    const zoom = ctx.zoom.value
-    const FADE_START = 1_000
-    const FADE_END = 100_000
-    let trailOpacity = zoom < FADE_START
-      ? TRAIL_OPACITY_BASE
-      : zoom >= FADE_END
-        ? 0
-        : TRAIL_OPACITY_BASE * (1 - (zoom - FADE_START) / (FADE_END - FADE_START))
-
-    if (isSelected && trailOpacity > 0) {
-      trailOpacity = Math.min(1.0, trailOpacity * 1.5)
-    }
-
-    if (trailOpacity <= 0.01) {
-      trailMesh.visible = false
+    // 检查是否在星区内喵
+    if (!this.isInSector(centerPos, frame.sectorCenters)) {
+      const existing = this.activeOrbitRingsByEntityId.get(entityId)
+      if (existing) {
+        this.activeOrbitRingsByEntityId.delete(entityId)
+        this.releaseOrbitRing(existing)
+      }
       return
     }
 
-    const worldWidth = PIXEL_WIDTH * zoom
-    const geometry = trailMesh.geometry
-    const posAttr = geometry.getAttribute('position') as THREE.BufferAttribute
+    let ring = this.activeOrbitRingsByEntityId.get(entityId)
+    if (!ring) {
+      ring = this.acquireOrbitRing()
+      this.parentGroup.add(ring)
+      this.activeOrbitRingsByEntityId.set(entityId, ring)
+    }
+
+    // 计算轨道参数喵
+    const a = details.semiMajorAxisGU
+    const ecc = details.eccentricity
+    const b = a * Math.sqrt(Math.max(0, 1 - ecc * ecc))
+    const periapsisArgRad = (details.periapsisArgDeg * Math.PI) / 180
+
+    // 生成椭圆轨道点（相机相对坐标）喵
+    const posAttr = ring.geometry.getAttribute('position') as THREE.BufferAttribute
     const positions = posAttr.array as Float32Array
-    const alphaAttr = geometry.getAttribute('aAlpha') as THREE.BufferAttribute
-    const alphas = alphaAttr.array as Float32Array
+    const cosW = Math.cos(periapsisArgRad)
+    const sinW = Math.sin(periapsisArgRad)
 
-    for (let i = 0; i < history.length; i++) {
-      const point = history[i]
-      if (!point) break
+    // 先生成均匀分布的顶点喵
+    for (let i = 0; i < ORBIT_SEGMENTS; i++) {
+      const theta = (i / ORBIT_SEGMENTS) * Math.PI * 2
+      const localX = a * Math.cos(theta)
+      const localY = b * Math.sin(theta)
+      const wx = localX * cosW - localY * sinW
+      const wy = localX * sinW + localY * cosW
+      const rp = ctx.toRenderPos({ x: centerPos.x + wx, y: centerPos.y + wy })
+      positions[i * 3] = rp.x
+      positions[i * 3 + 1] = rp.y
+      positions[i * 3 + 2] = 0
+    }
 
-      // 轨迹顶点使用相机相对坐标，避免 float32 精度问题喵
-      const rp = ctx.toRenderPos(point)
+    // 计算行星当前精确位置，修正最近的顶点使其穿过行星中心喵
+    defaultGameTimeManager.update()
+    const totalDays = defaultGameTimeManager.getCurrentGameSeconds() / 86400
+    const meanAnomalyRad = (details.meanAnomalyDegAtEpoch * Math.PI) / 180
+    const periodDays = details.orbitalPeriodDays
+    if (periodDays > 0) {
+      const planetAngle = meanAnomalyRad + (totalDays / periodDays) * 2 * Math.PI
+      const planetLocalX = a * Math.cos(planetAngle)
+      const planetLocalY = b * Math.sin(planetAngle)
+      const planetWx = planetLocalX * cosW - planetLocalY * sinW
+      const planetWy = planetLocalX * sinW + planetLocalY * cosW
+      const planetRp = ctx.toRenderPos({ x: centerPos.x + planetWx, y: centerPos.y + planetWy })
 
-      let dx = 0
-      let dy = 0
+      // 找最近的顶点索引喵
+      const segAngle = (2 * Math.PI) / ORBIT_SEGMENTS
+      const normalizedAngle = ((planetAngle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)
+      const nearestIdx = Math.round(normalizedAngle / segAngle) % ORBIT_SEGMENTS
 
-      if (i < history.length - 1) {
-        const nextPoint = history[i + 1]
-        if (nextPoint) {
-          dx = nextPoint.x - point.x
-          dy = nextPoint.y - point.y
-        }
-      } else if (i > 0) {
-        const previousPoint = history[i - 1]
-        if (previousPoint) {
-          dx = point.x - previousPoint.x
-          dy = point.y - previousPoint.y
-        }
-      }
-
-      const length = Math.sqrt(dx * dx + dy * dy) || 1
-      const nx = (-dy / length) * (worldWidth / 2)
-      const ny = (dx / length) * (worldWidth / 2)
-
-      const vertexOffset = i * 6
-      positions[vertexOffset] = rp.x - nx
-      positions[vertexOffset + 1] = rp.y - ny
-      positions[vertexOffset + 2] = -0.2
-      positions[vertexOffset + 3] = rp.x + nx
-      positions[vertexOffset + 4] = rp.y + ny
-      positions[vertexOffset + 5] = -0.2
-
-      const vertexAlpha = i / (history.length - 1 || 1)
-      alphas[i * 2] = vertexAlpha
-      alphas[i * 2 + 1] = vertexAlpha
+      // 修正该顶点为行星精确位置喵
+      positions[nearestIdx * 3] = planetRp.x
+      positions[nearestIdx * 3 + 1] = planetRp.y
     }
 
     posAttr.needsUpdate = true
-    alphaAttr.needsUpdate = true
-    geometry.setDrawRange(0, (history.length - 1) * 6)
 
-    const material = trailMesh.material as THREE.ShaderMaterial & {
-      uniforms: {
-        uOpacity: { value: number }
-        uColor: { value: THREE.Color }
-      }
-    }
-    material.uniforms.uOpacity.value = trailOpacity
-    material.uniforms.uColor.value.copy(TRAIL_BASE_COLOR)
+    // 轨道 z = 行星中心 z，让轨道穿过行星中心喵
+    const planetRadiusGU = details.radiusGU
+    const planetClampedDiamGU = Math.max(planetRadiusGU * 2, 10 * ctx.zoom.value)
+    const planetSize = getLodSize(frame.lod.planet, false, planetClampedDiamGU)
+    const planetScaledRadius = planetSize * 0.5
+    ring.position.set(0, 0, -(ZLayer.CELESTIAL_PLANET_BASE + planetScaledRadius))
 
-    // 轨迹跟随行星层 z 基准喵
-    trailMesh.position.set(0, 0, -ZLayer.CELESTIAL_PLANET_BASE)
-    trailMesh.visible = true
-  }
-
-  private acquireTrailMesh(): THREE.Mesh {
-    const mesh = this.trailMeshPool.pop()
-    if (mesh) {
-      mesh.visible = true
-      return mesh
+    // 透明度：随 zoom 淡出喵
+    const zoom = ctx.zoom.value
+    let opacity = ORBIT_BASE_OPACITY
+    if (zoom > ORBIT_FADE_START_ZOOM) {
+      opacity = zoom >= ORBIT_FADE_END_ZOOM
+        ? 0
+        : ORBIT_BASE_OPACITY * (1 - (zoom - ORBIT_FADE_START_ZOOM) / (ORBIT_FADE_END_ZOOM - ORBIT_FADE_START_ZOOM))
     }
 
-    const geometry = new THREE.BufferGeometry()
-    const maxVertices = LayerPlanetRenderer.MAX_TRAIL_POINTS * 2
-    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(maxVertices * 3), 3))
-    geometry.setAttribute('aAlpha', new THREE.BufferAttribute(new Float32Array(maxVertices), 1))
+    const material = ring.material
+    material.opacity = opacity
+    material.color.set(0xffffff)
 
-    const indices = new Uint16Array((LayerPlanetRenderer.MAX_TRAIL_POINTS - 1) * 6)
-    for (let i = 0; i < LayerPlanetRenderer.MAX_TRAIL_POINTS - 1; i++) {
-      const vertex = i * 2
-      const indexOffset = i * 6
-      indices[indexOffset] = vertex
-      indices[indexOffset + 1] = vertex + 1
-      indices[indexOffset + 2] = vertex + 2
-      indices[indexOffset + 3] = vertex + 2
-      indices[indexOffset + 4] = vertex + 1
-      indices[indexOffset + 5] = vertex + 3
-    }
-    geometry.setIndex(new THREE.BufferAttribute(indices, 1))
-
-    const material = new THREE.ShaderMaterial({
-      uniforms: {
-        uColor: { value: TRAIL_BASE_COLOR.clone() },
-        uOpacity: { value: 1.0 },
-      },
-      vertexShader: TRAIL_VERTEX_SHADER,
-      fragmentShader: TRAIL_FRAGMENT_SHADER,
-      transparent: true,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-      blending: THREE.AdditiveBlending,
-    })
-
-    const trailMesh = new THREE.Mesh(geometry, material)
-    trailMesh.frustumCulled = false
-    trailMesh.renderOrder = -1
-    return trailMesh
+    ring.visible = opacity > 0.01
   }
 
   // ─── 主更新逻辑 ──────────────────────────────────────────────────
 
   update(ctx: WorldRenderContext, frame: WorldFrameState): void {
-    const { entitiesById, selectedIds, cullingAabb, lod, totalDays } = frame
+    const { entitiesById, selectedIds, cullingAabb, lod } = frame
     const planetLod = lod.planet
 
     // LOD 完全隐藏时回收所有对象喵
     if (!planetLod.visible) {
-      this.clearAllTrails()
+      this.clearAllOrbitRings()
       for (const [id, mesh] of this.activePlanetMeshesByEntityId.entries()) {
         this.activePlanetMeshesByEntityId.delete(id)
         this.releasePlanetMesh(mesh)
@@ -445,18 +422,21 @@ export class LayerPlanetRenderer {
         -(ZLayer.CELESTIAL_PLANET_BASE + scaledRadius),
       )
       mesh.visible = true
-
-      // 更新移动轨迹（历史点存储世界坐标，渲染时转相机相对）喵
-      this.updateTrail(entityId, planetPos, ctx, isSelected, totalDays)
     }
 
-    // 回收不可见实体的轨迹喵
-    for (const [id, trail] of this.activeTrailsByEntityId.entries()) {
-      if (!visibleEntityIds.has(id)) {
-        this.activeTrailsByEntityId.delete(id)
-        this.positionHistory.delete(id)
-        this.lastSampleMinuteByEntityId.delete(id)
-        this.releaseTrailMesh(trail)
+    // ── 独立更新轨道环（不受行星剔除影响，遍历所有行星）──喵
+    const orbitVisibleIds = new Set<number>()
+    for (const entity of entitiesById.values()) {
+      if (entity.entityType !== 'PLANET') continue
+      orbitVisibleIds.add(entity.entityId)
+      this.updateOrbitRing(entity.entityId, entity.details as PlanetDetails, ctx, frame)
+    }
+
+    // 回收不再需要的轨道环喵
+    for (const [id, ring] of this.activeOrbitRingsByEntityId.entries()) {
+      if (!orbitVisibleIds.has(id)) {
+        this.activeOrbitRingsByEntityId.delete(id)
+        this.releaseOrbitRing(ring)
       }
     }
   }
@@ -469,13 +449,10 @@ export class LayerPlanetRenderer {
     this.parentGroup.remove(mesh)
   }
 
-  private disposeTrailMesh(mesh: THREE.Mesh): void {
-    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
-    for (const material of materials) {
-      material.dispose()
-    }
-    mesh.geometry.dispose()
-    this.parentGroup.remove(mesh)
+  private disposeOrbitRing(ring: OrbitRing): void {
+    ring.material.dispose()
+    ring.geometry.dispose()
+    this.parentGroup.remove(ring)
   }
 
   dispose(): void {
@@ -508,21 +485,17 @@ export class LayerPlanetRenderer {
       this.sharedGeometry = null
     }
 
-    // 清理轨迹网格池喵
-    for (const mesh of this.trailMeshPool) {
-      this.disposeTrailMesh(mesh)
+    // 清理轨道环池喵
+    for (const ring of this.orbitRingPool) {
+      this.disposeOrbitRing(ring)
     }
-    this.trailMeshPool = []
+    this.orbitRingPool = []
 
-    // 清理活跃轨迹喵
-    for (const mesh of this.activeTrailsByEntityId.values()) {
-      this.disposeTrailMesh(mesh)
+    // 清理活跃轨道环喵
+    for (const ring of this.activeOrbitRingsByEntityId.values()) {
+      this.disposeOrbitRing(ring)
     }
-    this.activeTrailsByEntityId.clear()
-
-    // 清理历史数据喵
-    this.positionHistory.clear()
-    this.lastSampleMinuteByEntityId.clear()
+    this.activeOrbitRingsByEntityId.clear()
 
     console.log('LayerPlanetRenderer disposed')
     this.disposed = true

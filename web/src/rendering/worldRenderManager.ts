@@ -18,6 +18,8 @@ import type { LodOptions, LodState } from './subsystems/lodSystem'
 import { createTextureManager } from './subsystems/textureManager'
 import { GridRenderer } from './subsystems/gridRenderer'
 import { HexOutlineRenderer } from './subsystems/hexOutlineRenderer'
+import { MouseInteractionManager } from './subsystems/mouseInteractionManager'
+import { createCameraAnimationSubsystem } from './subsystems/cameraAnimationSubsystem'
 
 /**
  * 将 worldId 字符串哈希为数值种子喵。
@@ -56,6 +58,8 @@ export type WorldRenderer = {
     getEntityWorldPosGU: (entityId: number) => { x: number; y: number } | null
     setCurrentNationId: (nationId: string | null) => void
     setGridVisible: (visible: boolean) => void
+    /** 将相机中心移动到指定世界坐标喵 */
+    focusOnWorldPos: (worldPos: { x: number; y: number }) => void
     onCameraChanged: (cb: () => void) => () => void
     dispose: () => void
     getLayer: (name: string) => RenderLayer | null
@@ -186,6 +190,15 @@ export function createWorldRenderManager(
     gridRenderer.init(ctx)
     hexOutlineRenderer.init(ctx)
 
+    // 创建公共鼠标交互管理器，注册可交互元素喵
+    const mouseInteractionManager = new MouseInteractionManager()
+    mouseInteractionManager.bindCanvas(canvas)
+    const effectsLayer = layerManager.getLayer('entityEffects') as EntityEffectsLayer | null
+    const starLabelInteractable = effectsLayer?.getStarLabelInteractable() ?? null
+    if (starLabelInteractable) {
+        mouseInteractionManager.register(starLabelInteractable)
+    }
+
     const frameBuilder = createFrameStateBuilder(
         container,
         cameraWorldPosGU,
@@ -198,6 +211,7 @@ export function createWorldRenderManager(
 
     let currentCullingAabb = { minX: 0, maxX: 0, minY: 0, maxY: 0 }
     let latestSectorCenters: LowFreqWorldState['sectorCenters'] = []
+    let lastFrameTime = 0
 
     const cameraChangeListeners = new Set<() => void>()
     const onCameraChanged = (cb: () => void) => {
@@ -231,13 +245,43 @@ export function createWorldRenderManager(
         applyCameraTransform()
     }
 
-    inputSystem.onAction('CAMERA_ZOOM_IN', () => setZoom(zoom.value * 0.9))
-    inputSystem.onAction('CAMERA_ZOOM_OUT', () => setZoom(zoom.value * 1.1))
+    // CAMERA_ZOOM_IN / CAMERA_ZOOM_OUT 由 canvas wheel 事件直接处理（以鼠标为中心缩放）喵
     inputSystem.onAction('CAMERA_ZOOM_RESET', () => {
         setZoom(1)
         cameraWorldPosGU.set(0, 0)
         applyCameraTransform()
     })
+
+    // ── 相机动画子系统 ──喵
+    const cameraAnim = createCameraAnimationSubsystem()
+
+    // Space 键：无选中时鸟瞰全图，有选中时飞行聚焦到第一个实体喵
+    inputSystem.onAction('PAUSE', () => {
+        if (currentSelectedIds.length > 0) {
+            const firstId = currentSelectedIds[0]!
+            const pos = entityQuery.getEntityWorldPosGU(firstId)
+            if (pos) {
+                const snap = entityQuery.getEntitySnapshot(firstId)
+                const details = snap?.details as any
+                const radiusGU = details?.radiusGU ?? 0
+                if (radiusGU > 0) {
+                    const targetWorldSize = radiusGU * 2 * 1.8
+                    const viewportPx = Math.max(container.clientHeight, 1)
+                    const targetZoomVal = Math.max(minZoom, Math.min(maxZoom, targetWorldSize / viewportPx))
+                    cameraAnim.flyTo(pos, targetZoomVal)
+                } else {
+                    cameraAnim.flyTo(pos, Math.max(minZoom, Math.min(maxZoom, 10)))
+                }
+            }
+        } else {
+            cameraAnim.flyToZoom(maxZoom)
+        }
+    })
+
+    /** 将相机中心移动到指定世界坐标（带动画）喵 */
+    const focusOnWorldPos = (worldPos: { x: number; y: number }) => {
+        cameraAnim.flyToPosition(worldPos)
+    }
 
     let isDragging = false
     const dragStartClient = new THREE.Vector2(0, 0)
@@ -252,6 +296,7 @@ export function createWorldRenderManager(
         if (e.button !== 1) return
 
         isDragging = true
+        cameraAnim.cancel()
         dragStartClient.set(e.clientX, e.clientY)
         dragStartCamera.copy(cameraWorldPosGU)
         canvas.setPointerCapture(e.pointerId)
@@ -282,8 +327,28 @@ export function createWorldRenderManager(
 
     const onWheel = (e: WheelEvent) => {
         e.preventDefault()
+        cameraAnim.cancel()
         const zoomDelta = e.deltaY * 0.001
-        setZoom(zoom.value * (1 + zoomDelta))
+        const oldZoom = zoom.value
+        const newZoom = Math.max(minZoom, Math.min(maxZoom, oldZoom * (1 + zoomDelta)))
+        if (newZoom === oldZoom) return
+
+        // 以鼠标位置为缩放中心：保持鼠标下方的世界坐标不变喵
+        const rect = canvas.getBoundingClientRect()
+        const mx = e.clientX - rect.left   // 鼠标在 canvas 中的 X 像素（左→右）喵
+        const my = e.clientY - rect.top    // 鼠标在 canvas 中的 Y 像素（上→下）喵
+        const canvasW = rect.width
+        const canvasH = rect.height
+
+        // 鼠标相对于视口中心的像素偏移（世界坐标系方向）喵
+        const dxPx = mx - canvasW / 2      // 右为正喵
+        const dyPx = canvasH / 2 - my      // 上为正喵
+
+        // 调整相机位置，使鼠标下方的世界坐标保持不变喵
+        cameraWorldPosGU.x += dxPx * (oldZoom - newZoom)
+        cameraWorldPosGU.y += dyPx * (oldZoom - newZoom)
+
+        setZoom(newZoom)
     }
 
     const onContextMenu = (e: MouseEvent) => {
@@ -316,7 +381,20 @@ export function createWorldRenderManager(
         applyCameraTransform,
         {
             layerManager,
+            isCameraAnimating: () => cameraAnim.isAnimating(),
+            cancelCameraAnimation: () => cameraAnim.cancel(),
             onFrameUpdate: (renderCtx, frame) => {
+                // 仅在动画进行时驱动，空闲时零开销喵
+                if (cameraAnim.isAnimating()) {
+                    const now = performance.now() / 1000
+                    const dtSec = lastFrameTime > 0 ? Math.min(now - lastFrameTime, 0.1) : 0
+                    lastFrameTime = now
+                    cameraAnim.update(dtSec, cameraWorldPosGU, zoom, cameraHeight, cameraSystem.worldUnitsPerPixelToHeight, applyCameraTransform)
+                } else {
+                    lastFrameTime = 0
+                }
+
+                mouseInteractionManager.update()
                 gridRenderer.update(renderCtx, frame)
                 hexOutlineRenderer.update(renderCtx, frame)
             },
@@ -327,7 +405,10 @@ export function createWorldRenderManager(
     applyCameraTransform()
     renderLoop.start()
 
+    let currentSelectedIds: number[] = []
+
     const setSelectedEntityIds = (ids: number[]) => {
+        currentSelectedIds = ids
         frameBuilder.setSelectedIds(ids)
         void frameBuilder.build()
     }
@@ -432,6 +513,8 @@ export function createWorldRenderManager(
 
         renderLoop.stop()
         inputSystem.dispose()
+        mouseInteractionManager.dispose()
+        cameraAnim.dispose()
 
         layerManager.disposeAll(ctx)
         gridRenderer.dispose(ctx)
@@ -467,6 +550,7 @@ export function createWorldRenderManager(
         getEntityWorldPosGU: entityQuery.getEntityWorldPosGU,
         setCurrentNationId,
         setGridVisible,
+        focusOnWorldPos,
         onCameraChanged,
         dispose,
         getLayer: (name: string) => layerManager.getLayer(name),
