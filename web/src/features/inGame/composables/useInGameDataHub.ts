@@ -184,7 +184,6 @@ export function useInGameDataHub() {
       ) {
         receivedTickTraceEndAtRealMs.value = null
       }
-      syncEntitiesFromWorld()
     }
   }
 

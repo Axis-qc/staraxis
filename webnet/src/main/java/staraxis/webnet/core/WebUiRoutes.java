@@ -3,6 +3,8 @@ package staraxis.webnet.core;
 import java.io.File;
 
 import io.undertow.Handlers;
+import io.undertow.server.HttpHandler;
+import io.undertow.server.HttpServerExchange;
 import io.undertow.server.handlers.PathHandler;
 import io.undertow.server.handlers.resource.FileResourceManager;
 import io.undertow.server.handlers.resource.ResourceHandler;
@@ -69,8 +71,27 @@ public class WebUiRoutes {
         ResourceHandler webuiHandler = Handlers.resource(new FileResourceManager(webuiDir, 1024))
                 .setDirectoryListingEnabled(false);
 
-        // 1. 挂载 /webui/**
-        pathHandler.addPrefixPath("/webui", webuiHandler);
+        // SPA fallback：文件不存在时返回 index.html，支持 Vue Router 的前端路由喵
+        HttpHandler spaHandler = new HttpHandler() {
+            private final ResourceHandler delegate = webuiHandler;
+
+            @Override
+            public void handleRequest(HttpServerExchange exchange) throws Exception {
+                // 先尝试正常文件查找
+                String relativePath = exchange.getRelativePath();
+                File targetFile = new File(webuiDir, relativePath);
+                if (targetFile.exists() && targetFile.isFile()) {
+                    delegate.handleRequest(exchange);
+                } else {
+                    // 文件不存在，返回 index.html（SPA 路由由前端处理）喵
+                    exchange.setRelativePath("/index.html");
+                    delegate.handleRequest(exchange);
+                }
+            }
+        };
+
+        // 1. 挂载 /webui/**（带 SPA fallback）喵
+        pathHandler.addPrefixPath("/webui", spaHandler);
 
         // 2. 挂载根路径跳转 / -> /webui/
         pathHandler.addExactPath("/", Handlers.redirect("/webui/"));

@@ -169,6 +169,8 @@ export type LowFreqWorldState = {
   playerNationId: string | null
   /** 收包时间喵 */
   receivedAtClientMs: number
+  /** 公开实体基线（恒星/行星/重心），随低频快照下发喵 */
+  entities?: EntitySnapshot[]
 }
 
 // ==================== 可见性状态 ====================

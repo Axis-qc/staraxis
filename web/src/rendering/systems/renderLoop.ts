@@ -21,6 +21,10 @@ import type { InputSystem } from '../../input/inputSystem'
 import type { LayerManager } from '../layers'
 import { beginRenderFrame } from '@/game/world'
 
+/** 渲染性能统计全局开关，按 F9 切换喵 */
+let _perfEnabled = false
+export const isPerfEnabled = () => _perfEnabled
+
 export type RenderLoopOptions = {
     keyboardPanSpeed?: number
     layerManager?: LayerManager
@@ -55,61 +59,155 @@ export function createRenderLoop(
     let rafId = 0
     let isRunning = false
 
+    // ── 渲染性能统计 ──喵
+    let perfFrameCount = 0
+    let perfWindowStart = 0
+    const perfAccum = {
+        snapshot: 0,
+        input: 0,
+        buildFrame: 0,
+        layers: 0,
+        subsystems: 0,
+        webgl: 0,
+        total: 0,
+    }
+    const perfKeys = Object.keys(perfAccum) as (keyof typeof perfAccum)[]
+    /** 各渲染层逐层耗时累积喵 */
+    const layerAccum = new Map<string, number>()
+
+    /** 按 F9 切换控制台性能统计喵 */
+    const togglePerf = (e: KeyboardEvent) => {
+        if (e.key === 'F9') {
+            _perfEnabled = !_perfEnabled
+            perfFrameCount = 0
+            perfWindowStart = 0
+            for (const k of perfKeys) perfAccum[k] = 0
+            layerAccum.clear()
+            console.log(`[RenderPerf] ${_perfEnabled ? '已开启 — 每秒在控制台打印各阶段耗时' : '已关闭'}喵`)
+        }
+    }
+    globalThis.addEventListener('keydown', togglePerf)
+
     const tick = (timestampMs: number) => {
         if (!isRunning) return
 
         rafId = requestAnimationFrame(tick)
-        beginRenderFrame(timestampMs)
 
-        // 处理键盘持续平移（WASD/方向键）
-        // 相机动画期间跳过，避免与动画抢夺镜头控制权喵
+        // 非统计模式走快速路径，零额外开销喵
+        if (!_perfEnabled) {
+            beginRenderFrame(timestampMs)
+            if (!options.isCameraAnimating?.()) {
+                const inputState = inputSystem.getState()
+                let panX = 0
+                let panY = 0
+                if (inputState.pressedKeys.has('KeyW') || inputState.pressedKeys.has('ArrowUp')) panY += KEYBOARD_PAN_SPEED
+                if (inputState.pressedKeys.has('KeyS') || inputState.pressedKeys.has('ArrowDown')) panY -= KEYBOARD_PAN_SPEED
+                if (inputState.pressedKeys.has('KeyA') || inputState.pressedKeys.has('ArrowLeft')) panX -= KEYBOARD_PAN_SPEED
+                if (inputState.pressedKeys.has('KeyD') || inputState.pressedKeys.has('ArrowRight')) panX += KEYBOARD_PAN_SPEED
+                if (panX !== 0 || panY !== 0) {
+                    options.cancelCameraAnimation?.()
+                    cameraWorldPosGU.x += panX * zoom.value
+                    cameraWorldPosGU.y += panY * zoom.value
+                    applyCameraTransform()
+                }
+            }
+            const frame = buildFrameState()
+            if (layerManager) layerManager.updateAll(ctx, frame)
+            if (options.onFrameUpdate) options.onFrameUpdate(ctx, frame)
+            renderer.render(scene, camera)
+            return
+        }
+
+        // ── 统计模式：逐段计时 ──喵
+        let t0: number
+        const frameStart = performance.now()
+
+        // 快照插值喵
+        t0 = performance.now()
+        beginRenderFrame(timestampMs)
+        perfAccum.snapshot += performance.now() - t0
+
+        // 键盘输入喵
+        t0 = performance.now()
         if (!options.isCameraAnimating?.()) {
             const inputState = inputSystem.getState()
             let panX = 0
             let panY = 0
-
-            if (inputState.pressedKeys.has('KeyW') || inputState.pressedKeys.has('ArrowUp')) {
-                panY += KEYBOARD_PAN_SPEED
-            }
-            if (inputState.pressedKeys.has('KeyS') || inputState.pressedKeys.has('ArrowDown')) {
-                panY -= KEYBOARD_PAN_SPEED
-            }
-            if (inputState.pressedKeys.has('KeyA') || inputState.pressedKeys.has('ArrowLeft')) {
-                panX -= KEYBOARD_PAN_SPEED
-            }
-            if (inputState.pressedKeys.has('KeyD') || inputState.pressedKeys.has('ArrowRight')) {
-                panX += KEYBOARD_PAN_SPEED
-            }
-
+            if (inputState.pressedKeys.has('KeyW') || inputState.pressedKeys.has('ArrowUp')) panY += KEYBOARD_PAN_SPEED
+            if (inputState.pressedKeys.has('KeyS') || inputState.pressedKeys.has('ArrowDown')) panY -= KEYBOARD_PAN_SPEED
+            if (inputState.pressedKeys.has('KeyA') || inputState.pressedKeys.has('ArrowLeft')) panX -= KEYBOARD_PAN_SPEED
+            if (inputState.pressedKeys.has('KeyD') || inputState.pressedKeys.has('ArrowRight')) panX += KEYBOARD_PAN_SPEED
             if (panX !== 0 || panY !== 0) {
-                // WASD 按下时取消正在进行的飞行动画喵
                 options.cancelCameraAnimation?.()
                 cameraWorldPosGU.x += panX * zoom.value
                 cameraWorldPosGU.y += panY * zoom.value
                 applyCameraTransform()
             }
         }
+        perfAccum.input += performance.now() - t0
 
-        // 构建帧状态并更新渲染层
+        // 构建帧状态喵
+        t0 = performance.now()
         const frame = buildFrameState()
+        perfAccum.buildFrame += performance.now() - t0
 
+        // 渲染层更新喵
+        t0 = performance.now()
+        if (layerManager) layerManager.updateAll(ctx, frame)
+        perfAccum.layers += performance.now() - t0
+
+        // 累积各层耗时喵
         if (layerManager) {
-            layerManager.updateAll(ctx, frame)
+            for (const [name, ms] of layerManager.lastLayerTimings) {
+                layerAccum.set(name, (layerAccum.get(name) ?? 0) + ms)
+            }
         }
 
-        // 更新遗留子系统（网格、六边形轮廓等）喵
-        if (options.onFrameUpdate) {
-            options.onFrameUpdate(ctx, frame)
-        }
+        // 遗留子系统喵
+        t0 = performance.now()
+        if (options.onFrameUpdate) options.onFrameUpdate(ctx, frame)
+        perfAccum.subsystems += performance.now() - t0
 
-        // 渲染场景
+        // Three.js 渲染喵
+        t0 = performance.now()
         renderer.render(scene, camera)
+        perfAccum.webgl += performance.now() - t0
+
+        perfAccum.total += performance.now() - frameStart
+        perfFrameCount++
+
+        // 每秒输出一次汇总喵
+        if (perfWindowStart === 0) perfWindowStart = performance.now()
+        const elapsed = performance.now() - perfWindowStart
+        if (elapsed >= 1000) {
+            const fps = Math.round((perfFrameCount * 1000) / elapsed)
+            const rows: Record<string, string> = {}
+            for (const k of perfKeys) {
+                const avgMs = perfAccum[k] / perfFrameCount
+                const pct = ((perfAccum[k] / perfAccum.total) * 100).toFixed(1)
+                rows[k === 'total' ? '🔴 total' : k] = `${avgMs.toFixed(2)}ms  (${pct}%)`
+            }
+            // 逐层耗时明细（缩进显示在 layers 下方）喵
+            for (const [name, ms] of layerAccum) {
+                const avgMs = ms / perfFrameCount
+                const pct = ((ms / perfAccum.layers) * 100).toFixed(1)
+                rows[`  └ ${name}`] = `${avgMs.toFixed(2)}ms  (${pct}%)`
+            }
+            console.log(`[RenderPerf] FPS: ${fps}  帧数: ${perfFrameCount}`)
+            console.table(rows)
+
+            // 重置统计窗口喵
+            perfFrameCount = 0
+            perfWindowStart = performance.now()
+            for (const k of perfKeys) perfAccum[k] = 0
+            layerAccum.clear()
+        }
     }
 
     const start = () => {
         if (isRunning) return
         isRunning = true
-        tick()
+        tick(performance.now())
     }
 
     const stop = () => {
@@ -118,6 +216,7 @@ export function createRenderLoop(
             cancelAnimationFrame(rafId)
             rafId = 0
         }
+        globalThis.removeEventListener('keydown', togglePerf)
     }
 
     const isRunningFn = () => isRunning

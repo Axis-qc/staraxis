@@ -109,14 +109,13 @@ export function createFrameStateBuilder(
             maxY: cameraWorldPosGU.y + (viewHeightGU * CULLING_SCALE) / 2,
         }
 
-        defaultGameTimeManager.update()
         const totalDays = defaultGameTimeManager.getCurrentGameSeconds() / 86400
 
         // 使用LOD系统统一计算所有渲染类型的LOD状态
         const lod = computeLodState(zoom.value, lodOptions)
 
         return {
-            entitiesById: new Map(entitiesById),
+            entitiesById,  // 直接引用，避免每帧复制 1935 条喵
             sectorCenters: [...sectorCenters],
             sectorOwnerNationIdByCoord: { ...sectorOwnerNationIdByCoord },
             selectedIds: new Set(selectedIds),

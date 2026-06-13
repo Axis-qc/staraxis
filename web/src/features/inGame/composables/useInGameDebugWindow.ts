@@ -1,7 +1,30 @@
 import { ref } from 'vue'
 
+/**
+ * 判断调试模式是否开启喵。
+ * 优先级：URL参数 ?debug=1 > localStorage sa.debugMode > import.meta.env.DEV
+ */
+function isDebugEnabled(): boolean {
+    // URL 参数优先
+    if (typeof window !== 'undefined') {
+        try {
+            const params = new URLSearchParams(window.location.search)
+            if (params.has('debug')) {
+                return params.get('debug') !== '0'
+            }
+        } catch { /* ignore */ }
+        // localStorage 持久化开关
+        try {
+            if (localStorage.getItem('sa.debugMode') === 'true') return true
+            if (localStorage.getItem('sa.debugMode') === 'false') return false
+        } catch { /* ignore */ }
+    }
+    // 默认开启（URL ?debug=0 或 localStorage sa.debugMode=false 可关闭）
+    return true
+}
+
 export function useInGameDebugWindow(hub: any) {
-    const isDebugHudEnabled = import.meta.env.DEV
+    const isDebugHudEnabled = isDebugEnabled()
     const isDebugWindowVisible = ref(false)
     const debugWindowPos = ref({ x: 0, y: 0 })
     const isDraggingDebugWindow = ref(false)

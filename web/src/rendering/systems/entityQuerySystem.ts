@@ -21,6 +21,8 @@ export type EntityQuerySystem = {
     /** 获取实体快照（含 details），供外部读取实体属性喵 */
     getEntitySnapshot: (entityId: number) => EntitySnapshot | null
     updateEntities: (entities: EntitySnapshot[]) => void
+    /** 增量添加/更新实体，不清除已有缓存喵 */
+    addEntities: (entities: EntitySnapshot[]) => void
 }
 
 export function createEntityQuerySystem(): EntityQuerySystem {
@@ -31,14 +33,18 @@ export function createEntityQuerySystem(): EntityQuerySystem {
         for (const e of entities) {
             entitiesById.set(e.entityId, e)
         }
-        // 实体缓存由高频快照链路统一刷新喵
+    }
+
+    const addEntities = (entities: EntitySnapshot[]) => {
+        for (const e of entities) {
+            entitiesById.set(e.entityId, e)
+        }
     }
 
     const getEntityWorldPosGU = (entityId: number): { x: number; y: number } | null => {
         const e = entitiesById.get(entityId)
         if (!e) return null
 
-        // 恒星和舰船直接返回位置喵
         if (e.entityType === 'STAR') {
             return e.posWorldGU ?? null
         }
@@ -51,32 +57,25 @@ export function createEntityQuerySystem(): EntityQuerySystem {
         if (e.entityType === 'PLANET') {
             const details = e.details as PlanetDetails
             if (!details) return null
-
             const center = entitiesById.get(details.orbitCenterEntityId)
-            if (!center) return null
+            if (!center || !center.posWorldGU) return null
 
-            defaultGameTimeManager.update()
             const totalDays = defaultGameTimeManager.getCurrentGameSeconds() / 86400
-
-            // 计算行星轨道位置
             const meanAnomaly = (Number(details.meanAnomalyDegAtEpoch ?? 0) * Math.PI) / 180
             const periodDays = Number(details.orbitalPeriodDays ?? 0)
             if (!Number.isFinite(periodDays) || periodDays <= 0) return null
-
             const angle = meanAnomaly + (totalDays / periodDays) * 2 * Math.PI
             const a = Number(details.semiMajorAxisGU ?? 0)
             const ecc = Number(details.eccentricity ?? 0)
             const b = a * Math.sqrt(Math.max(0, 1 - ecc ** 2))
             const periapsisArgRad = (Number(details.periapsisArgDeg ?? 0) * Math.PI) / 180
-
             const localX = a * Math.cos(angle)
             const localY = b * Math.sin(angle)
             const cosW = Math.cos(periapsisArgRad)
             const sinW = Math.sin(periapsisArgRad)
-
             return {
-                x: center.posWorldGU!.x + localX * cosW - localY * sinW,
-                y: center.posWorldGU!.y + localX * sinW + localY * cosW,
+                x: center.posWorldGU.x + localX * cosW - localY * sinW,
+                y: center.posWorldGU.y + localX * sinW + localY * cosW,
             }
         }
 
@@ -91,5 +90,6 @@ export function createEntityQuerySystem(): EntityQuerySystem {
         getEntityWorldPosGU,
         getEntitySnapshot,
         updateEntities,
+        addEntities,
     }
 }

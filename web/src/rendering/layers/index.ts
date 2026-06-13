@@ -54,13 +54,13 @@ export const ZLayer = {
  * 颜色基于 `planet-types.json` 中的 typeId 喵。
  */
 export const PLANET_TYPE_COLORS: Record<string, number> = {
-    TERRESTRIAL:   0x4a90d9,  // 海洋蓝
-    ROCKY_BARREN:  0x8b7355,  // 岩石棕
-    GAS_GIANT:     0xd4a054,  // 气态金
-    ICE_GIANT:     0x7ec8e3,  // 冰蓝
-    OCEAN_WORLD:   0x2e86c1,  // 深海蓝
-    LAVA_WORLD:    0xd45d00,  // 岩浆橙
-    FROZEN_WORLD:  0xc5e0f0,  // 冰雪白蓝
+    TERRESTRIAL: 0x4a90d9,  // 海洋蓝
+    ROCKY_BARREN: 0x8b7355,  // 岩石棕
+    GAS_GIANT: 0xd4a054,  // 气态金
+    ICE_GIANT: 0x7ec8e3,  // 冰蓝
+    OCEAN_WORLD: 0x2e86c1,  // 深海蓝
+    LAVA_WORLD: 0xd45d00,  // 岩浆橙
+    FROZEN_WORLD: 0xc5e0f0,  // 冰雪白蓝
 }
 
 /**
@@ -99,6 +99,9 @@ export interface RenderLayer {
  */
 export interface LayerManager {
     readonly layers: Map<string, RenderLayer>
+
+    /** 各层最近一次 update 的耗时（ms），由 updateAll 自动填充喵 */
+    readonly lastLayerTimings: Map<string, number>
 
     // 层管理
     registerLayer(layer: RenderLayer): void

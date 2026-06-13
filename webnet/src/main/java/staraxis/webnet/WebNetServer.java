@@ -51,6 +51,7 @@ import staraxis.webnet.command.SpawnColonyShipCommand;
 import staraxis.webnet.command.ColonizePlanetWebCommand;
 import staraxis.webnet.ai.WebAiWebSocketHandler;
 import staraxis.webnet.ai.WebAiAutoStarter;
+import staraxis.webnet.websocket.SnapshotBroadcaster;
 import staraxis.webnet.websocket.WebPlayerWebSocketHandler;
 import io.undertow.Handlers;
 import io.undertow.Undertow;
@@ -95,9 +96,9 @@ public class WebNetServer {
     private final WebCommandRegistry commandRegistry = new WebCommandRegistry(objectMapper);
 
     private final WsConnectionManager connMgr = new WsConnectionManager();
+    private final staraxis.webnet.websocket.SnapshotBroadcaster snapshotBroadcaster;
     private final WebPlayerWebSocketHandler playerWebSocketHandler;
     private final WebAiWebSocketHandler aiWebSocketHandler;
-    private final staraxis.webnet.websocket.SnapshotBroadcaster snapshotBroadcaster;
 
     private final AtomicLong lastTickCostMs = new AtomicLong(0);
     private volatile long lastLowFreqWsCheckMs = 0;
@@ -120,10 +121,11 @@ public class WebNetServer {
         commandRegistry.register(new SetSimTimeSpeedCommand());
         commandRegistry.register(new SpawnColonyShipCommand());
         commandRegistry.register(new ColonizePlanetWebCommand());
-        this.playerWebSocketHandler = new WebPlayerWebSocketHandler(objectMapper, authStore, connMgr, commandRegistry);
-        this.aiWebSocketHandler = new WebAiWebSocketHandler(authStore, connMgr);
         this.snapshotBroadcaster = new staraxis.webnet.websocket.SnapshotBroadcaster(objectMapper, connMgr,
                 lastTickCostMs);
+        this.playerWebSocketHandler = new WebPlayerWebSocketHandler(objectMapper, authStore, connMgr, commandRegistry,
+                this.snapshotBroadcaster);
+        this.aiWebSocketHandler = new WebAiWebSocketHandler(authStore, connMgr);
     }
 
     public void start() {

@@ -38,13 +38,15 @@ public class WebPlayerWebSocketHandler {
     private final AuthStore authStore;
     private final WsConnectionManager connMgr;
     private final WebCommandRegistry commandRegistry;
+    private final SnapshotBroadcaster snapshotBroadcaster;
 
     public WebPlayerWebSocketHandler(ObjectMapper objectMapper, AuthStore authStore, WsConnectionManager connMgr,
-            WebCommandRegistry commandRegistry) {
+            WebCommandRegistry commandRegistry, SnapshotBroadcaster snapshotBroadcaster) {
         this.objectMapper = objectMapper;
         this.authStore = authStore;
         this.connMgr = connMgr;
         this.commandRegistry = commandRegistry;
+        this.snapshotBroadcaster = snapshotBroadcaster;
     }
 
     /**
@@ -121,6 +123,15 @@ public class WebPlayerWebSocketHandler {
                         WebSockets.sendText(
                                 "{\"type\":\"snapshotTickTraceStarted\",\"ok\":true,\"durationMs\":" + durationMs
                                         + ",\"traceUntilRealMs\":" + traceUntilMs + "}",
+                                channel, null);
+                        return;
+                    }
+
+                    if ("toggleBroadcastTimingTrace".equals(type)) {
+                        boolean state = snapshotBroadcaster.toggleBroadcastTimingTrace();
+                        GameLog.log("BroadcastTimingTrace toggled by player=" + playerId + " state=" + state);
+                        WebSockets.sendText(
+                                "{\"type\":\"broadcastTimingTraceToggled\",\"ok\":true,\"active\":" + state + "}",
                                 channel, null);
                         return;
                     }
@@ -223,7 +234,8 @@ public class WebPlayerWebSocketHandler {
                 visible = intelSystem.computeIntelVisibleSectors(nationId);
             } else {
                 // 情报系统未初始化，回退到简化可见性计算喵
-                System.err.println("[WebPlayerWebSocketHandler] IntelSystem not initialized, falling back to visibility system喵");
+                System.err.println(
+                        "[WebPlayerWebSocketHandler] IntelSystem not initialized, falling back to visibility system喵");
                 visible = runtime.getWorldStateForSimOnly().visibilitySystem
                         .computeIntelVisibleSectorsForNation(nationId);
             }
@@ -231,11 +243,12 @@ public class WebPlayerWebSocketHandler {
             SnapshotMessageDto snapshotDto = SnapshotMessageFactory.buildSnapshotMessageWithNation(runtime, 0, visible,
                     nationId);
             SnapshotHighFreqMessageDto highFreqDto = SnapshotMessageFactory.buildHighFreqSnapshotMessage(snapshotDto);
-            SnapshotLowFreqMessageDto lowFreqDto = SnapshotMessageFactory.buildLowFreqSnapshotMessage(snapshotDto);
+            // 首次全量同步，低频携带全量实体基线喵
+            SnapshotLowFreqMessageDto lowFreqDto = SnapshotMessageFactory.buildLowFreqSnapshotMessage(snapshotDto,
+                    true);
 
             WebSockets.sendText(objectMapper.writeValueAsString(highFreqDto), channel, null);
             WebSockets.sendText(objectMapper.writeValueAsString(lowFreqDto), channel, null);
-            WebSockets.sendText(objectMapper.writeValueAsString(snapshotDto), channel, null);
         } catch (Exception e) {
             WebSockets.sendText("{\"type\":\"snapshot\",\"ok\":false,\"error\":\"snapshot_build_failed\"}",
                     channel, null);

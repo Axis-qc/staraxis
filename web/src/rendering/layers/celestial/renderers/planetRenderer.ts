@@ -11,12 +11,11 @@
 
 import * as THREE from 'three'
 import type { WorldRenderContext, WorldFrameState } from '../../../worldRenderManager'
-import type { PlanetDetails } from '../../../../net/snapshotWs'
+import type { PlanetDetails, EntitySnapshot } from '../../../../net/snapshotWs'
 import { shouldRender, getLodSize } from '../../../subsystems/lodSystem'
 import { ZLayer } from '../../index'
 import { getPlanetProfile } from './planetProfile'
 import { generatePlanetCanvas } from './planetTextureGenerator'
-import { SECTOR_SIZE_GU } from '../../../hexSectorGeometry'
 import { defaultGameTimeManager } from '../../../../game/time/GameTimeManager'
 
 /** 轨道环采样点数（椭圆平滑度） */
@@ -27,9 +26,6 @@ const ORBIT_BASE_OPACITY = 0.45
 const ORBIT_FADE_START_ZOOM = 1_000
 /** 轨道环淡出结束 zoom（超过此值完全隐藏） */
 const ORBIT_FADE_END_ZOOM = 100_000
-/** 判定行星"在星区内"的距离阈值倍数（× SECTOR_SIZE_GU） */
-const SECTOR_IN_RANGE_FACTOR = 1.5
-
 /** 球体细分段数（固定俯视下不需要太高） */
 const PLANET_SPHERE_SEGMENTS = 24
 
@@ -38,6 +34,17 @@ type PlanetMesh = THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>
 
 /** 轨道环类型（LineLoop 自动闭合首尾） */
 type OrbitRing = THREE.LineLoop<THREE.BufferGeometry, THREE.LineBasicMaterial>
+
+/** 轨道缓存条目：记录生成参数，只在参数变化时重算喵 */
+type OrbitCacheEntry = {
+  /** 世界坐标椭圆点（不含行星位），只在轨道参数或星位变化时重算喵 */
+  worldPoints: { x: number; y: number }[]
+  /** 上次重算时使用的轨道参数哈希喵 */
+  paramsHash: string
+  /** 上次重算时的恒星世界坐标喵 */
+  centerWorldX: number
+  centerWorldY: number
+}
 
 export class LayerPlanetRenderer {
   private parentGroup: THREE.Group
@@ -56,6 +63,13 @@ export class LayerPlanetRenderer {
   // 轨道环相关
   private orbitRingPool: OrbitRing[] = []
   private activeOrbitRingsByEntityId = new Map<number, OrbitRing>()
+  /** 轨道世界坐标缓存，只在参数变化时重算喵 */
+  private orbitCache = new Map<number, OrbitCacheEntry>()
+  /** 恒星 → 环绕行星索引，实体表变化时缓存喵 */
+  private starToPlanets = new Map<number, number[]>()
+  private lastCameraX = NaN
+  private lastCameraY = NaN
+  private _prevEntityCount = -1
 
   private static readonly DEFAULT_POOL_SIZE = 20
 
@@ -153,18 +167,6 @@ export class LayerPlanetRenderer {
 
   // ─── 轨道环管理 ────────────────────────────────────────────────
 
-  /** 判断轨道中心是否处于某个星区范围内喵 */
-  private isInSector(orbitCenter: { x: number; y: number }, sectorCenters: { x: number; y: number }[]): boolean {
-    const threshold = SECTOR_SIZE_GU * SECTOR_IN_RANGE_FACTOR
-    const thresholdSq = threshold * threshold
-    for (const sc of sectorCenters) {
-      const dx = orbitCenter.x - sc.x
-      const dy = orbitCenter.y - sc.y
-      if (dx * dx + dy * dy <= thresholdSq) return true
-    }
-    return false
-  }
-
   private releaseOrbitRing(ring: OrbitRing): void {
     ring.visible = false
     this.orbitRingPool.push(ring)
@@ -174,6 +176,24 @@ export class LayerPlanetRenderer {
     for (const [id, ring] of this.activeOrbitRingsByEntityId.entries()) {
       this.activeOrbitRingsByEntityId.delete(id)
       this.releaseOrbitRing(ring)
+    }
+    this.orbitCache.clear()
+  }
+
+  /** 重建恒星 → 行星索引（仅在实体数量变化时调用）喵 */
+  private rebuildStarToPlanets(entitiesById: Map<number, EntitySnapshot>): void {
+    this.starToPlanets.clear()
+    for (const entity of entitiesById.values()) {
+      if (entity.entityType !== 'PLANET') continue
+      const details = entity.details as PlanetDetails
+      if (!details) continue
+      const starId = details.orbitCenterEntityId
+      let arr = this.starToPlanets.get(starId)
+      if (!arr) {
+        arr = []
+        this.starToPlanets.set(starId, arr)
+      }
+      arr.push(entity.entityId)
     }
   }
 
@@ -203,99 +223,105 @@ export class LayerPlanetRenderer {
   }
 
   /**
-   * 更新行星轨道环喵。
-   * 根据开普勒轨道参数生成椭圆轨道，仅在星区内显示喵。
+   * 确保轨道世界坐标点已缓存（仅在参数或星位变化时重算）喵。
+   * 返回缓存条目，若轨道不可见则返回 null 喵。
    */
-  private updateOrbitRing(
+  private ensureOrbitCache(
     entityId: number,
     details: PlanetDetails,
+    centerPos: { x: number; y: number },
+  ): OrbitCacheEntry | null {
+    // 构造参数哈希（含星位，星位微移也触发重算）喵
+    const cxQ = Math.round(centerPos.x)
+    const cxR = Math.round(centerPos.y)
+    const hash = `${details.orbitCenterEntityId}_${details.semiMajorAxisGU}_${details.eccentricity}_${details.periapsisArgDeg}_${cxQ}_${cxR}`
+
+    const cached = this.orbitCache.get(entityId)
+    if (cached && cached.paramsHash === hash) return cached
+
+    // ── 重算世界坐标椭圆点 ──喵
+    const a = details.semiMajorAxisGU
+    const ecc = details.eccentricity
+    const b = a * Math.sqrt(Math.max(0, 1 - ecc * ecc))
+    const periapsisArgRad = (details.periapsisArgDeg * Math.PI) / 180
+    const cosW = Math.cos(periapsisArgRad)
+    const sinW = Math.sin(periapsisArgRad)
+
+    const worldPoints: { x: number; y: number }[] = new Array(ORBIT_SEGMENTS)
+    for (let i = 0; i < ORBIT_SEGMENTS; i++) {
+      const theta = (i / ORBIT_SEGMENTS) * Math.PI * 2
+      const localX = a * Math.cos(theta)
+      const localY = b * Math.sin(theta)
+      worldPoints[i] = {
+        x: centerPos.x + localX * cosW - localY * sinW,
+        y: centerPos.y + localX * sinW + localY * cosW,
+      }
+    }
+
+    // 修正行星精确位置顶点喵
+    const totalDays = defaultGameTimeManager.getCurrentGameSeconds() / 86400
+    const periodDays = details.orbitalPeriodDays
+    if (periodDays > 0) {
+      const meanAnomalyRad = (details.meanAnomalyDegAtEpoch * Math.PI) / 180
+      const planetAngle = meanAnomalyRad + (totalDays / periodDays) * 2 * Math.PI
+      const planetLocalX = a * Math.cos(planetAngle)
+      const planetLocalY = b * Math.sin(planetAngle)
+      const segAngle = (2 * Math.PI) / ORBIT_SEGMENTS
+      const normalizedAngle = ((planetAngle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)
+      const nearestIdx = Math.round(normalizedAngle / segAngle) % ORBIT_SEGMENTS
+      worldPoints[nearestIdx] = {
+        x: centerPos.x + planetLocalX * cosW - planetLocalY * sinW,
+        y: centerPos.y + planetLocalX * sinW + planetLocalY * cosW,
+      }
+    }
+
+    const entry: OrbitCacheEntry = {
+      worldPoints,
+      paramsHash: hash,
+      centerWorldX: cxQ,
+      centerWorldY: cxR,
+    }
+    this.orbitCache.set(entityId, entry)
+    return entry
+  }
+
+  /**
+   * 轻量更新轨道环：仅刷新渲染坐标、透明度、可见性喵。
+   * 重算世界坐标点的逻辑在 ensureOrbitCache 中完成喵。
+   */
+  private updateOrbitRingLightweight(
+    entityId: number,
+    details: PlanetDetails,
+    cacheEntry: OrbitCacheEntry,
     ctx: WorldRenderContext,
     frame: WorldFrameState,
+    cameraMoved: boolean,
   ): void {
-    const orbitLod = frame.lod.orbit
-    // LOD 完全隐藏时回收喵
-    if (!orbitLod.visible) {
-      const existing = this.activeOrbitRingsByEntityId.get(entityId)
-      if (existing) {
-        this.activeOrbitRingsByEntityId.delete(entityId)
-        this.releaseOrbitRing(existing)
-      }
-      return
-    }
-
-    // 获取轨道中心（恒星）位置喵
-    const centerEntity = frame.entitiesById.get(details.orbitCenterEntityId)
-    const centerPos = centerEntity?.posWorldGU
-    if (!centerPos) return
-
-    // 检查是否在星区内喵
-    if (!this.isInSector(centerPos, frame.sectorCenters)) {
-      const existing = this.activeOrbitRingsByEntityId.get(entityId)
-      if (existing) {
-        this.activeOrbitRingsByEntityId.delete(entityId)
-        this.releaseOrbitRing(existing)
-      }
-      return
-    }
-
     let ring = this.activeOrbitRingsByEntityId.get(entityId)
     if (!ring) {
       ring = this.acquireOrbitRing()
       this.parentGroup.add(ring)
       this.activeOrbitRingsByEntityId.set(entityId, ring)
+      cameraMoved = true // 新创建的环必须刷新坐标喵
     }
 
-    // 计算轨道参数喵
-    const a = details.semiMajorAxisGU
-    const ecc = details.eccentricity
-    const b = a * Math.sqrt(Math.max(0, 1 - ecc * ecc))
-    const periapsisArgRad = (details.periapsisArgDeg * Math.PI) / 180
-
-    // 生成椭圆轨道点（相机相对坐标）喵
-    const posAttr = ring.geometry.getAttribute('position') as THREE.BufferAttribute
-    const positions = posAttr.array as Float32Array
-    const cosW = Math.cos(periapsisArgRad)
-    const sinW = Math.sin(periapsisArgRad)
-
-    // 先生成均匀分布的顶点喵
-    for (let i = 0; i < ORBIT_SEGMENTS; i++) {
-      const theta = (i / ORBIT_SEGMENTS) * Math.PI * 2
-      const localX = a * Math.cos(theta)
-      const localY = b * Math.sin(theta)
-      const wx = localX * cosW - localY * sinW
-      const wy = localX * sinW + localY * cosW
-      const rp = ctx.toRenderPos({ x: centerPos.x + wx, y: centerPos.y + wy })
-      positions[i * 3] = rp.x
-      positions[i * 3 + 1] = rp.y
-      positions[i * 3 + 2] = 0
+    // 仅在相机移动时刷新渲染坐标喵
+    if (cameraMoved) {
+      const posAttr = ring.geometry.getAttribute('position') as THREE.BufferAttribute
+      const positions = posAttr.array as Float32Array
+      const wps = cacheEntry.worldPoints
+      for (let i = 0; i < ORBIT_SEGMENTS; i++) {
+        const wp = wps[i]
+        if (!wp) continue
+        const rp = ctx.toRenderPos(wp)
+        positions[i * 3] = rp.x
+        positions[i * 3 + 1] = rp.y
+        positions[i * 3 + 2] = 0
+      }
+      posAttr.needsUpdate = true
     }
 
-    // 计算行星当前精确位置，修正最近的顶点使其穿过行星中心喵
-    defaultGameTimeManager.update()
-    const totalDays = defaultGameTimeManager.getCurrentGameSeconds() / 86400
-    const meanAnomalyRad = (details.meanAnomalyDegAtEpoch * Math.PI) / 180
-    const periodDays = details.orbitalPeriodDays
-    if (periodDays > 0) {
-      const planetAngle = meanAnomalyRad + (totalDays / periodDays) * 2 * Math.PI
-      const planetLocalX = a * Math.cos(planetAngle)
-      const planetLocalY = b * Math.sin(planetAngle)
-      const planetWx = planetLocalX * cosW - planetLocalY * sinW
-      const planetWy = planetLocalX * sinW + planetLocalY * cosW
-      const planetRp = ctx.toRenderPos({ x: centerPos.x + planetWx, y: centerPos.y + planetWy })
-
-      // 找最近的顶点索引喵
-      const segAngle = (2 * Math.PI) / ORBIT_SEGMENTS
-      const normalizedAngle = ((planetAngle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)
-      const nearestIdx = Math.round(normalizedAngle / segAngle) % ORBIT_SEGMENTS
-
-      // 修正该顶点为行星精确位置喵
-      positions[nearestIdx * 3] = planetRp.x
-      positions[nearestIdx * 3 + 1] = planetRp.y
-    }
-
-    posAttr.needsUpdate = true
-
-    // 轨道 z = 行星中心 z，让轨道穿过行星中心喵
+    // z 轴位置喵
     const planetRadiusGU = details.radiusGU
     const planetClampedDiamGU = Math.max(planetRadiusGU * 2, 10 * ctx.zoom.value)
     const planetSize = getLodSize(frame.lod.planet, false, planetClampedDiamGU)
@@ -311,10 +337,8 @@ export class LayerPlanetRenderer {
         : ORBIT_BASE_OPACITY * (1 - (zoom - ORBIT_FADE_START_ZOOM) / (ORBIT_FADE_END_ZOOM - ORBIT_FADE_START_ZOOM))
     }
 
-    const material = ring.material
-    material.opacity = opacity
-    material.color.set(0xffffff)
-
+    ring.material.opacity = opacity
+    ring.material.color.set(0xffffff)
     ring.visible = opacity > 0.01
   }
 
@@ -343,10 +367,27 @@ export class LayerPlanetRenderer {
       const isSelected = selectedIds.has(entity.entityId)
       if (!shouldRender(planetLod, isSelected)) continue
 
+      // 先用轨道中心做粗略剔除，避免对不可见行星做昂贵轨道计算喵
+      const details = entity.details as PlanetDetails
+      const centerEntity = details ? entitiesById.get(details.orbitCenterEntityId) : null
+      const centerPos = centerEntity?.posWorldGU
+      if (!isSelected && centerPos) {
+        const orbitRadius = Number(details.semiMajorAxisGU ?? 0)
+        const expandedAabb = {
+          minX: cullingAabb.minX - orbitRadius,
+          maxX: cullingAabb.maxX + orbitRadius,
+          minY: cullingAabb.minY - orbitRadius,
+          maxY: cullingAabb.maxY + orbitRadius,
+        }
+        if (!this.isPointInAabb(centerPos, expandedAabb)) {
+          continue
+        }
+      }
+
       const planetPos = ctx.getEntityWorldPosGU(entity.entityId)
       if (!planetPos) continue
 
-      // 剔除检查（选中实体始终显示）喵
+      // 精确剔除（选中实体始终显示）喵
       if (!isSelected && !this.isPointInAabb(planetPos, cullingAabb)) {
         continue
       }
@@ -424,18 +465,57 @@ export class LayerPlanetRenderer {
       mesh.visible = true
     }
 
-    // ── 独立更新轨道环（不受行星剔除影响，遍历所有行星）──喵
-    const orbitVisibleIds = new Set<number>()
-    for (const entity of entitiesById.values()) {
-      if (entity.entityType !== 'PLANET') continue
-      orbitVisibleIds.add(entity.entityId)
-      this.updateOrbitRing(entity.entityId, entity.details as PlanetDetails, ctx, frame)
+    // ── 轨道环：用 sectorCoord 直接按星区剔除 ──喵
+    const orbitLod = lod.orbit
+
+    // starToPlanets 索引（仅在实体数变化时重建）喵
+    if (entitiesById.size !== this._prevEntityCount) {
+      this._prevEntityCount = entitiesById.size
+      this.rebuildStarToPlanets(entitiesById)
     }
 
-    // 回收不再需要的轨道环喵
+    const cameraMoved = ctx.cameraWorldPosGU.x !== this.lastCameraX
+      || ctx.cameraWorldPosGU.y !== this.lastCameraY
+    if (cameraMoved) {
+      this.lastCameraX = ctx.cameraWorldPosGU.x
+      this.lastCameraY = ctx.cameraWorldPosGU.y
+    }
+
+    // 可见星区集合（直接用 q,r 坐标匹配 entity.sectorCoord）喵
+    const visibleSectors = new Set<string>()
+    for (const sc of frame.sectorCenters) {
+      visibleSectors.add(`${sc.q},${sc.r}`)
+    }
+
+    const inOrbitSector = new Set<number>()
+    for (const entity of entitiesById.values()) {
+      if (entity.entityType !== 'STAR') continue
+      // 直接用实体自带的 sectorCoord 判断是否在可见星区内喵
+      const sectorKey = `${entity.sectorCoord.q},${entity.sectorCoord.r}`
+      if (!visibleSectors.has(sectorKey)) continue
+
+      const sp = entity.posWorldGU
+      if (!sp) continue
+      const planetIds = this.starToPlanets.get(entity.entityId)
+      if (!planetIds) continue
+      for (const planetId of planetIds) {
+        inOrbitSector.add(planetId)
+        if (!orbitLod.visible) continue
+        const planetEntity = entitiesById.get(planetId)
+        if (!planetEntity) continue
+        const details = planetEntity.details as PlanetDetails
+        const cacheEntry = this.ensureOrbitCache(planetId, details, sp)
+        if (cacheEntry) {
+          this.updateOrbitRingLightweight(planetId, details, cacheEntry, ctx, frame, cameraMoved)
+        }
+      }
+    }
+
+    // 回收不在可见星区内的轨道环喵
     for (const [id, ring] of this.activeOrbitRingsByEntityId.entries()) {
-      if (!orbitVisibleIds.has(id)) {
+      if (!inOrbitSector.has(id)) {
         this.activeOrbitRingsByEntityId.delete(id)
+        this.orbitCache.delete(id)
         this.releaseOrbitRing(ring)
       }
     }

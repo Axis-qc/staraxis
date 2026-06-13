@@ -32,7 +32,7 @@ export class GridRenderer implements WorldRenderSubsystem {
     private grid: THREE.LineSegments | null = null
     private geometry: THREE.BufferGeometry | null = null
     private material: THREE.LineBasicMaterial | null = null
-    private visible: boolean = true
+    private visible: boolean = false
 
     init(ctx: WorldRenderContext): void {
         this.material = new THREE.LineBasicMaterial({

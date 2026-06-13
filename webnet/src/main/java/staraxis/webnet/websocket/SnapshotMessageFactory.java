@@ -164,8 +164,8 @@ public final class SnapshotMessageFactory {
         boolean hasNationId = nationId != null && !nationId.isBlank();
         if (snapshotsBySector != null && !snapshotsBySector.isEmpty()) {
             // 确定要遍历的星区：如果filterSectors非空则用它，否则遍历所有星区喵
-            Set<SectorCoord> sectorsToProcess = (filterSectors != null && !filterSectors.isEmpty()) ?
-                    filterSectors : snapshotsBySector.keySet();
+            Set<SectorCoord> sectorsToProcess = (filterSectors != null && !filterSectors.isEmpty()) ? filterSectors
+                    : snapshotsBySector.keySet();
 
             for (SectorCoord sector : sectorsToProcess) {
                 List<EntitySnapshot> sectorSnapshots = snapshotsBySector.get(sector);
@@ -175,8 +175,7 @@ public final class SnapshotMessageFactory {
 
                 // O(1) 从星区缓存获取玩家在此星区的探测等级喵
                 var worldSector = runtime.getWorldStateForSimOnly().worldMap.getSector(sector);
-                int detectorLevel = (worldSector != null && hasNationId) ?
-                        worldSector.getDetectorLevel(nationId) : -1;
+                int detectorLevel = (worldSector != null && hasNationId) ? worldSector.getDetectorLevel(nationId) : -1;
 
                 // 如果该玩家在此星区无探测，只处理本国实体喵
                 boolean hasDetector = detectorLevel >= 0;
@@ -196,14 +195,16 @@ public final class SnapshotMessageFactory {
                     // 本国实体强制可见（无论探测等级）喵
                     boolean isOwnedBySelf = hasNationId && nationId.equals(s.ownerNationId);
                     if (isOwnedBySelf) {
-                        privateEntitiesByIntelLevel.computeIfAbsent(s.intelRequiredLevel, k -> new ArrayList<>()).add(s);
+                        privateEntitiesByIntelLevel.computeIfAbsent(s.intelRequiredLevel, k -> new ArrayList<>())
+                                .add(s);
                         continue;
                     }
 
                     // 非本国实体：需要在该星区有探测，且情报等级 <= 探测等级喵
                     // 由于列表已排序，i < cutoffIndex 的实体都满足条件喵
                     if (hasDetector && i < cutoffIndex) {
-                        privateEntitiesByIntelLevel.computeIfAbsent(s.intelRequiredLevel, k -> new ArrayList<>()).add(s);
+                        privateEntitiesByIntelLevel.computeIfAbsent(s.intelRequiredLevel, k -> new ArrayList<>())
+                                .add(s);
                     }
                 }
             }
@@ -267,7 +268,8 @@ public final class SnapshotMessageFactory {
                         }
 
                         if (intelSystem != null) {
-                            Map<String, Integer> sectorIntelLevels = intelSystem.getNationSectorIntelLevelsView(nationId);
+                            Map<String, Integer> sectorIntelLevels = intelSystem
+                                    .getNationSectorIntelLevelsView(nationId);
                             int requiredLevel = intelSystem.getRequiredIntelLevel(s.entityType);
                             String sectorKey = "q:" + s.sectorCoord.q() + ",r:" + s.sectorCoord.r();
                             int detectorLevel = sectorIntelLevels.getOrDefault(sectorKey, -1);
@@ -288,7 +290,8 @@ public final class SnapshotMessageFactory {
                             + " filteredPublic=" + filteredPublicSnapshots.size()
                             + " privateCount=" + privateCount
                             + " privateTiers=" + privateEntitiesByIntelLevel.keySet()
-                            + " filterSectors=" + (filterSectors == null ? "null" : String.valueOf(filterSectors.size()))
+                            + " filterSectors="
+                            + (filterSectors == null ? "null" : String.valueOf(filterSectors.size()))
                             + " nationId=" + nationId
                             + " skippedNoNationId=" + skippedNoNationId
                             + " skippedEntityMissing=" + skippedEntityMissing
@@ -381,18 +384,20 @@ public final class SnapshotMessageFactory {
         }
 
         RealTimeStateDto rt = legacySnapshot.realTimeWorldState;
+        // 高频快照只发动态实体（舰船等），不发静态天体喵
         return SnapshotHighFreqMessageDto.forFull(
                 legacySnapshot.tickCostMs,
                 rt.simulationTick,
                 rt.totalGameSeconds,
                 rt.totalGameSecondsExact,
                 rt.deltaGameSeconds,
-                rt.entities,
+                null, // 不再包含公开实体（恒星/行星/重心）
                 rt.privateEntitiesByIntelLevel,
                 legacySnapshot.playerNationId);
     }
 
-    public static SnapshotLowFreqMessageDto buildLowFreqSnapshotMessage(SnapshotMessageDto legacySnapshot) {
+    public static SnapshotLowFreqMessageDto buildLowFreqSnapshotMessage(SnapshotMessageDto legacySnapshot,
+            boolean includeEntities) {
         if (legacySnapshot == null || !legacySnapshot.ok || legacySnapshot.realTimeWorldState == null) {
             String error = legacySnapshot == null ? "snapshot_missing" : legacySnapshot.error;
             return SnapshotLowFreqMessageDto.forError(error == null ? "snapshot_invalid" : error);
@@ -402,6 +407,9 @@ public final class SnapshotMessageFactory {
         long version = legacySnapshot.dailySettlementState != null
                 ? legacySnapshot.dailySettlementState.settledAtGameSeconds
                 : rt.simulationTick;
+        // 低频快照携带公开实体基线（恒星/行星/重心），由调用方决定是否包含喵
+        List<EntitySnapshot> publicEntities = includeEntities && rt.entities != null ? rt.entities
+                : java.util.Collections.emptyList();
         return SnapshotLowFreqMessageDto.forFull(
                 rt.simulationTick,
                 version,
@@ -418,7 +426,8 @@ public final class SnapshotMessageFactory {
                 rt.sectorCenters,
                 rt.sectorOwnerNationIdByCoord,
                 legacySnapshot.dailySettlementState,
-                legacySnapshot.playerNationId);
+                legacySnapshot.playerNationId,
+                publicEntities);
     }
 
     public static CommandResultMessageDto buildCommandResultMessage(

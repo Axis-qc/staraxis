@@ -39,7 +39,7 @@
  * - **性能**：大量实体渲染时的同步压力，已通过按需推送与增量更新缓解喵。
  * - **输入拦截**：需确保 UI 面板打开时正确拦截底层相机操作。
  */
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { onMounted, onUnmounted, ref, watch, watchEffect } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import { useAstroAssets } from '../composables/useAstroAssets'
@@ -124,8 +124,6 @@ const { playerId } = storeToRefs(auth)
 // 镜头状态持久化（sessionStorage）喵
 const cameraPersister = createCameraStatePersister(renderer, playerId)
 
-let lastSnapshotLogTime = 0
-let isFirstSnapshotLog = true
 let interestEntitySyncTimerId = 0
 let detachInterestCameraListener: (() => void) | null = null
 let lastInterestEntitySignature = ''
@@ -495,6 +493,10 @@ function startSnapshotTickTraceCapture() {
   wsClient.value?.startSnapshotTickTrace(durationMs)
 }
 
+function toggleBroadcastTimingTrace() {
+  wsClient.value?.toggleBroadcastTimingTrace()
+}
+
 function chooseRandomSpawnInGame() {
   if (!spawnSystems.value.length) {
     selectedSpawnSystemId.value = null
@@ -739,7 +741,6 @@ onMounted(async () => {
       const syncResult = world.applyHighFreqSnapshot(s)
       if (syncResult.success) {
         hub.setLastHighFreqSnapshot(s)
-        hub.syncEntitiesFromWorld()
         hub.getRenderer()?.updateFromHighFreqSnapshot(s)
         syncViewportInterestEntityIds(false)
       }
@@ -748,6 +749,7 @@ onMounted(async () => {
       const world = getLocalVisibleWorld()
       if (world.applyLowFreqSnapshot(s)) {
         hub.syncLowFreqStateFromWorld()
+        hub.syncEntitiesFromWorld()
         hub.getRenderer()?.updateLowFreqState(getLatestLowFreqState())
       }
     },
@@ -755,88 +757,33 @@ onMounted(async () => {
       handleCommandResult(result)
       syncViewportInterestEntityIds(false)
     },
-    onSnapshot: (s) => {
-      const now = Date.now()
-      if (isFirstSnapshotLog || now - lastSnapshotLogTime >= 60000) {
-        const ok = !!s.ok
-        const sectorCentersCount = s.realTimeWorldState?.sectorCenters?.length ?? -1
-        const entities = s.realTimeWorldState?.entities ?? []
-        const entitiesCount = entities.length
+  })
 
-        // 专门统计行星数据喵
-        const planets = entities.filter(e => e.entityType === 'PLANET')
-        const planetsWithDetails = planets.filter(p => p.details !== null)
+  // 监听高频快照到达后执行初始舰船聚焦喵
+  watchEffect(() => {
+    const s = hub.lastHighFreqSnapshot.value
+    if (!s || hasAppliedInitialShipFocus || !needsInitialFocusOnInitialShip) return
 
-        // 统计私有实体中的舰船喵
-        const privateTiers = s.realTimeWorldState?.privateEntitiesByIntelLevel ?? {}
-        const privateEntities = Object.values(privateTiers).flatMap(arr => arr ?? [])
-        const ships = privateEntities.filter(e => e.entityType === 'SHIP')
-        const shipsWithDetails = ships.filter(s => s.details !== null)
+    const r = hub.getRenderer()
+    const nationId = auth.selectedNationId
+    if (!r || !nationId) return
 
-        console.log(
-          `[Snapshot Debug] first=${isFirstSnapshotLog} ok=${ok} sectors=${sectorCentersCount} entities=${entitiesCount} planets=${planets.length}(withDetails:${planetsWithDetails.length}) ships=${ships.length}(withDetails:${shipsWithDetails.length}) 喵`,
-        )
-        if (planets.length > 0 && planetsWithDetails.length === 0) {
-          console.error('[Snapshot Debug] Warning: Planets exist but all details are NULL! 喵')
-        }
-        if (ships.length > 0) {
-          console.log('[Snapshot Debug] Ships found:', ships.map(s => ({ id: s.entityId, owner: s.ownerNationId, pos: s.posWorldGU })))
-        }
-        isFirstSnapshotLog = false
-        lastSnapshotLogTime = now
-      }
+    const allEntities = getAllEntitySnapshots()
+    const initialShip = allEntities.find((e) => {
+      if (e.entityType !== 'SHIP') return false
+      const d: any = e.details
+      const flags: string[] = Array.isArray(d?.customFlags) ? d.customFlags : []
+      return e.ownerNationId === nationId && flags.includes('INITIAL_SPAWN_SHIP')
+    })
 
-      // 先应用快照到前端本地世界层喵
-      const world = getLocalVisibleWorld()
-      const syncResult = world.applySnapshot(s)
-      if (syncResult.success) {
-        console.debug(`[LocalVisibleWorld] 快照同步成功: tick=${syncResult.appliedTick}, 实体(+${syncResult.addedEntities}/~${syncResult.updatedEntities}/-${syncResult.removedEntities})喵`)
-        hub.syncEntitiesFromWorld()
-        hub.syncLowFreqStateFromWorld()
-        hub.setLastHighFreqSnapshot({
-          type: 'snapshot_high_freq',
-          ok: s.ok,
-          error: s.error,
-          tickCostMs: s.tickCostMs,
-          simulationTick: s.realTimeWorldState?.simulationTick ?? 0,
-          totalGameSeconds: s.realTimeWorldState?.totalGameSeconds ?? 0,
-          totalGameSecondsExact: s.realTimeWorldState?.totalGameSecondsExact ?? s.realTimeWorldState?.totalGameSeconds ?? 0,
-          deltaGameSeconds: s.realTimeWorldState?.deltaGameSeconds ?? 0,
-          syncMode: 'full',
-          entities: s.realTimeWorldState?.entities ?? [],
-          privateEntitiesByIntelLevel: s.realTimeWorldState?.privateEntitiesByIntelLevel ?? {},
-          playerNationId: s.playerNationId,
-        })
-        hub.getRenderer()?.updateFromSnapshot(s)
-      }
-
-      // 若本会话没有镜头缓存，则扫描本国实体列表找到初始舰船并做一次初始聚焦喵。
-      if (!hasAppliedInitialShipFocus && needsInitialFocusOnInitialShip) {
-        const r = hub.getRenderer()
-        const nationId = auth.selectedNationId
-
-        if (r && nationId) {
-          const allEntities = getAllEntitySnapshots()
-
-          // 新策略：优先聚焦携带固定 flag 的初始出生舰船喵。
-          const initialShip = allEntities.find((e) => {
-            if (e.entityType !== 'SHIP') return false
-            const d: any = e.details
-            const flags: string[] = Array.isArray(d?.customFlags) ? d.customFlags : []
-            return e.ownerNationId === nationId && flags.includes('INITIAL_SPAWN_SHIP')
-          })
-
-          const initialShipPos = initialShip ? getInterpolatedEntityWorldPosGU(initialShip.entityId) : null
-          if (initialShipPos) {
-            r.cameraWorldPosGU.set(initialShipPos.x, initialShipPos.y)
-            r.applyCameraTransform()
-            hasAppliedInitialShipFocus = true
-            needsInitialFocusOnInitialShip = false
-            cameraPersister.schedulePersist()
-          }
-        }
-      }
-    },
+    const initialShipPos = initialShip ? getInterpolatedEntityWorldPosGU(initialShip.entityId) : null
+    if (initialShipPos) {
+      r.cameraWorldPosGU.set(initialShipPos.x, initialShipPos.y)
+      r.applyCameraTransform()
+      hasAppliedInitialShipFocus = true
+      needsInitialFocusOnInitialShip = false
+      cameraPersister.schedulePersist()
+    }
   })
 
   // 出生流程并入 in-game：进入游戏后若未出生，加载可选出生点喵。
@@ -996,6 +943,14 @@ onUnmounted(() => {
             </button>
             <button class="debug-toggle-btn" type="button" @click="copyReceivedTickSequenceText()">
               复制Tick
+            </button>
+          </div>
+        </div>
+        <div class="kv">
+          <div class="k">后端广播计时</div>
+          <div class="v debug-action-row">
+            <button class="debug-toggle-btn" type="button" @click="toggleBroadcastTimingTrace()">
+              开关计时
             </button>
           </div>
         </div>

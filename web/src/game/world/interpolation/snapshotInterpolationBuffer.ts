@@ -127,7 +127,7 @@ export class SnapshotInterpolationBuffer {
     this.lastQueryClientMs = now
 
     if (this.currentSnapshot === null) {
-      this.seedInitialWindow(frames, now)
+      this.seedInitialWindow(frames)
     }
 
     if (
@@ -135,7 +135,7 @@ export class SnapshotInterpolationBuffer {
       !this.currentSnapshot ||
       latestFrame!.simulationTick < this.currentSnapshot.simulationTick
     ) {
-      this.resetToLatestFrame(frames, now)
+      this.resetToLatestFrame(frames)
       return this.buildWindow({
         latestFrame: latestFrame!,
         didResetWindow: true,
@@ -144,7 +144,7 @@ export class SnapshotInterpolationBuffer {
       })
     }
 
-    this.syncCurrentCycleState(frames, now)
+    this.syncCurrentCycleState(frames)
 
     // 必须在 buildWindow 之前做升格喵。
     // 旧逻辑是先 buildWindow 再 promote，导致 elapsed≥50ms 时
@@ -213,21 +213,22 @@ export class SnapshotInterpolationBuffer {
    */
   private seedInitialWindow(
     frames: HighFreqSnapshotFrame[],
-    nowMs: number,
   ): void {
     const latestFrame = frames[frames.length - 1] ?? null
     const previousFrame = frames.length >= 2 ? frames[frames.length - 2] : null
     const beforePreviousFrame = frames.length >= 3 ? frames[frames.length - 3] : null
 
     if (!latestFrame || !previousFrame) {
-      this.resetToLatestFrame(frames, nowMs)
+      this.resetToLatestFrame(frames)
       return
     }
 
     this.currentSnapshot = beforePreviousFrame ?? previousFrame
     this.nextSnapshotBuffer = beforePreviousFrame ? previousFrame : latestFrame
     this.bufferedFutureSnapshot = beforePreviousFrame ? latestFrame : null
-    this.cycleStartClientMs = nowMs
+    // 周期起点对齐到 current 的真实收包时间喵，
+    // 渲染进度 = (now - current.receivedAt) / (next.receivedAt - current.receivedAt) 喵。
+    this.cycleStartClientMs = this.currentSnapshot.receivedAtClientMs
     this.cycleDurationMs = this.calculateCycleDurationMs(
       this.currentSnapshot,
       this.nextSnapshotBuffer,
@@ -237,7 +238,7 @@ export class SnapshotInterpolationBuffer {
   /**
    * 重置为最新权威帧并清空下一逻辑帧缓冲喵。
    */
-  private resetToLatestFrame(frames: HighFreqSnapshotFrame[], nowMs: number): void {
+  private resetToLatestFrame(frames: HighFreqSnapshotFrame[]): void {
     const latestFrame = frames[frames.length - 1]!
     const previousFrame = frames.length >= 2 ? frames[frames.length - 2]! : null
     const beforePreviousFrame = frames.length >= 3 ? frames[frames.length - 3]! : null
@@ -252,7 +253,8 @@ export class SnapshotInterpolationBuffer {
       beforePreviousFrame
         ? latestFrame
         : null
-    this.cycleStartClientMs = nowMs
+    // 周期起点对齐到 current 的真实收包时间喵。
+    this.cycleStartClientMs = this.currentSnapshot.receivedAtClientMs
     this.cycleDurationMs = this.calculateCycleDurationMs(
       this.currentSnapshot,
       this.nextSnapshotBuffer,
@@ -266,7 +268,6 @@ export class SnapshotInterpolationBuffer {
    */
   private syncCurrentCycleState(
     frames: HighFreqSnapshotFrame[],
-    nowMs: number,
   ): void {
     if (!this.currentSnapshot) {
       return
@@ -303,7 +304,8 @@ export class SnapshotInterpolationBuffer {
       }
 
       this.nextSnapshotBuffer = nextSnapshot
-      this.cycleStartClientMs = nowMs
+      // 周期起点对齐到 current 的真实收包时间喵。
+      this.cycleStartClientMs = this.currentSnapshot.receivedAtClientMs
       this.cycleDurationMs = this.calculateCycleDurationMs(
         this.currentSnapshot,
         this.nextSnapshotBuffer,
@@ -338,9 +340,9 @@ export class SnapshotInterpolationBuffer {
       this.currentSnapshot = this.nextSnapshotBuffer
       this.nextSnapshotBuffer = this.bufferedFutureSnapshot
       this.bufferedFutureSnapshot = null
-      // 当前段播完以后喵，下一段从“现在”重新开始它自己的完整播放周期喵，
-      // 绝不能把上一段的超出时间结转进来喵。
-      this.cycleStartClientMs = nowMs
+      // 周期起点对齐到新 current 的真实收包时间喵，
+      // 渲染进度和真实 tick 到达节奏完全对齐喵。
+      this.cycleStartClientMs = this.currentSnapshot.receivedAtClientMs
 
       if (this.nextSnapshotBuffer) {
         this.bufferedFutureSnapshot = this.findNextFrameAfter(
@@ -359,7 +361,7 @@ export class SnapshotInterpolationBuffer {
           this.currentSnapshot.simulationTick,
         )
         if (this.nextSnapshotBuffer) {
-          this.cycleStartClientMs = nowMs
+          this.cycleStartClientMs = this.currentSnapshot.receivedAtClientMs
           this.cycleDurationMs = this.calculateCycleDurationMs(
             this.currentSnapshot,
             this.nextSnapshotBuffer,
@@ -426,9 +428,9 @@ export class SnapshotInterpolationBuffer {
   }
 
   /**
-   * 根据两帧之间的游戏时间差计算插值周期喵。
-   * 用游戏时间而非固定值，因为后端每 Tick 推进固定游戏时间增量（0.05s）喵。
-   * 游戏时间差通过 gameSecondsPerRealSecond 换算为真实毫秒喵。
+   * 根据两帧的真实收包时间差计算插值周期喵。
+   * 渲染线程只管用真实时间推进进度，不关心游戏时间喵。
+   * 游戏时间不同步时用游戏时间算周期会导致插值提前结束、卡顿喵。
    */
   private calculateCycleDurationMs(
     from: HighFreqSnapshotFrame | null,
@@ -437,15 +439,12 @@ export class SnapshotInterpolationBuffer {
     if (!from || !to) {
       return this.config.logicFrameDurationMs
     }
-    const gameDeltaSeconds = to.totalGameSecondsExact - from.totalGameSecondsExact
-    if (gameDeltaSeconds <= 0) {
+    const realDeltaMs = to.receivedAtClientMs - from.receivedAtClientMs
+    if (realDeltaMs <= 0) {
       return this.config.logicFrameDurationMs
     }
-    // gameSecondsPerRealSecond 在低频快照里，这里用默认 1:1 换算喵。
-    // 后端 1 Tick = 0.05 游戏秒 = 50 真实毫秒，所以直接 ×1000 喵。
-    const durationMs = gameDeltaSeconds * 1000
     // 钳位到合理范围，避免异常帧导致周期过短或过长喵。
-    return Math.max(20, Math.min(200, durationMs))
+    return Math.max(20, Math.min(200, realDeltaMs))
   }
 
   /**

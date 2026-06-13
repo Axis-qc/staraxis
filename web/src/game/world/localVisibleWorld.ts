@@ -413,6 +413,12 @@ export class LocalVisibleWorldImpl {
           continue
         }
 
+        // 静态实体（恒星/行星/重心）由低频快照维护，高频快照不删喵
+        if (existingEntity.entityType === 'STAR' || existingEntity.entityType === 'PLANET'
+                || existingEntity.entityType === 'SYSTEM_BARYCENTER') {
+          continue
+        }
+
         if (this.shouldRetainEntityWithoutSnapshot(existingEntity)) {
           continue
         }
@@ -477,7 +483,16 @@ export class LocalVisibleWorldImpl {
       dailySettlementState: snapshot.dailySettlementState ?? previous?.dailySettlementState ?? null,
       playerNationId: snapshot.playerNationId ?? previous?.playerNationId ?? null,
       receivedAtClientMs: Date.now(),
+      entities: snapshot.entities ?? previous?.entities,
     }
+    // 处理低频快照中的公开实体基线（恒星/行星/重心），更新到实体缓存喵
+    const entities = snapshot.entities
+    if (entities && entities.length > 0) {
+      for (const entity of entities) {
+        this.state.visibleEntitiesById.set(entity.entityId, entity)
+      }
+    }
+
     this.state.lastAppliedLowFreqVersion = snapshot.version
     return true
   }

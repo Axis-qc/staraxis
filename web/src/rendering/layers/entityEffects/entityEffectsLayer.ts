@@ -7,6 +7,7 @@
  */
 
 import type { WorldRenderContext, WorldFrameState } from '../../worldRenderManager'
+import type { Interactable } from '../../subsystems/mouseInteractionManager'
 import { BaseLayer } from '../baseLayer'
 import { RenderOrder } from '../index'
 import { SelectionEffectRenderer } from './renderers/selectionEffectRenderer'
@@ -57,5 +58,10 @@ export class EntityEffectsLayer extends BaseLayer {
 
     ctx.worldGroup.remove(this.group)
     super.setVisible(false)
+  }
+
+  /** 获取恒星标签的 Interactable，供 MouseInteractionManager 注册喵 */
+  getStarLabelInteractable(): Interactable | null {
+    return this._starInfoLabelRenderer
   }
 }

@@ -210,6 +210,7 @@ export function createWorldRenderManager(
     const inputSystem = createInputSystem(canvas)
 
     let currentCullingAabb = { minX: 0, maxX: 0, minY: 0, maxY: 0 }
+    let latestLowFreqState: LowFreqWorldState | null = null
     let latestSectorCenters: LowFreqWorldState['sectorCenters'] = []
     let lastFrameTime = 0
 
@@ -416,34 +417,30 @@ export function createWorldRenderManager(
     const updateFromHighFreqSnapshot = (snapshot: SnapshotHighFreqMessage) => {
         if (!snapshot.ok) return
 
-        const publicEntities = snapshot.entities ?? []
+        // 高频快照只含动态实体（舰船），不重新塞入全部1935个实体喵
         const privateTierMap = snapshot.privateEntitiesByIntelLevel ?? {}
         const privateEntities = Object.values(privateTierMap).flatMap((arr) => arr ?? [])
+        if (privateEntities.length === 0) return
 
-        const mergedById = new Map<number, EntitySnapshot>()
-        for (const entity of publicEntities) {
-            mergedById.set(entity.entityId, entity)
-        }
-        for (const entity of privateEntities) {
-            mergedById.set(entity.entityId, entity)
-        }
-        const mergedEntities = Array.from(mergedById.values())
-
-        visibilityManager.updateFromSnapshot(
-            mergedEntities,
-            latestSectorCenters,
-            Date.now(),
-        )
-
-        frameBuilder.updateEntities(mergedEntities)
-        entityQuery.updateEntities(mergedEntities)
-        void frameBuilder.build()
+        // 仅增量更新渲染缓存，不替换恒星/行星基线喵
+        frameBuilder.updateEntities(privateEntities)
+        entityQuery.addEntities(privateEntities)
     }
 
+    /** 是否已设置恒星/行星基线渲染缓存喵 */
+    let lowFreqBaselineSet = false
+
     const updateLowFreqState = (state: LowFreqWorldState | null) => {
+        latestLowFreqState = state
         latestSectorCenters = state?.sectorCenters ?? []
         frameBuilder.replaceSectorCenters(latestSectorCenters)
         frameBuilder.updateSectorOwnerNationIdByCoord(state?.sectorOwnerNationIdByCoord ?? {})
+        // 首次低频基线：将恒星/行星注入渲染缓存（后续高频只增量更新舰船）喵
+        if (!lowFreqBaselineSet && state?.entities && state.entities.length > 0) {
+            lowFreqBaselineSet = true
+            frameBuilder.updateEntities(state.entities)
+            entityQuery.addEntities(state.entities)
+        }
         void frameBuilder.build()
     }
 

@@ -1,6 +1,7 @@
 package staraxis.webnet.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import staraxis.game.state.snapshot.EntitySnapshot;
 
 import java.util.List;
 import java.util.Map;
@@ -43,6 +44,8 @@ public class SnapshotLowFreqMessageDto {
     public final Map<String, String> sectorOwnerNationIdByCoord;
     public final DailySettlementStateDto dailySettlementState;
     public final String playerNationId;
+    /** 公开实体基线（恒星/行星/重心），每秒随低频快照下发喵 */
+    public final List<EntitySnapshot> entities;
 
     public SnapshotLowFreqMessageDto(
             boolean ok,
@@ -64,7 +67,8 @@ public class SnapshotLowFreqMessageDto {
             List<SectorCenterDto> sectorCenters,
             Map<String, String> sectorOwnerNationIdByCoord,
             DailySettlementStateDto dailySettlementState,
-            String playerNationId) {
+            String playerNationId,
+            List<EntitySnapshot> entities) {
         this.ok = ok;
         this.error = error;
         this.simulationTick = simulationTick;
@@ -85,6 +89,7 @@ public class SnapshotLowFreqMessageDto {
         this.sectorOwnerNationIdByCoord = sectorOwnerNationIdByCoord;
         this.dailySettlementState = dailySettlementState;
         this.playerNationId = playerNationId;
+        this.entities = entities;
     }
 
     public static SnapshotLowFreqMessageDto forFull(
@@ -103,28 +108,14 @@ public class SnapshotLowFreqMessageDto {
             List<SectorCenterDto> sectorCenters,
             Map<String, String> sectorOwnerNationIdByCoord,
             DailySettlementStateDto dailySettlementState,
-            String playerNationId) {
+            String playerNationId,
+            List<EntitySnapshot> entities) {
         return new SnapshotLowFreqMessageDto(
-                true,
-                null,
-                simulationTick,
-                version,
-                "full",
-                null,
-                worldRadius,
-                worldType,
-                gameSecondsPerRealSecond,
-                timeScale,
-                year,
-                month,
-                day,
-                hour,
-                minute,
-                second,
-                sectorCenters,
-                sectorOwnerNationIdByCoord,
-                dailySettlementState,
-                playerNationId);
+                true, null, simulationTick, version, "full", null,
+                worldRadius, worldType, gameSecondsPerRealSecond, timeScale,
+                year, month, day, hour, minute, second,
+                sectorCenters, sectorOwnerNationIdByCoord, dailySettlementState, playerNationId,
+                entities);
     }
 
     public static SnapshotLowFreqMessageDto forDelta(
@@ -144,51 +135,21 @@ public class SnapshotLowFreqMessageDto {
             List<SectorCenterDto> sectorCenters,
             Map<String, String> sectorOwnerNationIdByCoord,
             DailySettlementStateDto dailySettlementState,
-            String playerNationId) {
+            String playerNationId,
+            List<EntitySnapshot> entities) {
         return new SnapshotLowFreqMessageDto(
-                true,
-                null,
-                simulationTick,
-                version,
-                "delta",
-                baseVersion,
-                worldRadius,
-                worldType,
-                gameSecondsPerRealSecond,
-                timeScale,
-                year,
-                month,
-                day,
-                hour,
-                minute,
-                second,
-                sectorCenters,
-                sectorOwnerNationIdByCoord,
-                dailySettlementState,
-                playerNationId);
+                true, null, simulationTick, version, "delta", baseVersion,
+                worldRadius, worldType, gameSecondsPerRealSecond, timeScale,
+                year, month, day, hour, minute, second,
+                sectorCenters, sectorOwnerNationIdByCoord, dailySettlementState, playerNationId,
+                entities);
     }
 
     public static SnapshotLowFreqMessageDto forError(String error) {
         return new SnapshotLowFreqMessageDto(
-                false,
-                error,
-                0L,
-                0L,
-                "full",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
+                false, error, 0L, 0L, "full", null,
+                null, null, null, null,
+                null, null, null, null, null, null,
+                null, null, null, null, null);
     }
 }

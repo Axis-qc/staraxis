@@ -179,6 +179,8 @@ export type SnapshotLowFreqMessage = {
     sectorOwnerNationIdByCoord?: Record<string, string>
     dailySettlementState?: DailySettlementState
     playerNationId?: string
+    /** 公开实体基线（恒星/行星/重心），每秒随低频快照下发喵 */
+    entities?: EntitySnapshot[]
 }
 
 export type CommandResultMessage = {
@@ -201,7 +203,6 @@ export type CommandResultMessage = {
 export type SnapshotWsOptions = {
     reconnectDelayMs?: number
     onStatus?: (s: { connected: boolean }) => void
-    onSnapshot?: (snapshot: SnapshotMessage) => void
     onHighFreqSnapshot?: (snapshot: SnapshotHighFreqMessage) => void
     onLowFreqSnapshot?: (snapshot: SnapshotLowFreqMessage) => void
     onCommandResult?: (result: CommandResultMessage) => void
@@ -215,6 +216,7 @@ export type SnapshotWsClient = {
     startSnapshotTickTrace: (durationMs: number) => void
     setNationId: (nationId: string) => void
     requestFullSync: () => void
+    toggleBroadcastTimingTrace: () => void
 }
 
 export function connectSnapshotWs(options: SnapshotWsOptions = {}): SnapshotWsClient {
@@ -239,9 +241,7 @@ export function connectSnapshotWs(options: SnapshotWsOptions = {}): SnapshotWsCl
             const data = JSON.parse(text)
             const type = data?.type
 
-            if (type === 'snapshot') {
-                options.onSnapshot?.(data)
-            } else if (type === 'snapshot_high_freq') {
+            if (type === 'snapshot_high_freq') {
                 options.onHighFreqSnapshot?.(data)
             } else if (type === 'snapshot_low_freq') {
                 options.onLowFreqSnapshot?.(data)
@@ -291,6 +291,9 @@ export function connectSnapshotWs(options: SnapshotWsOptions = {}): SnapshotWsCl
         },
         requestFullSync: () => {
             sharedWsClient.sendText(JSON.stringify({ type: 'requestFullSync' }))
+        },
+        toggleBroadcastTimingTrace: () => {
+            sharedWsClient.sendText(JSON.stringify({ type: 'toggleBroadcastTimingTrace' }))
         }
     }
 }

@@ -15,6 +15,8 @@ import staraxis.webnet.api.joingame.WorldSavesApi;
 
 import java.util.Set;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -36,6 +38,24 @@ public class SnapshotBroadcaster {
     private final Map<String, Long> lastLowFreqBroadcastAtMsByWorldId = new java.util.concurrent.ConcurrentHashMap<>();
     private final Map<String, Long> lastLoggedHighFreqTickByWorldId = new java.util.concurrent.ConcurrentHashMap<>();
     private final Map<String, Boolean> lastTraceActiveByWorldId = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 广播计时追踪开关：由前端调试窗口触发喵 */
+    private volatile boolean broadcastTimingTraceActive = false;
+    /** 低频快照异步序列化+发送线程池，避免阻塞 gameTicker 喵 */
+    private final ExecutorService lowFreqExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "webnet-lowfreq-sender");
+        t.setDaemon(true);
+        return t;
+    });
+
+    /**
+     * 切换广播计时追踪模式喵。
+     * @return 切换后的状态
+     */
+    public boolean toggleBroadcastTimingTrace() {
+        broadcastTimingTraceActive = !broadcastTimingTraceActive;
+        return broadcastTimingTraceActive;
+    }
 
     public SnapshotBroadcaster(ObjectMapper objectMapper, WsConnectionManager connMgr, AtomicLong lastTickCostMs) {
         this.objectMapper = objectMapper;
@@ -116,6 +136,13 @@ public class SnapshotBroadcaster {
             // 这样前端收到的高频快照就应当严格按 50ms 一个 Tick 连续到达喵。
             runtime.publishRealtimeSnapshotForced();
 
+            // 低频快照时机判断：每秒一次喵
+            final boolean shouldSendLowFreq = nowMs
+                    - lastLowFreqBroadcastAtMsByWorldId.getOrDefault(activeWorldId, 0L) >= 1000L;
+            if (shouldSendLowFreq) {
+                lastLowFreqBroadcastAtMsByWorldId.put(activeWorldId, nowMs);
+            }
+
             for (WebSocketChannel ch : snapshotSubscribers) {
                 if (ch != null && ch.isOpen()) {
                     String nationId = null;
@@ -134,37 +161,61 @@ public class SnapshotBroadcaster {
                     Set<SectorCoord> visible = runtime.getWorldStateForSimOnly().visibilitySystem
                             .computeIntelVisibleSectorsForNation(nationId);
 
-                    // 记录快照生成时间喵
-                    long snapshotStartTime = System.nanoTime();
+                    // ===== 分段计时：定位广播瓶颈喵 =====
+                    long tDtoStart = System.nanoTime();
                     SnapshotMessageDto snapshotDto = SnapshotMessageFactory.buildSnapshotMessageWithNation(runtime,
                             lastTickCostMs.get(),
                             visible, nationId);
-                    SnapshotHighFreqMessageDto highFreqDto = SnapshotMessageFactory.buildHighFreqSnapshotMessage(snapshotDto);
-                    boolean shouldSendLowFreq = nowMs
-                            - lastLowFreqBroadcastAtMsByWorldId.getOrDefault(activeWorldId, 0L) >= 1000L;
+                    SnapshotHighFreqMessageDto highFreqDto = SnapshotMessageFactory
+                            .buildHighFreqSnapshotMessage(snapshotDto);
+                    // 主线程从已构建的全量DTO提取低频DTO（引用拷贝，微秒级）喵。
+                    // 异步线程只做序列化+发送，不碰 runtime，避免双缓冲竞态喵。
                     SnapshotLowFreqMessageDto lowFreqDto = shouldSendLowFreq
-                            ? SnapshotMessageFactory.buildLowFreqSnapshotMessage(snapshotDto)
+                            ? SnapshotMessageFactory.buildLowFreqSnapshotMessage(snapshotDto, true)
                             : null;
+                    long tDtoEnd = System.nanoTime();
+
                     String highFreqJson = objectMapper.writeValueAsString(highFreqDto);
-                    String lowFreqJson = lowFreqDto == null ? null : objectMapper.writeValueAsString(lowFreqDto);
-                    String legacyJson = objectMapper.writeValueAsString(snapshotDto);
-                    long snapshotBuildTimeMs = (System.nanoTime() - snapshotStartTime) / 1_000_000L;
+                    long tSerEnd = System.nanoTime();
 
-                    // 更新性能监测器中的快照生成时间喵
-                    staraxis.game.log.PerformanceMonitor.getInstance().updateLastSnapshotBuildTime(snapshotBuildTimeMs);
-
+                    // 高频快照同步发送（轻量，含舰船）喵
                     WebSockets.sendText(highFreqJson, ch, null);
-                    if (lowFreqJson != null) {
-                        WebSockets.sendText(lowFreqJson, ch, null);
+                    long tSendEnd = System.nanoTime();
+
+                    // 低频快照：异步序列化+发送，不阻塞 gameTicker 喵
+                    if (lowFreqDto != null) {
+                        final SnapshotLowFreqMessageDto finalLowFreq = lowFreqDto;
+                        final WebSocketChannel finalCh = ch;
+                        lowFreqExecutor.submit(() -> {
+                            try {
+                                String json = objectMapper.writeValueAsString(finalLowFreq);
+                                WebSockets.sendText(json, finalCh, null);
+                            } catch (Exception ignored) {
+                            }
+                        });
                     }
-                    WebSockets.sendText(legacyJson, ch, null);
+
+                    long buildDtoMs = (tDtoEnd - tDtoStart) / 1_000_000L;
+                    long serializeMs = (tSerEnd - tDtoEnd) / 1_000_000L;
+                    long sendMs = (tSendEnd - tSerEnd) / 1_000_000L;
+
+                    // 更新性能监测器中的快照生成时间（DTO构建+序列化）喵
+                    staraxis.game.log.PerformanceMonitor.getInstance()
+                            .updateLastSnapshotBuildTime(buildDtoMs + serializeMs);
+
+                    if (broadcastTimingTraceActive) {
+                        staraxis.webnet.core.WebNetLog.log(
+                                "BroadcastTimer buildDto=" + buildDtoMs + "ms"
+                                        + " serialize=" + serializeMs + "ms"
+                                        + " send=" + sendMs + "ms"
+                                        + " lowFreq=" + (lowFreqDto != null ? "async" : "skip")
+                                        + " tick=" + runtime.getRealTimeWorldStateReadonly().simulationTick
+                                        + " entities=" + (snapshotDto.realTimeWorldState != null
+                                                ? snapshotDto.realTimeWorldState.entities.size() : 0));
+                    }
                 }
             }
             boolean traceActive = connMgr.isSnapshotTickTraceActive(nowMs);
-            boolean wasTraceActive = lastTraceActiveByWorldId.getOrDefault(activeWorldId, false);
-            if (traceActive && !wasTraceActive) {
-                lastLoggedHighFreqTickByWorldId.remove(activeWorldId);
-            }
             lastTraceActiveByWorldId.put(activeWorldId, traceActive);
 
             if (traceActive) {
@@ -175,15 +226,12 @@ public class SnapshotBroadcaster {
                         "SnapshotTx"
                                 + " world=" + activeWorldId
                                 + " tick=" + sentTick
-                                + " tickGap=" + (lastLoggedHighFreqTickByWorldId.containsKey(activeWorldId) ? tickGap : 0)
+                                + " tickGap="
+                                + (lastLoggedHighFreqTickByWorldId.containsKey(activeWorldId) ? tickGap : 0)
                                 + " txRealMs=" + nowMs
                                 + " subscriberCount=" + snapshotSubscribers.size()
-                                + " lowFreqSent="
-                                + (nowMs - lastLowFreqBroadcastAtMsByWorldId.getOrDefault(activeWorldId, 0L) >= 1000L));
+                                + " lowFreqQueued=" + shouldSendLowFreq);
                 lastLoggedHighFreqTickByWorldId.put(activeWorldId, sentTick);
-            }
-            if (nowMs - lastLowFreqBroadcastAtMsByWorldId.getOrDefault(activeWorldId, 0L) >= 1000L) {
-                lastLowFreqBroadcastAtMsByWorldId.put(activeWorldId, nowMs);
             }
         } catch (Exception e) {
             try {

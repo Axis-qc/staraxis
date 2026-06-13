@@ -11,9 +11,19 @@
 
 import type { WorldRenderContext, WorldFrameState } from '../worldRenderManager'
 import type { RenderLayer, LayerManager } from './index'
+import { isPerfEnabled } from '../systems/renderLoop'
+
+/** 具有子渲染器计时能力的层接口（如 CelestialLayer）喵 */
+interface SubTimingLayer extends RenderLayer {
+    lastStarMs?: number
+    lastPlanetMs?: number
+}
 
 export class SimpleLayerManager implements LayerManager {
     readonly layers = new Map<string, RenderLayer>()
+
+    /** 各层最近一次 update 的耗时（ms），由 updateAll 自动填充喵 */
+    readonly lastLayerTimings = new Map<string, number>()
 
     registerLayer(layer: RenderLayer): void {
         if (this.layers.has(layer.name)) {
@@ -35,9 +45,27 @@ export class SimpleLayerManager implements LayerManager {
         const sortedLayers = Array.from(this.layers.values())
             .sort((a, b) => a.renderOrder - b.renderOrder)
 
-        for (const layer of sortedLayers) {
-            if (layer.isVisible()) {
-                layer.update(ctx, frame)
+        if (isPerfEnabled()) {
+            for (const layer of sortedLayers) {
+                if (layer.isVisible()) {
+                    const t0 = performance.now()
+                    layer.update(ctx, frame)
+                    this.lastLayerTimings.set(layer.name, performance.now() - t0)
+
+                    const sub = layer as SubTimingLayer
+                    if (sub.lastStarMs !== undefined) {
+                        this.lastLayerTimings.set(`${layer.name}/star`, sub.lastStarMs)
+                    }
+                    if (sub.lastPlanetMs !== undefined) {
+                        this.lastLayerTimings.set(`${layer.name}/planet`, sub.lastPlanetMs)
+                    }
+                } else {
+                    this.lastLayerTimings.set(layer.name, 0)
+                }
+            }
+        } else {
+            for (const layer of sortedLayers) {
+                if (layer.isVisible()) layer.update(ctx, frame)
             }
         }
     }

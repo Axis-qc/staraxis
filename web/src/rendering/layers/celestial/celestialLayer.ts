@@ -15,10 +15,15 @@ import { BaseLayer } from '../baseLayer'
 import { RenderOrder } from '../index'
 import { LayerStarRenderer } from './renderers/starRenderer'
 import { LayerPlanetRenderer } from './renderers/planetRenderer'
+import { isPerfEnabled } from '../../systems/renderLoop'
 
 export class CelestialLayer extends BaseLayer {
     private _starRenderer: LayerStarRenderer | null = null
     private _planetRenderer: LayerPlanetRenderer | null = null
+
+    /** 子渲染器最近一次 update 耗时（ms），仅在 isPerfEnabled() 时有效喵 */
+    lastStarMs = 0
+    lastPlanetMs = 0
 
     constructor() {
         super('celestial', RenderOrder.CELESTIAL)
@@ -41,14 +46,18 @@ export class CelestialLayer extends BaseLayer {
     update(ctx: WorldRenderContext, frame: WorldFrameState): void {
         if (!this.visible) return
 
+        const perfOn = isPerfEnabled()
+
         // 更新恒星渲染器
         if (this._starRenderer) {
-            this._starRenderer.update(ctx, frame)
+            if (perfOn) { const t0 = performance.now(); this._starRenderer.update(ctx, frame); this.lastStarMs = performance.now() - t0 }
+            else { this._starRenderer.update(ctx, frame) }
         }
 
         // 更新行星渲染器
         if (this._planetRenderer) {
-            this._planetRenderer.update(ctx, frame)
+            if (perfOn) { const t0 = performance.now(); this._planetRenderer.update(ctx, frame); this.lastPlanetMs = performance.now() - t0 }
+            else { this._planetRenderer.update(ctx, frame) }
         }
 
         this.updateTimestamp()
