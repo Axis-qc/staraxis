@@ -54,11 +54,14 @@ tasks.fatJar.dependsOn(':game:processResources')
 // 使用 ./gradlew build 或 ./gradlew dist 构建完整发行版
 
 run {
-  // Web 版不需要 LibGDX assets workingDir，这里保持在项目根目录，方便读取 ../web/dist
   workingDir = rootProject.rootDir
 
-  // server-ui 已废弃：webnet 仅提供 API/WS + 托管 /webui 静态资源
-  // 保留该段仅作兼容（不再传递参数）
+  onlyIf {
+    gradle.startParameter.taskNames.any { name ->
+      name == 'runWeb' || name == ':runWeb' || name == 'webnet:run' || name == ':webnet:run'
+    }
+  }
+
   if (project.hasProperty('serverUi')) {
     // no-op
   }

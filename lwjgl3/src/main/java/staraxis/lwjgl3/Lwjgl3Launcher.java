@@ -37,7 +37,7 @@ public class Lwjgl3Launcher {
     }
 
     private static GameSettings loadSettingsPreGdx() {
-        File settingsFile = new File("../gamedata/settings.json");
+        File settingsFile = new File("gamedata/settings.json");
         if (!settingsFile.exists()) {
             log.info("settings.json not found, using default settings for window creation.");
             return GameSettings.createDefault();
@@ -52,10 +52,7 @@ public class Lwjgl3Launcher {
     }
 
     private static void ensureLogDir() {
-        // NOTE: `:lwjgl3:run` 在 build.gradle 中将 workingDir 设为 assets/，因此 user.dir 指向
-        // assets。
-        // 为了把日志稳定落到“项目根目录/gamedata/logs”，这里使用 ../gamedata/logs。
-        File dir = new File("../gamedata/logs");
+        File dir = new File("gamedata/logs");
         if (!dir.exists())
             dir.mkdirs();
     }

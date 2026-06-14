@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 
-REM StarAxis Game Launcher - Using bundled JDK
+REM StarAxis Native Client Launcher - Using bundled JDK
 
 set "GAME_DIR=%~dp0"
 set "JDK_DIR=%GAME_DIR%openjdk-21.0.2"
@@ -30,7 +30,7 @@ echo Game directory: %GAME_DIR%
 echo ==========================================
 echo.
 
-REM Start game server
+REM Start native LWJGL3/OpenGL game client
 REM -Xmx2G: Allocate 2GB memory (adjustable)
 REM -Dfile.encoding=UTF-8: Force UTF-8 encoding
 "%JAVA_EXE%" -Xmx2G -Dfile.encoding=UTF-8 -jar "%GAME_DIR%StarAxis.jar"

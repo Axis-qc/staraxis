@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 
-REM StarAxis Game Debug Launcher
+REM StarAxis Native Client Debug Launcher
 
 set "GAME_DIR=%~dp0"
 set "JDK_DIR=%GAME_DIR%openjdk-21.0.2"

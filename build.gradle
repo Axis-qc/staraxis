@@ -118,41 +118,39 @@ tasks.register('copyGameAssets', Copy) {
   exclude '**/*.tmp'
 }
 
-// 复制后端 Jar 到发行目录
-tasks.register('copyBackendJar', Copy) {
+// 复制原生客户端 Jar 到发行目录
+tasks.register('copyNativeClientJar', Copy) {
   group = 'build'
-  description = 'Copy backend fat jar to distribution directory.'
+  description = 'Copy native LWJGL3 client jar to distribution directory.'
 
-  dependsOn ':webnet:fatJar'
+  dependsOn ':lwjgl3:jar'
 
-  from(tasks.getByPath(':webnet:fatJar').archiveFile)
+  from(tasks.getByPath(':lwjgl3:jar').archiveFile)
   into(gameDistDir)
   rename { 'StarAxis.jar' }
 }
 
-// 完整打包任务 - 构建整个游戏发行版
+// 完整打包任务 - 构建原生客户端发行版
 tasks.register('dist') {
   group = 'build'
-  description = 'Build complete game distribution (frontend + backend + assets + scripts).'
+  description = 'Build native game distribution (LWJGL3 client + assets + scripts).'
 
-  dependsOn 'buildWeb'
   dependsOn 'copyLaunchScripts'
   dependsOn 'copyGameAssets'
-  dependsOn 'copyBackendJar'
+  dependsOn 'copyNativeClientJar'
 
   doLast {
     println "========================================"
-    println " StarAxis 发行版构建完成！"
+    println " StarAxis 原生客户端发行版构建完成！"
     println "========================================"
     println "输出目录: ${gameDistDir}"
     println ""
     println "文件清单:"
-    println "  - StarAxis.jar        : 游戏主程序"
-    println "  - StarAxis.bat        : 启动脚本"
+    println "  - StarAxis.jar        : 原生客户端主程序"
+    println "  - StarAxis.bat        : 原生客户端启动脚本"
     println "  - StarAxis-Debug.bat  : 调试脚本"
     println "  - README.txt          : 使用说明"
     println "  - assets/             : 游戏资源"
-    println "  - webui/              : 前端界面"
     println "========================================"
   }
 }
@@ -172,12 +170,21 @@ tasks.register('clean', Delete) {
   delete gameDistDir
 }
 
-// Web 版启动入口：仅启动 webnet（HTTP + WebSocket），不启动 lwjgl3/libgdx
+// 原生客户端启动入口：创建 LWJGL3/OpenGL 游戏窗口
+// 用法：./gradlew run
+
+tasks.register('run') {
+  group = 'application'
+  description = 'Run native LWJGL3 client.'
+  dependsOn ':lwjgl3:run'
+}
+
+// webnet 调试入口：仅启动 HTTP + WebSocket，不启动原生窗口
 // 用法：./gradlew runWeb
 
 tasks.register('runWeb') {
   group = 'application'
-  description = 'Run web version (webnet server only).'
+  description = 'Run webnet gateway for debugging.'
   dependsOn ':webnet:run'
 }
 
