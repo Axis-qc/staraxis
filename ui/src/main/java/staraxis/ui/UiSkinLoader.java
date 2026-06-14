@@ -120,9 +120,146 @@ public final class UiSkinLoader {
 
     public static Skin loadDefault(String skinJsonPath) {
         Skin skin = new Skin(Gdx.files.internal(skinJsonPath));
+        registerProceduralDrawables(skin);
         registerNinePatchDrawables(skin, "ui/uiskin/9png");
         registerPngDrawables(skin, "ui/uiskin/png", "ui/uiskin/PNG");
         return skin;
+    }
+
+    private static void registerProceduralDrawables(Skin skin) {
+        registerProcedural(skin, "white", createSolid(1, 1, 0xFFFFFFFF));
+        registerProcedural(skin, "rect", createSolid(4, 4, 0xFFFFFFFF));
+        registerProcedural(skin, "square", createSolid(4, 4, 0xFFFFFFFF));
+        registerProcedural(skin, "dot", createCircle(8, 8, 0xFFFFFFFF));
+        registerProcedural(skin, "line-h", createSolid(4, 1, 0xFFFFFFFF));
+        registerProcedural(skin, "line-v", createSolid(1, 4, 0xFFFFFFFF));
+        registerProcedural(skin, "knob-h", createSolid(8, 4, 0xFFFFFFFF));
+        registerProcedural(skin, "knob-v", createSolid(4, 8, 0xFFFFFFFF));
+        registerProcedural(skin, "check-on", createCheckOn(8, 8, 0xFFFFFFFF));
+        registerProcedural(skin, "check", createCheckOutline(8, 8, 0xFFFFFFFF));
+        registerProcedural(skin, "select", createSelectBox(8, 8, 0xFFFFFFFF));
+        registerProcedural(skin, "tree-minus", createTreeMinus(8, 8, 0xFFFFFFFF));
+        registerProcedural(skin, "tree-plus", createTreePlus(8, 8, 0xFFFFFFFF));
+        registerProcedural(skin, "window-resize", createWindowResize(8, 8, 0xFFFFFFFF));
+        registerProcedural(skin, "window-border", createWindowBorder(8, 8, 0xFFFFFFFF));
+
+        registerProceduralNinePatch(skin, "Rounded_background", createRoundedRect(16, 16, 4, 0xFFFFFFFF), 4, 4, 4, 4);
+    }
+
+    private static void registerProcedural(Skin skin, String name, Pixmap pixmap) {
+        if (skin.has(name, Drawable.class)) return;
+        Texture tex = new Texture(pixmap);
+        tex.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        skin.add(name, tex, Texture.class);
+        skin.add(name, new TextureRegionDrawable(new TextureRegion(tex)), Drawable.class);
+        pixmap.dispose();
+    }
+
+    private static void registerProceduralNinePatch(Skin skin, String name, Pixmap pixmap, int l, int r, int t, int b) {
+        if (skin.has(name, Drawable.class)) {
+            pixmap.dispose();
+            return;
+        }
+        Texture tex = new Texture(pixmap);
+        tex.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        NinePatch patch = new NinePatch(new TextureRegion(tex), l, r, t, b);
+        skin.add(name, tex, Texture.class);
+        skin.add(name, new NinePatchDrawable(patch), Drawable.class);
+        pixmap.dispose();
+    }
+
+    private static Pixmap createSolid(int w, int h, int rgba) {
+        Pixmap p = new Pixmap(w, h, Pixmap.Format.RGBA8888);
+        p.setColor(rgba);
+        p.fill();
+        return p;
+    }
+
+    private static Pixmap createCircle(int w, int h, int rgba) {
+        Pixmap p = new Pixmap(w, h, Pixmap.Format.RGBA8888);
+        p.setColor(rgba);
+        p.fillCircle(w / 2, h / 2, Math.min(w, h) / 2);
+        return p;
+    }
+
+    private static Pixmap createCheckOn(int w, int h, int rgba) {
+        Pixmap p = new Pixmap(w, h, Pixmap.Format.RGBA8888);
+        p.setColor(rgba);
+        p.fillRectangle(0, 0, w, h);
+        p.setColor(0x00000000);
+        p.fillRectangle(1, 1, w - 2, h - 2);
+        p.setColor(rgba);
+        p.drawLine(2, h / 2, w / 2 - 1, h - 3);
+        p.drawLine(w / 2 - 1, h - 3, w - 3, 2);
+        p.drawLine(2, h / 2 - 1, w / 2 - 1, h - 4);
+        p.drawLine(w / 2, h - 3, w - 3, 1);
+        return p;
+    }
+
+    private static Pixmap createCheckOutline(int w, int h, int rgba) {
+        Pixmap p = new Pixmap(w, h, Pixmap.Format.RGBA8888);
+        p.setColor(rgba);
+        p.drawRectangle(0, 0, w, h);
+        return p;
+    }
+
+    private static Pixmap createSelectBox(int w, int h, int rgba) {
+        Pixmap p = new Pixmap(w, h, Pixmap.Format.RGBA8888);
+        p.setColor(rgba);
+        p.fillRectangle(0, 0, w, h);
+        p.setColor(0x00000000);
+        p.fillRectangle(1, 1, w - 2, h - 2);
+        p.setColor(rgba);
+        p.drawLine(w - 4, 2, w - 2, 4);
+        p.drawLine(w - 5, 2, w - 2, 5);
+        return p;
+    }
+
+    private static Pixmap createTreeMinus(int w, int h, int rgba) {
+        Pixmap p = new Pixmap(w, h, Pixmap.Format.RGBA8888);
+        p.setColor(rgba);
+        p.drawRectangle(0, 0, w, h);
+        p.fillRectangle(2, h / 2 - 1, w - 4, 2);
+        return p;
+    }
+
+    private static Pixmap createTreePlus(int w, int h, int rgba) {
+        Pixmap p = new Pixmap(w, h, Pixmap.Format.RGBA8888);
+        p.setColor(rgba);
+        p.drawRectangle(0, 0, w, h);
+        p.fillRectangle(2, h / 2 - 1, w - 4, 2);
+        p.fillRectangle(w / 2 - 1, 2, 2, h - 4);
+        return p;
+    }
+
+    private static Pixmap createWindowResize(int w, int h, int rgba) {
+        Pixmap p = new Pixmap(w, h, Pixmap.Format.RGBA8888);
+        p.setColor(rgba);
+        for (int i = 0; i < 3; i++) {
+            int x = w - 2 - i * 3;
+            int y = i * 3;
+            p.drawLine(x, y, w - 1, y + (w - 1 - x));
+        }
+        return p;
+    }
+
+    private static Pixmap createWindowBorder(int w, int h, int rgba) {
+        Pixmap p = new Pixmap(w, h, Pixmap.Format.RGBA8888);
+        p.setColor(rgba);
+        p.drawRectangle(0, 0, w, h);
+        return p;
+    }
+
+    private static Pixmap createRoundedRect(int w, int h, int radius, int rgba) {
+        Pixmap p = new Pixmap(w, h, Pixmap.Format.RGBA8888);
+        p.setColor(rgba);
+        p.fillRectangle(radius, 0, w - radius * 2, h);
+        p.fillRectangle(0, radius, w, h - radius * 2);
+        p.fillCircle(radius, radius, radius);
+        p.fillCircle(w - radius - 1, radius, radius);
+        p.fillCircle(radius, h - radius - 1, radius);
+        p.fillCircle(w - radius - 1, h - radius - 1, radius);
+        return p;
     }
 
     private static void registerPngDrawables(Skin skin, String... internalDirs) {

@@ -67,8 +67,10 @@ public final class FontProvider {
     private static String buildCharactersFromI18n() {
         // NOTE: 基础字符集（控制符号/常用 ASCII），避免某些 UI 文本不是 i18n 时缺字。
         String base = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789" +
-                "-()（）/\\ _" +
-                ">v≡";
+                "-()（）/\\ _:：" +
+                ">v≡" +
+                "星轴原生客户端本机世界区数实体舰队图菜单平移缩放" +
+                "资产总览日期设施列表点击项聚焦左键拖动已选中当前未选择框选双击右键下令舰船信息状态待机关闭空白处下达移动指令开发军事科技内政外交暂无开始游戏";
 
         Set<Character> chars = new LinkedHashSet<>();
         for (int i = 0; i < base.length(); i++) {
@@ -87,8 +89,7 @@ public final class FontProvider {
         }
 
         // NOTE: 同时扫描 mod 的 i18n，确保字体位图包含 mod 文本需要的字符，避免运行时缺字。
-        // 由于 :lwjgl3:run 的 workingDir 为 assets/，这里用 ../gamedata/mods 定位项目根下的 mod 目录。
-        FileHandle modsDir = Gdx.files.local("../gamedata/mods/");
+        FileHandle modsDir = Gdx.files.local("gamedata/mods/");
         if (modsDir.exists() && modsDir.isDirectory()) {
             FileHandle[] modDirs = modsDir.list();
             java.util.Arrays.sort(modDirs, java.util.Comparator.comparing(FileHandle::name));

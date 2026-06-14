@@ -18,101 +18,128 @@
       "children": [
         {
           "type": "container",
-          "name": "center_content",
+          "name": "hud",
           "properties": {
             "fillParent": true,
-            "align": "center",
-            "pad": 24
+            "align": "left",
+            "pad": 48
           },
           "children": [
             {
-              "type": "label",
-              "name": "title",
+              "type": "container",
+              "name": "hud_content",
               "properties": {
-                "text": "app.title",
-                "alignment": "center",
+                "align": "topleft",
+                "pad": 0,
                 "cell": {
-                  "padBottom": 18
+                  "expand": true,
+                  "fillY": true
                 }
-              }
-            },
-            {
-              "type": "button",
-              "name": "btn_new_game",
-              "properties": {
-                "text": "mainMenu.newGame",
-                "onClick": "SHOW_DEVELOPING_DIALOG",
-                "cell": {
-                  "width": 360,
-                  "height": 48,
-                  "pad": 8
+              },
+              "children": [
+                {
+                  "type": "label",
+                  "name": "title",
+                  "properties": {
+                    "text": "app.title",
+                    "style": "white",
+                    "alignment": "left",
+                    "cell": {
+                      "padBottom": 4
+                    }
+                  }
+                },
+                {
+                  "type": "label",
+                  "name": "subtitle",
+                  "properties": {
+                    "text": "mainMenu.web.subtitle",
+                    "style": "subtitle",
+                    "alignment": "left",
+                    "cell": {
+                      "padBottom": 32
+                    }
+                  }
+                },
+                {
+                  "type": "button",
+                  "name": "btn_new_game",
+                  "properties": {
+                    "text": "mainMenu.newGame",
+                    "onClick": "NEW_GAME",
+                    "cell": {
+                      "width": 360,
+                      "height": 48,
+                      "padBottom": 8
+                    }
+                  }
+                },
+                {
+                  "type": "button",
+                  "name": "btn_load_game",
+                  "properties": {
+                    "text": "mainMenu.loadGame",
+                    "onClick": "LOAD_GAME",
+                    "cell": {
+                      "width": 360,
+                      "height": 48,
+                      "padBottom": 8
+                    }
+                  }
+                },
+                {
+                  "type": "button",
+                  "name": "btn_multiplayer",
+                  "properties": {
+                    "text": "mainMenu.multiplayer",
+                    "onClick": "SHOW_DEVELOPING_DIALOG",
+                    "cell": {
+                      "width": 360,
+                      "height": 48,
+                      "padBottom": 8
+                    }
+                  }
+                },
+                {
+                  "type": "button",
+                  "name": "btn_ship_designer",
+                  "properties": {
+                    "text": "mainMenu.shipDesigner",
+                    "onClick": "SHOW_DEVELOPING_DIALOG",
+                    "cell": {
+                      "width": 360,
+                      "height": 48,
+                      "padBottom": 8
+                    }
+                  }
+                },
+                {
+                  "type": "button",
+                  "name": "btn_settings",
+                  "properties": {
+                    "text": "mainMenu.settings",
+                    "onClick": "OPEN_SETTINGS",
+                    "cell": {
+                      "width": 360,
+                      "height": 48,
+                      "padBottom": 8
+                    }
+                  }
+                },
+                {
+                  "type": "button",
+                  "name": "btn_exit",
+                  "properties": {
+                    "text": "mainMenu.exit",
+                    "onClick": "EXIT_CLICK",
+                    "cell": {
+                      "width": 360,
+                      "height": 48,
+                      "padBottom": 8
+                    }
+                  }
                 }
-              }
-            },
-            {
-              "type": "button",
-              "name": "btn_load_game",
-              "properties": {
-                "text": "mainMenu.loadGame",
-                "onClick": "SHOW_DEVELOPING_DIALOG",
-                "cell": {
-                  "width": 360,
-                  "height": 48,
-                  "pad": 8
-                }
-              }
-            },
-            {
-              "type": "button",
-              "name": "btn_multiplayer",
-              "properties": {
-                "text": "mainMenu.multiplayer",
-                "onClick": "SHOW_DEVELOPING_DIALOG",
-                "cell": {
-                  "width": 360,
-                  "height": 48,
-                  "pad": 8
-                }
-              }
-            },
-            {
-              "type": "button",
-              "name": "btn_ship_designer",
-              "properties": {
-                "text": "mainMenu.shipDesigner",
-                "onClick": "SHOW_DEVELOPING_DIALOG",
-                "cell": {
-                  "width": 360,
-                  "height": 48,
-                  "pad": 8
-                }
-              }
-            },
-            {
-              "type": "button",
-              "name": "btn_settings",
-              "properties": {
-                "text": "mainMenu.settings",
-                "onClick": "OPEN_SETTINGS",
-                "cell": {
-                  "width": 360,
-                  "height": 48,
-                  "pad": 8
-                }
-              }
-            },
-            {
-              "type": "button",
-              "name": "btn_exit",
-              "properties": {
-                "text": "mainMenu.exit",
-                "onClick": "EXIT_CLICK",
-                "cell": {
-                  "width": 360,
-                  "height": 48,
-                  "pad": 8
-                }
-              }
+              ]
             }
           ]
         },
@@ -160,6 +187,26 @@
                   "children": []
                 }
               ]
+            }
+          ]
+        },
+        {
+          "type": "container",
+          "name": "bottom_right_overlay",
+          "properties": {
+            "fillParent": true,
+            "align": "bottomright",
+            "pad": 24
+          },
+          "children": [
+            {
+              "type": "label",
+              "name": "version_info",
+              "properties": {
+                "text": "common.version",
+                "style": "default",
+                "alignment": "right"
+              }
             }
           ]
         }

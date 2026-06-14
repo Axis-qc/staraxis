@@ -5,12 +5,17 @@ import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.utils.Disposable;
 
 import java.util.function.Consumer;
+import staraxis.game.StarAxisGameRuntime;
 import staraxis.ui.i18n.I18nService;
 import staraxis.ui.json.UiFactory;
 import staraxis.ui.json.UiParser;
+import staraxis.ui.screens.InGameHudScreen;
+import staraxis.ui.screens.LoadGameScreen;
 import staraxis.ui.screens.MainMenuScreen;
+import staraxis.ui.screens.NationSelectScreen;
 import staraxis.ui.screens.SettingsScreen;
 import staraxis.ui.screens.UiComponentsTestScreen;
+import staraxis.ui.screens.WorldSettingsScreen;
 import staraxis.ui.widgets.DevelopingDialog;
 
 import java.util.HashMap;
@@ -24,6 +29,7 @@ import java.util.Map;
  * - 通过 {@link #dispatchAction(String)} 以 actionId 的方式把交互意图上抛，避免 UI
  * 直接修改权威世界状态。
  * - 某些服务（例如 JSON UI）需要依赖 Skin 等资源，因此采用显式 init 方法，避免初始化顺序导致 NPE。
+ * - 原生客户端与 game 运行时同进程，直接持有 StarAxisGameRuntime 引用，无需网络层。
  */
 public class Gui {
 
@@ -31,6 +37,8 @@ public class Gui {
     private final Consumer<Float> uiScaleApplier;
     private final Consumer<Float> fontScaleApplier;
     private final Map<Class<?>, Object> componentsByType = new HashMap<>();
+
+    private StarAxisGameRuntime runtime;
 
     /** 当前正在显示的 Screen，用于切换时清理旧界面。 */
     private Disposable activeScreen;
@@ -43,6 +51,14 @@ public class Gui {
 
     public Stage getStage() {
         return stage;
+    }
+
+    public void registerRuntime(StarAxisGameRuntime runtime) {
+        this.runtime = runtime;
+    }
+
+    public StarAxisGameRuntime getRuntime() {
+        return runtime;
     }
 
     public void applyUiScale(float scale) {
@@ -120,6 +136,34 @@ public class Gui {
         }
     }
 
+    public void showWorldSettings() {
+        WorldSettingsScreen screen = get(WorldSettingsScreen.class);
+        if (screen != null) {
+            switchScreen(screen, screen::show);
+        }
+    }
+
+    public void showNationSelect() {
+        NationSelectScreen screen = get(NationSelectScreen.class);
+        if (screen != null) {
+            switchScreen(screen, screen::show);
+        }
+    }
+
+    public void showLoadGame() {
+        LoadGameScreen screen = get(LoadGameScreen.class);
+        if (screen != null) {
+            switchScreen(screen, screen::show);
+        }
+    }
+
+    public void showInGameHud() {
+        InGameHudScreen screen = get(InGameHudScreen.class);
+        if (screen != null) {
+            switchScreen(screen, screen::show);
+        }
+    }
+
     public void showUiComponentsTestScreen() {
         UiComponentsTestScreen screen = get(UiComponentsTestScreen.class);
         if (screen != null) {
@@ -164,6 +208,25 @@ public class Gui {
                 showSettingsScreen();
                 return;
             case "BACK_TO_MAIN_MENU":
+                showMainMenu();
+                return;
+            case "NEW_GAME":
+                showWorldSettings();
+                return;
+            case "LOAD_GAME":
+                showLoadGame();
+                return;
+            case "NATION_SELECT":
+                showNationSelect();
+                return;
+            case "START_GAME":
+                if (runtime != null) {
+                    runtime.start();
+                    showInGameHud();
+                }
+                return;
+            case "RETURN_TO_MAIN_MENU":
+                runtime = null;
                 showMainMenu();
                 return;
             case "TOGGLE_VSYNC": {

@@ -5,6 +5,7 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputMultiplexer;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
@@ -14,7 +15,12 @@ import staraxis.ui.FontProvider;
 import staraxis.ui.Gui;
 import staraxis.ui.UiSkinLoader;
 import staraxis.ui.i18n.I18nService;
+import staraxis.ui.screens.InGameHudScreen;
+import staraxis.ui.screens.LoadGameScreen;
 import staraxis.ui.screens.MainMenuScreen;
+import staraxis.ui.screens.NationSelectScreen;
+import staraxis.ui.screens.SettingsScreen;
+import staraxis.ui.screens.WorldSettingsScreen;
 import staraxis.ui.widgets.DevelopingDialog;
 
 public class UiPreviewApp implements ApplicationListener {
@@ -53,10 +59,23 @@ public class UiPreviewApp implements ApplicationListener {
         gui.register(Skin.class, skin);
         gui.initJsonUi();
 
-        MainMenuScreen mainMenuScreen = new MainMenuScreen(gui);
+        ShapeRenderer sr = new ShapeRenderer();
+        gui.register(ShapeRenderer.class, sr);
+
+        MainMenuScreen mainMenuScreen = new MainMenuScreen(gui, sr, finalFont);
+        WorldSettingsScreen worldSettingsScreen = new WorldSettingsScreen(gui);
+        NationSelectScreen nationSelectScreen = new NationSelectScreen(gui);
+        LoadGameScreen loadGameScreen = new LoadGameScreen(gui);
+        InGameHudScreen inGameHudScreen = new InGameHudScreen(gui);
+        SettingsScreen settingsScreen = new SettingsScreen(gui);
         DevelopingDialog developingDialog = new DevelopingDialog(skin, i18nService);
 
         gui.register(MainMenuScreen.class, mainMenuScreen);
+        gui.register(WorldSettingsScreen.class, worldSettingsScreen);
+        gui.register(NationSelectScreen.class, nationSelectScreen);
+        gui.register(LoadGameScreen.class, loadGameScreen);
+        gui.register(InGameHudScreen.class, inGameHudScreen);
+        gui.register(SettingsScreen.class, settingsScreen);
         gui.register(DevelopingDialog.class, developingDialog);
 
         gui.showMainMenu();
@@ -92,6 +111,10 @@ public class UiPreviewApp implements ApplicationListener {
             Skin skin = gui.get(Skin.class);
             if (skin != null) {
                 skin.dispose();
+            }
+            ShapeRenderer sr = gui.get(ShapeRenderer.class);
+            if (sr != null) {
+                sr.dispose();
             }
         }
         if (stage != null) {
