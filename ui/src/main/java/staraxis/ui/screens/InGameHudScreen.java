@@ -2,31 +2,24 @@ package staraxis.ui.screens;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.scenes.scene2d.Actor;
+import com.badlogic.gdx.scenes.scene2d.Group;
 import com.badlogic.gdx.scenes.scene2d.Stage;
-import com.badlogic.gdx.scenes.scene2d.ui.Label;
-import com.badlogic.gdx.scenes.scene2d.ui.Skin;
-import com.badlogic.gdx.scenes.scene2d.ui.Table;
-import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
-import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.utils.Disposable;
 import staraxis.game.StarAxisGameRuntime;
 import staraxis.game.state.RealTimeWorldState;
 import staraxis.ui.Gui;
+import staraxis.ui.json.ComponentNode;
+import staraxis.ui.json.UiFactory;
+import staraxis.ui.json.UiParser;
+import staraxis.ui.widgets.VectorLabel;
 
-/**
- * 游戏中 HUD 覆盖层 Screen。
- *
- * 覆盖在世界渲染之上，包含顶部概览、时间控制、底部建造栏、ESC 菜单等子组件。
- */
 public class InGameHudScreen implements Disposable {
+
+    private static final String UI_PATH = "ui/gameui/ingame-hud/ingame_hud.json";
 
     private final Gui gui;
     private final Stage stage;
     private Actor root;
-
-    private Label timeLabel;
-    private Label tickLabel;
-    private Label entityCountLabel;
 
     public InGameHudScreen(Gui gui) {
         this.gui = gui;
@@ -36,54 +29,17 @@ public class InGameHudScreen implements Disposable {
     public void show() {
         dispose();
 
-        Skin skin = gui.get(Skin.class);
-        if (skin == null) return;
+        UiParser parser = gui.get(UiParser.class);
+        UiFactory factory = gui.get(UiFactory.class);
+        if (parser == null || factory == null) return;
 
-        Table table = new Table();
-        table.setFillParent(true);
+        ComponentNode node = parser.parseInternal(UI_PATH);
+        if (node == null) return;
 
-        Table topBar = new Table();
-        topBar.top().right();
-        timeLabel = new Label("", skin);
-        tickLabel = new Label("", skin);
-        entityCountLabel = new Label("", skin);
-        topBar.add(timeLabel).padRight(12);
-        topBar.add(tickLabel).padRight(12);
-        topBar.add(entityCountLabel);
-        table.add(topBar).expandX().fillX().top().pad(8).row();
-
-        table.row();
-        table.add().expand().fill();
-
-        Table bottomBar = new Table();
-        bottomBar.bottom().center();
-
-        String[] tabs = { "inGame.develop", "inGame.military", "inGame.tech",
-                "inGame.domestic", "inGame.diplomacy" };
-        for (String tabKey : tabs) {
-            TextButton btn = new TextButton(gui.i18n(tabKey), skin);
-            btn.addListener(new ChangeListener() {
-                @Override
-                public void changed(ChangeEvent event, Actor actor) {
-                    gui.dispatchAction("SHOW_DEVELOPING_DIALOG");
-                }
-            });
-            bottomBar.add(btn).width(120).height(36).pad(4);
+        root = factory.create(node);
+        if (root != null) {
+            stage.addActor(root);
         }
-
-        TextButton escBtn = new TextButton(gui.i18n("common.back"), skin);
-        escBtn.addListener(new ChangeListener() {
-            @Override
-            public void changed(ChangeEvent event, Actor actor) {
-                gui.dispatchAction("RETURN_TO_MAIN_MENU");
-            }
-        });
-        bottomBar.add(escBtn).width(80).height(36).pad(4);
-
-        table.add(bottomBar).expandX().fillX().bottom().pad(8).row();
-
-        root = table;
-        stage.addActor(root);
 
         refreshHud();
     }
@@ -95,10 +51,24 @@ public class InGameHudScreen implements Disposable {
         RealTimeWorldState state = rt.getRealTimeWorldStateReadonly();
         if (state == null) return;
 
-        timeLabel.setText(String.format("Y%d M%d D%d %02d:%02d",
-                state.year, state.month, state.day, state.hour, state.minute));
-        tickLabel.setText("Tick: " + state.simulationTick);
-        entityCountLabel.setText("Entities: " + state.getEntitiesByIdView().size());
+        if (root instanceof Group) {
+            Group rootGroup = (Group) root;
+            Actor timeActor = rootGroup.findActor("time_label");
+            if (timeActor instanceof VectorLabel) {
+                ((VectorLabel) timeActor).setText(String.format("Y%d M%d D%d %02d:%02d",
+                        state.year, state.month, state.day, state.hour, state.minute));
+            }
+
+            Actor tickActor = rootGroup.findActor("tick_label");
+            if (tickActor instanceof VectorLabel) {
+                ((VectorLabel) tickActor).setText("Tick: " + state.simulationTick);
+            }
+
+            Actor entityActor = rootGroup.findActor("entity_count_label");
+            if (entityActor instanceof VectorLabel) {
+                ((VectorLabel) entityActor).setText("Entities: " + state.getEntitiesByIdView().size());
+            }
+        }
     }
 
     @Override

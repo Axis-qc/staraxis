@@ -14,19 +14,21 @@ import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import staraxis.ui.FontProvider;
 import staraxis.ui.Gui;
 import staraxis.ui.UiSkinLoader;
+import staraxis.ui.effects.EffectRegistry;
 import staraxis.ui.i18n.I18nService;
+import staraxis.ui.json.GameDataProvider;
+import staraxis.ui.json.UiFactory;
 import staraxis.ui.screens.InGameHudScreen;
-import staraxis.ui.screens.LoadGameScreen;
-import staraxis.ui.screens.MainMenuScreen;
-import staraxis.ui.screens.NationSelectScreen;
 import staraxis.ui.screens.SettingsScreen;
 import staraxis.ui.screens.WorldSettingsScreen;
 import staraxis.ui.widgets.DevelopingDialog;
+import staraxis.ui.widgets.StarfieldBackground;
 
 public class UiPreviewApp implements ApplicationListener {
 
     private Stage stage;
     private Gui gui;
+    private StarfieldBackground starfield;
 
     @Override
     public void create() {
@@ -62,18 +64,24 @@ public class UiPreviewApp implements ApplicationListener {
         ShapeRenderer sr = new ShapeRenderer();
         gui.register(ShapeRenderer.class, sr);
 
-        MainMenuScreen mainMenuScreen = new MainMenuScreen(gui, sr, finalFont);
+        starfield = new StarfieldBackground(sr);
+        starfield.init(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+
+        UiFactory factory = gui.get(UiFactory.class);
+        EffectRegistry effectRegistry = gui.get(EffectRegistry.class);
+        if (factory != null) {
+            factory.setEffectRegistry(effectRegistry);
+            factory.setShapeRenderer(sr);
+            factory.setBitmapFont(finalFont);
+            factory.setDataProvider(new GameDataProvider());
+        }
+
         WorldSettingsScreen worldSettingsScreen = new WorldSettingsScreen(gui);
-        NationSelectScreen nationSelectScreen = new NationSelectScreen(gui);
-        LoadGameScreen loadGameScreen = new LoadGameScreen(gui);
         InGameHudScreen inGameHudScreen = new InGameHudScreen(gui);
         SettingsScreen settingsScreen = new SettingsScreen(gui);
         DevelopingDialog developingDialog = new DevelopingDialog(skin, i18nService);
 
-        gui.register(MainMenuScreen.class, mainMenuScreen);
         gui.register(WorldSettingsScreen.class, worldSettingsScreen);
-        gui.register(NationSelectScreen.class, nationSelectScreen);
-        gui.register(LoadGameScreen.class, loadGameScreen);
         gui.register(InGameHudScreen.class, inGameHudScreen);
         gui.register(SettingsScreen.class, settingsScreen);
         gui.register(DevelopingDialog.class, developingDialog);
@@ -86,6 +94,9 @@ public class UiPreviewApp implements ApplicationListener {
         if (stage != null) {
             stage.getViewport().update(width, height, true);
         }
+        if (starfield != null) {
+            starfield.resize(width, height);
+        }
     }
 
     @Override
@@ -93,7 +104,14 @@ public class UiPreviewApp implements ApplicationListener {
         Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
-        stage.act(Gdx.graphics.getDeltaTime());
+        float dt = Gdx.graphics.getDeltaTime();
+
+        if (starfield != null) {
+            starfield.act(dt);
+            starfield.render();
+        }
+
+        stage.act(dt);
         stage.draw();
     }
 
@@ -120,5 +138,6 @@ public class UiPreviewApp implements ApplicationListener {
         if (stage != null) {
             stage.dispose();
         }
+        FontProvider.disposeAllIncremental();
     }
 }

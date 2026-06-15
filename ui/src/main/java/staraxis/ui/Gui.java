@@ -6,10 +6,12 @@ import com.badlogic.gdx.utils.Disposable;
 
 import java.util.function.Consumer;
 import staraxis.game.StarAxisGameRuntime;
+import staraxis.ui.effects.EffectRegistry;
 import staraxis.ui.i18n.I18nService;
 import staraxis.ui.json.UiFactory;
 import staraxis.ui.json.UiParser;
 import staraxis.ui.screens.InGameHudScreen;
+import staraxis.ui.screens.JsonScreen;
 import staraxis.ui.screens.LoadGameScreen;
 import staraxis.ui.screens.MainMenuScreen;
 import staraxis.ui.screens.NationSelectScreen;
@@ -39,6 +41,27 @@ public class Gui {
     private final Map<Class<?>, Object> componentsByType = new HashMap<>();
 
     private StarAxisGameRuntime runtime;
+
+    private static final String[] THEME_PATHS = {
+        "effects/default.json",
+        "effects/amethyst.json",
+        "effects/ember.json",
+        "effects/forest.json"
+    };
+    private int currentThemeIndex = 0;
+
+    private void cycleTheme() {
+        currentThemeIndex = (currentThemeIndex + 1) % THEME_PATHS.length;
+        EffectRegistry reg = get(EffectRegistry.class);
+        if (reg != null) {
+            reg.clear();
+            reg.load(THEME_PATHS[currentThemeIndex]);
+        }
+        UiFactory factory = get(UiFactory.class);
+        if (factory != null) {
+            factory.setEffectRegistry(reg);
+        }
+    }
 
     /** 当前正在显示的 Screen，用于切换时清理旧界面。 */
     private Disposable activeScreen;
@@ -99,6 +122,11 @@ public class Gui {
         if (tryGet(UiFactory.class) == null) {
             register(UiFactory.class, new UiFactory(this));
         }
+        if (tryGet(EffectRegistry.class) == null) {
+            EffectRegistry reg = new EffectRegistry();
+            reg.load("effects/default.json");
+            register(EffectRegistry.class, reg);
+        }
     }
 
     public String i18n(String key) {
@@ -123,10 +151,8 @@ public class Gui {
     }
 
     public void showMainMenu() {
-        MainMenuScreen screen = get(MainMenuScreen.class);
-        if (screen != null) {
-            switchScreen(screen, screen::show);
-        }
+        JsonScreen screen = new JsonScreen(this, "ui/gameui/main-menu/main_menu.json");
+        switchScreen(screen, screen::show);
     }
 
     public void showSettingsScreen() {
@@ -144,17 +170,13 @@ public class Gui {
     }
 
     public void showNationSelect() {
-        NationSelectScreen screen = get(NationSelectScreen.class);
-        if (screen != null) {
-            switchScreen(screen, screen::show);
-        }
+        JsonScreen screen = new JsonScreen(this, "ui/gameui/nation-select/nation_select.json");
+        switchScreen(screen, screen::show);
     }
 
     public void showLoadGame() {
-        LoadGameScreen screen = get(LoadGameScreen.class);
-        if (screen != null) {
-            switchScreen(screen, screen::show);
-        }
+        JsonScreen screen = new JsonScreen(this, "ui/gameui/load-game/load_game.json");
+        switchScreen(screen, screen::show);
     }
 
     public void showInGameHud() {
@@ -194,8 +216,23 @@ public class Gui {
             case "EXIT_CLICK":
                 Gdx.app.exit();
                 return;
-            case "TOGGLE_LANGUAGE_MENU":
+            case "TOGGLE_LANGUAGE": {
+                I18nService i18n = get(I18nService.class);
+                if (i18n != null) {
+                    String current = i18n.getCurrentLanguage();
+                    java.util.List<String> langs = i18n.listAvailableLanguages();
+                    int langIdx = langs.indexOf(current);
+                    String next = langs.get((langIdx + 1) % langs.size());
+                    i18n.load(next);
+                    showMainMenu();
+                }
                 return;
+            }
+            case "TOGGLE_THEME": {
+                cycleTheme();
+                showMainMenu();
+                return;
+            }
             case "SET_LANG_ZH":
                 get(I18nService.class).load("zh");
                 showMainMenu();
@@ -219,6 +256,14 @@ public class Gui {
             case "NATION_SELECT":
                 showNationSelect();
                 return;
+            case "SELECT_NATION": {
+                WorldSettingsScreen ws = get(WorldSettingsScreen.class);
+                if (ws != null && actionArg != null) {
+                    ws.setSelectedNation(actionArg);
+                }
+                showWorldSettings();
+                return;
+            }
             case "START_GAME":
                 if (runtime != null) {
                     runtime.start();

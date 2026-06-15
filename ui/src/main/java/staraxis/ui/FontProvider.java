@@ -16,6 +16,15 @@ public final class FontProvider {
     private FontProvider() {
     }
 
+    private static final java.util.List<FreeTypeFontGenerator> incrementalGenerators = new java.util.ArrayList<>();
+
+    public static void disposeAllIncremental() {
+        for (FreeTypeFontGenerator g : incrementalGenerators) {
+            try { g.dispose(); } catch (Exception ignored) {}
+        }
+        incrementalGenerators.clear();
+    }
+
     public static BitmapFont createDefaultFont() {
         Gdx.app.log("FontProvider", "使用 LibGDX 默认 BitmapFont 作为兜底字体");
         return new BitmapFont();
@@ -48,19 +57,19 @@ public final class FontProvider {
         try {
             FreeTypeFontGenerator.FreeTypeFontParameter param = new FreeTypeFontGenerator.FreeTypeFontParameter();
             param.size = size;
-            param.incremental = false;
-            // NOTE: 非增量模式下，需要一次性生成所有可能出现的字符。
-            // 这里从 assets/i18n/strings_*.properties 汇总字符集，避免手工维护白名单。
+            param.incremental = true;
             param.characters = buildCharactersFromI18n();
+            param.minFilter = com.badlogic.gdx.graphics.Texture.TextureFilter.Linear;
+            param.magFilter = com.badlogic.gdx.graphics.Texture.TextureFilter.Linear;
 
             BitmapFont font = generator.generateFont(param);
-            Gdx.app.log("FontProvider", "TTF 字体生成成功: " + ttfInternalPath + " (characters 从 i18n 汇总)");
+            incrementalGenerators.add(generator);
+            Gdx.app.log("FontProvider", "TTF 字体生成成功: " + ttfInternalPath + " (增量模式)");
             return font;
         } catch (Throwable t) {
+            generator.dispose();
             Gdx.app.error("FontProvider", "TTF 字体生成失败: " + ttfInternalPath, t);
             return null;
-        } finally {
-            generator.dispose();
         }
     }
 

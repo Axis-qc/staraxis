@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "type": "container",
   "name": "root_container",
   "properties": {
@@ -9,12 +9,6 @@
     {
       "type": "stack",
       "name": "main_menu_stack",
-      "properties": {
-        "cell": {
-          "expand": true,
-          "fill": true
-        }
-      },
       "children": [
         {
           "type": "container",
@@ -30,113 +24,87 @@
               "name": "hud_content",
               "properties": {
                 "align": "topleft",
-                "pad": 0,
-                "cell": {
-                  "expand": true,
-                  "fillY": true
-                }
+                "cell": { "expand": true, "fillY": true }
               },
               "children": [
                 {
-                  "type": "label",
+                  "type": "vector_label",
+                  "effect": "title_white",
                   "name": "title",
                   "properties": {
                     "text": "app.title",
-                    "style": "white",
-                    "alignment": "left",
-                    "cell": {
-                      "padBottom": 4
-                    }
+                    "cell": { "width": 400, "height": 56, "padBottom": 4 }
                   }
                 },
                 {
-                  "type": "label",
+                  "type": "vector_label",
+                  "effect": "subtitle_accent",
                   "name": "subtitle",
                   "properties": {
                     "text": "mainMenu.web.subtitle",
-                    "style": "subtitle",
-                    "alignment": "left",
-                    "cell": {
-                      "padBottom": 32
-                    }
+                    "cell": { "width": 400, "height": 24, "padBottom": 32 }
                   }
                 },
                 {
-                  "type": "button",
+                  "type": "menu_entry",
+                  "effect": "menu_item_primary",
                   "name": "btn_new_game",
                   "properties": {
                     "text": "mainMenu.newGame",
                     "onClick": "NEW_GAME",
-                    "cell": {
-                      "width": 360,
-                      "height": 48,
-                      "padBottom": 8
-                    }
+                    "cell": { "width": 360, "height": 48, "padBottom": 8 }
                   }
                 },
                 {
-                  "type": "button",
+                  "type": "menu_entry",
+                  "effect": "menu_item_primary",
                   "name": "btn_load_game",
                   "properties": {
                     "text": "mainMenu.loadGame",
                     "onClick": "LOAD_GAME",
-                    "cell": {
-                      "width": 360,
-                      "height": 48,
-                      "padBottom": 8
-                    }
+                    "cell": { "width": 360, "height": 48, "padBottom": 8 }
                   }
                 },
                 {
-                  "type": "button",
+                  "type": "menu_entry",
+                  "effect": "menu_item_secondary",
                   "name": "btn_multiplayer",
                   "properties": {
                     "text": "mainMenu.multiplayer",
+                    "tag": "mainMenu.tag.developing",
                     "onClick": "SHOW_DEVELOPING_DIALOG",
-                    "cell": {
-                      "width": 360,
-                      "height": 48,
-                      "padBottom": 8
-                    }
+                    "cell": { "width": 360, "height": 48, "padBottom": 8 }
                   }
                 },
                 {
-                  "type": "button",
+                  "type": "menu_entry",
+                  "effect": "menu_item_secondary",
                   "name": "btn_ship_designer",
                   "properties": {
                     "text": "mainMenu.shipDesigner",
+                    "tag": "mainMenu.tag.developing",
                     "onClick": "SHOW_DEVELOPING_DIALOG",
-                    "cell": {
-                      "width": 360,
-                      "height": 48,
-                      "padBottom": 8
-                    }
+                    "cell": { "width": 360, "height": 48, "padBottom": 8 }
                   }
                 },
                 {
-                  "type": "button",
+                  "type": "menu_entry",
+                  "effect": "menu_item_primary",
                   "name": "btn_settings",
                   "properties": {
                     "text": "mainMenu.settings",
                     "onClick": "OPEN_SETTINGS",
-                    "cell": {
-                      "width": 360,
-                      "height": 48,
-                      "padBottom": 8
-                    }
+                    "cell": { "width": 360, "height": 48, "padBottom": 8 }
                   }
                 },
                 {
-                  "type": "button",
+                  "type": "menu_entry",
+                  "effect": "menu_item_primary",
                   "name": "btn_exit",
                   "properties": {
                     "text": "mainMenu.exit",
                     "onClick": "EXIT_CLICK",
-                    "cell": {
-                      "width": 360,
-                      "height": 48,
-                      "padBottom": 8
-                    }
+                    "cell": { "width": 360, "height": 48 }
                   }
                 }
               ]
@@ -144,68 +112,60 @@
           ]
         },
         {
-          "type": "container",
-          "name": "top_right_overlay",
+          "type": "position",
+          "name": "lang_button_pos",
           "properties": {
-            "fillParent": true,
             "align": "topright",
             "pad": 8
           },
           "children": [
             {
               "type": "container",
-              "name": "lang_group",
+              "name": "top_right_buttons",
               "properties": {
-                "align": "topright",
-                "pad": 0
+                "align": "topright"
               },
               "children": [
                 {
-                  "type": "button",
+                  "type": "vector_button",
+                  "effect": "primary_button",
                   "name": "lang_button",
                   "properties": {
                     "text": "lang.current",
-                    "onClick": "TOGGLE_LANGUAGE_MENU",
-                    "cell": {
-                      "width": 140,
-                      "height": 40,
-                      "pad": 4
-                    }
+                    "onClick": "TOGGLE_LANGUAGE",
+                    "cell": { "width": 140, "height": 36, "padBottom": 6 }
                   }
                 },
                 {
-                  "type": "container",
-                  "name": "lang_menu",
+                  "type": "vector_button",
+                  "effect": "primary_button",
+                  "name": "theme_button",
                   "properties": {
-                    "visible": false,
-                    "align": "topright",
-                    "pad": 0,
-                    "cell": {
-                      "padTop": 4
-                    }
-                  },
-                  "children": []
+                    "text": "theme.current",
+                    "onClick": "TOGGLE_THEME",
+                    "cell": { "width": 140, "height": 36 }
+                  }
                 }
               ]
             }
           ]
         },
         {
-          "type": "container",
-          "name": "bottom_right_overlay",
+          "type": "position",
+          "name": "version_pos",
           "properties": {
-            "fillParent": true,
             "align": "bottomright",
-            "pad": 24
+            "pad": 24,
+            "width": 200,
+            "height": 20
           },
           "children": [
             {
-              "type": "label",
+              "type": "vector_label",
+              "effect": "version_dim",
               "name": "version_info",
               "properties": {
-                "text": "common.version",
-                "style": "default",
-                "alignment": "right"
+                "text": "common.version"
               }
             }
           ]

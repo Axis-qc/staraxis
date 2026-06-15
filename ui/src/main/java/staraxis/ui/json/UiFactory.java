@@ -2,6 +2,8 @@ package staraxis.ui.json;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Group;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
@@ -12,6 +14,13 @@ import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
 import com.badlogic.gdx.utils.Align;
 import staraxis.ui.Gui;
+import staraxis.ui.effects.EffectRegistry;
+import staraxis.ui.effects.MenuEntryEffect;
+import staraxis.ui.effects.VectorButtonEffect;
+import staraxis.ui.effects.VectorLabelEffect;
+import staraxis.ui.widgets.MenuEntry;
+import staraxis.ui.widgets.VectorButton;
+import staraxis.ui.widgets.VectorLabel;
 
 import java.util.Locale;
 import java.util.Map;
@@ -23,6 +32,10 @@ public class UiFactory {
 
     private final Skin skin;
     private final Gui gui;
+    private EffectRegistry effectRegistry;
+    private ShapeRenderer shapeRenderer;
+    private BitmapFont bitmapFont;
+    private DataProvider dataProvider;
 
     private static Map<String, ComponentNode> COMPONENT_LIB = java.util.Collections.emptyMap();
 
@@ -52,6 +65,22 @@ public class UiFactory {
     public UiFactory(Gui gui) {
         this.gui = gui;
         this.skin = gui.get(Skin.class);
+    }
+
+    public void setEffectRegistry(EffectRegistry registry) {
+        this.effectRegistry = registry;
+    }
+
+    public void setShapeRenderer(ShapeRenderer sr) {
+        this.shapeRenderer = sr;
+    }
+
+    public void setBitmapFont(BitmapFont font) {
+        this.bitmapFont = font;
+    }
+
+    public void setDataProvider(DataProvider provider) {
+        this.dataProvider = provider;
     }
 
     public Actor create(ComponentNode node) {
@@ -121,6 +150,15 @@ public class UiFactory {
                 break;
             case "textfield":
                 actor = buildTextField(node);
+                break;
+            case "menu_entry":
+                actor = buildMenuEntry(node);
+                break;
+            case "vector_button":
+                actor = buildVectorButton(node);
+                break;
+            case "vector_label":
+                actor = buildVectorLabel(node);
                 break;
             default:
                 actor = new Group();
@@ -367,6 +405,7 @@ public class UiFactory {
         final float y = toFloat(node.properties.get("y"), Float.NaN);
         final float cfgWidth = toFloat(node.properties.get("width"), Float.NaN);
         final float cfgHeight = toFloat(node.properties.get("height"), Float.NaN);
+        final float pad = toFloat(node.properties.get("pad"), 0);
         final float minAutoWidth = 200f, maxAutoWidth = 520f;
         WidgetGroup g = new WidgetGroup() {
             @Override
@@ -392,15 +431,15 @@ public class UiFactory {
                 } else {
                     String a = align.toLowerCase(Locale.ROOT);
                     if (a.contains("left"))
-                        cx = 0;
+                        cx = pad;
                     else if (a.contains("right"))
-                        cx = baseW - child.getWidth();
+                        cx = baseW - child.getWidth() - pad;
                     else
                         cx = (baseW - child.getWidth()) / 2f;
                     if (a.contains("top"))
-                        cy = baseH - child.getHeight();
+                        cy = baseH - child.getHeight() - pad;
                     else if (a.contains("bottom"))
-                        cy = 0;
+                        cy = pad;
                     else
                         cy = (baseH - child.getHeight()) / 2f;
                 }
@@ -524,6 +563,15 @@ public class UiFactory {
         container.top().left();
         if (!node.children.isEmpty())
             container.setUserObject(node.children.get(0));
+
+        String dataSource = (String) node.properties.get("dataSource");
+        if (dataSource != null && dataProvider != null) {
+            java.util.List<Map<String, Object>> items = dataProvider.getData(dataSource);
+            if (items != null && !items.isEmpty()) {
+                renderRepeatItems(container, items);
+            }
+        }
+
         return container;
     }
 
@@ -814,5 +862,61 @@ public class UiFactory {
 
     private float clamp(float v, float min, float max) {
         return v < min ? min : (v > max ? max : v);
+    }
+
+    private Actor buildMenuEntry(ComponentNode node) {
+        String effectName = (String) node.properties.get("effect");
+        MenuEntryEffect effect = null;
+        if (effectRegistry != null && effectName != null) {
+            effect = effectRegistry.get(effectName, MenuEntryEffect.class);
+        }
+        String text = gui.i18n((String) node.properties.getOrDefault("text", ""));
+        String tagKey = (String) node.properties.get("tag");
+        String tagText = tagKey != null ? gui.i18n(tagKey) : null;
+        String onClick = (String) node.properties.get("onClick");
+
+        Runnable action = onClick != null ? () -> gui.dispatchAction(onClick) : null;
+
+        if (shapeRenderer == null || bitmapFont == null) {
+            Gdx.app.error("UiFactory", "ShapeRenderer/BitmapFont not set for menu_entry");
+            return new Group();
+        }
+
+        return new MenuEntry(shapeRenderer, bitmapFont, effect, text, tagText, action);
+    }
+
+    private Actor buildVectorButton(ComponentNode node) {
+        String effectName = (String) node.properties.get("effect");
+        VectorButtonEffect effect = null;
+        if (effectRegistry != null && effectName != null) {
+            effect = effectRegistry.get(effectName, VectorButtonEffect.class);
+        }
+        String text = gui.i18n((String) node.properties.getOrDefault("text", ""));
+        String onClick = (String) node.properties.get("onClick");
+
+        Runnable action = onClick != null ? () -> gui.dispatchAction(onClick) : null;
+
+        if (shapeRenderer == null || bitmapFont == null) {
+            Gdx.app.error("UiFactory", "ShapeRenderer/BitmapFont not set for vector_button");
+            return new Group();
+        }
+
+        return new VectorButton(shapeRenderer, bitmapFont, effect, text, action);
+    }
+
+    private Actor buildVectorLabel(ComponentNode node) {
+        String effectName = (String) node.properties.get("effect");
+        VectorLabelEffect effect = null;
+        if (effectRegistry != null && effectName != null) {
+            effect = effectRegistry.get(effectName, VectorLabelEffect.class);
+        }
+        String text = gui.i18n((String) node.properties.getOrDefault("text", ""));
+
+        if (bitmapFont == null) {
+            Gdx.app.error("UiFactory", "BitmapFont not set for vector_label");
+            return new Group();
+        }
+
+        return new VectorLabel(bitmapFont, effect, text);
     }
 }

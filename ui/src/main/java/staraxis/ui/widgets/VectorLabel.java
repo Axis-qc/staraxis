@@ -4,21 +4,34 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.scenes.scene2d.Actor;
+import staraxis.ui.effects.VectorLabelEffect;
 
 public class VectorLabel extends Actor {
 
+    private static final VectorLabelEffect DEFAULT_EFFECT = VectorLabelEffect.fromMap("default", new java.util.HashMap<>());
+
     private final BitmapFont font;
+    private final VectorLabelEffect effect;
     private String text;
-    private Color textColor;
 
     public VectorLabel(BitmapFont font, String text) {
-        this(font, text, new Color(0.75f, 0.75f, 0.75f, 1f));
+        this(font, DEFAULT_EFFECT, text);
+    }
+
+    public VectorLabel(BitmapFont font, Color color) {
+        this(font, VectorLabelEffect.fromMap("inline", new java.util.HashMap<>()), "");
+        this.effect.text.color = color;
     }
 
     public VectorLabel(BitmapFont font, String text, Color color) {
+        this(font, VectorLabelEffect.fromMap("inline", new java.util.HashMap<>()), text);
+        this.effect.text.color = color;
+    }
+
+    public VectorLabel(BitmapFont font, VectorLabelEffect effect, String text) {
         this.font = font;
+        this.effect = effect != null ? effect : DEFAULT_EFFECT;
         this.text = text;
-        this.textColor = color;
     }
 
     public void setText(String text) {
@@ -26,12 +39,12 @@ public class VectorLabel extends Actor {
     }
 
     public void setTextColor(Color color) {
-        this.textColor = color;
+        this.effect.text.color.set(color);
     }
 
     @Override
     public void draw(Batch batch, float parentAlpha) {
-        font.setColor(textColor);
+        font.setColor(effect.text.color);
         font.draw(batch, text, getX(), getY() + getHeight());
         font.setColor(Color.WHITE);
     }

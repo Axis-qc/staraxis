@@ -8,18 +8,15 @@ import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.InputListener;
+import staraxis.ui.effects.VectorButtonEffect;
 
 public class VectorButton extends Actor {
 
-    private static final Color NORMAL = new Color(0.15f, 0.15f, 0.15f, 0.85f);
-    private static final Color HOVER = new Color(0.25f, 0.25f, 0.25f, 0.90f);
-    private static final Color PRESSED = new Color(0.35f, 0.12f, 0.12f, 0.95f);
-    private static final Color TEXT_NORMAL = new Color(0.75f, 0.75f, 0.75f, 1f);
-    private static final Color TEXT_HOVER = new Color(1f, 1f, 1f, 1f);
-    private static final Color ACCENT = new Color(0.3f, 0.65f, 0.95f, 1f);
+    private static final VectorButtonEffect DEFAULT_EFFECT = VectorButtonEffect.fromMap("default", new java.util.HashMap<>());
 
     private final ShapeRenderer sr;
     private final BitmapFont font;
+    private final VectorButtonEffect effect;
     private String text;
     private Runnable onClick;
 
@@ -27,8 +24,13 @@ public class VectorButton extends Actor {
     private boolean pressed;
 
     public VectorButton(ShapeRenderer sr, BitmapFont font, String text, Runnable onClick) {
+        this(sr, font, DEFAULT_EFFECT, text, onClick);
+    }
+
+    public VectorButton(ShapeRenderer sr, BitmapFont font, VectorButtonEffect effect, String text, Runnable onClick) {
         this.sr = sr;
         this.font = font;
+        this.effect = effect != null ? effect : DEFAULT_EFFECT;
         this.text = text;
         this.onClick = onClick;
 
@@ -75,26 +77,33 @@ public class VectorButton extends Actor {
 
         sr.setProjectionMatrix(batch.getProjectionMatrix());
         if (pressed) {
-            sr.setColor(PRESSED);
+            sr.setColor(effect.background.pressedColor);
         } else if (hovered) {
-            sr.setColor(HOVER);
+            sr.setColor(effect.background.hoverColor);
         } else {
-            sr.setColor(NORMAL);
+            sr.setColor(effect.background.color);
         }
         sr.begin(ShapeType.Filled);
         sr.rect(x, y, w, h);
         sr.end();
 
-        if (hovered || pressed) {
-            sr.setColor(ACCENT);
+        if (effect.border.width > 0) {
+            sr.setColor(effect.border.color);
+            sr.begin(ShapeType.Line);
+            sr.rect(x, y, w, h);
+            sr.end();
+        }
+
+        if (effect.accent.enabled && (hovered || pressed)) {
+            sr.setColor(effect.accent.color);
             sr.begin(ShapeType.Filled);
-            sr.rect(x, y, 3, h);
+            sr.rect(x, y, effect.accent.width, h);
             sr.end();
         }
 
         batch.begin();
 
-        Color textColor = hovered ? TEXT_HOVER : TEXT_NORMAL;
+        Color textColor = hovered ? effect.text.hoverColor : effect.text.color;
         font.setColor(textColor);
         font.draw(batch, text, x + 14, y + (h + font.getCapHeight()) / 2f);
         font.setColor(Color.WHITE);

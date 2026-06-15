@@ -31,11 +31,31 @@
         "checkBox",
         "horizontalGroup",
         "imageButton",
-        "textButton"
+        "textButton",
+        "menu_entry",
+        "vector_button",
+        "vector_label",
+        "starfield"
       ]
     },
     "name": {
       "description": "A unique identifier for the component.",
+      "type": "string"
+    },
+    "effect": {
+      "description": "Reference an effect from effects/default.json.",
+      "type": "string"
+    },
+    "tag": {
+      "description": "Tag text key for components like menu_entry.",
+      "type": "string"
+    },
+    "onClick": {
+      "description": "Action id dispatched on click.",
+      "type": "string"
+    },
+    "dataSource": {
+      "description": "Data source name for repeat components.",
       "type": "string"
     },
     "properties": {
@@ -60,14 +80,10 @@
   },
   "anyOf": [
     {
-      "required": [
-        "type"
-      ]
+      "required": ["type"]
     },
     {
-      "required": [
-        "include"
-      ]
+      "required": ["include"]
     }
   ]
 }

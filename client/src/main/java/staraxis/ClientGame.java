@@ -18,14 +18,15 @@ import staraxis.render.NativeWorldRenderer;
 import staraxis.ui.FontProvider;
 import staraxis.ui.Gui;
 import staraxis.ui.UiSkinLoader;
+import staraxis.ui.effects.EffectRegistry;
 import staraxis.ui.i18n.I18nService;
+import staraxis.ui.json.GameDataProvider;
+import staraxis.ui.json.UiFactory;
 import staraxis.ui.screens.InGameHudScreen;
-import staraxis.ui.screens.LoadGameScreen;
-import staraxis.ui.screens.MainMenuScreen;
-import staraxis.ui.screens.NationSelectScreen;
 import staraxis.ui.screens.SettingsScreen;
 import staraxis.ui.screens.WorldSettingsScreen;
 import staraxis.ui.widgets.DevelopingDialog;
+import staraxis.ui.widgets.StarfieldBackground;
 
 /**
  * ClientGame
@@ -41,6 +42,7 @@ public class ClientGame implements ApplicationListener {
     private Gui gui;
     private StarAxisGameRuntime runtime;
     private NativeWorldRenderer worldRenderer;
+    private StarfieldBackground starfield;
 
     @Override
     public void create() {
@@ -78,18 +80,24 @@ public class ClientGame implements ApplicationListener {
         ShapeRenderer sr = new ShapeRenderer();
         gui.register(ShapeRenderer.class, sr);
 
-        MainMenuScreen mainMenuScreen = new MainMenuScreen(gui, sr, finalFont);
+        starfield = new StarfieldBackground(sr);
+        starfield.init(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+
+        UiFactory factory = gui.get(UiFactory.class);
+        EffectRegistry effectRegistry = gui.get(EffectRegistry.class);
+        if (factory != null) {
+            factory.setEffectRegistry(effectRegistry);
+            factory.setShapeRenderer(sr);
+            factory.setBitmapFont(finalFont);
+            factory.setDataProvider(new GameDataProvider());
+        }
+
         WorldSettingsScreen worldSettingsScreen = new WorldSettingsScreen(gui);
-        NationSelectScreen nationSelectScreen = new NationSelectScreen(gui);
-        LoadGameScreen loadGameScreen = new LoadGameScreen(gui);
         InGameHudScreen inGameHudScreen = new InGameHudScreen(gui);
         SettingsScreen settingsScreen = new SettingsScreen(gui);
         DevelopingDialog developingDialog = new DevelopingDialog(skin, i18nService);
 
-        gui.register(MainMenuScreen.class, mainMenuScreen);
         gui.register(WorldSettingsScreen.class, worldSettingsScreen);
-        gui.register(NationSelectScreen.class, nationSelectScreen);
-        gui.register(LoadGameScreen.class, loadGameScreen);
         gui.register(InGameHudScreen.class, inGameHudScreen);
         gui.register(SettingsScreen.class, settingsScreen);
         gui.register(DevelopingDialog.class, developingDialog);
@@ -107,6 +115,9 @@ public class ClientGame implements ApplicationListener {
         }
         if (worldRenderer != null) {
             worldRenderer.resize(width, height);
+        }
+        if (starfield != null) {
+            starfield.resize(width, height);
         }
     }
 
@@ -129,6 +140,11 @@ public class ClientGame implements ApplicationListener {
             InGameHudScreen hud = gui.get(InGameHudScreen.class);
             if (hud != null) {
                 hud.refreshHud();
+            }
+        } else {
+            if (starfield != null) {
+                starfield.act(dt);
+                starfield.render();
             }
         }
 
@@ -167,5 +183,6 @@ public class ClientGame implements ApplicationListener {
             runtime.stop();
             runtime = null;
         }
+        FontProvider.disposeAllIncremental();
     }
 }

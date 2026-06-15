@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 2,
+  "type": "container",
+  "name": "load_game_root",
+  "properties": {
+    "fillParent": true,
+    "align": "center",
+    "pad": 24
+  },
+  "children": [
+    {
+      "type": "vector_label",
+      "effect": "title_white",
+      "name": "title",
+      "properties": {
+        "text": "mainMenu.loadGame",
+        "cell": { "width": 320, "height": 40, "padBottom": 16 }
+      }
+    },
+    {
+      "type": "scroll",
+      "name": "save_scroll",
+      "properties": {
+        "scrollX": false,
+        "scrollY": true,
+        "cell": { "width": 320, "height": 300, "padBottom": 16 }
+      },
+      "children": [
+        {
+          "type": "repeat",
+          "name": "save_list",
+          "dataSource": "saves",
+          "children": [
+            {
+              "type": "menu_entry",
+              "effect": "menu_item_primary",
+              "properties": {
+                "text": "${name}",
+                "onClick": "SHOW_DEVELOPING_DIALOG",
+                "cell": { "width": 280, "height": 40, "padBottom": 4 }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "vector_button",
+      "effect": "primary_button",
+      "name": "back_btn",
+      "properties": {
+        "text": "common.back",
+        "onClick": "BACK_TO_MAIN_MENU",
+        "cell": { "width": 200, "height": 40 }
+      }
+    }
+  ]
+}
