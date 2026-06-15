@@ -44,8 +44,13 @@ public class VectorLabel extends Actor {
 
     @Override
     public void draw(Batch batch, float parentAlpha) {
+        float oldScaleX = font.getData().scaleX;
+        float oldScaleY = font.getData().scaleY;
+        float scale = Math.max(0.1f, effect.text.size / 96f);
+        font.getData().setScale(scale);
         font.setColor(effect.text.color);
         font.draw(batch, text, getX(), getY() + getHeight());
         font.setColor(Color.WHITE);
+        font.getData().setScale(oldScaleX, oldScaleY);
     }
 }

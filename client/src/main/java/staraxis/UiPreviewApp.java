@@ -49,6 +49,9 @@ public class UiPreviewApp implements ApplicationListener {
         BitmapFont ttfFont = FontProvider.tryCreateFontFromTtfOrNull("fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf",
                 28);
         BitmapFont finalFont = (ttfFont != null) ? ttfFont : defaultFont;
+        BitmapFont vectorTtfFont = FontProvider.tryCreateFontFromTtfOrNull("fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf",
+                96);
+        BitmapFont vectorFont = (vectorTtfFont != null) ? vectorTtfFont : finalFont;
 
         skin.add("default-font", finalFont, BitmapFont.class);
 
@@ -72,7 +75,7 @@ public class UiPreviewApp implements ApplicationListener {
         if (factory != null) {
             factory.setEffectRegistry(effectRegistry);
             factory.setShapeRenderer(sr);
-            factory.setBitmapFont(finalFont);
+            factory.setBitmapFont(vectorFont);
             factory.setDataProvider(new GameDataProvider());
         }
 

@@ -10,12 +10,8 @@ import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.utils.Disposable;
 import staraxis.ui.Gui;
-import staraxis.ui.i18n.I18nService;
 import staraxis.ui.widgets.MenuEntry;
-import staraxis.ui.widgets.VectorButton;
 import staraxis.ui.widgets.VectorLabel;
-
-import java.util.List;
 
 public class MainMenuScreen implements Disposable {
 
@@ -59,7 +55,7 @@ public class MainMenuScreen implements Disposable {
         title.setPosition(64, stage.getHeight() - 140);
 
         // --- Subtitle ---
-        VectorLabel subtitle = new VectorLabel(subtitleFont, gui.i18n("mainMenu.web.subtitle"), SUBTITLE_COLOR);
+        VectorLabel subtitle = new VectorLabel(subtitleFont, gui.i18n("mainMenu.subtitle"), SUBTITLE_COLOR);
         subtitle.setSize(400, 30);
         subtitle.setPosition(64, stage.getHeight() - 175);
 
@@ -95,21 +91,6 @@ public class MainMenuScreen implements Disposable {
         addMenuEntry(stack, gui.i18n("mainMenu.exit"), null,
                 () -> gui.dispatchAction("EXIT_CLICK"),
                 menuX, menuY - 5 * (entryHeight + 8f), entryWidth, entryHeight);
-
-        // --- Language button (top-right) ---
-        String langLabel = "> " + gui.i18n("lang.current");
-        VectorButton langBtn = new VectorButton(sr, menuFont, langLabel, () -> {
-            I18nService i18n = gui.get(I18nService.class);
-            String current = i18n.getCurrentLanguage();
-            List<String> langs = i18n.listAvailableLanguages();
-            int idx = langs.indexOf(current);
-            String next = langs.get((idx + 1) % langs.size());
-            i18n.load(next);
-            show();
-        });
-        langBtn.setSize(140, 36);
-        langBtn.setPosition(stage.getWidth() - 155, stage.getHeight() - 48);
-        stack.addActor(langBtn);
 
         // --- Version (bottom-right) ---
         VectorLabel version = new VectorLabel(versionFont, gui.i18n("common.version"), VERSION_COLOR);

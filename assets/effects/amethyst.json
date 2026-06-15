@@ -4,72 +4,44 @@
     "bullet": {
       "color": "#9E8AB0",
       "hoverColor": "#A855F7",
-      "size": 8,
-      "glow": { "enabled": true, "radius": 14, "alpha": 0.4 }
+      "size": 9,
+      "glow": { "enabled": true, "radius": 18, "alpha": 0.46 }
     },
-    "text": {
-      "color": "#B0BEC5",
-      "hoverColor": "#FFFFFF"
-    },
-    "hover": {
-      "shiftX": 12,
-      "speed": 10
-    },
-    "tag": {
-      "bgColor": "#A855F73D",
-      "textColor": "#FFFFFF"
-    }
+    "text": { "color": "#C8D6E5", "hoverColor": "#FFFFFF", "size": 30 },
+    "hover": { "shiftX": 14, "speed": 10 },
+    "tag": { "bgColor": "#A855F755", "textColor": "#FFFFFF" }
   },
   "menu_item_secondary": {
     "type": "menu_entry",
     "bullet": {
       "color": "#6E5A7A",
       "hoverColor": "#A855F7",
-      "size": 6,
-      "glow": { "enabled": true, "radius": 10, "alpha": 0.25 }
+      "size": 7,
+      "glow": { "enabled": true, "radius": 12, "alpha": 0.28 }
     },
-    "text": {
-      "color": "#78909C",
-      "hoverColor": "#CFD8DC"
-    },
-    "hover": {
-      "shiftX": 8,
-      "speed": 8
-    },
-    "tag": {
-      "bgColor": "#A855F72E",
-      "textColor": "#FFFFFF"
-    }
+    "text": { "color": "#8EA0AF", "hoverColor": "#DCEBFF", "size": 26 },
+    "hover": { "shiftX": 10, "speed": 8 },
+    "tag": { "bgColor": "#A855F733", "textColor": "#FFFFFF" }
   },
   "primary_button": {
     "type": "vector_button",
     "background": {
-      "color": "#0D1117",
-      "hoverColor": "#161B22",
-      "pressedColor": "#2A142E"
+      "color": "#0B071CCC",
+      "hoverColor": "#190E36EE",
+      "pressedColor": "#281255FF"
     },
     "border": {
       "radius": 4,
       "width": 1,
-      "color": "#30363D",
+      "color": "#A855F766",
       "type": "solid"
     },
-    "text": {
-      "color": "#C9D1D9",
-      "hoverColor": "#FFFFFF"
-    },
-    "accent": {
-      "enabled": true,
-      "color": "#A855F7",
-      "width": 3
-    }
+    "text": { "color": "#C9D1D9", "hoverColor": "#FFFFFF" },
+    "accent": { "enabled": true, "color": "#A855F7", "width": 4 }
   },
   "panel_dark": {
     "type": "container",
-    "background": {
-      "color": "#0D1117",
-      "alpha": 0.85
-    },
+    "background": { "color": "#0D1117", "alpha": 0.85 },
     "border": {
       "radius": 12,
       "width": 1,
@@ -77,16 +49,28 @@
       "type": "solid"
     }
   },
+  "title_hero": {
+    "type": "vector_label",
+    "text": { "color": "#FFFFFF", "size": 96 }
+  },
   "title_white": {
     "type": "vector_label",
-    "text": { "color": "#FFFFFF", "size": 28 }
+    "text": { "color": "#FFFFFF", "size": 34 }
   },
   "subtitle_accent": {
     "type": "vector_label",
-    "text": { "color": "#A855F7", "size": 18 }
+    "text": { "color": "#A855F7", "size": 20 }
+  },
+  "kicker_accent": {
+    "type": "vector_label",
+    "text": { "color": "#D8B4FE", "size": 16 }
+  },
+  "body_dim": {
+    "type": "vector_label",
+    "text": { "color": "#A6B7C8CC", "size": 18 }
   },
   "version_dim": {
     "type": "vector_label",
-    "text": { "color": "#8B949E6B", "size": 14 }
+    "text": { "color": "#8B949E88", "size": 14 }
   }
 }

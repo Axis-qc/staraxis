@@ -76,6 +76,7 @@ public class VectorButton extends Actor {
         batch.end();
 
         sr.setProjectionMatrix(batch.getProjectionMatrix());
+        sr.setTransformMatrix(batch.getTransformMatrix());
         if (pressed) {
             sr.setColor(effect.background.pressedColor);
         } else if (hovered) {
@@ -103,9 +104,13 @@ public class VectorButton extends Actor {
 
         batch.begin();
 
+        float oldScaleX = font.getData().scaleX;
+        float oldScaleY = font.getData().scaleY;
+        font.getData().setScale(22f / 96f);
         Color textColor = hovered ? effect.text.hoverColor : effect.text.color;
         font.setColor(textColor);
         font.draw(batch, text, x + 14, y + (h + font.getCapHeight()) / 2f);
         font.setColor(Color.WHITE);
+        font.getData().setScale(oldScaleX, oldScaleY);
     }
 }

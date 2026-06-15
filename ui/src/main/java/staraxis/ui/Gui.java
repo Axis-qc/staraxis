@@ -235,11 +235,11 @@ public class Gui {
             }
             case "SET_LANG_ZH":
                 get(I18nService.class).load("zh");
-                showMainMenu();
+                showSettingsScreen();
                 return;
             case "SET_LANG_EN":
                 get(I18nService.class).load("en");
-                showMainMenu();
+                showSettingsScreen();
                 return;
             case "OPEN_SETTINGS":
                 showSettingsScreen();

@@ -9,40 +9,49 @@
     {
       "type": "stack",
       "name": "main_menu_stack",
+      "properties": {
+        "cell": { "expand": true, "fill": true, "grow": true }
+      },
       "children": [
         {
-          "type": "container",
-          "name": "hud",
+          "type": "position",
+          "name": "main_panel_pos",
           "properties": {
-            "fillParent": true,
             "align": "left",
-            "pad": 48
+            "pad": 56,
+            "width": 520,
+            "height": 620
           },
           "children": [
             {
               "type": "container",
-              "name": "hud_content",
+              "name": "main_panel",
               "properties": {
                 "align": "topleft",
-                "cell": { "expand": true, "fillY": true }
+                "pad": 34
               },
               "children": [
                 {
                   "type": "vector_label",
-                  "effect": "title_white",
+                  "effect": "title_hero",
                   "name": "title",
                   "properties": {
                     "text": "app.title",
-                    "cell": { "width": 400, "height": 56, "padBottom": 4 }
+                    "cell": { "width": 440, "height": 132, "padBottom": 12 }
                   }
                 },
                 {
-                  "type": "vector_label",
-                  "effect": "subtitle_accent",
-                  "name": "subtitle",
+                  "type": "image",
+                  "name": "title_line",
                   "properties": {
-                    "text": "mainMenu.web.subtitle",
-                    "cell": { "width": 400, "height": 24, "padBottom": 32 }
+                    "drawable": "line-h",
+                    "color": "#4AC9FF99",
+                    "cell": {
+                      "width": 260,
+                      "height": 2,
+                      "align": "left",
+                      "padBottom": 34
+                    }
                   }
                 },
                 {
@@ -52,7 +61,7 @@
                   "properties": {
                     "text": "mainMenu.newGame",
                     "onClick": "NEW_GAME",
-                    "cell": { "width": 360, "height": 48, "padBottom": 8 }
+                    "cell": { "width": 420, "height": 54, "padBottom": 8 }
                   }
                 },
                 {
@@ -62,7 +71,7 @@
                   "properties": {
                     "text": "mainMenu.loadGame",
                     "onClick": "LOAD_GAME",
-                    "cell": { "width": 360, "height": 48, "padBottom": 8 }
+                    "cell": { "width": 420, "height": 54, "padBottom": 8 }
                   }
                 },
                 {
@@ -73,7 +82,7 @@
                     "text": "mainMenu.multiplayer",
                     "tag": "mainMenu.tag.developing",
                     "onClick": "SHOW_DEVELOPING_DIALOG",
-                    "cell": { "width": 360, "height": 48, "padBottom": 8 }
+                    "cell": { "width": 420, "height": 50, "padBottom": 8 }
                   }
                 },
                 {
@@ -84,7 +93,7 @@
                     "text": "mainMenu.shipDesigner",
                     "tag": "mainMenu.tag.developing",
                     "onClick": "SHOW_DEVELOPING_DIALOG",
-                    "cell": { "width": 360, "height": 48, "padBottom": 8 }
+                    "cell": { "width": 420, "height": 50, "padBottom": 8 }
                   }
                 },
                 {
@@ -94,17 +103,17 @@
                   "properties": {
                     "text": "mainMenu.settings",
                     "onClick": "OPEN_SETTINGS",
-                    "cell": { "width": 360, "height": 48, "padBottom": 8 }
+                    "cell": { "width": 420, "height": 54, "padBottom": 8 }
                   }
                 },
                 {
                   "type": "menu_entry",
-                  "effect": "menu_item_primary",
+                  "effect": "menu_item_secondary",
                   "name": "btn_exit",
                   "properties": {
                     "text": "mainMenu.exit",
                     "onClick": "EXIT_CLICK",
-                    "cell": { "width": 360, "height": 48 }
+                    "cell": { "width": 420, "height": 50 }
                   }
                 }
               ]
@@ -113,37 +122,30 @@
         },
         {
           "type": "position",
-          "name": "lang_button_pos",
+          "name": "theme_panel_pos",
           "properties": {
             "align": "topright",
-            "pad": 8
+            "pad": 36,
+            "width": 220,
+            "height": 78
           },
           "children": [
             {
               "type": "container",
-              "name": "top_right_buttons",
+              "name": "theme_panel",
               "properties": {
-                "align": "topright"
+                "align": "center",
+                "pad": 18
               },
               "children": [
                 {
                   "type": "vector_button",
                   "effect": "primary_button",
-                  "name": "lang_button",
-                  "properties": {
-                    "text": "lang.current",
-                    "onClick": "TOGGLE_LANGUAGE",
-                    "cell": { "width": 140, "height": 36, "padBottom": 6 }
-                  }
-                },
-                {
-                  "type": "vector_button",
-                  "effect": "primary_button",
                   "name": "theme_button",
                   "properties": {
-                    "text": "theme.current",
+                    "text": "theme.label",
                     "onClick": "TOGGLE_THEME",
-                    "cell": { "width": 140, "height": 36 }
+                    "cell": { "width": 170, "height": 42 }
                   }
                 }
               ]
@@ -155,9 +157,9 @@
           "name": "version_pos",
           "properties": {
             "align": "bottomright",
-            "pad": 24,
-            "width": 200,
-            "height": 20
+            "pad": 28,
+            "width": 220,
+            "height": 28
           },
           "children": [
             {

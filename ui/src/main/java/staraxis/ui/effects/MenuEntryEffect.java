@@ -16,6 +16,7 @@ public class MenuEntryEffect extends EffectDef {
     public static class TextDef {
         public Color color = new Color(0.53f, 0.53f, 0.53f, 1f);
         public Color hoverColor = new Color(1f, 1f, 1f, 1f);
+        public float size = 28f;
     }
 
     public static class HoverDef {
@@ -56,6 +57,7 @@ public class MenuEntryEffect extends EffectDef {
         if (textMap != null) {
             e.text.color = parseColor((String) textMap.get("color"), e.text.color);
             e.text.hoverColor = parseColor((String) textMap.get("hoverColor"), e.text.hoverColor);
+            e.text.size = toFloat(textMap.get("size"), e.text.size);
         }
 
         java.util.Map<String, Object> hoverMap = (java.util.Map<String, Object>) map.get("hover");

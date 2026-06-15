@@ -219,6 +219,14 @@ public class UiFactory {
             }
         }
 
+        Object color = node.properties.get("color");
+        if (color != null) {
+            Color c = resolveColor(color.toString());
+            if (c != null) {
+                actor.setColor(c);
+            }
+        }
+
         Object userObject = node.properties.get("userObject");
         if (userObject != null) {
             actor.setUserObject(userObject);

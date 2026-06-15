@@ -26,6 +26,7 @@ public class MenuEntry extends Actor {
 
     private boolean hovered;
     private float hoverProgress;
+    private float pulse;
 
     public MenuEntry(ShapeRenderer sr, BitmapFont font, String text, Runnable onClick) {
         this(sr, font, DEFAULT_EFFECT, text, null, onClick);
@@ -71,46 +72,59 @@ public class MenuEntry extends Actor {
 
     @Override
     public void act(float delta) {
+        super.act(delta);
+        pulse += delta;
         float target = hovered ? 1f : 0f;
-        if (Math.abs(hoverProgress - target) > 0.001f) {
-            hoverProgress = Interpolation.fade.apply(hoverProgress, target, Math.min(1f, delta * effect.hover.speed));
-        } else {
+        float alpha = 1f - (float) Math.exp(-Math.max(1f, effect.hover.speed) * delta);
+        hoverProgress += (target - hoverProgress) * alpha;
+        if (Math.abs(hoverProgress - target) < 0.001f) {
             hoverProgress = target;
         }
     }
 
     @Override
     public void draw(Batch batch, float parentAlpha) {
-        float x = getX() + hoverProgress * effect.hover.shiftX;
+        float p = Interpolation.smooth.apply(hoverProgress);
+        float x = getX() + p * effect.hover.shiftX;
         float y = getY();
         float h = getHeight();
-        float bulletSize = effect.bullet.size;
-        float bulletX = x;
-        float bulletY = y + (h - bulletSize) / 2f;
+        float baseBulletSize = effect.bullet.size;
+        float pulseScale = hovered ? (0.04f + 0.04f * (float) Math.sin(pulse * 7f)) * p : 0f;
+        float bulletSize = baseBulletSize * (1f + 0.42f * p + pulseScale);
+        float bulletCenterX = x + baseBulletSize * 0.5f;
+        float bulletCenterY = y + h * 0.5f;
 
         batch.end();
 
         sr.setProjectionMatrix(batch.getProjectionMatrix());
+        sr.setTransformMatrix(batch.getTransformMatrix());
 
-        Color bulletColor = effect.bullet.color.cpy().lerp(effect.bullet.hoverColor, hoverProgress);
-        sr.setColor(bulletColor);
-        sr.begin(ShapeType.Filled);
-        sr.circle(bulletX + bulletSize / 2f, bulletY + bulletSize / 2f, bulletSize / 2f);
-        sr.end();
-
-        if (effect.bullet.glow && hoverProgress > 0.01f) {
+        if (effect.bullet.glow && p > 0.001f) {
+            float glowPulse = 0.85f + 0.15f * (float) Math.sin(pulse * 6f);
+            float glowRadius = effect.bullet.glowRadius * p * glowPulse;
             sr.setColor(effect.bullet.hoverColor.r, effect.bullet.hoverColor.g, effect.bullet.hoverColor.b,
-                    hoverProgress * effect.bullet.glowAlpha);
+                    p * effect.bullet.glowAlpha);
             sr.begin(ShapeType.Filled);
-            sr.circle(bulletX + bulletSize / 2f, bulletY + bulletSize / 2f, effect.bullet.glowRadius);
+            sr.circle(bulletCenterX, bulletCenterY, glowRadius);
             sr.end();
         }
 
+        Color bulletColor = effect.bullet.color.cpy().lerp(effect.bullet.hoverColor, p);
+        sr.setColor(bulletColor);
+        sr.begin(ShapeType.Filled);
+        sr.circle(bulletCenterX, bulletCenterY, bulletSize / 2f);
+        sr.end();
+
         batch.begin();
 
-        Color textColor = effect.text.color.cpy().lerp(effect.text.hoverColor, hoverProgress);
+        float oldScaleX = font.getData().scaleX;
+        float oldScaleY = font.getData().scaleY;
+        float scale = Math.max(0.1f, effect.text.size / 96f);
+        font.getData().setScale(scale);
+
+        Color textColor = effect.text.color.cpy().lerp(effect.text.hoverColor, p);
         font.setColor(textColor);
-        float textX = bulletX + bulletSize + 15f;
+        float textX = x + baseBulletSize + 15f;
         float textY = y + (h + font.getCapHeight()) / 2f;
         layout.setText(font, text);
         font.draw(batch, layout, textX, textY);
@@ -135,5 +149,6 @@ public class MenuEntry extends Actor {
         }
 
         font.setColor(Color.WHITE);
+        font.getData().setScale(oldScaleX, oldScaleY);
     }
 }

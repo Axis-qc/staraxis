@@ -795,9 +795,63 @@
                                                                 "text": "settings.tab.other",
                                                                 "color": "#FFFFFFFF",
                                                                 "cell": {
+                                                                    "colspan": 2,
+                                                                    "align": "left",
+                                                                    "padBottom": 10
+                                                                }
+                                                            }
+                                                        },
+                                                        {
+                                                            "include": "divider",
+                                                            "properties": {
+                                                                "cell": {
+                                                                    "colspan": 2,
+                                                                    "padBottom": 12
+                                                                }
+                                                            }
+                                                        },
+                                                        {
+                                                            "type": "label",
+                                                            "properties": {
+                                                                "text": "lang.current",
+                                                                "cell": {
                                                                     "align": "left"
                                                                 }
                                                             }
+                                                        },
+                                                        {
+                                                            "type": "container",
+                                                            "properties": {
+                                                                "layout": "row",
+                                                                "cell": {
+                                                                    "align": "right"
+                                                                }
+                                                            },
+                                                            "children": [
+                                                                {
+                                                                    "type": "button",
+                                                                    "properties": {
+                                                                        "text": "简体中文",
+                                                                        "onClick": "SET_LANG_ZH",
+                                                                        "cell": {
+                                                                            "width": 140,
+                                                                            "height": 42,
+                                                                            "padRight": 8
+                                                                        }
+                                                                    }
+                                                                },
+                                                                {
+                                                                    "type": "button",
+                                                                    "properties": {
+                                                                        "text": "English",
+                                                                        "onClick": "SET_LANG_EN",
+                                                                        "cell": {
+                                                                            "width": 140,
+                                                                            "height": 42
+                                                                        }
+                                                                    }
+                                                                }
+                                                            ]
                                                         }
                                                     ]
                                                 }

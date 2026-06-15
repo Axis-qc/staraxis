@@ -133,6 +133,10 @@ public class UiParser {
         if (props != null)
             node.properties = toMap(props);
 
+        String effect = value.getString("effect", null);
+        if (effect != null)
+            node.properties.put("effect", effect);
+
         JsonValue children = value.get("children");
         if (children != null) {
             children.iterator().forEachRemaining(c -> node.children.add(toNode(c)));

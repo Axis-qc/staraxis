@@ -20,6 +20,7 @@ public class StarfieldBackground {
 
     private final ShapeRenderer sr;
     private final Matrix4 projMatrix = new Matrix4();
+    private final Matrix4 transformMatrix = new Matrix4();
     private final Star[] stars1;
     private final Star[] stars2;
     private final Star[] stars3;
@@ -80,6 +81,7 @@ public class StarfieldBackground {
     public void render() {
         Gdx.gl.glEnable(GL20.GL_BLEND);
         sr.setProjectionMatrix(projMatrix);
+        sr.setTransformMatrix(transformMatrix.idt());
         sr.begin(ShapeType.Filled);
         drawStars(stars1, Color.WHITE);
         drawStars(stars2, Color.WHITE);
