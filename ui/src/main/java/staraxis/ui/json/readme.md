@@ -276,3 +276,63 @@
 - `UiFactory` 侧采取“容错渲染”策略：
   - 未识别的 `type` 不会抛异常，会用空 `Group` 占位。
   - drawable 缺失只会打日志。
+## 特殊节点：ref（外部文件引用）
+
+`ref` 节点用于将一个外部 JSON 文件的内容内联到当前位置，降低单个 JSON 文件的嵌套层级。
+
+### 语法
+
+```json
+{ "ref": "ui/gameui/settings/tabs/general.json" }
+```
+
+### 行为
+
+1. 解析器在 `toNode()` 阶段遇到 `ref` 节点时，会通过 `Gdx.files.internal(ref)` 加载并解析目标文件。
+2. 目标文件的根节点替换当前 `ref` 节点，递归处理其子节点。
+3. `ref` 节点的 `name` 会覆盖被引用文件的根节点 `name`（用于 Actor 查找）。
+4. `ref` 节点的 `properties` 和 `children` 会追加到被引用节点上（扩展机制）。
+
+### 注意
+
+- 目标文件必须是合法的 UI JSON（通过 schema 校验）。
+- 不支持循环引用。
+- `ref` 在解析阶段展开，工厂侧（`UiFactory`）无需感知。
+
+### 示例：settings.json 拆分
+
+主文件使用 `ref` 引用子模块：
+
+```json
+{
+  "type": "container",
+  "name": "settings_root",
+  "children": [
+    { "ref": "ui/gameui/settings/left_panel.json" },
+    {
+      "type": "position",
+      "children": [
+        { "ref": "ui/gameui/settings/tabs/general.json" },
+        { "ref": "ui/gameui/settings/tabs/graphics.json" }
+      ]
+    }
+  ]
+}
+```
+
+子文件 `tabs/general.json` 是完整的合法 JSON：
+
+```json
+{
+  "type": "scroll",
+  "name": "settings_scroll",
+  "children": [
+    {
+      "type": "container",
+      "children": [
+        { "type": "label", "properties": { "text": "UI缩放" } }
+      ]
+    }
+  ]
+}
+```

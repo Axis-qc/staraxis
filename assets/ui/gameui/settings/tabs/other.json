@@ -1,0 +1,90 @@
+{
+  "type": "scroll",
+  "name": "other_scroll",
+  "properties": {
+    "cell": {
+      "expand": true,
+      "fill": true,
+      "grow": true
+    },
+    "visible": false
+  },
+  "children": [
+    {
+      "type": "container",
+      "name": "pane_other",
+      "properties": {
+        "align": "top",
+        "pad": 10
+      },
+      "children": [
+        {
+          "type": "vector_label",
+          "effect": "title_white",
+          "properties": {
+            "text": "其他",
+            "cell": {
+              "width": 680,
+              "height": 54,
+              "padBottom": 14
+            }
+          }
+        },
+        {
+          "type": "image",
+          "properties": {
+            "drawable": "line-h",
+            "color": "#4AC9FF99",
+            "cell": {
+              "width": 260,
+              "height": 2,
+              "align": "left",
+              "padBottom": 24
+            }
+          }
+        },
+        {
+          "type": "label",
+          "properties": {
+            "text": "lang.current",
+            "cell": {
+              "align": "left",
+              "padBottom": 10
+            }
+          }
+        },
+        {
+          "type": "container",
+          "properties": {
+            "layout": "row"
+          },
+          "children": [
+            {
+              "type": "button",
+              "properties": {
+                "text": "简体中文",
+                "onClick": "SET_LANG_ZH",
+                "cell": {
+                  "width": 140,
+                  "height": 42,
+                  "padRight": 10
+                }
+              }
+            },
+            {
+              "type": "button",
+              "properties": {
+                "text": "English",
+                "onClick": "SET_LANG_EN",
+                "cell": {
+                  "width": 140,
+                  "height": 42
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

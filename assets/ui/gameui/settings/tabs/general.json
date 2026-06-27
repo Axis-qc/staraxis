@@ -1,0 +1,160 @@
+{
+  "type": "scroll",
+  "name": "settings_scroll",
+  "properties": {
+    "cell": {
+      "expand": true,
+      "fill": true,
+      "grow": true
+    }
+  },
+  "children": [
+    {
+      "type": "container",
+      "name": "pane_settings",
+      "properties": {
+        "align": "top",
+        "pad": 10
+      },
+      "children": [
+        {
+          "type": "vector_label",
+          "effect": "title_white",
+          "properties": {
+            "text": "游戏设置",
+            "cell": {
+              "width": 680,
+              "height": 54,
+              "padBottom": 14
+            }
+          }
+        },
+        {
+          "type": "image",
+          "properties": {
+            "drawable": "line-h",
+            "color": "#4AC9FF99",
+            "cell": {
+              "width": 260,
+              "height": 2,
+              "align": "left",
+              "padBottom": 24
+            }
+          }
+        },
+        {
+          "type": "container",
+          "name": "row_ui_scale",
+          "properties": {
+            "layout": "row",
+            "cell": {
+              "padBottom": 18
+            }
+          },
+          "children": [
+            {
+              "type": "label",
+              "properties": {
+                "text": "settings.uiScale",
+                "cell": {
+                  "width": 260,
+                  "align": "left"
+                }
+              }
+            },
+            {
+              "type": "button",
+              "properties": {
+                "text": "<",
+                "onClick": "DECREASE_UI_SCALE",
+                "cell": {
+                  "width": 58,
+                  "height": 38
+                }
+              }
+            },
+            {
+              "type": "label",
+              "name": "ui_scale_label",
+              "properties": {
+                "text": "1.0x",
+                "color": "#FFFFFFFF",
+                "cell": {
+                  "width": 96,
+                  "align": "center"
+                }
+              }
+            },
+            {
+              "type": "button",
+              "properties": {
+                "text": ">",
+                "onClick": "INCREASE_UI_SCALE",
+                "cell": {
+                  "width": 58,
+                  "height": 38
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "container",
+          "name": "row_font_scale",
+          "properties": {
+            "layout": "row",
+            "cell": {
+              "padBottom": 18
+            }
+          },
+          "children": [
+            {
+              "type": "label",
+              "properties": {
+                "text": "settings.fontScale",
+                "cell": {
+                  "width": 260,
+                  "align": "left"
+                }
+              }
+            },
+            {
+              "type": "button",
+              "properties": {
+                "text": "<",
+                "onClick": "DECREASE_FONT_SCALE",
+                "cell": {
+                  "width": 58,
+                  "height": 38
+                }
+              }
+            },
+            {
+              "type": "label",
+              "name": "font_scale_label",
+              "properties": {
+                "text": "1.0x",
+                "color": "#FFFFFFFF",
+                "cell": {
+                  "width": 96,
+                  "align": "center"
+                }
+              }
+            },
+            {
+              "type": "button",
+              "properties": {
+                "text": ">",
+                "onClick": "INCREASE_FONT_SCALE",
+                "cell": {
+                  "width": 58,
+                  "height": 38
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -10,6 +10,8 @@ import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
+import com.badlogic.gdx.utils.JsonReader;
+import com.badlogic.gdx.utils.JsonValue;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import staraxis.ui.FontProvider;
 import staraxis.ui.Gui;
@@ -18,6 +20,7 @@ import staraxis.ui.effects.EffectRegistry;
 import staraxis.ui.i18n.I18nService;
 import staraxis.ui.json.GameDataProvider;
 import staraxis.ui.json.UiFactory;
+import staraxis.ui.settings.SettingsRepository;
 import staraxis.ui.screens.InGameHudScreen;
 import staraxis.ui.screens.SettingsScreen;
 import staraxis.ui.screens.WorldSettingsScreen;
@@ -42,6 +45,7 @@ public class UiPreviewApp implements ApplicationListener {
         }, s -> {
         });
         gui.register(I18nService.class, i18nService);
+        gui.register(SettingsRepository.class, new SettingsRepository());
 
         Skin skin = UiSkinLoader.loadDefault("ui/uiskin/uiskin.json");
 
@@ -67,7 +71,7 @@ public class UiPreviewApp implements ApplicationListener {
         ShapeRenderer sr = new ShapeRenderer();
         gui.register(ShapeRenderer.class, sr);
 
-        starfield = new StarfieldBackground(sr);
+        starfield = new StarfieldBackground(sr, loadMainMenuBackgroundImage());
         starfield.init(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 
         UiFactory factory = gui.get(UiFactory.class);
@@ -118,6 +122,12 @@ public class UiPreviewApp implements ApplicationListener {
         stage.draw();
     }
 
+    private String loadMainMenuBackgroundImage() {
+        JsonValue root = new JsonReader().parse(Gdx.files.internal("ui/gameui/main-menu/main_menu.json"));
+        JsonValue props = root.get("properties");
+        return props == null ? null : props.getString("backgroundImage", null);
+    }
+
     @Override
     public void pause() {
     }
@@ -140,6 +150,10 @@ public class UiPreviewApp implements ApplicationListener {
         }
         if (stage != null) {
             stage.dispose();
+        }
+        if (starfield != null) {
+            starfield.dispose();
+            starfield = null;
         }
         FontProvider.disposeAllIncremental();
     }

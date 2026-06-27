@@ -1,0 +1,74 @@
+{
+  "type": "scroll",
+  "name": "audio_scroll",
+  "properties": {
+    "cell": {
+      "expand": true,
+      "fill": true,
+      "grow": true
+    },
+    "visible": false
+  },
+  "children": [
+    {
+      "type": "container",
+      "name": "pane_audio",
+      "properties": {
+        "align": "top",
+        "pad": 10
+      },
+      "children": [
+        {
+          "type": "vector_label",
+          "effect": "title_white",
+          "properties": {
+            "text": "音乐",
+            "cell": {
+              "width": 680,
+              "height": 54,
+              "padBottom": 14
+            }
+          }
+        },
+        {
+          "type": "image",
+          "properties": {
+            "drawable": "line-h",
+            "color": "#4AC9FF99",
+            "cell": {
+              "width": 260,
+              "height": 2,
+              "align": "left",
+              "padBottom": 24
+            }
+          }
+        },
+        {
+          "type": "label",
+          "properties": {
+            "text": "settings.masterVolume",
+            "cell": {
+              "align": "left",
+              "padBottom": 10
+            }
+          }
+        },
+        {
+          "type": "slider",
+          "name": "master_volume_slider",
+          "properties": {
+            "min": 0,
+            "max": 1,
+            "step": 0.01,
+            "value": 0.8,
+            "onChange": "SET_MASTER_VOLUME",
+            "cell": {
+              "width": 360,
+              "align": "left"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

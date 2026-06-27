@@ -3,7 +3,8 @@
   "type": "container",
   "name": "root_container",
   "properties": {
-    "fillParent": true
+    "fillParent": true,
+    "backgroundImage": "world/world_bg_1.png"
   },
   "children": [
     {

@@ -144,6 +144,9 @@ www-test/
 nbactions.xml
 nb-configuration.xml
 
+## Assets (large binaries):
+assets/effect/
+
 ## OS-Specific:
 .DS_Store
 Thumbs.db

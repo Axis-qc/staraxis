@@ -1,0 +1,67 @@
+{
+  "type": "position",
+  "name": "fps_popup",
+  "properties": {
+    "visible": false,
+    "height": 240
+  },
+  "children": [
+    {
+      "type": "container",
+      "name": "fps_popup_bg",
+      "properties": {
+        "background": "Rounded_background",
+        "pad": 10
+      },
+      "children": [
+        {
+          "type": "scroll",
+          "name": "fps_scroll",
+          "properties": {
+            "scrollX": false,
+            "scrollY": true
+          },
+          "children": [
+            {
+              "type": "repeat",
+              "name": "fps_repeat",
+              "children": [
+                {
+                  "type": "container",
+                  "name": "fps_row",
+                  "properties": {},
+                  "children": [
+                    {
+                      "type": "button",
+                      "name": "fps_item",
+                      "properties": {
+                        "text": "${item}",
+                        "onClick": "${action}",
+                        "cell": {
+                          "grow": true,
+                          "height": 38,
+                          "padRight": 24
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "image",
+                  "name": "fps_divider",
+                  "properties": {
+                    "drawable": "split",
+                    "cell": {
+                      "height": 2,
+                      "padTop": 2
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

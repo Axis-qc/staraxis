@@ -433,23 +433,25 @@ public class UiFactory {
                     targetW = Math.max(targetW, minAutoWidth);
                 child.setSize(targetW, targetH);
                 float cx, cy;
-                if (!Float.isNaN(x) && !Float.isNaN(y)) {
+                // x 与 y 独立处理：允许仅设置其中一个，未设置的方向回退到 align 定位
+                String a = align.toLowerCase(Locale.ROOT);
+                if (!Float.isNaN(x)) {
                     cx = x;
-                    cy = y;
+                } else if (a.contains("left")) {
+                    cx = pad;
+                } else if (a.contains("right")) {
+                    cx = baseW - child.getWidth() - pad;
                 } else {
-                    String a = align.toLowerCase(Locale.ROOT);
-                    if (a.contains("left"))
-                        cx = pad;
-                    else if (a.contains("right"))
-                        cx = baseW - child.getWidth() - pad;
-                    else
-                        cx = (baseW - child.getWidth()) / 2f;
-                    if (a.contains("top"))
-                        cy = baseH - child.getHeight() - pad;
-                    else if (a.contains("bottom"))
-                        cy = pad;
-                    else
-                        cy = (baseH - child.getHeight()) / 2f;
+                    cx = (baseW - child.getWidth()) / 2f;
+                }
+                if (!Float.isNaN(y)) {
+                    cy = y;
+                } else if (a.contains("top")) {
+                    cy = baseH - child.getHeight() - pad;
+                } else if (a.contains("bottom")) {
+                    cy = pad;
+                } else {
+                    cy = (baseH - child.getHeight()) / 2f;
                 }
                 child.setPosition(cx, cy);
             }

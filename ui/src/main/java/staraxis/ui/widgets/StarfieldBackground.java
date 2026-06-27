@@ -3,6 +3,8 @@ package staraxis.ui.widgets;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
 import com.badlogic.gdx.math.MathUtils;
@@ -19,6 +21,8 @@ public class StarfieldBackground {
     private static final int LAYER3_COUNT = 40;
 
     private final ShapeRenderer sr;
+    private final SpriteBatch batch;
+    private final Texture background;
     private final Matrix4 projMatrix = new Matrix4();
     private final Matrix4 transformMatrix = new Matrix4();
     private final Star[] stars1;
@@ -28,8 +32,14 @@ public class StarfieldBackground {
     private float worldWidth;
     private float worldHeight;
 
-    public StarfieldBackground(ShapeRenderer sr) {
+    public StarfieldBackground(ShapeRenderer sr, String backgroundPath) {
         this.sr = sr;
+        this.batch = new SpriteBatch();
+        this.background = backgroundPath == null || backgroundPath.trim().isEmpty() ? null : new Texture(Gdx.files.internal(backgroundPath));
+        if (this.background != null) {
+            this.background.setWrap(Texture.TextureWrap.Repeat, Texture.TextureWrap.Repeat);
+            this.background.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        }
         this.worldWidth = Gdx.graphics.getWidth();
         this.worldHeight = Gdx.graphics.getHeight();
         stars1 = new Star[LAYER1_COUNT];
@@ -79,6 +89,15 @@ public class StarfieldBackground {
     }
 
     public void render() {
+        if (background != null) {
+            batch.setProjectionMatrix(projMatrix);
+            batch.setTransformMatrix(transformMatrix.idt());
+            batch.begin();
+            batch.draw(background, 0, 0, worldWidth, worldHeight, 0, 0,
+                    worldWidth / background.getWidth(), worldHeight / background.getHeight());
+            batch.end();
+        }
+
         Gdx.gl.glEnable(GL20.GL_BLEND);
         sr.setProjectionMatrix(projMatrix);
         sr.setTransformMatrix(transformMatrix.idt());
@@ -94,5 +113,12 @@ public class StarfieldBackground {
             sr.setColor(baseColor.r, baseColor.g, baseColor.b, s.alpha);
             sr.circle(s.x, s.y, s.size * 0.5f);
         }
+    }
+
+    public void dispose() {
+        if (background != null) {
+            background.dispose();
+        }
+        batch.dispose();
     }
 }

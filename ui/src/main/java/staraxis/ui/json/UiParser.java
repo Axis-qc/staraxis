@@ -123,6 +123,7 @@ public class UiParser {
         ComponentNode node = new ComponentNode(value.getString("type", null));
         node.name = value.getString("name", null);
         node.include = value.getString("include", null);
+        node.ref = value.getString("ref", null);
         // params 可以是对象
         JsonValue paramsVal = value.get("params");
         if (paramsVal != null && paramsVal.isObject()) {
@@ -141,7 +142,59 @@ public class UiParser {
         if (children != null) {
             children.iterator().forEachRemaining(c -> node.children.add(toNode(c)));
         }
+
+        // ref 解析：加载引用的外部 JSON 文件，用其内容替换当前节点
+        if (node.ref != null && !node.ref.isBlank()) {
+            ComponentNode resolved = loadRef(node.ref);
+            if (resolved != null) {
+                // 仅当 ref 节点显式设置了 name 时才覆盖，避免 null 覆盖被引用文件的原始 name
+                if (node.name != null) {
+                    resolved.name = node.name;
+                }
+                // 允许 ref 节点通过 properties 和 children 覆盖/扩展被引用文件
+                if (!node.properties.isEmpty()) {
+                    resolved.properties.putAll(node.properties);
+                }
+                if (!node.children.isEmpty()) {
+                    resolved.children.addAll(node.children);
+                }
+                return resolved;
+            }
+            // 回退：保留原节点，由工厂侧处理
+            log.warn("UiParser: ref resolution failed for '{}', keeping original node", node.ref);
+        }
         return node;
+    }
+
+    /**
+     * 加载引用的外部 JSON 文件并解析为 ComponentNode。
+     * 路径相对于 assets 根目录，通过 Gdx.files.internal 读取。
+     */
+    private ComponentNode loadRef(String refPath) {
+        FileHandle fh = Gdx.files.internal(refPath);
+        if (!fh.exists()) {
+            log.error("UiParser: ref file not found: {}", refPath);
+            return null;
+        }
+        try {
+            String json = fh.readString(StandardCharsets.UTF_8.name());
+            // NOTE: 子文件也经过 schema 校验，确保格式一致
+            JsonNode jsonNode = com.fasterxml.jackson.databind.json.JsonMapper.builder().build().readTree(json);
+            Set<ValidationMessage> errors = schema.validate(jsonNode);
+            if (!errors.isEmpty()) {
+                StringBuilder sb = new StringBuilder();
+                for (ValidationMessage err : errors) {
+                    sb.append("\n").append(refPath).append(" | ").append(err.getMessage());
+                }
+                log.error("UiParser: ref schema validation failed:{}", sb.toString());
+                return null;
+            }
+            JsonValue root = new JsonReader().parse(json);
+            return toNode(root);
+        } catch (Exception e) {
+            log.error("UiParser: failed to load ref '{}'", refPath, e);
+            return null;
+        }
     }
 
     private Map<String, Object> toMap(JsonValue obj) {

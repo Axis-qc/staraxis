@@ -1,0 +1,67 @@
+{
+  "type": "position",
+  "name": "resolution_popup",
+  "properties": {
+    "visible": false,
+    "height": 320
+  },
+  "children": [
+    {
+      "type": "container",
+      "name": "resolution_popup_bg",
+      "properties": {
+        "background": "Rounded_background",
+        "pad": 10
+      },
+      "children": [
+        {
+          "type": "scroll",
+          "name": "resolution_scroll",
+          "properties": {
+            "scrollX": false,
+            "scrollY": true
+          },
+          "children": [
+            {
+              "type": "repeat",
+              "name": "resolution_repeat",
+              "children": [
+                {
+                  "type": "container",
+                  "name": "resolution_row",
+                  "properties": {},
+                  "children": [
+                    {
+                      "type": "button",
+                      "name": "resolution_item",
+                      "properties": {
+                        "text": "${item}",
+                        "onClick": "${action}",
+                        "cell": {
+                          "grow": true,
+                          "height": 38,
+                          "padRight": 24
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "image",
+                  "name": "resolution_divider",
+                  "properties": {
+                    "drawable": "split",
+                    "cell": {
+                      "height": 2,
+                      "padTop": 2
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

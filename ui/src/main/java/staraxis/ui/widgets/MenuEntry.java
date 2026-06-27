@@ -25,6 +25,7 @@ public class MenuEntry extends Actor {
     private final MenuEntryEffect effect;
 
     private boolean hovered;
+    private boolean selected;
     private float hoverProgress;
     private float pulse;
 
@@ -70,11 +71,15 @@ public class MenuEntry extends Actor {
         });
     }
 
+    public void setSelected(boolean selected) {
+        this.selected = selected;
+    }
+
     @Override
     public void act(float delta) {
         super.act(delta);
         pulse += delta;
-        float target = hovered ? 1f : 0f;
+        float target = hovered || selected ? 1f : 0f;
         float alpha = 1f - (float) Math.exp(-Math.max(1f, effect.hover.speed) * delta);
         hoverProgress += (target - hoverProgress) * alpha;
         if (Math.abs(hoverProgress - target) < 0.001f) {
@@ -89,7 +94,7 @@ public class MenuEntry extends Actor {
         float y = getY();
         float h = getHeight();
         float baseBulletSize = effect.bullet.size;
-        float pulseScale = hovered ? (0.04f + 0.04f * (float) Math.sin(pulse * 7f)) * p : 0f;
+        float pulseScale = hovered || selected ? (0.04f + 0.04f * (float) Math.sin(pulse * 7f)) * p : 0f;
         float bulletSize = baseBulletSize * (1f + 0.42f * p + pulseScale);
         float bulletCenterX = x + baseBulletSize * 0.5f;
         float bulletCenterY = y + h * 0.5f;

@@ -1,0 +1,148 @@
+{
+  "type": "position",
+  "name": "settings_left_pos",
+  "properties": {
+    "align": "left",
+    "pad": 56,
+    "width": 330,
+    "height": 620
+  },
+  "children": [
+    {
+      "type": "container",
+      "name": "settings_left_panel",
+      "properties": {
+        "align": "topleft",
+        "pad": 18
+      },
+      "children": [
+        {
+          "type": "vector_label",
+          "name": "settings_title",
+          "effect": "title_white",
+          "properties": {
+            "text": "settings.title",
+            "cell": {
+              "width": 280,
+              "height": 58,
+              "padBottom": 18
+            }
+          }
+        },
+        {
+          "type": "image",
+          "name": "settings_title_line",
+          "properties": {
+            "drawable": "line-h",
+            "color": "#4AC9FF99",
+            "cell": {
+              "width": 210,
+              "height": 2,
+              "align": "left",
+              "padBottom": 30
+            }
+          }
+        },
+        {
+          "type": "container",
+          "name": "tab_bar",
+          "properties": {
+            "align": "top",
+            "cell": {
+              "width": 280,
+              "height": 300,
+              "padBottom": 26
+            }
+          },
+          "children": [
+            {
+              "type": "menu_entry",
+              "name": "tab_general",
+              "effect": "menu_item_primary",
+              "properties": {
+                "text": "游戏设置",
+                "onClick": "OPEN_SETTINGS_TAB:general",
+                "cell": {
+                  "width": 260,
+                  "height": 52,
+                  "padBottom": 8
+                }
+              }
+            },
+            {
+              "type": "menu_entry",
+              "name": "tab_graphics",
+              "effect": "menu_item_primary",
+              "properties": {
+                "text": "画面",
+                "onClick": "OPEN_SETTINGS_TAB:graphics",
+                "cell": {
+                  "width": 260,
+                  "height": 52,
+                  "padBottom": 8
+                }
+              }
+            },
+            {
+              "type": "menu_entry",
+              "name": "tab_audio",
+              "effect": "menu_item_primary",
+              "properties": {
+                "text": "音乐",
+                "onClick": "OPEN_SETTINGS_TAB:audio",
+                "cell": {
+                  "width": 260,
+                  "height": 52,
+                  "padBottom": 8
+                }
+              }
+            },
+            {
+              "type": "menu_entry",
+              "name": "tab_other",
+              "effect": "menu_item_primary",
+              "properties": {
+                "text": "其他",
+                "onClick": "OPEN_SETTINGS_TAB:other",
+                "cell": {
+                  "width": 260,
+                  "height": 52,
+                  "padBottom": 8
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "vector_button",
+          "name": "back_button",
+          "effect": "primary_button",
+          "properties": {
+            "text": "settings.back",
+            "onClick": "BACK_TO_MAIN_MENU",
+            "cell": {
+              "width": 210,
+              "height": 42,
+              "align": "left",
+              "padBottom": 10
+            }
+          }
+        },
+        {
+          "type": "vector_button",
+          "name": "save_button",
+          "effect": "primary_button",
+          "properties": {
+            "text": "settings.save",
+            "onClick": "SAVE_SETTINGS",
+            "cell": {
+              "width": 210,
+              "height": 42,
+              "align": "left"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

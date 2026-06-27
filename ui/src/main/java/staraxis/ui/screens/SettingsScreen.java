@@ -26,6 +26,7 @@ import staraxis.ui.settings.ModMetadata;
 import staraxis.ui.settings.ModMetadataRepository;
 import staraxis.ui.settings.ModOrderRepository;
 import staraxis.ui.settings.SettingsRepository;
+import staraxis.ui.widgets.MenuEntry;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -273,6 +274,11 @@ public class SettingsScreen implements Disposable {
 
         for (TabBinding binding : tabBindings.values()) {
             Actor a = rootGroup.findActor(binding.buttonActorName);
+            boolean active = binding.tabId.equals(activeTab);
+            if (a instanceof MenuEntry) {
+                ((MenuEntry) a).setSelected(active);
+                continue;
+            }
             if (!(a instanceof TextButton)) {
                 continue;
             }
@@ -280,7 +286,7 @@ public class SettingsScreen implements Disposable {
             TextButton b = (TextButton) a;
 
             b.setColor(white);
-            if (binding.tabId.equals(activeTab)) {
+            if (active) {
                 b.getColor().a = 1.0f;
             } else {
                 b.getColor().a = 0.72f;
@@ -292,9 +298,8 @@ public class SettingsScreen implements Disposable {
         tabBindings.clear();
         registerTabBinding("general", "tab_general", "settings_scroll");
         registerTabBinding("graphics", "tab_graphics", "graphics_scroll");
-        registerTabBinding("input", "tab_input", "input_scroll");
+        registerTabBinding("audio", "tab_audio", "audio_scroll");
         registerTabBinding("other", "tab_other", "other_scroll");
-        registerTabBinding("mods", "open_mod_list_button", "mods_scroll");
 
         // NOTE: ExampleMod 示例 Tab 不在本体内提供；这里仅注册本体内建的 Tab。
     }

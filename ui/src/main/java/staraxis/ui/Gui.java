@@ -43,10 +43,10 @@ public class Gui {
     private StarAxisGameRuntime runtime;
 
     private static final String[] THEME_PATHS = {
-        "effects/default.json",
-        "effects/amethyst.json",
-        "effects/ember.json",
-        "effects/forest.json"
+        "ui/effects/default.json",
+        "ui/effects/amethyst.json",
+        "ui/effects/ember.json",
+        "ui/effects/forest.json"
     };
     private int currentThemeIndex = 0;
 
@@ -124,7 +124,7 @@ public class Gui {
         }
         if (tryGet(EffectRegistry.class) == null) {
             EffectRegistry reg = new EffectRegistry();
-            reg.load("effects/default.json");
+            reg.load("ui/effects/default.json");
             register(EffectRegistry.class, reg);
         }
     }

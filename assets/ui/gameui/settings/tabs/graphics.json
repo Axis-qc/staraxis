@@ -1,0 +1,120 @@
+{
+  "type": "scroll",
+  "name": "graphics_scroll",
+  "properties": {
+    "cell": {
+      "expand": true,
+      "fill": true,
+      "grow": true
+    },
+    "visible": false
+  },
+  "children": [
+    {
+      "type": "container",
+      "name": "pane_graphics",
+      "properties": {
+        "align": "top",
+        "pad": 10
+      },
+      "children": [
+        {
+          "type": "vector_label",
+          "effect": "title_white",
+          "properties": {
+            "text": "画面",
+            "cell": {
+              "width": 680,
+              "height": 54,
+              "padBottom": 14
+            }
+          }
+        },
+        {
+          "type": "image",
+          "properties": {
+            "drawable": "line-h",
+            "color": "#4AC9FF99",
+            "cell": {
+              "width": 260,
+              "height": 2,
+              "align": "left",
+              "padBottom": 24
+            }
+          }
+        },
+        {
+          "type": "label",
+          "properties": {
+            "text": "settings.resolution",
+            "cell": {
+              "align": "left",
+              "padBottom": 8
+            }
+          }
+        },
+        {
+          "type": "button",
+          "name": "resolution_button",
+          "properties": {
+            "text": "1280x720",
+            "onClick": "TOGGLE_RESOLUTION_LIST",
+            "cell": {
+              "width": 280,
+              "height": 42,
+              "align": "left",
+              "padBottom": 16
+            }
+          }
+        },
+        {
+          "type": "label",
+          "properties": {
+            "text": "settings.vsync",
+            "cell": {
+              "align": "left",
+              "padBottom": 8
+            }
+          }
+        },
+        {
+          "type": "button",
+          "name": "vsync_button",
+          "properties": {
+            "text": "On",
+            "onClick": "TOGGLE_VSYNC",
+            "cell": {
+              "width": 280,
+              "height": 42,
+              "align": "left",
+              "padBottom": 16
+            }
+          }
+        },
+        {
+          "type": "label",
+          "properties": {
+            "text": "settings.fpsLimit",
+            "cell": {
+              "align": "left",
+              "padBottom": 8
+            }
+          }
+        },
+        {
+          "type": "button",
+          "name": "fps_limit_button",
+          "properties": {
+            "text": "Unlimited",
+            "onClick": "TOGGLE_FPS_LIST",
+            "cell": {
+              "width": 280,
+              "height": 42,
+              "align": "left"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
