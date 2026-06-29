@@ -22,6 +22,8 @@ import staraxis.ui.widgets.MenuEntry;
 import staraxis.ui.widgets.VectorButton;
 import staraxis.ui.widgets.VectorLabel;
 
+import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -107,6 +109,9 @@ public class UiFactory {
                 break;
             case "scroll":
                 actor = buildScroll(node);
+                break;
+            case "list":
+                actor = buildList(node);
                 break;
             case "window":
                 actor = buildWindow(node);
@@ -258,9 +263,10 @@ public class UiFactory {
         }
     }
 
-    private Table buildTable(ComponentNode node) {
+    private Actor buildTable(ComponentNode node) {
         Table table = new Table();
-        if (Boolean.TRUE.equals(node.properties.get("fillParent")))
+        boolean isFillParent = Boolean.TRUE.equals(node.properties.get("fillParent"));
+        if (isFillParent)
             table.setFillParent(true);
         applyTableAlign(table, node.properties.get("align"));
         Object pad = node.properties.get("pad");
@@ -275,15 +281,47 @@ public class UiFactory {
             if (d != null)
                 table.setBackground(d);
         }
+        // 固定尺寸（不依赖 fillParent 时使用）
+        float cfgWidth = toFloat(node.properties.get("width"), 0);
+        float cfgHeight = toFloat(node.properties.get("height"), 0);
         boolean horizontal = Boolean.TRUE.equals(node.properties.get("horizontal"));
         Object layout = node.properties.get("layout");
         if (layout != null && "row".equalsIgnoreCase(layout.toString())) {
             horizontal = true;
         }
 
+        // 垂直布局 + fillParent 时，预扫描是否包含底部对齐的子节点
+        boolean hasBottomChild = false;
+        if (!horizontal) {
+            for (ComponentNode child : node.children) {
+                Object a = child.properties.get("align");
+                if (a != null && a.toString().toLowerCase(Locale.ROOT).contains("bottom")) {
+                    hasBottomChild = true;
+                    break;
+                }
+            }
+        }
+
+        boolean bottomExpandHandled = false;
         for (ComponentNode child : node.children) {
             Actor childActor = create(child);
             Cell<?> cell = table.add(childActor);
+
+            // 将子节点的 align 属性同步到父 cell 对齐
+            applyCellAlignFromChild(cell, child);
+
+            // fillParent 垂直布局：首个非底部行 expandY 把底部行压到底
+            // 同时设 top 避免非底部行在扩展空间中居中
+            if (!horizontal && isFillParent && hasBottomChild && !bottomExpandHandled) {
+                Object a = child.properties.get("align");
+                boolean isBottom = a != null
+                        && a.toString().toLowerCase(Locale.ROOT).contains("bottom");
+                if (!isBottom) {
+                    cell.expandY();
+                    cell.top(); // keep at top of expanded row, not center
+                    bottomExpandHandled = true;
+                }
+            }
 
             applyDefaultBlockCell(node, child, cell, horizontal);
             applyCell(child, cell);
@@ -291,7 +329,67 @@ public class UiFactory {
             if (!horizontal)
                 table.row();
         }
+
+        // 固定尺寸：覆盖 layout 计算结果
+        if (cfgWidth > 0 || cfgHeight > 0) {
+            table.setSize(cfgWidth, cfgHeight);
+        }
+
+        // border 属性：borderColor + borderWidth → ShapeRenderer 画边框
+        float borderW = toFloat(node.properties.get("borderWidth"), 0);
+        final Color borderColor = resolveColor((String) node.properties.get("borderColor"));
+        if (borderW > 0 && borderColor != null && shapeRenderer != null) {
+            Group g = new Group() {
+                @Override
+                public void draw(com.badlogic.gdx.graphics.g2d.Batch b, float pa) {
+                    super.draw(b, pa);
+                    b.end();
+                    shapeRenderer.setProjectionMatrix(b.getProjectionMatrix());
+                    shapeRenderer.setTransformMatrix(b.getTransformMatrix());
+                    shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
+                    shapeRenderer.setColor(borderColor);
+                    shapeRenderer.rect(getX(), getY(), getWidth(), getHeight());
+                    shapeRenderer.end();
+                    b.begin();
+                }
+            };
+            if (isFillParent) {
+                table.setFillParent(false);
+            }
+            if (cfgWidth > 0 || cfgHeight > 0)
+                g.setSize(cfgWidth > 0 ? cfgWidth : table.getWidth(),
+                        cfgHeight > 0 ? cfgHeight : table.getHeight());
+            else
+                g.setSize(table.getWidth(), table.getHeight());
+            g.addActor(table);
+            return g;
+        }
+
         return table;
+    }
+
+    /**
+     * 将子节点的 "align" 属性翻译为父 Table cell 的对齐方式。
+     * 使 HUD 中的 top/right/bottom/left 能真正把子容器贴到父容器边缘。
+     * left/right 同时设置 expandX，让列撑满父容器宽度，否则对齐在小宽度 cell 内无效。
+     */
+    private void applyCellAlignFromChild(Cell<?> cell, ComponentNode child) {
+        Object alignValue = child.properties.get("align");
+        if (alignValue == null)
+            return;
+        String a = alignValue.toString().toLowerCase(Locale.ROOT);
+        if (a.contains("top"))
+            cell.top();
+        if (a.contains("bottom"))
+            cell.bottom();
+        if (a.contains("left")) {
+            cell.left();
+            cell.expandX(); // 列撑满父容器，使左对齐生效
+        }
+        if (a.contains("right")) {
+            cell.right();
+            cell.expandX(); // 列撑满父容器，使右对齐生效
+        }
     }
 
     private void applyTableAlign(Table table, Object alignValue) {
@@ -854,6 +952,22 @@ public class UiFactory {
     }
 
     private Drawable resolveDrawable(String name) {
+        // 颜色字符串 → 纯色 Drawable（颜色直接画进 pixmap 纹理，不用 tint）
+        Color c = resolveColor(name);
+        if (c != null) {
+            com.badlogic.gdx.graphics.Pixmap pm = new com.badlogic.gdx.graphics.Pixmap(1, 1,
+                    com.badlogic.gdx.graphics.Pixmap.Format.RGBA8888);
+            pm.setColor(c);
+            pm.fill();
+            com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable d =
+                    new com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable(
+                            new com.badlogic.gdx.graphics.g2d.TextureRegion(
+                                    new com.badlogic.gdx.graphics.Texture(pm)));
+            pm.dispose();
+            d.setMinWidth(0);
+            d.setMinHeight(0);
+            return d;
+        }
         try {
             return skin.getDrawable(name);
         } catch (Exception e) {
@@ -911,7 +1025,11 @@ public class UiFactory {
             return new Group();
         }
 
-        return new VectorButton(shapeRenderer, bitmapFont, effect, text, action);
+        VectorButton btn = new VectorButton(shapeRenderer, bitmapFont, effect, text, action);
+        float w = toFloat(node.properties.get("width"), 0);
+        float h = toFloat(node.properties.get("height"), 0);
+        if (w > 0 || h > 0) btn.setSize(w, h);
+        return btn;
     }
 
     private Actor buildVectorLabel(ComponentNode node) {
@@ -927,6 +1045,194 @@ public class UiFactory {
             return new Group();
         }
 
-        return new VectorLabel(bitmapFont, effect, text);
+        VectorLabel label = new VectorLabel(bitmapFont, effect, text);
+        // color 属性可覆盖效果的文本颜色（支持 #RRGGBBAA 格式）
+        Object color = node.properties.get("color");
+        if (color != null) {
+            Color c = resolveColor(color.toString());
+            if (c != null) label.setTextColor(c);
+        }
+        float w = toFloat(node.properties.get("width"), 0);
+        float h = toFloat(node.properties.get("height"), 0);
+        if (w > 0 || h > 0) label.setSize(w, h);
+        return label;
+    }
+
+    // ==================== list（可滚动列表） ====================
+
+    /**
+     * 构建 list（可滚动列表）：ScrollPane 包裹 Table，第一个 child 作为行模板。
+     * 通过 dataSource 从 DataProvider 获取数据，每行可点击选中。
+     *
+     * 支持属性：
+     * - dataSource（string）：数据源标识，传给 DataProvider#getData()
+     * - onSelect（string）：选中项时派发的 action id，格式为 "actionId:index"
+     * - spacing（number）：行间距，默认 0
+     * - scrollX / scrollY（boolean）：滚动方向，默认仅纵向滚动
+     * - width / height（number）：列表整体尺寸
+     */
+    private ScrollPane buildList(ComponentNode node) {
+        Table content = new Table();
+        content.top().left();
+
+        // 第一个 child 作为行模板
+        if (!node.children.isEmpty())
+            content.setUserObject(node.children.get(0));
+
+        String dataSource = (String) node.properties.get("dataSource");
+        String onSelect = (String) node.properties.get("onSelect");
+        float spacing = toFloat(node.properties.get("spacing"), 0f);
+
+        ScrollPane scroll = new ScrollPane(content, skin);
+        scroll.setTouchable(Touchable.enabled);
+        boolean sx = node.properties.get("scrollX") != null
+                && Boolean.parseBoolean(node.properties.get("scrollX").toString());
+        boolean sy = node.properties.get("scrollY") == null
+                || Boolean.parseBoolean(node.properties.get("scrollY").toString());
+        scroll.setScrollingDisabled(!sx, !sy);
+        scroll.setFadeScrollBars(false);
+        scroll.setScrollbarsOnTop(false);
+        scroll.setOverscroll(false, false);
+
+        float w = toFloat(node.properties.get("width"), 0);
+        float h = toFloat(node.properties.get("height"), 0);
+        if (w > 0 || h > 0) scroll.setSize(w, h);
+
+        // 在 ScrollPane 的 userObject 存储列表运行时配置
+        Map<String, Object> listConfig = new HashMap<>();
+        listConfig.put("onSelect", onSelect);
+        listConfig.put("spacing", spacing);
+        listConfig.put("selectedIndex", -1);
+        scroll.setUserObject(listConfig);
+
+        // 初始加载数据
+        if (dataSource != null && dataProvider != null) {
+            List<Map<String, Object>> items = dataProvider.getData(dataSource);
+            if (items != null) {
+                listConfig.put("itemsData", items);
+                renderListItems(scroll);
+            }
+        }
+
+        return scroll;
+    }
+
+    /**
+     * 渲染列表行。每次调用会清空并重建所有行（基于当前 itemsData 与 selectedIndex）。
+     * 每行注入 inputListener 实现点击选中 + 派发 onSelect 事件。
+     */
+    public void renderListItems(ScrollPane listActor) {
+        Object configObj = listActor.getUserObject();
+        if (!(configObj instanceof Map))
+            return;
+        @SuppressWarnings("unchecked")
+        Map<String, Object> config = (Map<String, Object>) configObj;
+
+        Actor content = listActor.getActor();
+        if (!(content instanceof Table))
+            return;
+        Table t = (Table) content;
+
+        Object uo = t.getUserObject();
+        if (!(uo instanceof ComponentNode))
+            return;
+        ComponentNode template = (ComponentNode) uo;
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> itemsData = (List<Map<String, Object>>) config.get("itemsData");
+        if (itemsData == null || itemsData.isEmpty())
+            return;
+
+        String onSelect = (String) config.get("onSelect");
+        float spacing = toFloat(config.get("spacing"), 0f);
+        int selectedIndex = config.get("selectedIndex") instanceof Number
+                ? ((Number) config.get("selectedIndex")).intValue()
+                : -1;
+
+        t.clearChildren();
+        t.top().left();
+
+        for (int i = 0; i < itemsData.size(); i++) {
+            Map<String, Object> data = itemsData.get(i);
+            ComponentNode inst = deepCopy(template);
+            substituteProps(inst, data);
+
+            // 注入选中状态到行数据
+            if (i == selectedIndex) {
+                inst.properties.put("selected", true);
+            }
+
+            Actor row = create(inst);
+            row.setName((inst.name != null ? inst.name : "list_item") + "_" + i);
+
+            // 点击选择
+            final int index = i;
+            row.addListener(new InputListener() {
+                @Override
+                public boolean touchDown(InputEvent e, float x, float y, int p, int b) {
+                    return true;
+                }
+
+                @Override
+                public void touchUp(InputEvent e, float x, float y, int p, int b) {
+                    config.put("selectedIndex", index);
+                    renderListItems(listActor); // 重渲染以刷新选中高亮
+                    if (onSelect != null && !onSelect.isEmpty()) {
+                        gui.dispatchAction(onSelect + ":" + index);
+                    }
+                }
+            });
+
+            t.add(row).growX().fillX();
+            if (spacing > 0 && i < itemsData.size() - 1)
+                t.row().padTop(spacing);
+            else
+                t.row();
+        }
+        t.invalidateHierarchy();
+    }
+
+    /**
+     * 设置列表数据并重新渲染。
+     *
+     * @param listActor buildList 返回的 ScrollPane
+     * @param itemsData 新数据列表
+     */
+    public void setListData(ScrollPane listActor, List<Map<String, Object>> itemsData) {
+        Object configObj = listActor.getUserObject();
+        if (!(configObj instanceof Map))
+            return;
+        @SuppressWarnings("unchecked")
+        Map<String, Object> config = (Map<String, Object>) configObj;
+        config.put("itemsData", itemsData);
+        config.put("selectedIndex", -1); // 重置选中
+        renderListItems(listActor);
+    }
+
+    /**
+     * 获取当前选中行索引，无选中返回 -1。
+     */
+    public int getListSelectedIndex(ScrollPane listActor) {
+        Object configObj = listActor.getUserObject();
+        if (!(configObj instanceof Map))
+            return -1;
+        @SuppressWarnings("unchecked")
+        Map<String, Object> config = (Map<String, Object>) configObj;
+        return config.get("selectedIndex") instanceof Number
+                ? ((Number) config.get("selectedIndex")).intValue()
+                : -1;
+    }
+
+    /**
+     * 程序化选中指定行。
+     */
+    public void selectListItem(ScrollPane listActor, int index) {
+        Object configObj = listActor.getUserObject();
+        if (!(configObj instanceof Map))
+            return;
+        @SuppressWarnings("unchecked")
+        Map<String, Object> config = (Map<String, Object>) configObj;
+        config.put("selectedIndex", index);
+        renderListItems(listActor);
     }
 }

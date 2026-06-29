@@ -24,6 +24,7 @@ public class GameSettings {
 
     // 画面设置
     public String graphicsQuality = "medium"; // low, medium, high
+    public int gpuIndex = 0; // 显卡/显示器索引（0 = 默认/首选）
 
     // 音频设置
     public float masterVolume = 0.8f;

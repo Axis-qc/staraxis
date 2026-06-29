@@ -289,6 +289,12 @@ public class Gui {
                     s.toggleFpsList();
                 return;
             }
+            case "TOGGLE_GPU": {
+                SettingsScreen s = get(SettingsScreen.class);
+                if (s != null)
+                    s.toggleGpu();
+                return;
+            }
             case "SELECT_RESOLUTION": {
                 SettingsScreen s = get(SettingsScreen.class);
                 if (s != null)

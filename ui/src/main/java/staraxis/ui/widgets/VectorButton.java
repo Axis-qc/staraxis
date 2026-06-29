@@ -74,30 +74,37 @@ public class VectorButton extends Actor {
         float w = getWidth();
         float h = getHeight();
 
+        // 兼容 Scene2D setColor alpha（用于 Tab 高亮等场景）
+        float alpha = getColor().a * parentAlpha;
+
         batch.end();
 
         sr.setProjectionMatrix(batch.getProjectionMatrix());
         sr.setTransformMatrix(batch.getTransformMatrix());
+        Color bg;
         if (pressed) {
-            sr.setColor(effect.background.pressedColor);
+            bg = effect.background.pressedColor;
         } else if (hovered) {
-            sr.setColor(effect.background.hoverColor);
+            bg = effect.background.hoverColor;
         } else {
-            sr.setColor(effect.background.color);
+            bg = effect.background.color;
         }
+        sr.setColor(bg.r, bg.g, bg.b, bg.a * alpha);
         sr.begin(ShapeType.Filled);
         sr.rect(x, y, w, h);
         sr.end();
 
         if (effect.border.width > 0) {
-            sr.setColor(effect.border.color);
+            Color bc = effect.border.color;
+            sr.setColor(bc.r, bc.g, bc.b, bc.a * alpha);
             sr.begin(ShapeType.Line);
             sr.rect(x, y, w, h);
             sr.end();
         }
 
         if (effect.accent.enabled && (hovered || pressed)) {
-            sr.setColor(effect.accent.color);
+            Color ac = effect.accent.color;
+            sr.setColor(ac.r, ac.g, ac.b, ac.a * alpha);
             sr.begin(ShapeType.Filled);
             sr.rect(x, y, effect.accent.width, h);
             sr.end();
@@ -109,7 +116,7 @@ public class VectorButton extends Actor {
         float oldScaleY = font.getData().scaleY;
         font.getData().setScale(22f / FontProvider.VECTOR_FONT_GEN_SIZE);
         Color textColor = hovered ? effect.text.hoverColor : effect.text.color;
-        font.setColor(textColor);
+        font.setColor(textColor.r, textColor.g, textColor.b, textColor.a * alpha);
         font.draw(batch, text, x + 14, y + (h + font.getCapHeight()) / 2f);
         font.setColor(Color.WHITE);
         font.getData().setScale(oldScaleX, oldScaleY);

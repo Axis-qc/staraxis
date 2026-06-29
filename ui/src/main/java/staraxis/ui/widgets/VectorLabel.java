@@ -3,7 +3,9 @@ package staraxis.ui.widgets;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.scenes.scene2d.Actor;
+import com.badlogic.gdx.scenes.scene2d.Touchable;
 import staraxis.ui.FontProvider;
 import staraxis.ui.effects.VectorLabelEffect;
 
@@ -14,6 +16,7 @@ public class VectorLabel extends Actor {
     private final BitmapFont font;
     private final VectorLabelEffect effect;
     private String text;
+    private final GlyphLayout layout = new GlyphLayout();
 
     public VectorLabel(BitmapFont font, String text) {
         this(font, DEFAULT_EFFECT, text);
@@ -33,14 +36,39 @@ public class VectorLabel extends Actor {
         this.font = font;
         this.effect = effect != null ? effect : DEFAULT_EFFECT;
         this.text = text;
+        setTouchable(Touchable.enabled);
+        updateSize();
     }
 
     public void setText(String text) {
         this.text = text;
+        updateSize();
+    }
+
+    public String getText() {
+        return text;
     }
 
     public void setTextColor(Color color) {
         this.effect.text.color.set(color);
+    }
+
+    /**
+     * 根据当前文本 + 字体缩放测算实际渲染尺寸，
+     * 同步 Actor 的 width/height，使 Scene2D 命中测试（hit）可正确命中此 Actor。
+     */
+    private void updateSize() {
+        if (text == null || text.isEmpty()) {
+            setSize(0, 0);
+            return;
+        }
+        float scale = Math.max(0.1f, effect.text.size / FontProvider.VECTOR_FONT_GEN_SIZE);
+        float oldScaleX = font.getData().scaleX;
+        float oldScaleY = font.getData().scaleY;
+        font.getData().setScale(scale);
+        layout.setText(font, text);
+        font.getData().setScale(oldScaleX, oldScaleY);
+        setSize(layout.width, layout.height);
     }
 
     @Override
@@ -50,6 +78,7 @@ public class VectorLabel extends Actor {
         float scale = Math.max(0.1f, effect.text.size / FontProvider.VECTOR_FONT_GEN_SIZE);
         font.getData().setScale(scale);
         font.setColor(effect.text.color);
+        // 文本顶部 = Actor 顶部（y + height），文字向下填充 Actor 区域
         font.draw(batch, text, getX(), getY() + getHeight());
         font.setColor(Color.WHITE);
         font.getData().setScale(oldScaleX, oldScaleY);

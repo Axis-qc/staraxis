@@ -35,7 +35,8 @@ public class StarfieldBackground {
     public StarfieldBackground(ShapeRenderer sr, String backgroundPath) {
         this.sr = sr;
         this.batch = new SpriteBatch();
-        this.background = backgroundPath == null || backgroundPath.trim().isEmpty() ? null : new Texture(Gdx.files.internal(backgroundPath));
+        this.background = backgroundPath == null || backgroundPath.trim().isEmpty() ? null
+                : new Texture(Gdx.files.internal(backgroundPath));
         if (this.background != null) {
             this.background.setWrap(Texture.TextureWrap.Repeat, Texture.TextureWrap.Repeat);
             this.background.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
@@ -61,7 +62,7 @@ public class StarfieldBackground {
     }
 
     private void initStars(Star[] stars, float alphaMin, float alphaMax,
-                           float sizeMin, float sizeMax, float speedMin, float speedMax) {
+            float sizeMin, float sizeMax, float speedMin, float speedMax) {
         for (int i = 0; i < stars.length; i++) {
             stars[i] = new Star();
             stars[i].x = MathUtils.random(worldWidth);

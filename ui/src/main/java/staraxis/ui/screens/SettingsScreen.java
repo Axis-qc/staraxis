@@ -10,10 +10,8 @@ import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.scenes.scene2d.utils.DragAndDrop;
 import com.badlogic.gdx.scenes.scene2d.ui.CheckBox;
-import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Slider;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
-import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.utils.Disposable;
 import staraxis.ui.Gui;
@@ -27,6 +25,8 @@ import staraxis.ui.settings.ModMetadataRepository;
 import staraxis.ui.settings.ModOrderRepository;
 import staraxis.ui.settings.SettingsRepository;
 import staraxis.ui.widgets.MenuEntry;
+import staraxis.ui.widgets.VectorButton;
+import staraxis.ui.widgets.VectorLabel;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -153,17 +153,19 @@ public class SettingsScreen implements Disposable {
             return;
         Group g = (Group) root;
 
-        TextButton resBtn = g.findActor("resolution_button");
+        VectorButton resBtn = g.findActor("resolution_button");
         if (resBtn != null)
             resBtn.setText(currentSettings.resolution);
 
-        TextButton fpsBtn = g.findActor("fps_limit_button");
+        VectorButton fpsBtn = g.findActor("fps_limit_button");
         if (fpsBtn != null)
             updateFpsLimitButtonText(fpsBtn);
 
-        TextButton vsyncBtn = g.findActor("vsync_button");
+        VectorButton vsyncBtn = g.findActor("vsync_button");
         if (vsyncBtn != null)
             updateVsyncButtonText(vsyncBtn);
+
+        refreshGpuButton();
 
         Slider vol = g.findActor("master_volume_slider");
         if (vol != null)
@@ -279,11 +281,11 @@ public class SettingsScreen implements Disposable {
                 ((MenuEntry) a).setSelected(active);
                 continue;
             }
-            if (!(a instanceof TextButton)) {
+            if (!(a instanceof VectorButton)) {
                 continue;
             }
 
-            TextButton b = (TextButton) a;
+            VectorButton b = (VectorButton) a;
 
             b.setColor(white);
             if (active) {
@@ -548,6 +550,20 @@ public class SettingsScreen implements Disposable {
             fpsPopup.setVisible(false);
     }
 
+    public void toggleGpu() {
+        java.util.List<String> gpus = staraxis.ui.settings.GpuService.available;
+        if (gpus.size() <= 1) return;
+        currentSettings.gpuIndex = (currentSettings.gpuIndex + 1) % gpus.size();
+        refreshGpuButton();
+    }
+
+    public void selectGpu(int index) {
+        java.util.List<String> gpus = staraxis.ui.settings.GpuService.available;
+        if (index < 0 || index >= gpus.size()) return;
+        currentSettings.gpuIndex = index;
+        refreshGpuButton();
+    }
+
     public void toggleVsync() {
         currentSettings.vsync = !currentSettings.vsync;
         Gdx.graphics.setVSync(currentSettings.vsync);
@@ -603,7 +619,7 @@ public class SettingsScreen implements Disposable {
 
     private void refreshUiScaleLabel() {
         if (root instanceof Group) {
-            Label label = ((Group) root).findActor("ui_scale_label");
+            VectorLabel label = ((Group) root).findActor("ui_scale_label");
             if (label != null)
                 label.setText(String.format("%.1fx", currentSettings.uiScale));
         }
@@ -611,7 +627,7 @@ public class SettingsScreen implements Disposable {
 
     private void refreshFontScaleLabel() {
         if (root instanceof Group) {
-            Label label = ((Group) root).findActor("font_scale_label");
+            VectorLabel label = ((Group) root).findActor("font_scale_label");
             if (label != null)
                 label.setText(String.format("%.1fx", currentSettings.fontScale));
         }
@@ -619,7 +635,7 @@ public class SettingsScreen implements Disposable {
 
     private void refreshResolutionButton() {
         if (root instanceof Group) {
-            TextButton b = ((Group) root).findActor("resolution_button");
+            VectorButton b = ((Group) root).findActor("resolution_button");
             if (b != null)
                 b.setText(currentSettings.resolution);
         }
@@ -635,7 +651,7 @@ public class SettingsScreen implements Disposable {
 
     private void refreshVsyncButton() {
         if (root instanceof Group) {
-            TextButton b = ((Group) root).findActor("vsync_button");
+            VectorButton b = ((Group) root).findActor("vsync_button");
             if (b != null)
                 updateVsyncButtonText(b);
         }
@@ -643,17 +659,31 @@ public class SettingsScreen implements Disposable {
 
     private void refreshFpsLimitButton() {
         if (root instanceof Group) {
-            TextButton b = ((Group) root).findActor("fps_limit_button");
+            VectorButton b = ((Group) root).findActor("fps_limit_button");
             if (b != null)
                 updateFpsLimitButtonText(b);
         }
     }
 
-    private void updateVsyncButtonText(TextButton button) {
+    private void refreshGpuButton() {
+        if (root instanceof Group) {
+            VectorButton b = ((Group) root).findActor("gpu_button");
+            if (b != null) {
+                String raw = staraxis.ui.settings.GpuService.getSelectedName(currentSettings.gpuIndex);
+                // 按钮 280px 约容纳 28 个英文字符，超长则截断
+                if (raw.length() > 28)
+                    raw = raw.substring(0, 25) + "...";
+                var gpus = staraxis.ui.settings.GpuService.available;
+                b.setText(raw + (gpus.size() > 1 ? " (" + (currentSettings.gpuIndex + 1) + "/" + gpus.size() + ")" : ""));
+            }
+        }
+    }
+
+    private void updateVsyncButtonText(VectorButton button) {
         button.setText(gui.i18n(currentSettings.vsync ? "common.on" : "common.off"));
     }
 
-    private void updateFpsLimitButtonText(TextButton button) {
+    private void updateFpsLimitButtonText(VectorButton button) {
         button.setText(currentSettings.fpsLimit == 0 ? gui.i18n("settings.unlimited")
                 : String.valueOf(currentSettings.fpsLimit));
     }
@@ -703,7 +733,7 @@ public class SettingsScreen implements Disposable {
                 detailActor.setVisible(false);
             }
 
-            Label expandLabel = rowGroup.findActor("expand");
+            VectorLabel expandLabel = rowGroup.findActor("expand");
             if (expandLabel != null) {
                 expandLabel.setText(">");
             }
@@ -731,7 +761,7 @@ public class SettingsScreen implements Disposable {
                 });
             }
 
-            Label nameLabel = rowGroup.findActor("mod_name");
+            VectorLabel nameLabel = rowGroup.findActor("mod_name");
             if (nameLabel != null) {
                 nameLabel.addListener(new ClickListener() {
                     @Override
@@ -797,11 +827,11 @@ public class SettingsScreen implements Disposable {
             Actor modName = ((Group) rowActor).findActor("mod_name");
             Actor compat = ((Group) rowActor).findActor("mod_compat");
 
-            String nameText = modName instanceof Label ? ((Label) modName).getText().toString() : "";
-            String compatText = compat instanceof Label ? ((Label) compat).getText().toString() : "";
+            String nameText = modName instanceof VectorLabel ? ((VectorLabel) modName).getText() : "";
+            String compatText = compat instanceof VectorLabel ? ((VectorLabel) compat).getText() : "";
 
-            Label nameLabel = new Label(nameText, gui.get(com.badlogic.gdx.scenes.scene2d.ui.Skin.class));
-            Label compatLabel = new Label(compatText, gui.get(com.badlogic.gdx.scenes.scene2d.ui.Skin.class));
+            VectorLabel nameLabel = new VectorLabel(gui.get(com.badlogic.gdx.graphics.g2d.BitmapFont.class), nameText);
+            VectorLabel compatLabel = new VectorLabel(gui.get(com.badlogic.gdx.graphics.g2d.BitmapFont.class), compatText);
             nameLabel.getColor().a = 0.95f;
             compatLabel.getColor().a = 0.85f;
 
