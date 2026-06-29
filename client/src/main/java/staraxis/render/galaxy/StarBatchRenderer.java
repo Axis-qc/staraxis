@@ -68,7 +68,7 @@ public class StarBatchRenderer {
             void main() {
                 v_color = a_color;
                 gl_Position = u_projViewTrans * vec4(a_position, 1.0);
-                gl_PointSize = 3.0;
+                gl_PointSize = 6.0;
             }
             """;
 
@@ -78,7 +78,15 @@ public class StarBatchRenderer {
             #endif
             varying vec4 v_color;
             void main() {
-                gl_FragColor = v_color;
+                // gl_PointCoord: (0,0)左上 -> (1,1)右下
+                vec2 center = gl_PointCoord - vec2(0.5);
+                float dist = length(center);
+                if (dist > 0.5) {
+                    discard;
+                }
+                // 边缘柔化
+                float alpha = 1.0 - smoothstep(0.35, 0.5, dist);
+                gl_FragColor = vec4(v_color.rgb, v_color.a * alpha);
             }
             """;
 
