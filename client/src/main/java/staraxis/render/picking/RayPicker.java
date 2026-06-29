@@ -1,7 +1,5 @@
 package staraxis.render.picking;
 
-import com.badlogic.gdx.math.Intersector;
-import com.badlogic.gdx.math.Plane;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.math.collision.Ray;
 
@@ -12,13 +10,17 @@ import staraxis.render.WorldCamera;
 /**
  * RayPicker（射线拾取器）。
  *
- * 在 Galaxy View 中，从相机发射射线，找到最近的恒星。
- * 返回选中的 starId（-1 表示未选中）。
+ * 在 Galaxy View 中，从相机发射射线，计算到每个恒星球体中心的最近距离。
+ * 选中距离最小的恒星（在阈值内）。
  */
 public class RayPicker {
 
-    /** 拾取距离阈值（GU），鼠标距离恒星中心小于此值视为选中。 */
-    private double pickThreshold = 500.0;
+    /** 临时向量复用（避免GC）。 */
+    private final Vector3 tmpV1 = new Vector3();
+    private final Vector3 tmpV2 = new Vector3();
+
+    /** 拾取半径（GU）。 */
+    private double pickRadius = 600.0;
 
     /** 缓存的悬停恒星ID。 */
     private long hoveredStarId = -1;
@@ -34,25 +36,27 @@ public class RayPicker {
     public void updateHovered(WorldCamera camera, GalaxyData galaxy, int screenX, int screenY) {
         Ray ray = camera.camera.getPickRay(screenX, screenY);
 
-        // 与星系盘面（Y=0）求交
-        Plane diskPlane = new Plane(new Vector3(0, 1, 0), 0);
-        Vector3 hitPoint = new Vector3();
-        boolean hit = Intersector.intersectRayPlane(ray, diskPlane, hitPoint);
-
         hoveredStarId = -1;
+        double bestDist = pickRadius;
 
-        if (hit) {
-            double bestDist = pickThreshold;
+        for (StarPosition star : galaxy.stars) {
+            // 计算射线到恒星球体中心的最短距离
+            // C = O + D * t, t = (P - O)·D
+            tmpV1.set(ray.origin);
+            tmpV2.set((float) star.galaxyX(), (float) star.galaxyY(), (float) star.galaxyZ());
 
-            for (StarPosition star : galaxy.stars) {
-                double dx = hitPoint.x - star.galaxyX();
-                double dz = hitPoint.z - star.galaxyZ();
-                double dist = Math.sqrt(dx * dx + dz * dz);
+            float dot = tmpV2.sub(tmpV1).dot(ray.direction);
 
-                if (dist < bestDist) {
-                    bestDist = dist;
-                    hoveredStarId = star.starId();
-                }
+            // 射线起点的垂足位置
+            tmpV1.set(ray.direction).scl(dot).add(ray.origin);
+
+            // 垂足到恒星中心的距离
+            double dist = tmpV2.set((float) star.galaxyX(), (float) star.galaxyY(), (float) star.galaxyZ())
+                .sub(tmpV1).len();
+
+            if (dist < bestDist) {
+                bestDist = dist;
+                hoveredStarId = star.starId();
             }
         }
     }
@@ -65,9 +69,9 @@ public class RayPicker {
     }
 
     /**
-     * 设置拾取距离阈值。
+     * 设置拾取半径。
      */
-    public void setPickThreshold(double threshold) {
-        this.pickThreshold = threshold;
+    public void setPickRadius(double radius) {
+        this.pickRadius = radius;
     }
 }
