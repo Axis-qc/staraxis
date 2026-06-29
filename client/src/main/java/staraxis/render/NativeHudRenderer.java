@@ -21,8 +21,6 @@ import staraxis.ui.FontProvider;
  */
 public class NativeHudRenderer {
 
-    private static final String FONT_PATH = "fonts/chinese/Alibaba-PuHuiTi-H.ttf";
-
     private final OrthographicCamera camera;
     private final Viewport viewport;
     private final ShapeRenderer shapes;
@@ -36,7 +34,7 @@ public class NativeHudRenderer {
         shapes = new ShapeRenderer();
         batch = new SpriteBatch();
         layout = new GlyphLayout();
-        BitmapFont ttfFont = FontProvider.tryCreateFontFromTtfOrNull(FONT_PATH, 20);
+        BitmapFont ttfFont = FontProvider.createHudFont();
         font = ttfFont != null ? ttfFont : FontProvider.createDefaultFont();
         font.setUseIntegerPositions(true);
     }

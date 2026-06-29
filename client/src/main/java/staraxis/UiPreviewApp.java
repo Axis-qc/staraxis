@@ -50,11 +50,9 @@ public class UiPreviewApp implements ApplicationListener {
         Skin skin = UiSkinLoader.loadDefault("ui/uiskin/uiskin.json");
 
         BitmapFont defaultFont = FontProvider.createDefaultFont();
-        BitmapFont ttfFont = FontProvider.tryCreateFontFromTtfOrNull("fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf",
-                28);
+        BitmapFont ttfFont = FontProvider.createUiFont();
         BitmapFont finalFont = (ttfFont != null) ? ttfFont : defaultFont;
-        BitmapFont vectorTtfFont = FontProvider.tryCreateFontFromTtfOrNull("fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf",
-                96);
+        BitmapFont vectorTtfFont = FontProvider.createVectorFont();
         BitmapFont vectorFont = (vectorTtfFont != null) ? vectorTtfFont : finalFont;
 
         skin.add("default-font", finalFont, BitmapFont.class);

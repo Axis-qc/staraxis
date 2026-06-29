@@ -10,6 +10,7 @@ import com.badlogic.gdx.math.Interpolation;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.InputListener;
+import staraxis.ui.FontProvider;
 import staraxis.ui.effects.MenuEntryEffect;
 
 public class MenuEntry extends Actor {
@@ -124,7 +125,7 @@ public class MenuEntry extends Actor {
 
         float oldScaleX = font.getData().scaleX;
         float oldScaleY = font.getData().scaleY;
-        float scale = Math.max(0.1f, effect.text.size / 96f);
+        float scale = Math.max(0.1f, effect.text.size / FontProvider.VECTOR_FONT_GEN_SIZE);
         font.getData().setScale(scale);
 
         Color textColor = effect.text.color.cpy().lerp(effect.text.hoverColor, p);

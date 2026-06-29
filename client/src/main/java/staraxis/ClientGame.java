@@ -17,6 +17,7 @@ import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import staraxis.game.StarAxisGameRuntime;
 import staraxis.logging.GdxToSlf4jLogger;
 import staraxis.render.NativeWorldRenderer;
+import staraxis.render.TestSceneRenderer;
 import staraxis.ui.FontProvider;
 import staraxis.ui.Gui;
 import staraxis.ui.UiSkinLoader;
@@ -47,6 +48,10 @@ public class ClientGame implements ApplicationListener {
     private NativeWorldRenderer worldRenderer;
     private StarfieldBackground starfield;
 
+    /** 3D 宇宙测试场景（按 T 键切换）喵 */
+    private TestSceneRenderer testScene;
+    private boolean testMode = false;
+
     @Override
     public void create() {
         if (Gdx.app != null) {
@@ -66,11 +71,9 @@ public class ClientGame implements ApplicationListener {
         Skin skin = UiSkinLoader.loadDefault("ui/uiskin/uiskin.json");
 
         BitmapFont defaultFont = FontProvider.createDefaultFont();
-        BitmapFont ttfFont = FontProvider.tryCreateFontFromTtfOrNull(
-                "fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf", 28);
+        BitmapFont ttfFont = FontProvider.createUiFont();
         BitmapFont finalFont = (ttfFont != null) ? ttfFont : defaultFont;
-        BitmapFont vectorTtfFont = FontProvider.tryCreateFontFromTtfOrNull(
-                "fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf", 96);
+        BitmapFont vectorTtfFont = FontProvider.createVectorFont();
         BitmapFont vectorFont = (vectorTtfFont != null) ? vectorTtfFont : finalFont;
 
         skin.add("default-font", finalFont, BitmapFont.class);
@@ -123,6 +126,9 @@ public class ClientGame implements ApplicationListener {
         if (worldRenderer != null) {
             worldRenderer.resize(width, height);
         }
+        if (testScene != null) {
+            testScene.resize(width, height);
+        }
         if (starfield != null) {
             starfield.resize(width, height);
         }
@@ -130,10 +136,25 @@ public class ClientGame implements ApplicationListener {
 
     @Override
     public void render() {
+        float dt = Gdx.graphics.getDeltaTime();
+
+        // T 键切换测试场景喵
+        if (Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.T)) {
+            testMode = !testMode;
+            if (testMode && testScene == null) {
+                testScene = new TestSceneRenderer();
+                testScene.resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+            }
+        }
+
+        // 测试模式：纯 3D 场景，不跑游戏逻辑喵
+        if (testMode && testScene != null) {
+            testScene.render(dt);
+            return;
+        }
+
         Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-
-        float dt = Gdx.graphics.getDeltaTime();
 
         runtime = gui.getRuntime();
         if (runtime != null) {
@@ -195,6 +216,10 @@ public class ClientGame implements ApplicationListener {
         if (worldRenderer != null) {
             worldRenderer.dispose();
             worldRenderer = null;
+        }
+        if (testScene != null) {
+            testScene.dispose();
+            testScene = null;
         }
         if (runtime != null) {
             runtime.stop();

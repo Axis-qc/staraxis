@@ -8,6 +8,7 @@ import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.InputListener;
+import staraxis.ui.FontProvider;
 import staraxis.ui.effects.VectorButtonEffect;
 
 public class VectorButton extends Actor {
@@ -106,7 +107,7 @@ public class VectorButton extends Actor {
 
         float oldScaleX = font.getData().scaleX;
         float oldScaleY = font.getData().scaleY;
-        font.getData().setScale(22f / 96f);
+        font.getData().setScale(22f / FontProvider.VECTOR_FONT_GEN_SIZE);
         Color textColor = hovered ? effect.text.hoverColor : effect.text.color;
         font.setColor(textColor);
         font.draw(batch, text, x + 14, y + (h + font.getCapHeight()) / 2f);

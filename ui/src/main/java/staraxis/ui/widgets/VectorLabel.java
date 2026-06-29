@@ -4,6 +4,7 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.scenes.scene2d.Actor;
+import staraxis.ui.FontProvider;
 import staraxis.ui.effects.VectorLabelEffect;
 
 public class VectorLabel extends Actor {
@@ -46,7 +47,7 @@ public class VectorLabel extends Actor {
     public void draw(Batch batch, float parentAlpha) {
         float oldScaleX = font.getData().scaleX;
         float oldScaleY = font.getData().scaleY;
-        float scale = Math.max(0.1f, effect.text.size / 96f);
+        float scale = Math.max(0.1f, effect.text.size / FontProvider.VECTOR_FONT_GEN_SIZE);
         font.getData().setScale(scale);
         font.setColor(effect.text.color);
         font.draw(batch, text, getX(), getY() + getHeight());

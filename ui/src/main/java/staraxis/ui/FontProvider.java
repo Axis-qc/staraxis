@@ -16,6 +16,21 @@ public final class FontProvider {
     private FontProvider() {
     }
 
+    // 字体分辨率倍率：生成位图时使用逻辑大小 * 此倍率，提升纹理清晰度
+    public static final float RESOLUTION_MULTIPLIER = 2.0f;
+
+    // 逻辑字体大小
+    public static final int UI_FONT_SIZE = 28;
+    public static final int VECTOR_FONT_SIZE = 96;
+    public static final int HUD_FONT_SIZE = 20;
+
+    // 矢量字体实际生成大小（供外部缩放计算使用）
+    public static final float VECTOR_FONT_GEN_SIZE = VECTOR_FONT_SIZE * RESOLUTION_MULTIPLIER;
+
+    // 字体文件路径
+    public static final String FONT_PATH = "fonts/chinese/AlibabaPuHuiTi-3-65-Medium.ttf";
+    public static final String HUD_FONT_PATH = "fonts/chinese/Alibaba-PuHuiTi-H.ttf";
+
     private static final java.util.List<FreeTypeFontGenerator> incrementalGenerators = new java.util.ArrayList<>();
 
     public static void disposeAllIncremental() {
@@ -28,6 +43,40 @@ public final class FontProvider {
     public static BitmapFont createDefaultFont() {
         Gdx.app.log("FontProvider", "使用 LibGDX 默认 BitmapFont 作为兜底字体");
         return new BitmapFont();
+    }
+
+    public static BitmapFont createUiFont() {
+        int genSize = Math.round(UI_FONT_SIZE * RESOLUTION_MULTIPLIER);
+        BitmapFont font = tryCreateFontFromTtfOrNull(FONT_PATH, genSize);
+        if (font != null) {
+            applyHiDpiScale(font);
+            return font;
+        }
+        return createDefaultFont();
+    }
+
+    public static BitmapFont createVectorFont() {
+        int genSize = Math.round(VECTOR_FONT_SIZE * RESOLUTION_MULTIPLIER);
+        BitmapFont font = tryCreateFontFromTtfOrNull(FONT_PATH, genSize);
+        if (font != null) {
+            return font;
+        }
+        return createDefaultFont();
+    }
+
+    public static BitmapFont createHudFont() {
+        int genSize = Math.round(HUD_FONT_SIZE * RESOLUTION_MULTIPLIER);
+        BitmapFont font = tryCreateFontFromTtfOrNull(HUD_FONT_PATH, genSize);
+        if (font != null) {
+            applyHiDpiScale(font);
+            return font;
+        }
+        return createDefaultFont();
+    }
+
+    private static void applyHiDpiScale(BitmapFont font) {
+        float invScale = 1.0f / RESOLUTION_MULTIPLIER;
+        font.getData().setScale(invScale);
     }
 
     public static BitmapFont tryCreateFontFromTtfOrNull(String ttfInternalPath, int size) {
