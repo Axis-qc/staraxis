@@ -3,6 +3,7 @@ package staraxis;
 import com.badlogic.gdx.ApplicationListener;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputMultiplexer;
+import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
@@ -10,8 +11,6 @@ import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
-import com.badlogic.gdx.utils.JsonReader;
-import com.badlogic.gdx.utils.JsonValue;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 
 import staraxis.game.StarAxisGameRuntime;
@@ -19,6 +18,7 @@ import staraxis.game.astro.StarSystem;
 import staraxis.logging.GdxToSlf4jLogger;
 import staraxis.render.ViewManager;
 import staraxis.render.WorldCamera;
+import staraxis.render.util.MenuBackgroundLoader;
 import staraxis.render.galaxy.GalaxyViewRenderer;
 import staraxis.render.picking.RayPicker;
 import staraxis.render.system.SystemViewRenderer;
@@ -44,6 +44,9 @@ import staraxis.ui.widgets.StarfieldBackground;
  */
 public class ClientGame implements ApplicationListener {
 
+    /** 平台侧注入的初始化回调，在 GL 上下文就绪后执行（如 GPU 枚举） */
+    public static Runnable onReady;
+
     private Stage stage;
     private Gui gui;
     private StarAxisGameRuntime runtime;
@@ -59,19 +62,85 @@ public class ClientGame implements ApplicationListener {
     // 当前选中的恒星系（System View）
     private StarSystem currentSystem;
 
+    // UI 调试叠加层（F3 切换），显示坐标原点/鼠标坐标/悬停元素边框
+    private UiDebug uiDebug;
+
     @Override
     public void create() {
+        // 平台侧回调（GPU 枚举等，GL 上下文已就绪）
+        if (onReady != null) {
+            onReady.run();
+            onReady = null; // 只执行一次
+        }
+
         if (Gdx.app != null) {
             Gdx.app.setApplicationLogger(new GdxToSlf4jLogger());
         }
 
         stage = new Stage(new ScreenViewport());
-        Gdx.input.setInputProcessor(new InputMultiplexer(stage));
+
+        // 滚轮事件处理器——将滚轮滚动转发给 WorldCamera
+        InputProcessor scrollProcessor = new InputProcessor() {
+            @Override
+            public boolean keyDown(int keycode) {
+                return false;
+            }
+
+            @Override
+            public boolean keyUp(int keycode) {
+                return false;
+            }
+
+            @Override
+            public boolean keyTyped(char character) {
+                return false;
+            }
+
+            @Override
+            public boolean touchDown(int screenX, int screenY, int pointer, int button) {
+                return false;
+            }
+
+            @Override
+            public boolean touchUp(int screenX, int screenY, int pointer, int button) {
+                return false;
+            }
+
+            @Override
+            public boolean touchCancelled(int screenX, int screenY, int pointer, int button) {
+                return false;
+            }
+
+            @Override
+            public boolean touchDragged(int screenX, int screenY, int pointer) {
+                return false;
+            }
+
+            @Override
+            public boolean mouseMoved(int screenX, int screenY) {
+                return false;
+            }
+
+            @Override
+            public boolean scrolled(float amountX, float amountY) {
+                if (spaceCamera != null) {
+                    spaceCamera.onScroll(amountY);
+                }
+                return false;
+            }
+        };
+
+        InputMultiplexer multiplexer = new InputMultiplexer();
+        multiplexer.addProcessor(scrollProcessor);
+        multiplexer.addProcessor(stage);
+        Gdx.input.setInputProcessor(multiplexer);
 
         I18nService i18nService = new I18nService();
         i18nService.load("zh");
 
-        gui = new Gui(stage, s -> {}, s -> {});
+        gui = new Gui(stage, s -> {
+        }, s -> {
+        });
         gui.register(I18nService.class, i18nService);
         gui.register(SettingsRepository.class, new SettingsRepository());
 
@@ -97,7 +166,7 @@ public class ClientGame implements ApplicationListener {
         ShapeRenderer sr = new ShapeRenderer();
         gui.register(ShapeRenderer.class, sr);
 
-        starfield = new StarfieldBackground(sr, loadMainMenuBackgroundImage());
+        starfield = new StarfieldBackground(sr, MenuBackgroundLoader.loadBackgroundImage());
         starfield.init(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 
         UiFactory factory = gui.get(UiFactory.class);
@@ -123,11 +192,18 @@ public class ClientGame implements ApplicationListener {
 
         initSpaceRendering();
 
+        // UI 调试面板初始化（F3 打开，JSON 声明式 UI）
+        uiDebug = new UiDebug(stage, gui.get(ShapeRenderer.class), vectorFont,
+                gui.get(staraxis.ui.json.UiParser.class),
+                gui.get(staraxis.ui.json.UiFactory.class));
+        uiDebug.setCamera(spaceCamera);
+
         gui.showMainMenu();
     }
 
     private void initSpaceRendering() {
         spaceCamera = new WorldCamera();
+        spaceCamera.setMaxOrbitDist(50000); // Galaxy 视图默认最远 5 万 GU
         viewManager = new ViewManager();
         rayPicker = new RayPicker();
         galaxyViewRenderer = new GalaxyViewRenderer();
@@ -141,12 +217,6 @@ public class ClientGame implements ApplicationListener {
         }
         if (spaceCamera != null) {
             spaceCamera.resize(width, height);
-        }
-        if (galaxyViewRenderer != null) {
-            galaxyViewRenderer.resize(width, height);
-        }
-        if (systemViewRenderer != null) {
-            systemViewRenderer.resize(width, height);
         }
         if (starfield != null) {
             starfield.resize(width, height);
@@ -174,6 +244,12 @@ public class ClientGame implements ApplicationListener {
 
         stage.act(dt);
         stage.draw();
+
+        // UI 调试叠加层（F3 开关）
+        if (uiDebug != null) {
+            uiDebug.update();
+            uiDebug.render();
+        }
     }
 
     private void renderSpaceScene(float dt) {
@@ -187,6 +263,7 @@ public class ClientGame implements ApplicationListener {
                 viewManager.switchToGalaxy();
                 currentSystem = null;
                 systemViewRenderer.resetTime();
+                spaceCamera.setMaxOrbitDist(50000); // 回到 Galaxy 放宽最远距离
                 spaceCamera.resetView();
             }
         }
@@ -202,7 +279,7 @@ public class ClientGame implements ApplicationListener {
         var state = runtime.getRealTimeWorldStateReadonly();
 
         rayPicker.updateHovered(spaceCamera, state,
-            Gdx.input.getX(), Gdx.input.getY(), galaxyViewRenderer);
+                Gdx.input.getX(), Gdx.input.getY(), galaxyViewRenderer);
 
         // 更新悬停恒星坐标显示
         InGameHudScreen hud = gui.get(InGameHudScreen.class);
@@ -218,6 +295,7 @@ public class ClientGame implements ApplicationListener {
                     currentSystem = system;
                     viewManager.switchToSystem(selectedStarId);
                     systemViewRenderer.resetTime();
+                    spaceCamera.setMaxOrbitDist(20000); // System 视图最远 2 万 GU
                     spaceCamera.setZoom(5.0);
                     spaceCamera.target.set(0, 0, 0);
                 }
@@ -228,7 +306,8 @@ public class ClientGame implements ApplicationListener {
     }
 
     private void renderSystemView(float dt) {
-        if (currentSystem == null) return;
+        if (currentSystem == null)
+            return;
 
         systemViewRenderer.advanceTime(dt);
         systemViewRenderer.render(currentSystem, spaceCamera);
@@ -236,10 +315,12 @@ public class ClientGame implements ApplicationListener {
 
     private StarSystem findSystemByStarId(long starId) {
         var ws = runtime.getWorldStateForSimOnly();
-        if (ws == null || ws.astro == null) return null;
+        if (ws == null || ws.astro == null)
+            return null;
 
         for (StarSystem sys : ws.astro.getSystemsView()) {
-            if (sys == null) continue;
+            if (sys == null)
+                continue;
             for (var star : sys.stars) {
                 if (star != null && star.entityId == starId) {
                     return sys;
@@ -247,12 +328,6 @@ public class ClientGame implements ApplicationListener {
             }
         }
         return null;
-    }
-
-    private String loadMainMenuBackgroundImage() {
-        JsonValue root = new JsonReader().parse(Gdx.files.internal("ui/gameui/main-menu/main_menu.json"));
-        JsonValue props = root.get("properties");
-        return props == null ? null : props.getString("backgroundImage", null);
     }
 
     @Override
@@ -281,6 +356,10 @@ public class ClientGame implements ApplicationListener {
         if (starfield != null) {
             starfield.dispose();
             starfield = null;
+        }
+        if (uiDebug != null) {
+            uiDebug.dispose();
+            uiDebug = null;
         }
         if (galaxyViewRenderer != null) {
             galaxyViewRenderer.dispose();

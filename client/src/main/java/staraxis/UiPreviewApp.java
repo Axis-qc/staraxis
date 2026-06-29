@@ -10,8 +10,6 @@ import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
-import com.badlogic.gdx.utils.JsonReader;
-import com.badlogic.gdx.utils.JsonValue;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import staraxis.ui.FontProvider;
 import staraxis.ui.Gui;
@@ -24,6 +22,7 @@ import staraxis.ui.settings.SettingsRepository;
 import staraxis.ui.screens.InGameHudScreen;
 import staraxis.ui.screens.SettingsScreen;
 import staraxis.ui.screens.WorldSettingsScreen;
+import staraxis.render.util.MenuBackgroundLoader;
 import staraxis.ui.widgets.DevelopingDialog;
 import staraxis.ui.widgets.StarfieldBackground;
 
@@ -69,7 +68,7 @@ public class UiPreviewApp implements ApplicationListener {
         ShapeRenderer sr = new ShapeRenderer();
         gui.register(ShapeRenderer.class, sr);
 
-        starfield = new StarfieldBackground(sr, loadMainMenuBackgroundImage());
+        starfield = new StarfieldBackground(sr, MenuBackgroundLoader.loadBackgroundImage());
         starfield.init(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 
         UiFactory factory = gui.get(UiFactory.class);
@@ -118,12 +117,6 @@ public class UiPreviewApp implements ApplicationListener {
 
         stage.act(dt);
         stage.draw();
-    }
-
-    private String loadMainMenuBackgroundImage() {
-        JsonValue root = new JsonReader().parse(Gdx.files.internal("ui/gameui/main-menu/main_menu.json"));
-        JsonValue props = root.get("properties");
-        return props == null ? null : props.getString("backgroundImage", null);
     }
 
     @Override
