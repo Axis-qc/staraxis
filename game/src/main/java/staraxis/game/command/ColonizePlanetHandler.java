@@ -2,8 +2,8 @@ package staraxis.game.command;
 
 import staraxis.game.state.WorldState;
 import staraxis.game.entity.Entity;
+import staraxis.game.space.SpacePosition;
 import staraxis.game.ship.ShipBody;
-import staraxis.game.world.Vec2d;
 
 /**
  * ColonizePlanetHandler
@@ -81,7 +81,7 @@ public class ColonizePlanetHandler implements CommandHandler<ColonizePlanetComma
             throw new IllegalArgumentException("entity_position_missing");
         }
 
-        double distance = distance(shipEntity.posWorldGU, planetEntity.posWorldGU);
+        double distance = shipEntity.posWorldGU.distanceTo(planetEntity.posWorldGU);
 
         // 验证距离是否在允许的殖民范围内喵（1000GU）喵
         if (distance > COLONIZATION_MAX_DISTANCE_GU) {
@@ -167,12 +167,4 @@ public class ColonizePlanetHandler implements CommandHandler<ColonizePlanetComma
         }
     }
 
-    /**
-     * 计算两点之间的距离（GU）喵。
-     */
-    private double distance(Vec2d a, Vec2d b) {
-        double dx = a.x() - b.x();
-        double dy = a.y() - b.y();
-        return Math.sqrt(dx * dx + dy * dy);
-    }
 }

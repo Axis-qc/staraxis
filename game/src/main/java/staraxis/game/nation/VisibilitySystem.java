@@ -2,6 +2,7 @@ package staraxis.game.nation;
 
 import staraxis.game.state.WorldState;
 import staraxis.game.world.WorldSector;
+import staraxis.game.space.SpacePosition;
 import staraxis.game.world.Vec2d;
 import staraxis.game.world.hex.SectorCoord;
 import staraxis.game.entity.Entity;
@@ -292,13 +293,13 @@ public class VisibilitySystem {
      * @param b 点B
      * @return 距离
      */
-    private double calculateDistance(Vec2d a, Vec2d b) {
+    private double calculateDistance(SpacePosition a, Vec2d b) {
         if (a == null || b == null) {
             return Double.MAX_VALUE;
         }
         double dx = a.x() - b.x();
-        double dy = a.y() - b.y();
-        return Math.sqrt(dx * dx + dy * dy);
+        double dz = a.z() - b.y();
+        return Math.sqrt(dx * dx + dz * dz);
     }
 
     /**

@@ -1,7 +1,7 @@
 package staraxis.game.ship;
 
+import staraxis.game.space.SpacePosition;
 import staraxis.game.state.WorldState;
-import staraxis.game.world.Vec2d;
 
 /**
  * ShipFullMovementSystem（舰船完整移动系统）喵。
@@ -25,8 +25,8 @@ public class ShipFullMovementSystem extends AbstractShipMovementSystem {
 
     void updateShipMovement(ShipBody ship, double dtGameSeconds, WorldState worldState) {
         double dx = ship.movementTarget.x() - ship.posWorldGU.x();
-        double dy = ship.movementTarget.y() - ship.posWorldGU.y();
-        double distanceToTarget = Math.sqrt(dx * dx + dy * dy);
+        double dz = ship.movementTarget.z() - ship.posWorldGU.z();
+        double distanceToTarget = Math.sqrt(dx * dx + dz * dz);
 
         if (distanceToTarget < TARGET_ARRIVAL_THRESHOLD_GU) {
             completeMoveAtTarget(ship, ship.movementTarget, worldState);
@@ -34,12 +34,12 @@ public class ShipFullMovementSystem extends AbstractShipMovementSystem {
         }
 
         double moveDirX = dx / distanceToTarget;
-        double moveDirY = dy / distanceToTarget;
+        double moveDirZ = dz / distanceToTarget;
 
         double headingRad = Math.toRadians(ship.currentHeadingDeg);
         double bowX = Math.cos(headingRad);
-        double bowY = Math.sin(headingRad);
-        double dotProduct = moveDirX * bowX + moveDirY * bowY;
+        double bowZ = Math.sin(headingRad);
+        double dotProduct = moveDirX * bowX + moveDirZ * bowZ;
         double angleDiff = Math.toDegrees(Math.acos(Math.max(-1.0, Math.min(1.0, dotProduct))));
 
         double effectiveMaxSpeed;
@@ -60,35 +60,37 @@ public class ShipFullMovementSystem extends AbstractShipMovementSystem {
         boolean needDecelerate = stopDistance >= distanceToTarget;
 
         double targetVelX = moveDirX * effectiveMaxSpeed;
-        double targetVelY = moveDirY * effectiveMaxSpeed;
+        double targetVelZ = moveDirZ * effectiveMaxSpeed;
 
         if (needDecelerate) {
             double decelAmount = effectiveAcceleration * dtGameSeconds;
             double newSpeed = Math.max(0, currentSpeed - decelAmount);
             if (currentSpeed > VELOCITY_THRESHOLD) {
                 double scale = newSpeed / currentSpeed;
-                ship.velWorldGU = new Vec2d(
+                ship.velWorldGU = new SpacePosition(
                     ship.velWorldGU.x() * scale,
-                    ship.velWorldGU.y() * scale
+                    0,
+                    ship.velWorldGU.z() * scale
                 );
             } else {
-                ship.velWorldGU = new Vec2d(0, 0);
+                ship.velWorldGU = SpacePosition.ORIGIN;
             }
         } else {
             double currentVelX = ship.velWorldGU != null ? ship.velWorldGU.x() : 0.0;
-            double currentVelY = ship.velWorldGU != null ? ship.velWorldGU.y() : 0.0;
+            double currentVelZ = ship.velWorldGU != null ? ship.velWorldGU.z() : 0.0;
             double velDiffX = targetVelX - currentVelX;
-            double velDiffY = targetVelY - currentVelY;
-            double velDiff = Math.sqrt(velDiffX * velDiffX + velDiffY * velDiffY);
+            double velDiffZ = targetVelZ - currentVelZ;
+            double velDiff = Math.sqrt(velDiffX * velDiffX + velDiffZ * velDiffZ);
 
             if (velDiff < VELOCITY_THRESHOLD) {
-                ship.velWorldGU = new Vec2d(targetVelX, targetVelY);
+                ship.velWorldGU = new SpacePosition(targetVelX, 0, targetVelZ);
             } else {
                 double accelAmount = Math.min(velDiff, effectiveAcceleration * dtGameSeconds);
                 double ratio = accelAmount / velDiff;
-                ship.velWorldGU = new Vec2d(
+                ship.velWorldGU = new SpacePosition(
                     currentVelX + velDiffX * ratio,
-                    currentVelY + velDiffY * ratio
+                    0,
+                    currentVelZ + velDiffZ * ratio
                 );
             }
         }
@@ -116,13 +118,13 @@ public class ShipFullMovementSystem extends AbstractShipMovementSystem {
 
     private void decelerateToStop(ShipBody ship, double dtGameSeconds, WorldState worldState) {
         if (ship.velWorldGU == null) {
-            ship.velWorldGU = new Vec2d(0, 0);
+            ship.velWorldGU = SpacePosition.ORIGIN;
             return;
         }
 
         double currentSpeed = speedOf(ship.velWorldGU);
         if (currentSpeed < 1.0) {
-            ship.velWorldGU = new Vec2d(0, 0);
+            ship.velWorldGU = SpacePosition.ORIGIN;
             return;
         }
 
@@ -130,9 +132,10 @@ public class ShipFullMovementSystem extends AbstractShipMovementSystem {
         double newSpeed = Math.max(0, currentSpeed - decelAmount);
         double scale = newSpeed / currentSpeed;
 
-        ship.velWorldGU = new Vec2d(
+        ship.velWorldGU = new SpacePosition(
             ship.velWorldGU.x() * scale,
-            ship.velWorldGU.y() * scale
+            0,
+            ship.velWorldGU.z() * scale
         );
 
         applyVelocity(ship, dtGameSeconds, worldState);

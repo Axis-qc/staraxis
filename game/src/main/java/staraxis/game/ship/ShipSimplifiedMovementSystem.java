@@ -1,7 +1,7 @@
 package staraxis.game.ship;
 
+import staraxis.game.space.SpacePosition;
 import staraxis.game.state.WorldState;
-import staraxis.game.world.Vec2d;
 
 /**
  * ShipSimplifiedMovementSystem（舰船简化移动系统）喵。
@@ -51,13 +51,13 @@ public class ShipSimplifiedMovementSystem extends AbstractShipMovementSystem {
                                                     WorldState worldState) {
         if (command.commandType == MovementCommand.TYPE_STOP) {
             if (ship.velWorldGU == null) {
-                ship.velWorldGU = new Vec2d(0, 0);
+                ship.velWorldGU = SpacePosition.ORIGIN;
                 return;
             }
 
             double currentSpeed = speedOf(ship.velWorldGU);
             if (currentSpeed < VELOCITY_THRESHOLD) {
-                ship.velWorldGU = new Vec2d(0, 0);
+                ship.velWorldGU = SpacePosition.ORIGIN;
                 ship.isMoving = false;
                 ship.lastCompletedClientCommandId = ship.activeClientCommandId;
                 ship.activeClientCommandId = null;
@@ -70,13 +70,15 @@ public class ShipSimplifiedMovementSystem extends AbstractShipMovementSystem {
             double newSpeed = Math.max(0, currentSpeed - decelAmount);
             double scale = newSpeed / currentSpeed;
 
-            ship.velWorldGU = new Vec2d(
+            ship.velWorldGU = new SpacePosition(
                 ship.velWorldGU.x() * scale,
-                ship.velWorldGU.y() * scale
+                0,
+                ship.velWorldGU.z() * scale
             );
-            ship.posWorldGU = new Vec2d(
+            ship.posWorldGU = new SpacePosition(
                 ship.posWorldGU.x() + ship.velWorldGU.x() * dtGameSeconds,
-                ship.posWorldGU.y() + ship.velWorldGU.y() * dtGameSeconds
+                0,
+                ship.posWorldGU.z() + ship.velWorldGU.z() * dtGameSeconds
             );
             return;
         }
@@ -86,17 +88,17 @@ public class ShipSimplifiedMovementSystem extends AbstractShipMovementSystem {
         }
 
         double dx = command.targetPosition.x() - ship.posWorldGU.x();
-        double dy = command.targetPosition.y() - ship.posWorldGU.y();
-        double distance = Math.sqrt(dx * dx + dy * dy);
+        double dz = command.targetPosition.z() - ship.posWorldGU.z();
+        double distance = Math.sqrt(dx * dx + dz * dz);
         if (distance < TARGET_ARRIVAL_THRESHOLD_GU) {
             completeMoveAtTarget(ship, command.targetPosition, worldState);
             return;
         }
 
         double dirX = dx / distance;
-        double dirY = dy / distance;
+        double dirZ = dz / distance;
         double speed = command.maxSpeed * 0.5;
-        ship.velWorldGU = new Vec2d(dirX * speed, dirY * speed);
+        ship.velWorldGU = new SpacePosition(dirX * speed, 0, dirZ * speed);
 
         double projectedTravelDistance = speed * dtGameSeconds;
         if (projectedTravelDistance >= distance) {
@@ -104,14 +106,15 @@ public class ShipSimplifiedMovementSystem extends AbstractShipMovementSystem {
             return;
         }
 
-        ship.posWorldGU = new Vec2d(
+        ship.posWorldGU = new SpacePosition(
             ship.posWorldGU.x() + ship.velWorldGU.x() * dtGameSeconds,
-            ship.posWorldGU.y() + ship.velWorldGU.y() * dtGameSeconds
+            0,
+            ship.posWorldGU.z() + ship.velWorldGU.z() * dtGameSeconds
         );
         ship.sectorCoord = staraxis.game.world.WorldHexLayout.worldToSectorCoord(ship.posWorldGU);
         worldState.markRealtimeDirty();
 
-        double targetHeading = Math.toDegrees(Math.atan2(dirY, dirX));
+        double targetHeading = Math.toDegrees(Math.atan2(dirZ, dirX));
         double headingDiff = normalizeAngle(targetHeading - ship.currentHeadingDeg);
         double maxTurn = command.turnRate * dtGameSeconds;
         if (Math.abs(headingDiff) <= maxTurn) {

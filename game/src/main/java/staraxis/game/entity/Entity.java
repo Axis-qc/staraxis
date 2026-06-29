@@ -1,6 +1,6 @@
 package staraxis.game.entity;
 
-import staraxis.game.world.Vec2d;
+import staraxis.game.space.SpacePosition;
 import staraxis.game.world.hex.SectorCoord;
 
 /**
@@ -27,11 +27,11 @@ public class Entity {
     /** 所在星区坐标（sectorCoord = sectorId 口径）。 */
     public SectorCoord sectorCoord;
 
-    /** 世界坐标（GU）。 */
-    public Vec2d posWorldGU;
+    /** 世界坐标（GU），XZ 为星系平面，Y 为垂直方向。 */
+    public SpacePosition posWorldGU;
 
     /** 世界速度（GU/tick 或 GU/hour，具体口径后续统一）。 */
-    public Vec2d velWorldGU;
+    public SpacePosition velWorldGU;
 
     /** 所属国家/文明 ID（nationId 口径，String 类型，与国家定义 ID 一致）。无归属时为 null。 */
     public String ownerNationId;

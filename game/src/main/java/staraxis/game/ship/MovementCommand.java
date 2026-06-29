@@ -1,6 +1,6 @@
 package staraxis.game.ship;
 
-import staraxis.game.world.Vec2d;
+import staraxis.game.space.SpacePosition;
 
 /**
  * MovementCommand（移动指令）喵。
@@ -25,13 +25,13 @@ public class MovementCommand {
     public final String clientCommandId;
 
     /** 目标位置（世界坐标 GU），仅当 commandType == TYPE_MOVE_TO 时有效喵。 */
-    public final Vec2d targetPosition;
+    public final SpacePosition targetPosition;
 
     /** 起始位置（世界坐标 GU）喵。 */
-    public final Vec2d startPosition;
+    public final SpacePosition startPosition;
 
     /** 起始速度（GU/游戏秒）喵。 */
-    public final Vec2d startVelocity;
+    public final SpacePosition startVelocity;
 
     /** 起始朝向（角度制，0度朝+X方向）喵。 */
     public final double startHeadingDeg;
@@ -87,13 +87,13 @@ public class MovementCommand {
      * @param simulationTick 当前模拟 tick
      * @return 移动指令
      */
-    public static MovementCommand createMoveTo(Vec2d targetPosition, ShipBody ship,
+    public static MovementCommand createMoveTo(SpacePosition targetPosition, ShipBody ship,
                                                String clientCommandId, double gameSeconds, int simulationTick) {
         return new Builder(TYPE_MOVE_TO)
                 .clientCommandId(clientCommandId)
                 .targetPosition(targetPosition)
-                .startPosition(ship.posWorldGU != null ? ship.posWorldGU : new Vec2d(0, 0))
-                .startVelocity(ship.velWorldGU != null ? ship.velWorldGU : new Vec2d(0, 0))
+                .startPosition(ship.posWorldGU != null ? ship.posWorldGU : SpacePosition.ORIGIN)
+                .startVelocity(ship.velWorldGU != null ? ship.velWorldGU : SpacePosition.ORIGIN)
                 .startHeadingDeg(ship.currentHeadingDeg)
                 .startGameSeconds(gameSeconds)
                 .startSimulationTick(simulationTick)
@@ -118,8 +118,8 @@ public class MovementCommand {
         return new Builder(TYPE_STOP)
                 .clientCommandId(clientCommandId)
                 .targetPosition(null)
-                .startPosition(ship.posWorldGU != null ? ship.posWorldGU : new Vec2d(0, 0))
-                .startVelocity(ship.velWorldGU != null ? ship.velWorldGU : new Vec2d(0, 0))
+                .startPosition(ship.posWorldGU != null ? ship.posWorldGU : SpacePosition.ORIGIN)
+                .startVelocity(ship.velWorldGU != null ? ship.velWorldGU : SpacePosition.ORIGIN)
                 .startHeadingDeg(ship.currentHeadingDeg)
                 .startGameSeconds(gameSeconds)
                 .startSimulationTick(simulationTick)
@@ -139,16 +139,14 @@ public class MovementCommand {
      * @param currentGameSeconds 当前游戏秒数
      * @return 如果指令已完成返回 true
      */
-    public boolean isCompleted(Vec2d currentPosition, double currentGameSeconds) {
+    public boolean isCompleted(SpacePosition currentPosition, double currentGameSeconds) {
         if (commandType == TYPE_STOP) {
             // 停止指令：当速度接近0时完成喵
-            double speed = Math.sqrt(startVelocity.x() * startVelocity.x() + startVelocity.y() * startVelocity.y());
+            double speed = startVelocity.length();
             return speed < 0.01;
         } else if (commandType == TYPE_MOVE_TO) {
             // 移动指令：当接近目标时完成喵
-            double dx = targetPosition.x() - currentPosition.x();
-            double dy = targetPosition.y() - currentPosition.y();
-            double distance = Math.sqrt(dx * dx + dy * dy);
+            double distance = currentPosition.distanceTo(targetPosition);
             return distance < 20.0; // 与 ShipMovementSystem 中的阈值一致喵
         }
         return true;
@@ -170,9 +168,9 @@ public class MovementCommand {
     public static class Builder {
         private final int commandType;
         private String clientCommandId;
-        private Vec2d targetPosition;
-        private Vec2d startPosition = new Vec2d(0, 0);
-        private Vec2d startVelocity = new Vec2d(0, 0);
+        private SpacePosition targetPosition;
+        private SpacePosition startPosition = SpacePosition.ORIGIN;
+        private SpacePosition startVelocity = SpacePosition.ORIGIN;
         private double startHeadingDeg = 0.0;
         private double startGameSeconds = 0.0;
         private int startSimulationTick = 0;
@@ -192,17 +190,17 @@ public class MovementCommand {
             return this;
         }
 
-        public Builder targetPosition(Vec2d targetPosition) {
+        public Builder targetPosition(SpacePosition targetPosition) {
             this.targetPosition = targetPosition;
             return this;
         }
 
-        public Builder startPosition(Vec2d startPosition) {
+        public Builder startPosition(SpacePosition startPosition) {
             this.startPosition = startPosition;
             return this;
         }
 
-        public Builder startVelocity(Vec2d startVelocity) {
+        public Builder startVelocity(SpacePosition startVelocity) {
             this.startVelocity = startVelocity;
             return this;
         }

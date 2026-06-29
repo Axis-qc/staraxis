@@ -22,7 +22,7 @@ package staraxis.game.ship;
 
 import staraxis.game.entity.Entity;
 import staraxis.game.entity.EntityType;
-import staraxis.game.world.Vec2d;
+import staraxis.game.space.SpacePosition;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -67,7 +67,7 @@ public class ShipBody extends Entity {
      * 移动目标位置（世界坐标 GU）喵。
      * 当 isMoving = true 时，舰船会向此位置移动。
      */
-    public Vec2d movementTarget;
+    public SpacePosition movementTarget;
 
     /**
      * 是否正在移动喵。

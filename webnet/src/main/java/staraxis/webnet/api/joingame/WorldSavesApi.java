@@ -5,6 +5,7 @@ import staraxis.game.StarAxisGameRuntime;
 import staraxis.game.entity.Entity;
 import staraxis.game.entity.EntityType;
 import staraxis.game.ship.ShipBody;
+import staraxis.game.space.SpacePosition;
 import staraxis.game.world.Vec2d;
 import staraxis.game.world.WorldGenConfig;
 import staraxis.game.world.hex.SectorCoord;
@@ -619,13 +620,17 @@ public final class WorldSavesApi {
             }
             Object posX = e.get("posX");
             Object posY = e.get("posY");
+            Object posZ = e.get("posZ");
             if (posX instanceof Number x && posY instanceof Number y) {
-                entity.posWorldGU = new Vec2d(x.doubleValue(), y.doubleValue());
+                double z = posZ instanceof Number zn ? zn.doubleValue() : 0.0;
+                entity.posWorldGU = new SpacePosition(x.doubleValue(), y.doubleValue(), z);
             }
             Object velX = e.get("velX");
             Object velY = e.get("velY");
+            Object velZ = e.get("velZ");
             if (velX instanceof Number vx && velY instanceof Number vy) {
-                entity.velWorldGU = new Vec2d(vx.doubleValue(), vy.doubleValue());
+                double vz = velZ instanceof Number vzn ? vzn.doubleValue() : 0.0;
+                entity.velWorldGU = new SpacePosition(vx.doubleValue(), vy.doubleValue(), vz);
             }
             entity.ownerNationId = e.get("ownerNationId") == null ? null : String.valueOf(e.get("ownerNationId"));
 

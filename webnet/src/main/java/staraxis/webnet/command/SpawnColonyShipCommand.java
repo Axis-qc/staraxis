@@ -1,9 +1,7 @@
 package staraxis.webnet.command;
 
 import staraxis.game.StarAxisGameRuntime;
-import staraxis.game.entity.EntityType;
-import staraxis.game.ship.ShipBody;
-import staraxis.game.world.Vec2d;
+import staraxis.game.space.SpacePosition;
 import staraxis.game.world.WorldHexLayout;
 import staraxis.game.world.hex.SectorCoord;
 
@@ -72,7 +70,7 @@ public class SpawnColonyShipCommand implements WebCommandHandler {
             }
 
             // 解析位置参数喵
-            Vec2d worldPos = null;
+            staraxis.game.world.Vec2d worldPos2d = null;
             SectorCoord sectorCoord = null;
 
             Object xObj = message.get("x");
@@ -81,9 +79,9 @@ public class SpawnColonyShipCommand implements WebCommandHandler {
                 // 使用世界坐标参数喵
                 double x = xObj instanceof Number ? ((Number) xObj).doubleValue() : Double.parseDouble(String.valueOf(xObj));
                 double y = yObj instanceof Number ? ((Number) yObj).doubleValue() : Double.parseDouble(String.valueOf(yObj));
-                worldPos = new Vec2d(x, y);
+                worldPos2d = new staraxis.game.world.Vec2d(x, y);
                 // 计算对应的星区坐标喵
-                sectorCoord = WorldHexLayout.worldToSectorCoord(worldPos);
+                sectorCoord = WorldHexLayout.worldToSectorCoord(worldPos2d);
             } else {
                 // 使用星区坐标参数喵
                 Object qObj = message.get("sectorQ");
@@ -93,13 +91,16 @@ public class SpawnColonyShipCommand implements WebCommandHandler {
                     int sectorR = rObj instanceof Number ? ((Number) rObj).intValue() : Integer.parseInt(String.valueOf(rObj));
                     sectorCoord = new SectorCoord(sectorQ, sectorR);
                     // 计算星区中心点作为世界坐标喵
-                    worldPos = WorldHexLayout.sectorCenterWorld2D_GU(sectorCoord);
+                    worldPos2d = WorldHexLayout.sectorCenterWorld2D_GU(sectorCoord);
                 }
             }
 
-            if (worldPos == null || sectorCoord == null) {
+            if (worldPos2d == null || sectorCoord == null) {
                 return "{\"type\":\"command_response\",\"ok\":false,\"error\":\"position_required\"}";
             }
+
+            // 映射到 3D 空间：XZ 平面，Y=0
+            SpacePosition worldPos = new SpacePosition(worldPos2d.x(), 0, worldPos2d.y());
 
             // 使用权威舰船生成服务创建殖民舰喵
             var worldState = runtime.getWorldStateForSimOnly();
@@ -109,7 +110,7 @@ public class SpawnColonyShipCommand implements WebCommandHandler {
                     worldState, nationId, worldPos, sectorCoord, 0L, customFlags);
 
             staraxis.webnet.core.WebNetLog.log("Spawned colony ship entityId=" + shipEntityId +
-                    " at (" + worldPos.x() + "," + worldPos.y() + ") in sector [" + sectorCoord.q() + "," + sectorCoord.r() + "] for nation " + nationId + " 喵");
+                    " at (" + worldPos.x() + "," + worldPos.z() + ") in sector [" + sectorCoord.q() + "," + sectorCoord.r() + "] for nation " + nationId + " 喵");
 
             return "{\"type\":\"command_response\",\"ok\":true,\"command\":\"spawnColonyShip\",\"shipEntityId\":" + shipEntityId + "}";
         } catch (Exception e) {

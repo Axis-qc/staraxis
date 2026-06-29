@@ -174,7 +174,7 @@ public final class AstroGenerator {
             star.systemId = system.systemId;
             star.parentEntityId = system.barycenterEntityId;
             star.sectorCoord = system.sectorCoord;
-            star.posWorldGU = system.centerWorldGU;
+            star.posWorldGU = new staraxis.game.space.SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y());
             system.stars.add(star);
         }
 
@@ -191,7 +191,7 @@ public final class AstroGenerator {
             planet.systemId = system.systemId;
             planet.parentEntityId = system.barycenterEntityId;
             planet.sectorCoord = system.sectorCoord;
-            planet.posWorldGU = system.centerWorldGU;
+            planet.posWorldGU = new staraxis.game.space.SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y());
             system.planets.add(planet);
         }
 

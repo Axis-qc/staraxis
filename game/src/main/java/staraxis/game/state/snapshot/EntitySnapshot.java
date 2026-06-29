@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import staraxis.game.entity.EntityType;
-import staraxis.game.world.Vec2d;
+import staraxis.game.space.SpacePosition;
 import staraxis.game.world.hex.SectorCoord;
 
 @JsonInclude(JsonInclude.Include.ALWAYS)
@@ -16,7 +16,7 @@ public class EntitySnapshot {
     public final long systemId;
     public final long parentEntityId;
     public final SectorCoord sectorCoord;
-    public final Vec2d posWorldGU;
+    public final SpacePosition posWorldGU;
     public final String ownerNationId;
     public final boolean isPublic;
 
@@ -37,7 +37,7 @@ public class EntitySnapshot {
             long systemId,
             long parentEntityId,
             SectorCoord sectorCoord,
-            Vec2d posWorldGU,
+            SpacePosition posWorldGU,
             String ownerNationId,
             boolean isPublic,
             Object details) {
@@ -51,7 +51,7 @@ public class EntitySnapshot {
             long systemId,
             long parentEntityId,
             SectorCoord sectorCoord,
-            Vec2d posWorldGU,
+            SpacePosition posWorldGU,
             String ownerNationId,
             boolean isPublic,
             Object details,
@@ -163,9 +163,9 @@ public class EntitySnapshot {
     public static class MovementCommandDetails {
         public final String commandType;
         public final String clientCommandId;
-        public final Vec2d targetPosition;
-        public final Vec2d startPosition;
-        public final Vec2d startVelocity;
+        public final SpacePosition targetPosition;
+        public final SpacePosition startPosition;
+        public final SpacePosition startVelocity;
         public final double startHeadingDeg;
         public final double startGameSeconds;
         public final int startSimulationTick;
@@ -179,9 +179,9 @@ public class EntitySnapshot {
         public MovementCommandDetails(
                 String commandType,
                 String clientCommandId,
-                Vec2d targetPosition,
-                Vec2d startPosition,
-                Vec2d startVelocity,
+                SpacePosition targetPosition,
+                SpacePosition startPosition,
+                SpacePosition startVelocity,
                 double startHeadingDeg,
                 double startGameSeconds,
                 int startSimulationTick,
@@ -214,8 +214,8 @@ public class EntitySnapshot {
         public final java.util.Set<String> customFlags;
         public final double headingDeg;
         public final boolean isMoving;
-        public final Vec2d movementTarget;
-        public final Vec2d velocity;
+        public final SpacePosition movementTarget;
+        public final SpacePosition velocity;
         public final double maxSpeed;
         public final double baseAcceleration;
         public final double bowAccelerationBonus;
@@ -228,8 +228,8 @@ public class EntitySnapshot {
                 java.util.Set<String> customFlags,
                 double headingDeg,
                 boolean isMoving,
-                Vec2d movementTarget,
-                Vec2d velocity,
+                SpacePosition movementTarget,
+                SpacePosition velocity,
                 double maxSpeed,
                 double baseAcceleration,
                 double bowAccelerationBonus,

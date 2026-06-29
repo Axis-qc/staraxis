@@ -1,7 +1,6 @@
 package staraxis.render.galaxy;
 
 import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.VertexAttributes;
 import com.badlogic.gdx.graphics.g3d.Environment;
@@ -17,27 +16,29 @@ import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.math.collision.BoundingBox;
 import com.badlogic.gdx.math.collision.Ray;
 
-import staraxis.game.space.galaxy.GalaxyData;
-import staraxis.game.space.galaxy.SpectralType;
-import staraxis.game.space.galaxy.StarPosition;
+import staraxis.game.entity.EntityType;
+import staraxis.game.state.RealTimeWorldState;
+import staraxis.game.state.snapshot.EntitySnapshot;
+import staraxis.game.state.snapshot.EntitySnapshot.StarDetails;
 import staraxis.render.WorldCamera;
+import staraxis.render.util.TemperatureColor;
 
 /**
  * StarBatchRenderer（恒星批量渲染器）。
  *
- * 每种光谱类型一个固定大小的球体模型，按类型分组用 ModelBatch 批量渲染。
- * 恒星大小由 SpectralType 的半径范围决定。
+ * 从 RealTimeWorldState 中读取所有 STAR 类型的实体快照，按光谱温度着色，
+ * 使用固定大小球体模型批量渲染。
  */
 public class StarBatchRenderer {
 
-    /** 恒星球体半径（GU），固定大小。 */
     private static final float STAR_RADIUS = 40f;
 
     private final ModelBatch modelBatch;
     private final Environment environment;
     private final Model starModel;
+    private final BoundingBox bounds = new BoundingBox();
+    private final Vector3 hitPos = new Vector3();
 
-    /** 预分配的 ModelInstance 池，按类型分组。 */
     private ModelInstance[] instances;
     private int instanceCount = 0;
 
@@ -56,49 +57,36 @@ public class StarBatchRenderer {
         );
     }
 
-    /**
-     * 渲染整个星系的所有恒星。
-     *
-     * @param galaxy 星系数据
-     * @param camera 世界相机
-     * @param hoveredStarId 悬停的恒星ID（-1 表示无）
-     */
-    public void render(GalaxyData galaxy, WorldCamera camera, long hoveredStarId) {
-        // 确保实例池足够大
-        int needed = galaxy.starCount();
-        if (instances == null || instances.length < needed) {
-            instances = new ModelInstance[needed];
-            for (int i = 0; i < needed; i++) {
-                instances[i] = new ModelInstance(starModel);
-            }
-        }
+    public void render(RealTimeWorldState state, WorldCamera camera, long hoveredStarId) {
+        java.util.List<EntitySnapshot> stars = filterStars(state);
+        int needed = stars.size();
+
+        ensureInstances(needed);
         instanceCount = needed;
 
-        // 设置每个实例的位置和颜色
         for (int i = 0; i < instanceCount; i++) {
-            StarPosition star = galaxy.stars.get(i);
+            EntitySnapshot snap = stars.get(i);
             ModelInstance inst = instances[i];
 
             inst.transform.idt();
             inst.transform.translate(
-                (float) star.galaxyX(),
-                (float) star.galaxyY(),
-                (float) star.galaxyZ()
+                (float) snap.posWorldGU.x(),
+                (float) snap.posWorldGU.y(),
+                (float) snap.posWorldGU.z()
             );
 
-            SpectralType type = star.spectralType();
-            float r, g, b;
-            if (star.starId() == hoveredStarId) {
-                r = 1f; g = 1f; b = 1f;
+            StarDetails details = (StarDetails) snap.details;
+            float[] rgb;
+            if (snap.entityId == hoveredStarId) {
+                rgb = new float[]{1f, 1f, 1f};
+            } else if (details != null) {
+                rgb = TemperatureColor.temperatureToRgb(details.temperatureK);
             } else {
-                r = type.colorR;
-                g = type.colorG;
-                b = type.colorB;
+                rgb = new float[]{1f, 0.92f, 0.6f};
             }
-            inst.materials.get(0).set(ColorAttribute.createDiffuse(r, g, b, 1f));
+            inst.materials.get(0).set(ColorAttribute.createDiffuse(rgb[0], rgb[1], rgb[2], 1f));
         }
 
-        // 批量渲染
         Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
         modelBatch.begin(camera.camera);
         for (int i = 0; i < instanceCount; i++) {
@@ -108,37 +96,24 @@ public class StarBatchRenderer {
         Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
     }
 
-    /**
-     * 射线拾取：检测射线命中的最近恒星。
-     *
-     * @param ray 鼠标射线
-     * @param galaxy 星系数据
-     * @return 命中的恒星ID，未命中返回 -1
-     */
-    public long pick(Ray ray, GalaxyData galaxy) {
-        int needed = galaxy.starCount();
-        if (instances == null || instances.length < needed) {
-            instances = new ModelInstance[needed];
-            for (int i = 0; i < needed; i++) {
-                instances[i] = new ModelInstance(starModel);
-            }
-        }
+    public long pick(Ray ray, RealTimeWorldState state) {
+        java.util.List<EntitySnapshot> stars = filterStars(state);
+        int needed = stars.size();
+        ensureInstances(needed);
         instanceCount = needed;
 
         long hitId = -1;
         float bestDist = Float.MAX_VALUE;
-        BoundingBox bounds = new BoundingBox();
-        Vector3 hitPos = new Vector3();
 
         for (int i = 0; i < instanceCount; i++) {
-            StarPosition star = galaxy.stars.get(i);
+            EntitySnapshot snap = stars.get(i);
             ModelInstance inst = instances[i];
 
             inst.transform.idt();
             inst.transform.translate(
-                (float) star.galaxyX(),
-                (float) star.galaxyY(),
-                (float) star.galaxyZ()
+                (float) snap.posWorldGU.x(),
+                (float) snap.posWorldGU.y(),
+                (float) snap.posWorldGU.z()
             );
 
             inst.calculateBoundingBox(bounds);
@@ -148,12 +123,31 @@ public class StarBatchRenderer {
                 float dist = ray.origin.dst(hitPos);
                 if (dist < bestDist) {
                     bestDist = dist;
-                    hitId = star.starId();
+                    hitId = snap.entityId;
                 }
             }
         }
 
         return hitId;
+    }
+
+    private java.util.List<EntitySnapshot> filterStars(RealTimeWorldState state) {
+        java.util.List<EntitySnapshot> result = new java.util.ArrayList<>();
+        for (EntitySnapshot snap : state.getEntitySnapshotsView()) {
+            if (snap != null && snap.entityType == EntityType.STAR) {
+                result.add(snap);
+            }
+        }
+        return result;
+    }
+
+    private void ensureInstances(int needed) {
+        if (instances == null || instances.length < needed) {
+            instances = new ModelInstance[needed];
+            for (int i = 0; i < needed; i++) {
+                instances[i] = new ModelInstance(starModel);
+            }
+        }
     }
 
     public void dispose() {

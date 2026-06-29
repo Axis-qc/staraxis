@@ -35,7 +35,7 @@ import staraxis.game.state.RealTimeWorldState;
 import staraxis.game.state.RealTimeWorldStateBuffer;
 import staraxis.game.state.WorldState;
 import staraxis.game.state.snapshot.EntitySnapshot;
-import staraxis.game.world.Vec2d;
+import staraxis.game.space.SpacePosition;
 import staraxis.game.world.WorldGenConfig;
 import staraxis.game.world.WorldGenerator;
 import staraxis.game.world.WorldHexLayout;
@@ -380,7 +380,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                     system.systemId,
                     0,
                     system.sectorCoord,
-                    system.centerWorldGU,
+                    new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y()),
                     null, // 重心初始通常无主
                     true, // 公开可见
                     new EntitySnapshot.SystemBarycenterDetails()));
@@ -393,7 +393,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                         star.systemId,
                         system.barycenterEntityId,
                         system.sectorCoord,
-                        system.centerWorldGU,
+                        new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y()),
                         star.ownerNationId,
                         true, // 公开可见
                         new EntitySnapshot.StarDetails(star.starTypeId, star.radiusGU, star.massSolar,
@@ -416,7 +416,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                         planet.systemId,
                         system.barycenterEntityId,
                         system.sectorCoord,
-                        system.centerWorldGU,
+                        new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y()),
                         planet.ownerNationId,
                         true, // 公开可见
                         new EntitySnapshot.PlanetDetails(
@@ -475,7 +475,7 @@ public class StarAxisGameRuntime implements GameRuntime {
             barycenter.systemId = system.systemId;
             barycenter.parentEntityId = 0;
             barycenter.sectorCoord = system.sectorCoord;
-            barycenter.posWorldGU = system.centerWorldGU;
+            barycenter.posWorldGU = new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y());
 
             // 权威注册到 WorldState 喵
             worldState.registerEntity(barycenter);
@@ -500,7 +500,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                 star.systemId = system.systemId;
                 star.parentEntityId = system.barycenterEntityId; // 单星系统也挂在重心下
                 star.sectorCoord = system.sectorCoord;
-                star.posWorldGU = system.centerWorldGU; // 单星系统：恒星位置=重心位置
+                star.posWorldGU = new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y()); // 单星系统：恒星位置=重心位置
 
                 // 权威注册到 WorldState 喵
                 worldState.registerEntity(star);
@@ -534,7 +534,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                 planet.systemId = system.systemId;
                 planet.parentEntityId = system.barycenterEntityId;
                 planet.sectorCoord = system.sectorCoord;
-                planet.posWorldGU = system.centerWorldGU;
+                planet.posWorldGU = new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y());
 
                 // 权威注册到 WorldState 喵
                 worldState.registerEntity(planet);
@@ -604,16 +604,16 @@ public class StarAxisGameRuntime implements GameRuntime {
             double headingDeg = 0.0;
             if (entity.velWorldGU != null) {
                 double vx = entity.velWorldGU.x();
-                double vy = entity.velWorldGU.y();
-                if (Math.abs(vx) > 1e-9 || Math.abs(vy) > 1e-9) {
-                    headingDeg = Math.toDegrees(Math.atan2(vy, vx));
+                double vz = entity.velWorldGU.z();
+                if (Math.abs(vx) > 1e-9 || Math.abs(vz) > 1e-9) {
+                    headingDeg = Math.toDegrees(Math.atan2(vz, vx));
                 }
             }
 
             // 获取舰船的移动状态和物理属性喵
             boolean isMoving = false;
-            Vec2d movementTarget = null;
-            Vec2d velocity = null;
+            SpacePosition movementTarget = null;
+            SpacePosition velocity = null;
             // 默认值与 ShipBody 一致，后续从 shipBody 读取实际值喵
             double maxSpeed = 20.0;
             double baseAcceleration = 5.0;

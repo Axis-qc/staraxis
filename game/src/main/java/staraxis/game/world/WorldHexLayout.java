@@ -1,5 +1,6 @@
 package staraxis.game.world;
 
+import staraxis.game.space.SpacePosition;
 import staraxis.game.world.hex.SectorCoord;
 
 /**
@@ -69,5 +70,13 @@ public final class WorldHexLayout {
 
         // 转换回轴向坐标：q = rx, r = rz
         return new SectorCoord(rx, rz);
+    }
+
+    /**
+     * 将 3D 世界坐标转换为最近的星区坐标喵。
+     * XZ 平面映射到 2D 星区网格（SpacePosition.z -> Vec2d.y）。
+     */
+    public static SectorCoord worldToSectorCoord(SpacePosition worldPos) {
+        return worldToSectorCoord(new Vec2d(worldPos.x(), worldPos.z()));
     }
 }

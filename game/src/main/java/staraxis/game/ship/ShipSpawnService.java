@@ -2,8 +2,8 @@ package staraxis.game.ship;
 
 import staraxis.game.astro.StarSystem;
 import staraxis.game.entity.EntityType;
+import staraxis.game.space.SpacePosition;
 import staraxis.game.state.WorldState;
-import staraxis.game.world.Vec2d;
 import staraxis.game.world.WorldHexLayout;
 import staraxis.game.world.hex.SectorCoord;
 
@@ -56,7 +56,7 @@ public final class ShipSpawnService {
         }
 
         // 2. 计算出生位置：星系中心偏移 500 GU（避免与星体重叠）喵
-        Vec2d systemCenter = spawnSystem.centerWorldGU;
+        staraxis.game.world.Vec2d systemCenter = spawnSystem.centerWorldGU;
         if (systemCenter == null) {
             // 若星系中心未定义，则使用星区中心喵
             SectorCoord sectorCoord = spawnSystem.sectorCoord;
@@ -66,9 +66,8 @@ public final class ShipSpawnService {
             systemCenter = WorldHexLayout.sectorCenterWorld2D_GU(sectorCoord);
         }
 
-        // 固定偏移向量（500 GU 在 X 轴正方向）喵
-        Vec2d offset = new Vec2d(500.0, 0.0);
-        Vec2d shipPos = new Vec2d(systemCenter.x() + offset.x(), systemCenter.y() + offset.y());
+        // 固定偏移向量（500 GU 在 X 轴正方向）喵，映射到 3D XZ 平面
+        SpacePosition shipPos = new SpacePosition(systemCenter.x() + 500.0, 0, systemCenter.y());
 
         // 3. 计算星区坐标喵
         SectorCoord sectorCoord = WorldHexLayout.worldToSectorCoord(shipPos);
@@ -80,7 +79,7 @@ public final class ShipSpawnService {
         ship.designId = null; // 暂不依赖设计文件喵
         ship.ownerNationId = nationId;
         ship.posWorldGU = shipPos;
-        ship.velWorldGU = new Vec2d(0, 0);
+        ship.velWorldGU = SpacePosition.ORIGIN;
         ship.sectorCoord = sectorCoord;
         ship.systemId = spawnSystem.systemId; // 所属星系ID喵
 
@@ -125,7 +124,7 @@ public final class ShipSpawnService {
      * @param customFlags 自定义标记集合（可为空）
      * @return 生成的舰船实体ID，失败时返回 -1
      */
-    public static long spawnShipAtPosition(WorldState worldState, String nationId, Vec2d position,
+    public static long spawnShipAtPosition(WorldState worldState, String nationId, SpacePosition position,
                                           SectorCoord sectorCoord, long systemId, java.util.Set<String> customFlags) {
         if (worldState == null) {
             throw new IllegalArgumentException("worldState_required");
@@ -156,7 +155,7 @@ public final class ShipSpawnService {
         ship.designId = null; // 暂不依赖设计文件喵
         ship.ownerNationId = nationId;
         ship.posWorldGU = position;
-        ship.velWorldGU = new Vec2d(0, 0);
+        ship.velWorldGU = SpacePosition.ORIGIN;
         ship.sectorCoord = finalSectorCoord;
         ship.systemId = systemId;
 

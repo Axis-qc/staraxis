@@ -7,6 +7,7 @@ import staraxis.game.entity.Entity;
 import staraxis.game.ship.MovementCommand;
 import staraxis.game.ship.ShipBody;
 import staraxis.game.state.WorldState;
+import staraxis.game.space.SpacePosition;
 import staraxis.game.world.Vec2d;
 import staraxis.webnet.game.GameSessions;
 
@@ -78,7 +79,7 @@ public final class ShipCommandApi {
         String clientCommandId = req.get("clientCommandId") == null ? null : String.valueOf(req.get("clientCommandId"));
         Long shipEntityId = req.get("shipEntityId") instanceof Number n ? n.longValue() : null;
         Double reportedGameSeconds = req.get("reportedGameSeconds") instanceof Number n ? n.doubleValue() : null;
-        Vec2d reportedPosition = parseVec2(req.get("reportedPosition"));
+        SpacePosition reportedPosition = parseVec2(req.get("reportedPosition"));
 
         if (nationId == null || nationId.isBlank()) {
             return Map.of("ok", false, "error", "nationId_required");
@@ -164,7 +165,7 @@ public final class ShipCommandApi {
         return response;
     }
 
-    private static Vec2d parseVec2(Object value) {
+    private static SpacePosition parseVec2(Object value) {
         if (!(value instanceof Map<?, ?> map)) {
             return null;
         }
@@ -173,34 +174,32 @@ public final class ShipCommandApi {
         if (!(xRaw instanceof Number xNumber) || !(yRaw instanceof Number yNumber)) {
             return null;
         }
-        return new Vec2d(xNumber.doubleValue(), yNumber.doubleValue());
+        return new SpacePosition(xNumber.doubleValue(), 0, yNumber.doubleValue());
     }
 
-    private static double distance(Vec2d a, Vec2d b) {
+    private static double distance(SpacePosition a, SpacePosition b) {
         if (a == null || b == null) {
             return Double.POSITIVE_INFINITY;
         }
-        double dx = a.x() - b.x();
-        double dy = a.y() - b.y();
-        return Math.sqrt(dx * dx + dy * dy);
+        return a.distanceTo(b);
     }
 
     private static Map<String, Object> buildCorrectionData(ShipBody ship) {
         LinkedHashMap<String, Object> data = new LinkedHashMap<>();
-        data.put("position", toVec2Map(ship.posWorldGU));
-        data.put("velocity", toVec2Map(ship.velWorldGU));
+        data.put("position", toSpacePosMap(ship.posWorldGU));
+        data.put("velocity", toSpacePosMap(ship.velWorldGU));
         data.put("headingDeg", ship.currentHeadingDeg);
         data.put("movementCommand", toMovementCommandMap(ship.movementCommand));
         return data;
     }
 
-    private static Map<String, Object> toVec2Map(Vec2d value) {
+    private static Map<String, Object> toSpacePosMap(SpacePosition value) {
         if (value == null) {
             return null;
         }
         LinkedHashMap<String, Object> result = new LinkedHashMap<>();
         result.put("x", value.x());
-        result.put("y", value.y());
+        result.put("y", value.z());
         return result;
     }
 
@@ -211,9 +210,9 @@ public final class ShipCommandApi {
         LinkedHashMap<String, Object> result = new LinkedHashMap<>();
         result.put("commandType", toMovementCommandType(command.commandType));
         result.put("clientCommandId", command.clientCommandId);
-        result.put("targetPosition", toVec2Map(command.targetPosition));
-        result.put("startPosition", toVec2Map(command.startPosition));
-        result.put("startVelocity", toVec2Map(command.startVelocity));
+        result.put("targetPosition", toSpacePosMap(command.targetPosition));
+        result.put("startPosition", toSpacePosMap(command.startPosition));
+        result.put("startVelocity", toSpacePosMap(command.startVelocity));
         result.put("startHeadingDeg", command.startHeadingDeg);
         result.put("startGameSeconds", command.startGameSeconds);
         result.put("startSimulationTick", command.startSimulationTick);

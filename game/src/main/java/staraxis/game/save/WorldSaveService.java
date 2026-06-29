@@ -198,11 +198,13 @@ public final class WorldSaveService {
             }
             if (entity.posWorldGU != null) {
                 e.put("posX", entity.posWorldGU.x());
-                e.put("posY", entity.posWorldGU.y());
+                e.put("posY", entity.posWorldGU.z());
+                e.put("posZ", entity.posWorldGU.y());
             }
             if (entity.velWorldGU != null) {
                 e.put("velX", entity.velWorldGU.x());
-                e.put("velY", entity.velWorldGU.y());
+                e.put("velY", entity.velWorldGU.z());
+                e.put("velZ", entity.velWorldGU.y());
             }
             e.put("ownerNationId", entity.ownerNationId);
 

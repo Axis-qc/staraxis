@@ -1,10 +1,10 @@
 package staraxis.game.command;
 
 import staraxis.game.entity.Entity;
+import staraxis.game.space.SpacePosition;
 import staraxis.game.ship.MovementCommand;
 import staraxis.game.ship.ShipBody;
 import staraxis.game.state.WorldState;
-import staraxis.game.world.Vec2d;
 
 public class MoveShipHandler implements CommandHandler<MoveShipCommand> {
 
@@ -22,6 +22,7 @@ public class MoveShipHandler implements CommandHandler<MoveShipCommand> {
         long shipEntityId = command.getShipEntityId();
         double targetX = command.getTargetX();
         double targetY = command.getTargetY();
+        double targetZ = command.getTargetZ();
 
         Entity entity = worldState.entitiesById.get(shipEntityId);
         if (!(entity instanceof ShipBody ship)) {
@@ -31,10 +32,10 @@ public class MoveShipHandler implements CommandHandler<MoveShipCommand> {
             return;
         }
 
-        ship.movementTarget = new Vec2d(targetX, targetY);
+        ship.movementTarget = new SpacePosition(targetX, targetY, targetZ);
         ship.isMoving = true;
         ship.targetHeadingDeg = Math.toDegrees(Math.atan2(
-                targetY - ship.posWorldGU.y(),
+                targetZ - ship.posWorldGU.z(),
                 targetX - ship.posWorldGU.x()));
         ship.activeClientCommandId = clientCommandId;
 
