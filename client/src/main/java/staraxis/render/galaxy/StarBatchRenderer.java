@@ -38,6 +38,9 @@ public class StarBatchRenderer {
     /** 着色器。 */
     private ShaderProgram shader;
 
+    /** 当前帧的投影视图矩阵。 */
+    private final Matrix4 projViewTrans = new Matrix4();
+
     private boolean begun = false;
 
     public StarBatchRenderer() {
@@ -96,6 +99,7 @@ public class StarBatchRenderer {
         }
         begun = true;
         starCount = 0;
+        projViewTrans.set(projectionView);
     }
 
     /**
@@ -157,6 +161,7 @@ public class StarBatchRenderer {
         Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
 
         shader.bind();
+        shader.setUniformMatrix("u_projViewTrans", projViewTrans);
         mesh.render(shader, GL20.GL_POINTS);
 
         Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);

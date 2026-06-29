@@ -60,13 +60,18 @@ public class OrbitRingMesh {
             double xLocal = r * Math.cos(nu);
             double yLocal = r * Math.sin(nu);
 
-            // 3-1-3 欧拉旋转
-            double x = (cosO * cosW - sinO * sinW * cosI) * xLocal
+            // 3-1-3 欧拉旋转（天文学标准：轨道面在 XY）
+            double solverX = (cosO * cosW - sinO * sinW * cosI) * xLocal
                      + (-cosO * sinW - sinO * cosW * cosI) * yLocal;
-            double y = (sinO * cosW + cosO * sinW * cosI) * xLocal
+            double solverY = (sinO * cosW + cosO * sinW * cosI) * xLocal
                      + (-sinO * sinW + cosO * cosW * cosI) * yLocal;
-            double z = (sinW * sinI) * xLocal
+            double solverZ = (sinW * sinI) * xLocal
                      + (cosW * sinI) * yLocal;
+
+            // 转换为渲染坐标：交换 Y/Z，使轨道面在 XZ 水平面
+            double x = solverX;
+            double y = solverZ;
+            double z = -solverY;
 
             if (seg > 0) {
                 shapeRenderer.line(
