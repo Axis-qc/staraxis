@@ -9,10 +9,13 @@ import com.badlogic.gdx.math.Vector3;
 /**
  * WorldCamera — 轨道相机喵。
  *
- * 缩放 = 镜头到 target 的距离（orbitDist），限制最大不超过世界边界。
- * WASD：移动 target（镜头中心点）
+ * 缩放 = 镜头到 target 的距离（orbitDist）。
+ * WASD：移动 target（镜头中心点，地平面方向）
+ * Q/E：控制 target 的 Y 轴上下移动
  * 右键拖拽：旋转视角
- * Q/E：缩放（增大/减小 orbitDist） R：重置
+ * 滚轮：缩放（增大/减小 orbitDist） R：重置
+ *
+ * target 限制在世界边界（±480000）内，但镜头实际位置不限制，避免边缘视角抖动喵。
  */
 public class WorldCamera {
 
@@ -20,6 +23,7 @@ public class WorldCamera {
     public static final double MAX_ZOOM = 7.0;
     private static final float ROT_SPEED = 0.3f;
     private static final float MOVE_SPEED = 500f;
+    private static final float SCROLL_ZOOM_SPEED = 0.5f;
 
     public final PerspectiveCamera camera;
     public final Vector3 target = new Vector3();
@@ -28,9 +32,11 @@ public class WorldCamera {
     public double zoomLevel = 4.0;
     private double targetZoom = 4.0;
     private double orbitDist = 2000;
+    private double maxOrbitDist = Double.MAX_VALUE; // 外部可设上限（Galaxy 5万 / System 2万）
 
     private int lx, ly;
     private boolean rotating;
+    private float scrollAccum = 0f;
 
     public WorldCamera() {
         camera = new PerspectiveCamera(67f, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
@@ -50,10 +56,16 @@ public class WorldCamera {
     public void update(float dt) {
         handleInput(dt);
         zoomLevel += (targetZoom - zoomLevel) * Math.min(dt * 5f, 1f);
-        // 缩放 = 镜头到 target 的距离喵
+        // 缩放 = 镜头到 target 的距离喵，受 maxOrbitDist 限制
         orbitDist = Math.pow(10, 2 + 0.67 * (7 - zoomLevel));
-        // 最大距离不超过世界边界，保证拉到底也不会出界喵
-        if (orbitDist > 480000) orbitDist = 480000;
+        if (orbitDist > maxOrbitDist) {
+            orbitDist = maxOrbitDist;
+            // 逆推最小 zoomLevel，阻止 zoom 继续往远了漂
+            double minZoom = 7 - (Math.log10(maxOrbitDist) - 2) / 0.67;
+            if (zoomLevel < minZoom) zoomLevel = minZoom;
+            if (targetZoom < minZoom) targetZoom = minZoom;
+        }
+        // 镜头位置不限制，允许自由越界喵
 
         float yr = yaw * MathUtils.degRad, pr = pitch * MathUtils.degRad;
         camera.position.set(
@@ -76,17 +88,39 @@ public class WorldCamera {
         targetZoom = zoomLevel;
     }
 
+    /** 设置镜头最远距离（GUI 单位），Galaxy 5万 / System 2万 */
+    public void setMaxOrbitDist(double max) {
+        this.maxOrbitDist = max;
+    }
+
+    public double getMaxOrbitDist() {
+        return maxOrbitDist;
+    }
+
+    /** 接收滚轮事件（由 InputProcessor 转发），积累滚轮偏移量喵 */
+    public void onScroll(float amountY) {
+        scrollAccum += amountY;
+    }
+
     private void handleInput(float dt) {
-        // Q/E 缩放喵
+        // 移动速度与 orbitDist 成正比，镜头越远移动越快喵
+        float sp = MOVE_SPEED * dt * (float) (orbitDist / 2000.0);
+        // Q/E 控制 target 的 Y 轴上下喵
         if (Gdx.input.isKeyPressed(Input.Keys.Q))
-            targetZoom = MathUtils.clamp(targetZoom + 2f * dt, MIN_ZOOM, MAX_ZOOM);
+            target.y -= sp;
         if (Gdx.input.isKeyPressed(Input.Keys.E))
-            targetZoom = MathUtils.clamp(targetZoom - 2f * dt, MIN_ZOOM, MAX_ZOOM);
+            target.y += sp;
+        // R 重置视角喵
         if (Gdx.input.isKeyJustPressed(Input.Keys.R))
             resetView();
 
+        // 滚轮缩放喵
+        if (scrollAccum != 0f) {
+            targetZoom = MathUtils.clamp(targetZoom - scrollAccum * SCROLL_ZOOM_SPEED, MIN_ZOOM, MAX_ZOOM);
+            scrollAccum = 0f;
+        }
+
         // WASD 镜头移动（地平面方向）喵
-        float sp = MOVE_SPEED * dt;
         Vector3 fwd = new Vector3(camera.direction).nor();
         fwd.y = 0;
         if (fwd.len() < 0.01f)
@@ -103,7 +137,7 @@ public class WorldCamera {
         if (Gdx.input.isKeyPressed(Input.Keys.D))
             target.add(rgt.scl(sp));
 
-        // 限制在 100万³ 世界坐标内喵
+        // 限制 target（镜头中心点）在 100万³ 世界坐标内，镜头位置不受限喵
         float lim = 480000f;
         target.x = MathUtils.clamp(target.x, -lim, lim);
         target.y = MathUtils.clamp(target.y, -lim, lim);

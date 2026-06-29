@@ -34,49 +34,62 @@ public class StarBatchRenderer {
     private final ModelBatch modelBatch;
     private final Model starModel;
     private final BoundingBox bounds = new BoundingBox();
-    private final Vector3 hitPos = new Vector3();
 
     private ModelInstance[] instances;
     private int instanceCount = 0;
+
+    /** 缓存的当前帧恒星列表（由 pick() 设置，render() 消费复用），避免重复过滤和变换 */
+    private final java.util.List<EntitySnapshot> cachedStars = new java.util.ArrayList<>();
+    private boolean cacheValid = false;
 
     public StarBatchRenderer() {
         modelBatch = new ModelBatch();
 
         ModelBuilder builder = new ModelBuilder();
         starModel = builder.createSphere(
-            STAR_RADIUS * 2, STAR_RADIUS * 2, STAR_RADIUS * 2,
-            8, 6,
-            new Material(),
-            VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal
-        );
+                STAR_RADIUS * 2, STAR_RADIUS * 2, STAR_RADIUS * 2,
+                8, 6,
+                new Material(),
+                VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal);
+    }
+
+    /** 准备当前帧的实例数据：过滤、扩容、计算位置变换。供 pick() 和 render() 复用 */
+    private void prepareStars(RealTimeWorldState state) {
+        filterStars(state, cachedStars);
+        int needed = cachedStars.size();
+        ensureInstances(needed);
+        instanceCount = needed;
+        for (int i = 0; i < instanceCount; i++) {
+            EntitySnapshot snap = cachedStars.get(i);
+            ModelInstance inst = instances[i];
+            inst.transform.idt();
+            inst.transform.translate(
+                    (float) snap.posWorldGU.x(),
+                    (float) snap.posWorldGU.y(),
+                    (float) snap.posWorldGU.z());
+        }
+        cacheValid = true;
     }
 
     public void render(RealTimeWorldState state, WorldCamera camera, long hoveredStarId) {
-        java.util.List<EntitySnapshot> stars = filterStars(state);
-        int needed = stars.size();
-
-        ensureInstances(needed);
-        instanceCount = needed;
+        // 如果 pick() 已经准备了缓存，直接复用；否则自行准备
+        if (!cacheValid) {
+            prepareStars(state);
+        }
+        cacheValid = false; // 消费后重置，下帧必须由 pick() 重新准备
 
         for (int i = 0; i < instanceCount; i++) {
-            EntitySnapshot snap = stars.get(i);
+            EntitySnapshot snap = cachedStars.get(i);
             ModelInstance inst = instances[i];
-
-            inst.transform.idt();
-            inst.transform.translate(
-                (float) snap.posWorldGU.x(),
-                (float) snap.posWorldGU.y(),
-                (float) snap.posWorldGU.z()
-            );
 
             StarDetails details = (StarDetails) snap.details;
             float[] rgb;
             if (snap.entityId == hoveredStarId) {
-                rgb = new float[]{1f, 1f, 1f};
+                rgb = new float[] { 1f, 1f, 1f };
             } else if (details != null) {
                 rgb = TemperatureColor.temperatureToRgb(details.temperatureK);
             } else {
-                rgb = new float[]{1f, 0.92f, 0.6f};
+                rgb = new float[] { 1f, 0.92f, 0.6f };
             }
             inst.materials.get(0).set(ColorAttribute.createDiffuse(rgb[0], rgb[1], rgb[2], 1f));
         }
@@ -91,24 +104,15 @@ public class StarBatchRenderer {
     }
 
     public long pick(Ray ray, RealTimeWorldState state) {
-        java.util.List<EntitySnapshot> stars = filterStars(state);
-        int needed = stars.size();
-        ensureInstances(needed);
-        instanceCount = needed;
+        // pick 总是先于 render 被调用，所以负责准备实例数据
+        prepareStars(state);
 
+        Vector3 hitPos = new Vector3();
         long hitId = -1;
         float bestDist = Float.MAX_VALUE;
 
         for (int i = 0; i < instanceCount; i++) {
-            EntitySnapshot snap = stars.get(i);
             ModelInstance inst = instances[i];
-
-            inst.transform.idt();
-            inst.transform.translate(
-                (float) snap.posWorldGU.x(),
-                (float) snap.posWorldGU.y(),
-                (float) snap.posWorldGU.z()
-            );
 
             inst.calculateBoundingBox(bounds);
             bounds.mul(inst.transform);
@@ -117,7 +121,7 @@ public class StarBatchRenderer {
                 float dist = ray.origin.dst(hitPos);
                 if (dist < bestDist) {
                     bestDist = dist;
-                    hitId = snap.entityId;
+                    hitId = cachedStars.get(i).entityId;
                 }
             }
         }
@@ -125,14 +129,13 @@ public class StarBatchRenderer {
         return hitId;
     }
 
-    private java.util.List<EntitySnapshot> filterStars(RealTimeWorldState state) {
-        java.util.List<EntitySnapshot> result = new java.util.ArrayList<>();
+    private void filterStars(RealTimeWorldState state, java.util.List<EntitySnapshot> out) {
+        out.clear();
         for (EntitySnapshot snap : state.getEntitySnapshotsView()) {
             if (snap != null && snap.entityType == EntityType.STAR) {
-                result.add(snap);
+                out.add(snap);
             }
         }
-        return result;
     }
 
     private void ensureInstances(int needed) {

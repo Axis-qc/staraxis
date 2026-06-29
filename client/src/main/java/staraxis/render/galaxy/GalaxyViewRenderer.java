@@ -30,7 +30,11 @@ public class GalaxyViewRenderer {
         batchRenderer.render(state, camera, hoveredStarId);
 
         if (hoveredStarId >= 0) {
-            drawSelectionBox(state, hoveredStarId, camera.camera.combined);
+            // 渲染时顺便查一次位置传递给 drawSelectionBox，避免二次遍历
+            EntitySnapshot star = findStar(state, hoveredStarId);
+            if (star != null) {
+                drawSelectionBox(star, camera.camera.combined);
+            }
         }
     }
 
@@ -38,10 +42,7 @@ public class GalaxyViewRenderer {
         return batchRenderer.pick(ray, state);
     }
 
-    private void drawSelectionBox(RealTimeWorldState state, long starId, Matrix4 projectionView) {
-        EntitySnapshot star = findStar(state, starId);
-        if (star == null) return;
-
+    private void drawSelectionBox(EntitySnapshot star, Matrix4 projectionView) {
         float x = (float) star.posWorldGU.x();
         float y = (float) star.posWorldGU.y();
         float z = (float) star.posWorldGU.z();
@@ -68,9 +69,6 @@ public class GalaxyViewRenderer {
             }
         }
         return null;
-    }
-
-    public void resize(int w, int h) {
     }
 
     public void dispose() {

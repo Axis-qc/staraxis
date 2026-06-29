@@ -45,6 +45,13 @@ public class SystemViewRenderer {
     private final StarMesh starMesh;
     private final OrbitRingMesh orbitRing;
 
+    /** 对象池：恒星 ModelInstance（仅 1 个，每帧复用） */
+    private final ModelInstance starInstance;
+    /** 对象池：高精度行星 ModelInstance（懒增长） */
+    private final java.util.ArrayList<ModelInstance> planetHighInstances = new java.util.ArrayList<>();
+    /** 对象池：低精度行星 ModelInstance（懒增长） */
+    private final java.util.ArrayList<ModelInstance> planetLowInstances = new java.util.ArrayList<>();
+
     private double simulationTime = 0.0;
 
     public SystemViewRenderer() {
@@ -57,45 +64,54 @@ public class SystemViewRenderer {
         planetMesh = new PlanetMesh();
         starMesh = new StarMesh();
         orbitRing = new OrbitRingMesh();
+
+        // 预创建恒星实例，行星实例在首次渲染时懒创建
+        starInstance = new ModelInstance(starMesh.getModel(), 0, 0, 0);
+    }
+
+    /** 确保行星两级实例池都足够大 */
+    private void ensurePlanetInstances(int needed) {
+        while (planetHighInstances.size() < needed) {
+            planetHighInstances.add(new ModelInstance(planetMesh.getHighDetail(), 0, 0, 0));
+        }
+        while (planetLowInstances.size() < needed) {
+            planetLowInstances.add(new ModelInstance(planetMesh.getLowDetail(), 0, 0, 0));
+        }
     }
 
     public void render(StarSystem system, WorldCamera camera) {
-        Vector3 cameraPos = camera.camera.position;
-
         Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
 
-        Vector3 starPos = new Vector3(0, 0, 0);
         if (!system.stars.isEmpty()) {
-            starPos = renderMainStar(system.stars.get(0), camera);
+            renderMainStar(system.stars.get(0), camera);
         }
 
-        for (PlanetBody planet : system.planets) {
-            renderPlanet(planet, starPos, camera);
+        // 遍历索引，保证每颗行星复用对应的池内实例
+        int planetCount = system.planets.size();
+        ensurePlanetInstances(planetCount);
+        for (int i = 0; i < planetCount; i++) {
+            renderPlanet(i, system.planets.get(i), camera);
         }
 
         Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
     }
 
-    private Vector3 renderMainStar(StarBody star, WorldCamera camera) {
-        double distance = camera.camera.position.len();
-        LodLevel lod = LodCalculator.calculate(distance);
-
+    private void renderMainStar(StarBody star, WorldCamera camera) {
         float[] rgb = TemperatureColor.temperatureToRgb(star.temperatureK);
         float scale = (float) star.radiusGU;
 
-        ModelInstance instance = new ModelInstance(starMesh.getModel(), 0, 0, 0);
-        instance.transform.scl(scale);
-        instance.materials.get(0).set(ColorAttribute.createDiffuse(rgb[0], rgb[1], rgb[2], 1f));
-        instance.materials.get(0).set(ColorAttribute.createEmissive(rgb[0], rgb[1], rgb[2], 1f));
+        // 复用池内实例，重置变换
+        starInstance.transform.idt();
+        starInstance.transform.scl(scale);
+        starInstance.materials.get(0).set(ColorAttribute.createDiffuse(rgb[0], rgb[1], rgb[2], 1f));
+        starInstance.materials.get(0).set(ColorAttribute.createEmissive(rgb[0], rgb[1], rgb[2], 1f));
 
         modelBatch.begin(camera.camera);
-        modelBatch.render(instance); // 不传 environment，方向光不影响恒星
+        modelBatch.render(starInstance); // 不传 environment，方向光不影响恒星
         modelBatch.end();
-
-        return new Vector3(0, 0, 0);
     }
 
-    private void renderPlanet(PlanetBody planet, Vector3 starPos, WorldCamera camera) {
+    private void renderPlanet(int index, PlanetBody planet, WorldCamera camera) {
         OrbitalElements orbit = toOrbitalElements(planet);
         SpacePosition pos = OrbitSolver.solve(orbit, simulationTime);
         float px = (float) pos.x();
@@ -104,10 +120,9 @@ public class SystemViewRenderer {
 
         Vector3 cameraPos = camera.camera.position;
         double distance = Math.sqrt(
-            (cameraPos.x - px) * (cameraPos.x - px) +
-            (cameraPos.y - py) * (cameraPos.y - py) +
-            (cameraPos.z - pz) * (cameraPos.z - pz)
-        );
+                (cameraPos.x - px) * (cameraPos.x - px) +
+                        (cameraPos.y - py) * (cameraPos.y - py) +
+                        (cameraPos.z - pz) * (cameraPos.z - pz));
         LodLevel lod = LodCalculator.calculate(distance);
 
         if (lod == LodLevel.HIDDEN) {
@@ -121,18 +136,18 @@ public class SystemViewRenderer {
         float scale = (float) planet.radiusGU;
         float[] rgb = planetColor(planet.planetTypeId);
 
-        ModelInstance instance;
-        if (lod == LodLevel.FULL) {
-            instance = new ModelInstance(planetMesh.getHighDetail(), px, py, pz);
-        } else {
-            instance = new ModelInstance(planetMesh.getLowDetail(), px, py, pz);
-        }
-
+        // 复用池内实例，根据 LOD 选择高/低精度池
+        ModelInstance instance = (lod == LodLevel.LOW)
+                ? planetLowInstances.get(index)
+                : planetHighInstances.get(index);
+        instance.transform.idt();
+        instance.transform.translate(px, py, pz);
         instance.transform.scl(scale);
         instance.materials.get(0).set(ColorAttribute.createDiffuse(rgb[0], rgb[1], rgb[2], 1f));
-        instance.materials.get(0).set(ColorAttribute.createEmissive(rgb[0] * 0.08f, rgb[1] * 0.08f, rgb[2] * 0.08f, 1f));
+        instance.materials.get(0)
+                .set(ColorAttribute.createEmissive(rgb[0] * 0.08f, rgb[1] * 0.08f, rgb[2] * 0.08f, 1f));
 
-        starLight.setDirection(px - starPos.x, py - starPos.y, pz - starPos.z);
+        starLight.setDirection(px - 0, py - 0, pz - 0);
 
         modelBatch.begin(camera.camera);
         modelBatch.render(instance, environment);
@@ -151,9 +166,6 @@ public class SystemViewRenderer {
         simulationTime = time;
     }
 
-    public void resize(int w, int h) {
-    }
-
     public void dispose() {
         modelBatch.dispose();
         planetMesh.dispose();
@@ -164,29 +176,28 @@ public class SystemViewRenderer {
     private static OrbitalElements toOrbitalElements(PlanetBody p) {
         double periodSeconds = p.orbitalPeriodDays * 86400.0;
         return new OrbitalElements(
-            p.semiMajorAxisGU,
-            p.eccentricity,
-            Math.toRadians(p.inclinationDeg),
-            0.0,
-            Math.toRadians(p.periapsisArgDeg),
-            Math.toRadians(p.meanAnomalyDegAtEpoch),
-            0.0,
-            periodSeconds
-        );
+                p.semiMajorAxisGU,
+                p.eccentricity,
+                Math.toRadians(p.inclinationDeg),
+                0.0,
+                Math.toRadians(p.periapsisArgDeg),
+                Math.toRadians(p.meanAnomalyDegAtEpoch),
+                0.0,
+                periodSeconds);
     }
 
     private static float[] planetColor(String planetTypeId) {
         if (planetTypeId == null) {
-            return new float[]{0.55f, 0.47f, 0.38f};
+            return new float[] { 0.55f, 0.47f, 0.38f };
         }
         return switch (planetTypeId.toUpperCase()) {
-            case "GAS_GIANT" -> new float[]{0.85f, 0.65f, 0.35f};
-            case "OCEAN", "WATER" -> new float[]{0.20f, 0.45f, 0.80f};
-            case "ICE", "ICE_GIANT" -> new float[]{0.75f, 0.82f, 0.90f};
-            case "LAVA", "VOLCANIC" -> new float[]{0.70f, 0.25f, 0.15f};
-            case "DESERT" -> new float[]{0.85f, 0.72f, 0.45f};
-            case "GARDEN", "TERRAN" -> new float[]{0.25f, 0.65f, 0.35f};
-            default -> new float[]{0.55f, 0.47f, 0.38f};
+            case "GAS_GIANT" -> new float[] { 0.85f, 0.65f, 0.35f };
+            case "OCEAN", "WATER" -> new float[] { 0.20f, 0.45f, 0.80f };
+            case "ICE", "ICE_GIANT" -> new float[] { 0.75f, 0.82f, 0.90f };
+            case "LAVA", "VOLCANIC" -> new float[] { 0.70f, 0.25f, 0.15f };
+            case "DESERT" -> new float[] { 0.85f, 0.72f, 0.45f };
+            case "GARDEN", "TERRAN" -> new float[] { 0.25f, 0.65f, 0.35f };
+            default -> new float[] { 0.55f, 0.47f, 0.38f };
         };
     }
 }
