@@ -106,7 +106,48 @@
   - `scrollY`（boolean，默认 `true`）：允许纵向滚动
 - **子节点**：仅使用第一个 child 作为 content
 
-### 6) window（Window）
+### 6) list（可滚动列表）
+
+- **type**：`list`
+- **构建**：`ScrollPane` 包裹 `Table`，搭配 `DataProvider` 做数据驱动行渲染
+- **支持属性**：
+  - `dataSource`（string）：数据源标识，传给 `DataProvider#getData(source)` 获取行数据
+  - `onSelect`（string）：选中行时派发的 action id，格式为 `actionId:index`（index 为 0-based 行号）
+  - `spacing`（number）：行间距，默认 0
+  - `scrollX`（boolean，默认 `false`）：允许横向滚动
+  - `scrollY`（boolean，默认 `true`）：允许纵向滚动
+  - `width`/`height`（number）：列表整体尺寸
+- **子节点**：第一个 child 作为行模板（`${key}` 占位符替换），其余 child 忽略
+- **选中机制**：点击行自动记录选中索引，注入 `selected: true` 到模板属性中（模板可通过 `${selected}` 切换视觉效果）；派发 `onSelect:index` 事件
+- **外部 API**：`UiFactory#setListData(ScrollPane, List)`, `getListSelectedIndex(ScrollPane)`, `selectListItem(ScrollPane, int)`
+- **示例**：
+```json
+{
+  "type": "list",
+  "name": "saveList",
+  "properties": {
+    "dataSource": "saves",
+    "onSelect": "saveList:select",
+    "spacing": 4,
+    "width": 300,
+    "height": 200
+  },
+  "children": [
+    {
+      "type": "container",
+      "properties": {
+        "background": "${selected?#406090B2:#00000000}",
+        "pad": 8
+      },
+      "children": [
+        { "type": "label", "properties": { "text": "${name}" } }
+      ]
+    }
+  ]
+}
+```
+
+### 7) window（Window）
 
 - **type**：`window`
 - **构建**：`new Window(title, skin)`
@@ -117,7 +158,7 @@
   - `resizable`（boolean）：可缩放
 - **子节点**：每个 child `window.add(create(child)).row()`，最后 `window.pack()`
 
-### 7) dialog（Dialog）
+### 8) dialog（Dialog）
 
 - **type**：`dialog`
 - **构建**：`new Dialog(title, skin)`
@@ -128,7 +169,7 @@
   - `resizable`（boolean）：可缩放
 - **子节点**：添加到 `dialog.getContentTable()`，并对每个 child 的 `cell` 属性生效，最后 `dialog.pack()`
 
-### 8) verticalgroup（VerticalGroup）
+### 9) verticalgroup（VerticalGroup）
 
 - **type**：`verticalgroup`
 - **构建**：`new VerticalGroup()`
@@ -137,7 +178,7 @@
   - `align`（string）：包含 `top/bottom/left/right/center` 的组合
 - **子节点**：每个 child `group.addActor(create(child))`
 
-### 9) repeat（Repeat 容器）
+### 10) repeat（Repeat 容器）
 
 - **type**：`repeat`
 - **构建**：`Table container = new Table()`（top/left）
@@ -145,7 +186,7 @@
   - `repeat` 的第一个 child 作为“模板节点”，会存入 `container.setUserObject(templateNode)`
   - 实际渲染由 `UiFactory#renderRepeatItems(...)` 完成
 
-### 10) label（Label）
+### 11) label（Label）
 
 - **type**：`label`
 - **构建**：`new Label(gui.i18n(text), skin)`
@@ -154,7 +195,7 @@
   - `alignment`（string）：包含 `left/center/right`
   - `color`（string）：`#RRGGBB/#RRGGBBAA` 或 Skin color 名称
 
-### 11) button（TextButton）
+### 12) button（TextButton）
 
 - **type**：`button`
 - **构建**：`new TextButton(gui.i18n(text), skin)`
@@ -163,14 +204,14 @@
   - `background`（string）：Skin drawable 名称（会覆盖 up/over/down/focused）
   - `onClick`（string）：点击动作 id，触发 `gui.dispatchAction(onClick)`
 
-### 12) image（Image）
+### 13) image（Image）
 
 - **type**：`image`
 - **构建**：`new Image(drawable)`
 - **支持属性**：
   - `drawable`（string）：Skin drawable 名称
 
-### 13) slider（Slider）
+### 14) slider（Slider）
 
 - **type**：`slider`
 - **构建**：`new Slider(min, max, step, vertical, skin)`
@@ -180,7 +221,7 @@
   - `vertical`（boolean）：是否垂直
   - `onChange`（string）：变化动作 id，触发 `actionId + ":" + sliderValue`
 
-### 14) selectbox（SelectBox<String>）
+### 15) selectbox（SelectBox<String>）
 
 - **type**：`selectbox`
 - **构建**：`new SelectBox<>(skin)`
@@ -189,7 +230,7 @@
   - `selected`（string）：默认选中项
   - `onChange`（string）：变化动作 id，触发 `actionId + ":" + selectedItem`
 
-### 15) progressbar（ProgressBar）
+### 16) progressbar（ProgressBar）
 
 - **type**：`progressbar`
 - **构建**：`new ProgressBar(min, max, step, vertical, skin)`
@@ -198,7 +239,7 @@
   - `value`（number/string）：初始值
   - `vertical`（boolean）：是否垂直
 
-### 16) textfield（TextField）
+### 17) textfield（TextField）
 
 - **type**：`textfield`
 - **构建**：`new TextField(text, skin)`
