@@ -32,7 +32,8 @@
                   "properties": {},
                   "children": [
                     {
-                      "type": "button",
+                      "type": "vector_button",
+                      "effect": "primary_button",
                       "name": "resolution_item",
                       "properties": {
                         "text": "${item}",

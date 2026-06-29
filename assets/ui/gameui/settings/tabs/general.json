@@ -53,7 +53,8 @@
           },
           "children": [
             {
-              "type": "label",
+              "type": "vector_label",
+              "effect": "body_dim",
               "properties": {
                 "text": "settings.uiScale",
                 "cell": {
@@ -63,7 +64,8 @@
               }
             },
             {
-              "type": "button",
+              "type": "vector_button",
+              "effect": "primary_button",
               "properties": {
                 "text": "<",
                 "onClick": "DECREASE_UI_SCALE",
@@ -74,7 +76,7 @@
               }
             },
             {
-              "type": "label",
+              "type": "vector_label",
               "name": "ui_scale_label",
               "properties": {
                 "text": "1.0x",
@@ -86,7 +88,8 @@
               }
             },
             {
-              "type": "button",
+              "type": "vector_button",
+              "effect": "primary_button",
               "properties": {
                 "text": ">",
                 "onClick": "INCREASE_UI_SCALE",
@@ -109,7 +112,8 @@
           },
           "children": [
             {
-              "type": "label",
+              "type": "vector_label",
+              "effect": "body_dim",
               "properties": {
                 "text": "settings.fontScale",
                 "cell": {
@@ -119,7 +123,8 @@
               }
             },
             {
-              "type": "button",
+              "type": "vector_button",
+              "effect": "primary_button",
               "properties": {
                 "text": "<",
                 "onClick": "DECREASE_FONT_SCALE",
@@ -130,7 +135,7 @@
               }
             },
             {
-              "type": "label",
+              "type": "vector_label",
               "name": "font_scale_label",
               "properties": {
                 "text": "1.0x",
@@ -142,7 +147,8 @@
               }
             },
             {
-              "type": "button",
+              "type": "vector_button",
+              "effect": "primary_button",
               "properties": {
                 "text": ">",
                 "onClick": "INCREASE_FONT_SCALE",

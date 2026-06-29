@@ -44,7 +44,8 @@
           }
         },
         {
-          "type": "label",
+          "type": "vector_label",
+          "effect": "body_dim",
           "properties": {
             "text": "lang.current",
             "cell": {
@@ -60,7 +61,8 @@
           },
           "children": [
             {
-              "type": "button",
+              "type": "vector_button",
+              "effect": "primary_button",
               "properties": {
                 "text": "简体中文",
                 "onClick": "SET_LANG_ZH",
@@ -72,7 +74,8 @@
               }
             },
             {
-              "type": "button",
+              "type": "vector_button",
+              "effect": "primary_button",
               "properties": {
                 "text": "English",
                 "onClick": "SET_LANG_EN",

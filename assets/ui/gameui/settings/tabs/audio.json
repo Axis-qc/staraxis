@@ -44,7 +44,8 @@
           }
         },
         {
-          "type": "label",
+          "type": "vector_label",
+          "effect": "body_dim",
           "properties": {
             "text": "settings.masterVolume",
             "cell": {
