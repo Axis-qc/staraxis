@@ -44,14 +44,14 @@ public final class OrbitSolver {
         // 3. 计算真近点角 nu
         double trueAnomaly = computeTrueAnomaly(eccentricAnomaly, elements.eccentricity());
 
-        // 4. 计算轨道平面位置
+        // 4. 计算轨道平面位置（轨道面在 XZ 平面，Y 轴朝上）
         double r = elements.semiMajorAxis() * (1.0 - elements.eccentricity() * Math.cos(eccentricAnomaly));
         double xLocal = r * Math.cos(trueAnomaly);
-        double yLocal = r * Math.sin(trueAnomaly);
+        double zLocal = r * Math.sin(trueAnomaly);
 
         // 5. 通过 3-1-3 欧拉旋转 (Omega, i, omega) 变换到星系坐标系
         return rotateToGalaxyFrame(
-            xLocal, yLocal,
+            xLocal, zLocal,
             elements.longitudeOfAscendingNode(),
             elements.inclination(),
             elements.argumentOfPeriapsis()
@@ -109,17 +109,20 @@ public final class OrbitSolver {
     /**
      * 通过 3-1-3 欧拉旋转 (Omega, i, omega) 将轨道平面坐标变换到星系坐标系。
      *
-     * 旋转矩阵 R = R_z(-Omega) * R_x(-i) * R_z(-omega)
+     * 轨道面在 XZ 平面（Y 轴朝上），i=0 时轨道完全在 XZ 平面。
+     *
+     * 旋转步骤：R_z(-Omega) * R_x(-i) * R_z(-omega)
+     * 输入 (xLocal, zLocal) 为轨道面内坐标。
      *
      * @param xLocal 轨道平面 X 坐标
-     * @param yLocal 轨道平面 Y 坐标
+     * @param zLocal 轨道平面 Z 坐标
      * @param omega 升交点经度（弧度）
      * @param inclination 轨道倾角（弧度）
      * @param argumentOfPeriapsis 近心点幅角（弧度）
      * @return 星系坐标系中的位置
      */
     private static SpacePosition rotateToGalaxyFrame(
-        double xLocal, double yLocal,
+        double xLocal, double zLocal,
         double omega, double inclination, double argumentOfPeriapsis
     ) {
         // 预计算三角函数
@@ -130,19 +133,19 @@ public final class OrbitSolver {
         double cosW = Math.cos(argumentOfPeriapsis);
         double sinW = Math.sin(argumentOfPeriapsis);
 
-        // 旋转矩阵元素（3-1-3 欧拉旋转）
-        // P = R_z(-Omega) * R_x(-i) * R_z(-omega)
-        double p11 = cosOmega * cosW - sinOmega * sinW * cosI;
-        double p12 = -cosOmega * sinW - sinOmega * cosW * cosI;
-        double p21 = sinOmega * cosW + cosOmega * sinW * cosI;
-        double p22 = -sinOmega * sinW + cosOmega * cosW * cosI;
-        double p31 = sinW * sinI;
-        double p32 = cosW * sinI;
+        // 旋转矩阵元素（轨道面在 XZ，Y 朝上）
+        // R = R_z(-Omega) * R_x(-i) * R_z(-omega)，作用于 (xLocal, 0, zLocal)
+        double p11 = cosOmega * cosW - sinOmega * cosI * sinW;
+        double p13 = cosOmega * sinW + sinOmega * cosI * cosW;
+        double p21 = sinOmega * sinI;
+        double p23 = -cosOmega * sinI;
+        double p31 = -sinOmega * cosW - cosOmega * cosI * sinW;
+        double p33 = -sinOmega * sinW + cosOmega * cosI * cosW;
 
         // 变换到星系坐标系
-        double x = p11 * xLocal + p12 * yLocal;
-        double y = p21 * xLocal + p22 * yLocal;
-        double z = p31 * xLocal + p32 * yLocal;
+        double x = p11 * xLocal + p13 * zLocal;
+        double y = p21 * xLocal + p23 * zLocal;
+        double z = p31 * xLocal + p33 * zLocal;
 
         return new SpacePosition(x, y, z);
     }

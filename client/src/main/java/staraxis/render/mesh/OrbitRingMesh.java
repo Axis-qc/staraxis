@@ -37,12 +37,7 @@ public class OrbitRingMesh {
         double omega = orbit.longitudeOfAscendingNode();
         double w = orbit.argumentOfPeriapsis();
 
-        // 计算轨道平面上的点，然后旋转到星系坐标系
-        shapeRenderer.setProjectionMatrix(projectionView);
-        shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
-        shapeRenderer.setColor(color);
-        Gdx.gl.glLineWidth(1f);
-
+        // 预计算旋转矩阵（轨道面在 XZ，Y 朝上）
         double cosI = Math.cos(i);
         double sinI = Math.sin(i);
         double cosO = Math.cos(omega);
@@ -50,28 +45,32 @@ public class OrbitRingMesh {
         double cosW = Math.cos(w);
         double sinW = Math.sin(w);
 
+        double p11 = cosO * cosW - sinO * cosI * sinW;
+        double p13 = cosO * sinW + sinO * cosI * cosW;
+        double p21 = sinO * sinI;
+        double p23 = -cosO * sinI;
+        double p31 = -sinO * cosW - cosO * cosI * sinW;
+        double p33 = -sinO * sinW + cosO * cosI * cosW;
+
+        shapeRenderer.setProjectionMatrix(projectionView);
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
+        shapeRenderer.setColor(color);
+        Gdx.gl.glLineWidth(1f);
+
         double prevX = 0, prevY = 0, prevZ = 0;
 
         for (int seg = 0; seg <= SEGMENTS; seg++) {
             double nu = 2.0 * Math.PI * seg / SEGMENTS;
 
-            // 轨道平面上的极坐标 -> 直角坐标
+            // 轨道平面极坐标 -> 直角坐标（轨道面在 XZ）
             double r = a * (1.0 - e * e) / (1.0 + e * Math.cos(nu));
             double xLocal = r * Math.cos(nu);
-            double yLocal = r * Math.sin(nu);
+            double zLocal = r * Math.sin(nu);
 
-            // 3-1-3 欧拉旋转（天文学标准：轨道面在 XY）
-            double solverX = (cosO * cosW - sinO * sinW * cosI) * xLocal
-                     + (-cosO * sinW - sinO * cosW * cosI) * yLocal;
-            double solverY = (sinO * cosW + cosO * sinW * cosI) * xLocal
-                     + (-sinO * sinW + cosO * cosW * cosI) * yLocal;
-            double solverZ = (sinW * sinI) * xLocal
-                     + (cosW * sinI) * yLocal;
-
-            // 转换为渲染坐标：交换 Y/Z，使轨道面在 XZ 水平面
-            double x = solverX;
-            double y = solverZ;
-            double z = -solverY;
+            // 旋转到星系坐标系
+            double x = p11 * xLocal + p13 * zLocal;
+            double y = p21 * xLocal + p23 * zLocal;
+            double z = p31 * xLocal + p33 * zLocal;
 
             if (seg > 0) {
                 shapeRenderer.line(

@@ -107,13 +107,11 @@ public class SystemViewRenderer {
      * 渲染行星。
      */
     private void renderPlanet(PlanetData planet, Vector3 cameraPos, WorldCamera camera) {
-        // 计算行星当前位置
+        // 计算行星当前位置（OrbitSolver 输出 XZ 水平面坐标）
         SpacePosition pos = OrbitSolver.solve(planet.orbit(), simulationTime);
-        // OrbitSolver 输出天文学坐标（轨道面在 XY），渲染需要 XZ 水平面
-        // 交换 Y/Z：renderX=solverX, renderY=solverZ, renderZ=-solverY
         float px = (float) pos.x();
-        float py = (float) pos.z();
-        float pz = (float) -pos.y();
+        float py = (float) pos.y();
+        float pz = (float) pos.z();
 
         // 计算 LOD
         double distance = Math.sqrt(
