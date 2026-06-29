@@ -1,0 +1,9 @@
+# StarAxis 启动器依赖喵
+#
+# 开发运行依赖（development）：
+# - 启动器仅用 Python 标准库（tkinter, winreg, subprocess, json, dataclasses）喵
+# - 无需额外安装第三方库喵
+#
+# 打包依赖（packaging）：
+# - 仅打包成 exe 时需要 PyInstaller 喵
+pyinstaller>=6.0
