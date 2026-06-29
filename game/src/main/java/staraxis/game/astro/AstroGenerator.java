@@ -8,7 +8,9 @@ import staraxis.game.astro.def.PresetStarSystemDef;
 import staraxis.game.astro.def.PresetStarSystemRepository;
 import staraxis.game.planet.PlanetSurface;
 import staraxis.game.planet.def.PlanetAssetRepository;
+import staraxis.game.space.SpacePosition;
 import staraxis.game.world.WorldGenConfig;
+import staraxis.game.world.WorldHexLayout;
 import staraxis.game.world.WorldMap;
 import staraxis.game.world.WorldSector;
 
@@ -411,6 +413,34 @@ public final class AstroGenerator {
     }
 
     // --- Helper methods ---
+
+    /**
+     * 在指定 3D 位置生成一个恒星系（用于星系生成器策略模式）喵。
+     */
+    public StarSystem generateSystemAtPosition(SpacePosition position, long starId) {
+        StarSystem system = new StarSystem();
+        system.systemId = idCounter.incrementAndGet();
+        system.barycenterEntityId = idCounter.incrementAndGet();
+
+        // 计算所属星区
+        staraxis.game.world.Vec2d pos2d = new staraxis.game.world.Vec2d(position.x(), position.z());
+        system.sectorCoord = WorldHexLayout.worldToSectorCoord(pos2d);
+        system.centerWorldGU = pos2d;
+
+        // 生成主星
+        StarBody primaryStar = generateStar(system, null);
+        primaryStar.entityId = starId;
+        primaryStar.systemId = system.systemId;
+        primaryStar.parentEntityId = system.barycenterEntityId;
+        primaryStar.sectorCoord = system.sectorCoord;
+        primaryStar.posWorldGU = new SpacePosition(position.x(), position.y(), position.z());
+        system.stars.add(primaryStar);
+
+        // 生成行星
+        generatePlanetsForSystem(system, primaryStar, null);
+
+        return system;
+    }
 
     private <T> T weightedRandom(List<T> items, java.util.function.ToDoubleFunction<T> weightFunc) {
         double totalWeight = items.stream().mapToDouble(weightFunc).sum();

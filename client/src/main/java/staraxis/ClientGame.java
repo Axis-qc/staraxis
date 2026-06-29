@@ -204,6 +204,12 @@ public class ClientGame implements ApplicationListener {
         rayPicker.updateHovered(spaceCamera, state,
             Gdx.input.getX(), Gdx.input.getY(), galaxyViewRenderer);
 
+        // 更新悬停恒星坐标显示
+        InGameHudScreen hud = gui.get(InGameHudScreen.class);
+        if (hud != null) {
+            hud.updateStarInfo(rayPicker.getHoveredStarId(), state);
+        }
+
         if (Gdx.input.isButtonJustPressed(com.badlogic.gdx.Input.Buttons.LEFT)) {
             long selectedStarId = rayPicker.getHoveredStarId();
             if (selectedStarId >= 0) {

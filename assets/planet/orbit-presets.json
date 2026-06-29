@@ -1,42 +1,24 @@
 {
-    "schemaVersion": 1,
-    "presets": [
-        {
-            "presetId": "DEFAULT",
-            "planetCountRange": [
-                2,
-                10
-            ],
-            "orbitSpacingMethod": "EXPONENTIAL",
-            "firstOrbitGURange": [
-                448793.6121,
-                2243968.0605
-            ],
-            "orbitSeparationFactorRange": [
-                1.4,
-                2
-            ],
-            "eccentricityRange": [
-                0,
-                0.25
-            ],
-            "inclinationDegRange": [
-                0,
-                5
-            ],
-            "rotationPeriodHoursRange": [
-                8,
-                48
-            ],
-            "planetTypeWeights": {
-                "TERRESTRIAL": 10,
-                "ROCKY_BARREN": 50,
-                "GAS_GIANT": 25,
-                "ICE_GIANT": 20,
-                "OCEAN_WORLD": 8,
-                "LAVA_WORLD": 5,
-                "FROZEN_WORLD": 20
-            }
-        }
-    ]
+  "schemaVersion": 1,
+  "presets": [
+    {
+      "presetId": "DEFAULT",
+      "planetCountRange": [2, 6],
+      "orbitSpacingMethod": "EXPONENTIAL",
+      "firstOrbitGURange": [1800, 3000],
+      "orbitSeparationFactorRange": [1.2, 1.5],
+      "eccentricityRange": [0, 0.15],
+      "inclinationDegRange": [0, 5],
+      "rotationPeriodHoursRange": [8, 48],
+      "planetTypeWeights": {
+        "TERRESTRIAL": 10,
+        "ROCKY_BARREN": 50,
+        "GAS_GIANT": 25,
+        "ICE_GIANT": 20,
+        "OCEAN_WORLD": 8,
+        "LAVA_WORLD": 5,
+        "FROZEN_WORLD": 20
+      }
+    }
+  ]
 }

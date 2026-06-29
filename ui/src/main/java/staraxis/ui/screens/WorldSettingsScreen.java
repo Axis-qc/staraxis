@@ -38,7 +38,7 @@ public class WorldSettingsScreen implements Disposable {
 
     private TextField worldNameField;
     private TextField worldSeedField;
-    private SelectBox<String> worldRadiusBox;
+    private SelectBox<String> systemCountBox;
     private SelectBox<String> worldTypeBox;
     private String selectedNationId;
 
@@ -77,13 +77,13 @@ public class WorldSettingsScreen implements Disposable {
         worldNameField = createThemedTextField(skin, gui.i18n("newGame.worldNameHint"), theme);
         table.add(worldNameField).width(220).padBottom(8).row();
 
-        // 世界半径
-        VectorLabel radiusLabel = createBodyLabel(L, gui.i18n("newGame.worldSettings.worldRadius"));
-        table.add(radiusLabel).left().padRight(10).padBottom(8);
-        worldRadiusBox = createThemedSelectBox(skin, theme);
-        worldRadiusBox.setItems("2", "3", "4", "5", "6");
-        worldRadiusBox.setSelected("3");
-        table.add(worldRadiusBox).width(220).padBottom(8).row();
+        // 恒星系数量
+        VectorLabel countLabel = createBodyLabel(L, gui.i18n("newGame.systemCount"));
+        table.add(countLabel).left().padRight(10).padBottom(8);
+        systemCountBox = createThemedSelectBox(skin, theme);
+        systemCountBox.setItems("500", "1000", "2000", "4000", "8000", "10000");
+        systemCountBox.setSelected("500");
+        table.add(systemCountBox).width(220).padBottom(8).row();
 
         // 世界类型
         VectorLabel typeLabel = createBodyLabel(L, gui.i18n("newGame.worldType"));
@@ -220,9 +220,8 @@ public class WorldSettingsScreen implements Disposable {
     private void startNewGame() {
         WorldGenConfig cfg = new WorldGenConfig();
         cfg.worldSeed = worldSeedField.getText().isBlank() ? null : worldSeedField.getText();
-        cfg.worldRadius = Integer.parseInt(worldRadiusBox.getSelected());
+        cfg.systemCount = Integer.parseInt(systemCountBox.getSelected());
         cfg.worldType = WorldType.valueOf(worldTypeBox.getSelected());
-        cfg.galaxyShape = "hex";
 
         if (selectedNationId != null && !selectedNationId.isBlank()) {
             staraxis.game.nation.NationDef def = new staraxis.game.nation.NationDef();

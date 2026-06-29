@@ -7,6 +7,7 @@ import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.utils.Disposable;
 import staraxis.game.StarAxisGameRuntime;
 import staraxis.game.state.RealTimeWorldState;
+import staraxis.game.state.snapshot.EntitySnapshot;
 import staraxis.ui.Gui;
 import staraxis.ui.json.ComponentNode;
 import staraxis.ui.json.UiFactory;
@@ -58,17 +59,28 @@ public class InGameHudScreen implements Disposable {
                 ((VectorLabel) timeActor).setText(String.format("Y%d M%d D%d %02d:%02d",
                         state.year, state.month, state.day, state.hour, state.minute));
             }
+        }
+    }
 
-            Actor tickActor = rootGroup.findActor("tick_label");
-            if (tickActor instanceof VectorLabel) {
-                ((VectorLabel) tickActor).setText("Tick: " + state.simulationTick);
-            }
+    public void updateStarInfo(long hoveredStarId, RealTimeWorldState state) {
+        if (!(root instanceof Group)) return;
 
-            Actor entityActor = rootGroup.findActor("entity_count_label");
-            if (entityActor instanceof VectorLabel) {
-                ((VectorLabel) entityActor).setText("Entities: " + state.getEntitiesByIdView().size());
+        Actor actor = ((Group) root).findActor("star_info_label");
+        if (!(actor instanceof VectorLabel label)) return;
+
+        if (hoveredStarId < 0 || state == null) {
+            label.setText("");
+            return;
+        }
+
+        for (EntitySnapshot snap : state.getEntitySnapshotsView()) {
+            if (snap != null && snap.entityId == hoveredStarId && snap.posWorldGU != null) {
+                var pos = snap.posWorldGU;
+                label.setText(String.format("(%.0f, %.0f, %.0f)", pos.x(), pos.y(), pos.z()));
+                return;
             }
         }
+        label.setText("");
     }
 
     @Override

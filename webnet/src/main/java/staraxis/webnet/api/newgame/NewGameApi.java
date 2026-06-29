@@ -149,24 +149,21 @@ public final class NewGameApi {
 
         cfg.playerNationDef = nationDef;
 
-        Object radius = d.worldGenConfig.get("worldRadius");
-        if (radius instanceof Number) {
-            cfg.worldRadius = ((Number) radius).intValue();
-        } else if (radius != null) {
+        Object count = d.worldGenConfig.get("systemCount");
+        if (count instanceof Number) {
+            cfg.systemCount = ((Number) count).intValue();
+        } else if (count != null) {
             try {
-                cfg.worldRadius = Integer.parseInt(String.valueOf(radius));
+                cfg.systemCount = Integer.parseInt(String.valueOf(count));
             } catch (Exception e) {
-                throw new IllegalArgumentException("worldRadius_invalid");
+                throw new IllegalArgumentException("systemCount_invalid");
             }
         } else {
-            throw new IllegalArgumentException("worldRadius_required");
+            cfg.systemCount = 500;
         }
 
         Object seed = d.worldGenConfig.get("worldSeed");
         cfg.worldSeed = seed == null ? null : String.valueOf(seed);
-
-        Object shape = d.worldGenConfig.get("galaxyShape");
-        cfg.galaxyShape = shape == null ? null : String.valueOf(shape);
 
         Object worldType = d.worldGenConfig.get("worldType");
         if (worldType != null && !String.valueOf(worldType).isBlank()) {
@@ -196,9 +193,9 @@ public final class NewGameApi {
 
         // 多世界：注册为 worldId，并切换为当前激活世界喵
         String worldId = GameSessions.setRuntime(runtime);
-        var finalWorldName = (worldName == null || worldName.isBlank()) ? ("World-" + cfg.worldRadius + "R") : worldName;
+        var finalWorldName = (worldName == null || worldName.isBlank()) ? ("World-" + cfg.systemCount + "S") : worldName;
         GameSessions.registerRuntime(worldId, runtime, finalWorldName, tickPolicy);
-        staraxis.webnet.core.WebNetLog.log("NewGameApi.step3Confirm setRuntime ok worldRadius=" + cfg.worldRadius
+        staraxis.webnet.core.WebNetLog.log("NewGameApi.step3Confirm setRuntime ok systemCount=" + cfg.systemCount
                 + " worldId=" + worldId + " tickPolicy=" + tickPolicy);
 
         return Map.of(

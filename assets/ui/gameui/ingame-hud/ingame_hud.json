@@ -10,33 +10,14 @@
       "type": "container",
       "name": "top_bar",
       "properties": {
-        "align": "topright",
-        "pad": 8,
-        "cell": { "expandX": true, "fillX": true }
+        "align": "right",
+        "pad": 8
       },
       "children": [
         {
           "type": "vector_label",
           "effect": "subtitle_accent",
           "name": "time_label",
-          "properties": {
-            "text": "",
-            "cell": { "padRight": 12 }
-          }
-        },
-        {
-          "type": "vector_label",
-          "effect": "subtitle_accent",
-          "name": "tick_label",
-          "properties": {
-            "text": "",
-            "cell": { "padRight": 12 }
-          }
-        },
-        {
-          "type": "vector_label",
-          "effect": "subtitle_accent",
-          "name": "entity_count_label",
           "properties": {
             "text": ""
           }
@@ -45,71 +26,18 @@
     },
     {
       "type": "container",
-      "name": "bottom_bar",
+      "name": "info_bar",
       "properties": {
-        "align": "bottom",
-        "pad": 8,
-        "cell": { "expandX": true, "fillX": true }
+        "align": "bottomleft",
+        "pad": 8
       },
       "children": [
         {
-          "type": "vector_button",
-          "effect": "primary_button",
-          "name": "btn_develop",
+          "type": "vector_label",
+          "effect": "body_muted",
+          "name": "star_info_label",
           "properties": {
-            "text": "inGame.develop",
-            "onClick": "SHOW_DEVELOPING_DIALOG",
-            "cell": { "width": 120, "height": 36, "pad": 4 }
-          }
-        },
-        {
-          "type": "vector_button",
-          "effect": "primary_button",
-          "name": "btn_military",
-          "properties": {
-            "text": "inGame.military",
-            "onClick": "SHOW_DEVELOPING_DIALOG",
-            "cell": { "width": 120, "height": 36, "pad": 4 }
-          }
-        },
-        {
-          "type": "vector_button",
-          "effect": "primary_button",
-          "name": "btn_tech",
-          "properties": {
-            "text": "inGame.tech",
-            "onClick": "SHOW_DEVELOPING_DIALOG",
-            "cell": { "width": 120, "height": 36, "pad": 4 }
-          }
-        },
-        {
-          "type": "vector_button",
-          "effect": "primary_button",
-          "name": "btn_domestic",
-          "properties": {
-            "text": "inGame.domestic",
-            "onClick": "SHOW_DEVELOPING_DIALOG",
-            "cell": { "width": 120, "height": 36, "pad": 4 }
-          }
-        },
-        {
-          "type": "vector_button",
-          "effect": "primary_button",
-          "name": "btn_diplomacy",
-          "properties": {
-            "text": "inGame.diplomacy",
-            "onClick": "SHOW_DEVELOPING_DIALOG",
-            "cell": { "width": 120, "height": 36, "pad": 4 }
-          }
-        },
-        {
-          "type": "vector_button",
-          "effect": "primary_button",
-          "name": "btn_back",
-          "properties": {
-            "text": "common.back",
-            "onClick": "RETURN_TO_MAIN_MENU",
-            "cell": { "width": 80, "height": 36, "pad": 4 }
+            "text": ""
           }
         }
       ]

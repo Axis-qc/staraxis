@@ -1,15 +1,15 @@
 package staraxis.game.world;
 
-import staraxis.game.world.hex.HexMath;
 import staraxis.game.world.hex.SectorCoord;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * WorldGenerator
+ * WorldGenerator。
  *
- * 纯逻辑世界生成器：按六边形半径生成星区，并拼合为大地图。
+ * 为 3D 宇宙场景生成最小化的世界地图。
+ * 所有恒星系位于 sector (0,0) 附近（星系大小远小于 sector 尺寸）。
  */
 public final class WorldGenerator {
 
@@ -20,37 +20,21 @@ public final class WorldGenerator {
         if (cfg == null) {
             throw new IllegalArgumentException("worldGenConfig_required");
         }
-        if (cfg.worldRadius < 0) {
-            throw new IllegalArgumentException("worldRadius_invalid");
-        }
 
-        int radius = cfg.worldRadius;
+        // 最小半径 1，确保至少包含 (0,0) 星区
+        int radius = 1;
         SectorCoord origin = new SectorCoord(0, 0);
 
         Map<SectorCoord, WorldSector> sectors = new LinkedHashMap<>();
 
-        // axial 坐标的半径盘：distance((0,0),(q,r)) <= radius
-        for (int q = -radius; q <= radius; q++) {
-            for (int r = -radius; r <= radius; r++) {
-                SectorCoord c = new SectorCoord(q, r);
-                if (HexMath.distance(origin, c) <= radius) {
-                    Vec2d center = WorldHexLayout.sectorCenterWorld2D_GU(c);
-                    WorldSector s = new WorldSector(c, center);
-                    s.ownerNationId = null; // 星区初始默认无主（公共），控制权后续由占领/资产归属逻辑决定
-                    sectors.put(c, s);
-                }
-            }
-        }
-
-        // 调试日志：记录生成的星区数量喵
-        staraxis.game.log.GameLog.logThrottled("worldgen_sector_count",
-                "[WorldGenerator] Generated " + sectors.size() + " sectors for radius=" + radius
-                        + ", playerNationId=" + (cfg.playerNationDef == null ? null : cfg.playerNationDef.id));
+        // 只生成中心星区 (0,0)
+        Vec2d center = WorldHexLayout.sectorCenterWorld2D_GU(origin);
+        WorldSector s = new WorldSector(origin, center);
+        s.ownerNationId = null;
+        sectors.put(origin, s);
 
         WorldMap worldMap = new WorldMap(radius, cfg.playerNationDef == null ? null : cfg.playerNationDef.id, sectors);
 
-        // 预留：国家占位逻辑（当前仅占位入口，不做算法）
-        // - 未来：可以根据 cfg.playerNationId / 多国家列表做出生点分配
         return worldMap;
     }
 }

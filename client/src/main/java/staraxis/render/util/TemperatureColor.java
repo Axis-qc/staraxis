@@ -3,40 +3,29 @@ package staraxis.render.util;
 /**
  * TemperatureColor。
  *
- * 将恒星色温（K）转换为 RGB 颜色分量。
- * 使用黑体辐射色温近似公式，结果与 SpectralType 预定义颜色一致。
+ * 将恒星色温（K）映射到 RGB，近似光谱类型颜色。
  */
 public final class TemperatureColor {
 
     private TemperatureColor() {
     }
 
-    /**
-     * 将色温转换为 RGB 颜色分量。
-     *
-     * @param temperatureK 色温（开尔文），有效范围 1000-40000K
-     * @return 长度为 3 的 float 数组 [r, g, b]，值范围 [0, 1]
-     */
+    private static final float[][] TEMP_COLORS = {
+        {30000, 0.59f, 0.71f, 1.0f},   // O: 蓝色
+        {10000, 0.67f, 0.78f, 1.0f},   // B: 蓝白
+        {7500,  0.85f, 0.89f, 1.0f},   // A: 白色
+        {6000,  1.0f,  0.97f, 0.85f},  // F: 黄白
+        {5200,  1.0f,  0.92f, 0.60f},  // G: 黄色（太阳）
+        {3700,  1.0f,  0.73f, 0.38f},  // K: 橙色
+        {0,     1.0f,  0.47f, 0.27f},  // M: 红色
+    };
+
     public static float[] temperatureToRgb(float temperatureK) {
-        float temp = Math.max(1000, Math.min(40000, temperatureK)) / 100f;
-
-        float r, g, b;
-
-        if (temp <= 66f) {
-            r = 1f;
-            g = 0.3900815787691529f - 0.6318414437826271f * (float) Math.exp((temp - 60f) / -50f);
-            b = temp <= 19f ? 0f
-                : 0.5432067893523771f - 0.6352163086295629f * (float) Math.exp((temp - 10f) / -73f);
-        } else {
-            r = 1.292936186062844f - 0.244391867586561f * (float) Math.exp((temp - 60f) / -100f);
-            g = 0.7678445888420641f - 0.1461245536903235f * (float) Math.exp((temp - 60f) / -125f);
-            b = 1f;
+        for (float[] entry : TEMP_COLORS) {
+            if (temperatureK >= entry[0]) {
+                return new float[]{entry[1], entry[2], entry[3]};
+            }
         }
-
-        return new float[]{
-            Math.max(0f, Math.min(1f, r)),
-            Math.max(0f, Math.min(1f, g)),
-            Math.max(0f, Math.min(1f, b))
-        };
+        return new float[]{1f, 0.47f, 0.27f};
     }
 }

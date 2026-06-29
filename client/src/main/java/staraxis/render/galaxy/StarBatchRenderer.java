@@ -3,13 +3,11 @@ package staraxis.render.galaxy;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.VertexAttributes;
-import com.badlogic.gdx.graphics.g3d.Environment;
 import com.badlogic.gdx.graphics.g3d.Material;
 import com.badlogic.gdx.graphics.g3d.Model;
 import com.badlogic.gdx.graphics.g3d.ModelBatch;
 import com.badlogic.gdx.graphics.g3d.ModelInstance;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
-import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import com.badlogic.gdx.math.Intersector;
 import com.badlogic.gdx.math.Vector3;
@@ -34,7 +32,6 @@ public class StarBatchRenderer {
     private static final float STAR_RADIUS = 40f;
 
     private final ModelBatch modelBatch;
-    private final Environment environment;
     private final Model starModel;
     private final BoundingBox bounds = new BoundingBox();
     private final Vector3 hitPos = new Vector3();
@@ -44,9 +41,6 @@ public class StarBatchRenderer {
 
     public StarBatchRenderer() {
         modelBatch = new ModelBatch();
-        environment = new Environment();
-        environment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.5f, 0.5f, 0.6f, 1f));
-        environment.add(new DirectionalLight().set(0.8f, 0.8f, 0.9f, 0, 1, 0));
 
         ModelBuilder builder = new ModelBuilder();
         starModel = builder.createSphere(
@@ -90,7 +84,7 @@ public class StarBatchRenderer {
         Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
         modelBatch.begin(camera.camera);
         for (int i = 0; i < instanceCount; i++) {
-            modelBatch.render(instances[i], environment);
+            modelBatch.render(instances[i]);
         }
         modelBatch.end();
         Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);

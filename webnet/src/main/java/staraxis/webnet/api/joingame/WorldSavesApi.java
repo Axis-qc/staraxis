@@ -129,7 +129,7 @@ public final class WorldSavesApi {
         }
 
         WorldGenConfig cfg = new WorldGenConfig();
-        cfg.worldRadius = worldRadius;
+        cfg.systemCount = worldRadius;
         cfg.worldSeed = worldSeed;
         cfg.worldType = staraxis.game.world.WorldType.SINGLE_PLAYER;
 
@@ -431,11 +431,11 @@ public final class WorldSavesApi {
             }
 
             if (radius instanceof Number n) {
-                cfg.worldRadius = n.intValue();
+                cfg.systemCount = n.intValue();
             } else if (radius != null) {
-                cfg.worldRadius = Integer.parseInt(String.valueOf(radius));
+                cfg.systemCount = Integer.parseInt(String.valueOf(radius));
             } else {
-                cfg.worldRadius = 12;
+                cfg.systemCount = 500;
             }
             Object seed = meta.get("worldSeed");
             cfg.worldSeed = seed == null ? null : String.valueOf(seed);

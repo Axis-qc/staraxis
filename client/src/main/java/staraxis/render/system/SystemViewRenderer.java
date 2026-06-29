@@ -40,6 +40,7 @@ public class SystemViewRenderer {
 
     private final ModelBatch modelBatch;
     private final Environment environment;
+    private final DirectionalLight starLight;
     private final PlanetMesh planetMesh;
     private final StarMesh starMesh;
     private final OrbitRingMesh orbitRing;
@@ -49,8 +50,9 @@ public class SystemViewRenderer {
     public SystemViewRenderer() {
         modelBatch = new ModelBatch();
         environment = new Environment();
-        environment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.3f, 0.3f, 0.4f, 1f));
-        environment.add(new DirectionalLight().set(0.8f, 0.8f, 0.9f, 0, 1, 0));
+        starLight = new DirectionalLight();
+        starLight.set(0.8f, 0.8f, 0.9f, 0, 1, 0);
+        environment.add(starLight);
 
         planetMesh = new PlanetMesh();
         starMesh = new StarMesh();
@@ -62,24 +64,21 @@ public class SystemViewRenderer {
 
         Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
 
+        Vector3 starPos = new Vector3(0, 0, 0);
         if (!system.stars.isEmpty()) {
-            renderMainStar(system.stars.get(0), cameraPos, camera);
+            starPos = renderMainStar(system.stars.get(0), camera);
         }
 
         for (PlanetBody planet : system.planets) {
-            renderPlanet(planet, cameraPos, camera);
+            renderPlanet(planet, starPos, camera);
         }
 
         Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
     }
 
-    private void renderMainStar(StarBody star, Vector3 cameraPos, WorldCamera camera) {
-        double distance = cameraPos.len();
+    private Vector3 renderMainStar(StarBody star, WorldCamera camera) {
+        double distance = camera.camera.position.len();
         LodLevel lod = LodCalculator.calculate(distance);
-
-        if (lod == LodLevel.HIDDEN) {
-            return;
-        }
 
         float[] rgb = TemperatureColor.temperatureToRgb(star.temperatureK);
         float scale = (float) star.radiusGU;
@@ -87,19 +86,23 @@ public class SystemViewRenderer {
         ModelInstance instance = new ModelInstance(starMesh.getModel(), 0, 0, 0);
         instance.transform.scl(scale);
         instance.materials.get(0).set(ColorAttribute.createDiffuse(rgb[0], rgb[1], rgb[2], 1f));
+        instance.materials.get(0).set(ColorAttribute.createEmissive(rgb[0], rgb[1], rgb[2], 1f));
 
         modelBatch.begin(camera.camera);
-        modelBatch.render(instance, environment);
+        modelBatch.render(instance); // 不传 environment，方向光不影响恒星
         modelBatch.end();
+
+        return new Vector3(0, 0, 0);
     }
 
-    private void renderPlanet(PlanetBody planet, Vector3 cameraPos, WorldCamera camera) {
+    private void renderPlanet(PlanetBody planet, Vector3 starPos, WorldCamera camera) {
         OrbitalElements orbit = toOrbitalElements(planet);
         SpacePosition pos = OrbitSolver.solve(orbit, simulationTime);
         float px = (float) pos.x();
         float py = (float) pos.y();
         float pz = (float) pos.z();
 
+        Vector3 cameraPos = camera.camera.position;
         double distance = Math.sqrt(
             (cameraPos.x - px) * (cameraPos.x - px) +
             (cameraPos.y - py) * (cameraPos.y - py) +
@@ -127,6 +130,9 @@ public class SystemViewRenderer {
 
         instance.transform.scl(scale);
         instance.materials.get(0).set(ColorAttribute.createDiffuse(rgb[0], rgb[1], rgb[2], 1f));
+        instance.materials.get(0).set(ColorAttribute.createEmissive(rgb[0] * 0.08f, rgb[1] * 0.08f, rgb[2] * 0.08f, 1f));
+
+        starLight.setDirection(px - starPos.x, py - starPos.y, pz - starPos.z);
 
         modelBatch.begin(camera.camera);
         modelBatch.render(instance, environment);

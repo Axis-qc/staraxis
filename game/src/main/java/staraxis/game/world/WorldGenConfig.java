@@ -7,29 +7,13 @@ package staraxis.game.world;
  */
 public class WorldGenConfig {
 
-    /**
-     * worldSeed：世界生成种子（允许为空，表示由外部决定默认策略）。
-     */
     public String worldSeed;
 
-    /**
-     * worldRadius：六边形星区半径（以中心 (0,0) 为起点的环数）。
-     */
-    public int worldRadius;
+    /** 恒星系数量（500~10000），决定生成多少个恒星系喵。 */
+    public int systemCount = 500;
 
-    /**
-     * galaxyShape：星系形状（数据驱动占位字段）。
-     */
-    public String galaxyShape;
-
-    /**
-     * worldType：世界类型（单人/多人/服务器）喵。
-     */
     public WorldType worldType = WorldType.SINGLE_PLAYER;
 
-    /**
-     * playerNationDef：玩家选择/自定义的国家定义。
-     */
     public staraxis.game.nation.NationDef playerNationDef;
 
     public WorldGenConfig() {

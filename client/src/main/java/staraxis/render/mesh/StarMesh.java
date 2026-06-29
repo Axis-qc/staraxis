@@ -1,10 +1,8 @@
 package staraxis.render.mesh;
 
-import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.VertexAttributes;
 import com.badlogic.gdx.graphics.g3d.Material;
 import com.badlogic.gdx.graphics.g3d.Model;
-import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 
 /**
@@ -23,7 +21,7 @@ public class StarMesh {
 
         // 恒星球体：24x18 段
         model = builder.createSphere(1f, 1f, 1f, 24, 18,
-            new Material(ColorAttribute.createDiffuse(Color.WHITE)),
+            new Material(),
             VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal);
     }
 

@@ -36,6 +36,12 @@ import staraxis.game.state.RealTimeWorldStateBuffer;
 import staraxis.game.state.WorldState;
 import staraxis.game.state.snapshot.EntitySnapshot;
 import staraxis.game.space.SpacePosition;
+import staraxis.game.space.galaxy.GalaxyConfig;
+import staraxis.game.space.galaxy.GalaxyData;
+import staraxis.game.space.galaxy.GalaxyGenerator;
+import staraxis.game.space.galaxy.GalaxyGeneratorFactory;
+import staraxis.game.space.galaxy.GalaxyType;
+import staraxis.game.space.galaxy.StarPosition;
 import staraxis.game.world.WorldGenConfig;
 import staraxis.game.world.WorldGenerator;
 import staraxis.game.world.WorldHexLayout;
@@ -105,7 +111,21 @@ public class StarAxisGameRuntime implements GameRuntime {
         configRegistry.loadAll();
 
         AstroGenerator astroGenerator = new AstroGenerator(astroAssets, planetAssets, cfg.worldSeed);
-        List<StarSystem> systems = astroGenerator.generateSystemsForMap(worldMap, cfg);
+
+        // 使用星系生成器（策略模式）生成恒星位置，然后按位置生成恒星系喵
+        int starCount = cfg.systemCount;
+        GalaxyConfig galaxyCfg = GalaxyConfig.defaultSpiral();
+        galaxyCfg.starCount = starCount;
+        galaxyCfg.worldSeed = (cfg.worldSeed == null || cfg.worldSeed.isBlank()) ? 42L : (long) cfg.worldSeed.hashCode();
+        GalaxyGenerator galaxyGen = GalaxyGeneratorFactory.create(GalaxyType.SPIRAL);
+        GalaxyData galaxyData = galaxyGen.generate(galaxyCfg);
+
+        List<StarSystem> systems = new java.util.ArrayList<>();
+        for (StarPosition sp : galaxyData.stars) {
+            SpacePosition pos = new SpacePosition(sp.galaxyX(), sp.galaxyY(), sp.galaxyZ());
+            StarSystem sys = astroGenerator.generateSystemAtPosition(pos, sp.starId());
+            systems.add(sys);
+        }
 
         AstroData astro = new AstroData(systems);
         WorldState ws = new WorldState(time, worldMap, astro);
@@ -374,13 +394,16 @@ public class StarAxisGameRuntime implements GameRuntime {
             List<EntitySnapshot> sectorBaselines = baselineMap.computeIfAbsent(sectorKey, k -> new ArrayList<>());
 
             // 3.1 系统重心喵
+            StarBody firstStar = system.stars.isEmpty() ? null : system.stars.get(0);
+            SpacePosition systemPos = firstStar != null ? firstStar.posWorldGU
+                : new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y());
             sectorBaselines.add(new EntitySnapshot(
                     system.barycenterEntityId,
                     EntityType.SYSTEM_BARYCENTER,
                     system.systemId,
                     0,
                     system.sectorCoord,
-                    new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y()),
+                    systemPos,
                     null, // 重心初始通常无主
                     true, // 公开可见
                     new EntitySnapshot.SystemBarycenterDetails()));
@@ -393,7 +416,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                         star.systemId,
                         system.barycenterEntityId,
                         system.sectorCoord,
-                        new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y()),
+                        star.posWorldGU != null ? star.posWorldGU : systemPos,
                         star.ownerNationId,
                         true, // 公开可见
                         new EntitySnapshot.StarDetails(star.starTypeId, star.radiusGU, star.massSolar,
@@ -416,7 +439,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                         planet.systemId,
                         system.barycenterEntityId,
                         system.sectorCoord,
-                        new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y()),
+                        systemPos,
                         planet.ownerNationId,
                         true, // 公开可见
                         new EntitySnapshot.PlanetDetails(
@@ -469,13 +492,19 @@ public class StarAxisGameRuntime implements GameRuntime {
 
         for (StarSystem system : worldState.astro.getSystemsView()) {
             // 1. 创建并注册重心实体
+            SpacePosition systemPos3d = null;
+            if (!system.stars.isEmpty() && system.stars.get(0).posWorldGU != null) {
+                systemPos3d = system.stars.get(0).posWorldGU;
+            }
+
             Entity barycenter = new Entity();
             barycenter.entityId = system.barycenterEntityId;
             barycenter.entityType = EntityType.SYSTEM_BARYCENTER;
             barycenter.systemId = system.systemId;
             barycenter.parentEntityId = 0;
             barycenter.sectorCoord = system.sectorCoord;
-            barycenter.posWorldGU = new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y());
+            barycenter.posWorldGU = systemPos3d != null ? systemPos3d
+                : new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y());
 
             // 权威注册到 WorldState 喵
             worldState.registerEntity(barycenter);
@@ -500,7 +529,10 @@ public class StarAxisGameRuntime implements GameRuntime {
                 star.systemId = system.systemId;
                 star.parentEntityId = system.barycenterEntityId; // 单星系统也挂在重心下
                 star.sectorCoord = system.sectorCoord;
-                star.posWorldGU = new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y()); // 单星系统：恒星位置=重心位置
+                if (star.posWorldGU == null) {
+                    star.posWorldGU = systemPos3d != null ? systemPos3d
+                        : new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y());
+                }
 
                 // 权威注册到 WorldState 喵
                 worldState.registerEntity(star);
@@ -534,7 +566,9 @@ public class StarAxisGameRuntime implements GameRuntime {
                 planet.systemId = system.systemId;
                 planet.parentEntityId = system.barycenterEntityId;
                 planet.sectorCoord = system.sectorCoord;
-                planet.posWorldGU = new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y());
+                planet.posWorldGU = planet.posWorldGU != null ? planet.posWorldGU
+                    : (systemPos3d != null ? systemPos3d
+                        : new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y()));
 
                 // 权威注册到 WorldState 喵
                 worldState.registerEntity(planet);
