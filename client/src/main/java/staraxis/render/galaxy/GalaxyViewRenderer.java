@@ -4,6 +4,7 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Matrix4;
+import com.badlogic.gdx.math.collision.Ray;
 
 import staraxis.game.space.galaxy.GalaxyData;
 import staraxis.game.space.galaxy.StarPosition;
@@ -42,6 +43,17 @@ public class GalaxyViewRenderer {
         if (hoveredStarId >= 0) {
             drawSelectionBox(galaxy.getStar(hoveredStarId), camera.camera.combined);
         }
+    }
+
+    /**
+     * 射线拾取恒星。
+     *
+     * @param ray 鼠标射线
+     * @param galaxy 星系数据
+     * @return 命中的恒星ID，未命中返回 -1
+     */
+    public long pick(Ray ray, GalaxyData galaxy) {
+        return batchRenderer.pick(ray, galaxy);
     }
 
     /**

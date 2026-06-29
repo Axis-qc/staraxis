@@ -256,7 +256,7 @@ public class ClientGame implements ApplicationListener {
     private void renderGalaxyView() {
         // 更新悬停恒星
         rayPicker.updateHovered(spaceCamera, galaxyData,
-            Gdx.input.getX(), Gdx.input.getY());
+            Gdx.input.getX(), Gdx.input.getY(), galaxyViewRenderer);
 
         // 点击选中恒星 -> 进入系统视图
         if (Gdx.input.isButtonJustPressed(com.badlogic.gdx.Input.Buttons.LEFT)) {

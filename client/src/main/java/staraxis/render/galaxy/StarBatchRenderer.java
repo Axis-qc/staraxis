@@ -12,6 +12,10 @@ import com.badlogic.gdx.graphics.g3d.ModelInstance;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
+import com.badlogic.gdx.math.Intersector;
+import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.math.collision.BoundingBox;
+import com.badlogic.gdx.math.collision.Ray;
 
 import staraxis.game.space.galaxy.GalaxyData;
 import staraxis.game.space.galaxy.SpectralType;
@@ -102,6 +106,54 @@ public class StarBatchRenderer {
         }
         modelBatch.end();
         Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
+    }
+
+    /**
+     * 射线拾取：检测射线命中的最近恒星。
+     *
+     * @param ray 鼠标射线
+     * @param galaxy 星系数据
+     * @return 命中的恒星ID，未命中返回 -1
+     */
+    public long pick(Ray ray, GalaxyData galaxy) {
+        int needed = galaxy.starCount();
+        if (instances == null || instances.length < needed) {
+            instances = new ModelInstance[needed];
+            for (int i = 0; i < needed; i++) {
+                instances[i] = new ModelInstance(starModel);
+            }
+        }
+        instanceCount = needed;
+
+        long hitId = -1;
+        float bestDist = Float.MAX_VALUE;
+        BoundingBox bounds = new BoundingBox();
+        Vector3 hitPos = new Vector3();
+
+        for (int i = 0; i < instanceCount; i++) {
+            StarPosition star = galaxy.stars.get(i);
+            ModelInstance inst = instances[i];
+
+            inst.transform.idt();
+            inst.transform.translate(
+                (float) star.galaxyX(),
+                (float) star.galaxyY(),
+                (float) star.galaxyZ()
+            );
+
+            inst.calculateBoundingBox(bounds);
+            bounds.mul(inst.transform);
+
+            if (Intersector.intersectRayBounds(ray, bounds, hitPos)) {
+                float dist = ray.origin.dst(hitPos);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    hitId = star.starId();
+                }
+            }
+        }
+
+        return hitId;
     }
 
     public void dispose() {
