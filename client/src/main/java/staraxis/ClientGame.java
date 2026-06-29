@@ -15,9 +15,19 @@ import com.badlogic.gdx.utils.JsonValue;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 
 import staraxis.game.StarAxisGameRuntime;
+import staraxis.game.space.galaxy.GalaxyConfig;
+import staraxis.game.space.galaxy.GalaxyData;
+import staraxis.game.space.galaxy.GalaxyGenerator;
+import staraxis.game.space.galaxy.GalaxyGeneratorFactory;
+import staraxis.game.space.system.StarSystemData;
+import staraxis.game.space.system.StarSystemGenerator;
 import staraxis.logging.GdxToSlf4jLogger;
 import staraxis.render.NativeWorldRenderer;
-import staraxis.render.TestSceneRenderer;
+import staraxis.render.ViewManager;
+import staraxis.render.WorldCamera;
+import staraxis.render.galaxy.GalaxyViewRenderer;
+import staraxis.render.picking.RayPicker;
+import staraxis.render.system.SystemViewRenderer;
 import staraxis.ui.FontProvider;
 import staraxis.ui.Gui;
 import staraxis.ui.UiSkinLoader;
@@ -48,9 +58,16 @@ public class ClientGame implements ApplicationListener {
     private NativeWorldRenderer worldRenderer;
     private StarfieldBackground starfield;
 
-    /** 3D 宇宙测试场景（按 T 键切换）喵 */
-    private TestSceneRenderer testScene;
-    private boolean testMode = false;
+    /** 3D 宇宙渲染管线 */
+    private WorldCamera spaceCamera;
+    private ViewManager viewManager;
+    private GalaxyData galaxyData;
+    private GalaxyViewRenderer galaxyViewRenderer;
+    private SystemViewRenderer systemViewRenderer;
+    private StarSystemGenerator starSystemGenerator;
+    private StarSystemData currentSystem;
+    private RayPicker rayPicker;
+    private boolean spaceMode = false;
 
     @Override
     public void create() {
@@ -115,7 +132,28 @@ public class ClientGame implements ApplicationListener {
         worldRenderer = new NativeWorldRenderer();
         resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 
+        initSpaceRendering();
+
         gui.showMainMenu();
+    }
+
+    /**
+     * 初始化 3D 宇宙渲染管线。
+     */
+    private void initSpaceRendering() {
+        spaceCamera = new WorldCamera();
+        viewManager = new ViewManager();
+        rayPicker = new RayPicker();
+        galaxyViewRenderer = new GalaxyViewRenderer();
+        systemViewRenderer = new SystemViewRenderer();
+        starSystemGenerator = new StarSystemGenerator();
+
+        // 生成默认螺旋星系
+        GalaxyConfig config = GalaxyConfig.defaultSpiral();
+        config.starCount = 5000;
+        config.worldSeed = 42L;
+        GalaxyGenerator generator = GalaxyGeneratorFactory.create(config.galaxyType);
+        galaxyData = generator.generate(config);
     }
 
     @Override
@@ -126,8 +164,14 @@ public class ClientGame implements ApplicationListener {
         if (worldRenderer != null) {
             worldRenderer.resize(width, height);
         }
-        if (testScene != null) {
-            testScene.resize(width, height);
+        if (spaceCamera != null) {
+            spaceCamera.resize(width, height);
+        }
+        if (galaxyViewRenderer != null) {
+            galaxyViewRenderer.resize(width, height);
+        }
+        if (systemViewRenderer != null) {
+            systemViewRenderer.resize(width, height);
         }
         if (starfield != null) {
             starfield.resize(width, height);
@@ -138,18 +182,18 @@ public class ClientGame implements ApplicationListener {
     public void render() {
         float dt = Gdx.graphics.getDeltaTime();
 
-        // T 键切换测试场景喵
+        // T 键切换 3D 宇宙模式
         if (Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.T)) {
-            testMode = !testMode;
-            if (testMode && testScene == null) {
-                testScene = new TestSceneRenderer();
-                testScene.resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+            spaceMode = !spaceMode;
+            if (spaceMode) {
+                spaceCamera.resetView();
+                viewManager.switchToGalaxy();
             }
         }
 
-        // 测试模式：纯 3D 场景，不跑游戏逻辑喵
-        if (testMode && testScene != null) {
-            testScene.render(dt);
+        // 3D 宇宙模式渲染
+        if (spaceMode) {
+            renderSpaceScene(dt);
             return;
         }
 
@@ -178,6 +222,69 @@ public class ClientGame implements ApplicationListener {
 
         stage.act(dt);
         stage.draw();
+    }
+
+    /**
+     * 渲染 3D 宇宙场景。
+     */
+    private void renderSpaceScene(float dt) {
+        spaceCamera.update(dt);
+
+        Gdx.gl.glClearColor(0.005f, 0.005f, 0.02f, 1f);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
+
+        // ESC 返回星系视图
+        if (Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.ESCAPE)) {
+            if (viewManager.isInSystemView()) {
+                viewManager.switchToGalaxy();
+                currentSystem = null;
+                systemViewRenderer.resetTime();
+                spaceCamera.resetView();
+            }
+        }
+
+        if (viewManager.isInGalaxyView()) {
+            renderGalaxyView();
+        } else if (viewManager.isInSystemView()) {
+            renderSystemView(dt);
+        }
+    }
+
+    /**
+     * 渲染星系视图。
+     */
+    private void renderGalaxyView() {
+        // 更新悬停恒星
+        rayPicker.updateHovered(spaceCamera, galaxyData,
+            Gdx.input.getX(), Gdx.input.getY());
+
+        // 点击选中恒星 -> 进入系统视图
+        if (Gdx.input.isButtonJustPressed(com.badlogic.gdx.Input.Buttons.LEFT)) {
+            long selectedStarId = rayPicker.getHoveredStarId();
+            if (selectedStarId >= 0) {
+                var star = galaxyData.getStar(selectedStarId);
+                if (star != null) {
+                    currentSystem = starSystemGenerator.generate(star, galaxyData.worldSeed);
+                    viewManager.switchToSystem(selectedStarId);
+                    systemViewRenderer.resetTime();
+                    spaceCamera.setZoom(5.0);
+                    spaceCamera.target.set(0, 0, 0);
+                }
+            }
+        }
+
+        galaxyViewRenderer.render(galaxyData, spaceCamera, rayPicker.getHoveredStarId());
+    }
+
+    /**
+     * 渲染恒星系视图。
+     */
+    private void renderSystemView(float dt) {
+        if (currentSystem == null) return;
+
+        // 推进模拟时间（1游戏秒 = 1真实秒）
+        systemViewRenderer.advanceTime(dt);
+        systemViewRenderer.render(currentSystem, spaceCamera);
     }
 
     private String loadMainMenuBackgroundImage() {
@@ -217,9 +324,13 @@ public class ClientGame implements ApplicationListener {
             worldRenderer.dispose();
             worldRenderer = null;
         }
-        if (testScene != null) {
-            testScene.dispose();
-            testScene = null;
+        if (galaxyViewRenderer != null) {
+            galaxyViewRenderer.dispose();
+            galaxyViewRenderer = null;
+        }
+        if (systemViewRenderer != null) {
+            systemViewRenderer.dispose();
+            systemViewRenderer = null;
         }
         if (runtime != null) {
             runtime.stop();
