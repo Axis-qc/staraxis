@@ -47,16 +47,25 @@ public class StarBatchRenderer {
             + "attribute vec3 i_position;\n"
             + "attribute vec3 i_color;\n"
             + "uniform mat4 u_projViewTrans;\n"
+            + "uniform vec3 u_cameraPos;\n"
+            + "uniform float u_lodFar;\n"
             + "varying vec3 v_color;\n"
+            + "varying float v_discard;\n"
             + "void main() {\n"
             + "  vec4 pos = vec4(a_position + i_position, 1.0);\n"
             + "  gl_Position = u_projViewTrans * pos;\n"
             + "  v_color = i_color;\n"
+            //  LOD 硬切换：d>=lodFar 直接 discard，球永远不透明写深度
+            + "  float dist = distance(i_position, u_cameraPos);\n"
+            + "  v_discard = step(dist, u_lodFar);\n"
             + "}\n";
 
     private static final String FRAG_SHADER = ""
             + "varying vec3 v_color;\n"
+            + "varying float v_discard;\n"
             + "void main() {\n"
+            //  超出 LOD 距离直接丢弃，不写颜色也不写深度
+            + "  if (v_discard < 0.5) discard;\n"
             //  恒星是自发光体，直接输出颜色，不依赖任何场景光照
             + "  gl_FragColor = vec4(v_color, 1.0);\n"
             + "}\n";
@@ -78,8 +87,13 @@ public class StarBatchRenderer {
     // ── 着色器 ──────────────────────────────────────────────────
     private ShaderProgram shader;
     private int uProjViewTrans;
+    private int uCameraPos;
+    private int uLodFar;
     private int iPositionLoc;
     private int iColorLoc;
+
+    // ── LOD 距离阈值（球硬切换，光晕软淡入） ──────────────────────
+    private float lodFar = 5000f;   // 远于此距离：球 discard，光晕接管
 
     // ── 状态 ──────────────────────────────────────────────────
     private int hoveredIndex = -1;
@@ -101,6 +115,8 @@ public class StarBatchRenderer {
             throw new GdxRuntimeException("恒星实例化着色器编译失败: " + shader.getLog());
         }
         uProjViewTrans = shader.getUniformLocation("u_projViewTrans");
+        uCameraPos = shader.getUniformLocation("u_cameraPos");
+        uLodFar = shader.getUniformLocation("u_lodFar");
         iPositionLoc = shader.getAttributeLocation("i_position");
         iColorLoc = shader.getAttributeLocation("i_color");
     }
@@ -243,12 +259,17 @@ public class StarBatchRenderer {
             hoveredIndex = newIdx;
         }
 
-        // ── 开启深度测试确保不透明遮挡 ──
+        // ── 球不透明：开启深度测试 + 深度写入，正确遮挡后方球和光晕 ──
         Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
+        Gdx.gl.glDepthMask(true);
+        //  不需要 alpha 混合（球永远不透明，远端用 discard 跳过）
+        Gdx.gl.glDisable(GL20.GL_BLEND);
 
         // ── 绑定着色器 ──
         shader.bind();
         shader.setUniformMatrix(uProjViewTrans, camera.camera.combined);
+        shader.setUniformf(uCameraPos, camera.camera.position);
+        shader.setUniformf(uLodFar, lodFar);
 
         // ── 绑定球体几何体（模型顶点属性） ──
         sphereMesh.bind(shader);

@@ -56,13 +56,17 @@ public class StarHaloRenderer {
             + "uniform float u_maxBoost;\n"
             + "uniform float u_minSizeScale;\n"
             + "uniform float u_maxSizeScale;\n"
+            + "uniform float u_lodFar;\n"
+            + "uniform float u_shrinkFar;\n"
             + "varying vec3 v_color;\n"
             + "varying vec2 v_uv;\n"
             + "varying float v_intensity;\n"
+            + "varying float v_discard;\n"
             + "void main() {\n"
             + "  float dist = distance(i_position, u_cameraPos);\n"
-            //  光晕世界大小随距离放大，补偿透视缩小，远处屏幕上更明显
-            + "  float sizeScale = clamp(dist / u_refDist, u_minSizeScale, u_maxSizeScale);\n"
+            //  光晕尺寸：d=lodFar 缩到球大小(minSizeScale)，d=shrinkFar 满尺寸(maxSizeScale)，区间内线性
+            + "  float sizeT = clamp((dist - u_lodFar) / (u_shrinkFar - u_lodFar), 0.0, 1.0);\n"
+            + "  float sizeScale = mix(u_minSizeScale, u_maxSizeScale, sizeT);\n"
             //  billboard：角点沿相机 right/up 展开，加到实例位置
             + "  vec3 worldPos = i_position + (a_corner.x * u_camRight + a_corner.y * u_camUp) * i_size * sizeScale;\n"
             + "  gl_Position = u_projViewTrans * vec4(worldPos, 1.0);\n"
@@ -70,18 +74,40 @@ public class StarHaloRenderer {
             + "  v_uv = a_corner;\n"
             //  距离补偿提亮：远处 boost 大，近处小
             + "  v_intensity = clamp(dist / u_refDist, u_minBoost, u_maxBoost);\n"
+            //  LOD 硬切换：d<lodFar 不画光晕（球出现），d>=lodFar 光晕出现（球消失）
+            + "  v_discard = step(u_lodFar, dist);\n"
             + "}\n";
 
-    //  片段着色器：程序化径向渐变，中心亮边缘透明
-    private static final String FRAG_SHADER = ""
+    //  片段着色器：模糊扩散层——全范围柔和渐变，提供整体星系明亮扩散感
+    private static final String FRAG_GLOW = ""
             + "#version 120\n"
             + "varying vec3 v_color;\n"
             + "varying vec2 v_uv;\n"
             + "varying float v_intensity;\n"
+            + "varying float v_discard;\n"
             + "void main() {\n"
-            //  d = 0 中心，1 边缘；smoothstep 让中心亮、边缘平滑过渡到 0
+            + "  if (v_discard < 0.5) discard;\n"
             + "  float d = length(v_uv);\n"
-            + "  float alpha = smoothstep(1.0, 0.0, d) * v_intensity;\n"
+            //  柔和渐变：从中心到边缘全范围平滑过渡
+            + "  float alpha = smoothstep(1.0, 0.0, d) * 0.6 * v_intensity;\n"
+            + "  gl_FragColor = vec4(v_color * alpha, alpha);\n"
+            + "}\n";
+
+    //  片段着色器：锐利发光点层——亮核+外晕，提供清晰发光点
+    private static final String FRAG_CORE = ""
+            + "#version 120\n"
+            + "varying vec3 v_color;\n"
+            + "varying vec2 v_uv;\n"
+            + "varying float v_intensity;\n"
+            + "varying float v_discard;\n"
+            + "void main() {\n"
+            + "  if (v_discard < 0.5) discard;\n"
+            + "  float d = length(v_uv);\n"
+            //  亮核：d<0.3 满亮，0.3~0.5 快速衰减到 0
+            + "  float core = smoothstep(0.5, 0.3, d);\n"
+            //  外晕：d=0.4 起衰减到 1.0 归零，强度为亮核一半
+            + "  float halo = smoothstep(1.0, 0.4, d) * 0.5;\n"
+            + "  float alpha = (core + halo) * v_intensity;\n"
             + "  gl_FragColor = vec4(v_color * alpha, alpha);\n"
             + "}\n";
 
@@ -98,26 +124,32 @@ public class StarHaloRenderer {
     private int instanceCount;
 
     // ── 着色器 ──────────────────────────────────────────────────
-    private ShaderProgram shader;
-    private int uProjViewTrans;
-    private int uCamRight;
-    private int uCamUp;
-    private int uCameraPos;
-    private int uRefDist;
-    private int uMinBoost;
-    private int uMaxBoost;
-    private int uMinSizeScale;
-    private int uMaxSizeScale;
-    private int iPositionLoc;
-    private int iColorLoc;
-    private int iSizeLoc;
+    //  两套 shader program 共享顶点着色器，fragment 不同（模糊扩散层 vs 锐利发光点层）
+    private ShaderProgram glowShader;  // 模糊扩散层
+    private ShaderProgram coreShader;  // 锐利发光点层
+    private int uProjViewTrans_g, uCamRight_g, uCamUp_g, uCameraPos_g, uRefDist_g, uMinBoost_g, uMaxBoost_g, uMinSizeScale_g, uMaxSizeScale_g, uLodFar_g, uShrinkFar_g;
+    private int uProjViewTrans_c, uCamRight_c, uCamUp_c, uCameraPos_c, uRefDist_c, uMinBoost_c, uMaxBoost_c, uMinSizeScale_c, uMaxSizeScale_c, uLodFar_c, uShrinkFar_c;
+    private int iPositionLoc_g, iColorLoc_g, iSizeLoc_g;
+    private int iPositionLoc_c, iColorLoc_c, iSizeLoc_c;
 
     // ── 距离补偿参数（可运行时调） ──────────────────────────────
-    private float refDist = 4000f;   // 满亮参考距离
-    private float minBoost = 0.2f;   // 近处亮度下限（光晕弱，避免贴脸过曝）
-    private float maxBoost = 1.0f;  // 远处亮度上限（提亮让星系明亮）
-    private float minSizeScale = 1.0f; // 近处光晕尺寸下限
-    private float maxSizeScale = 2.0f; // 远处光晕尺寸上限（放大补偿透视缩小）
+    private float refDist = 4000f;   // 满亮参考距离（两层共享）
+
+    //  模糊扩散层独立参数
+    private float glowMinBoost = 0.2f;   // 模糊层近处亮度下限
+    private float glowMaxBoost = 1.0f;  // 模糊层远处亮度上限
+    private float glowMinSizeScale = 0.8f; // 模糊层缩到恒星球大小
+    private float glowMaxSizeScale = 3.0f; // 模糊层满尺寸上限
+
+    //  锐利发光点层独立参数
+    private float coreMinBoost = 0.2f;   // 亮核层近处亮度下限
+    private float coreMaxBoost = 0.5f;  // 亮核层远处亮度上限
+    private float coreMinSizeScale = 0.6f; // 亮核层缩到恒星球大小（更小，清晰点）
+    private float coreMaxSizeScale = 1.0f; // 亮核层满尺寸上限
+
+    // ── LOD 距离阈值（与 StarBatchRenderer 一致，两层共享） ──
+    private float lodFar = 5000f;    // 近于此距离：光晕缩到球大小，球出现接管
+    private float shrinkFar = 8000f; // 远于此距离：光晕满尺寸，不再继续放大
 
     // ── 临时向量（避免每帧 GC） ──────────────────────────────────
     private final Vector3 tmpRight = new Vector3();
@@ -137,22 +169,45 @@ public class StarHaloRenderer {
     // ═══════════════════════════════════════════════════════════
 
     private void initShader() {
-        shader = new ShaderProgram(VERT_SHADER, FRAG_SHADER);
-        if (!shader.isCompiled()) {
-            throw new GdxRuntimeException("恒星光晕着色器编译失败: " + shader.getLog());
+        //  模糊扩散层
+        glowShader = new ShaderProgram(VERT_SHADER, FRAG_GLOW);
+        if (!glowShader.isCompiled()) {
+            throw new GdxRuntimeException("恒星光晕(模糊层)着色器编译失败: " + glowShader.getLog());
         }
-        uProjViewTrans = shader.getUniformLocation("u_projViewTrans");
-        uCamRight = shader.getUniformLocation("u_camRight");
-        uCamUp = shader.getUniformLocation("u_camUp");
-        uCameraPos = shader.getUniformLocation("u_cameraPos");
-        uRefDist = shader.getUniformLocation("u_refDist");
-        uMinBoost = shader.getUniformLocation("u_minBoost");
-        uMaxBoost = shader.getUniformLocation("u_maxBoost");
-        uMinSizeScale = shader.getUniformLocation("u_minSizeScale");
-        uMaxSizeScale = shader.getUniformLocation("u_maxSizeScale");
-        iPositionLoc = shader.getAttributeLocation("i_position");
-        iColorLoc = shader.getAttributeLocation("i_color");
-        iSizeLoc = shader.getAttributeLocation("i_size");
+        uProjViewTrans_g = glowShader.getUniformLocation("u_projViewTrans");
+        uCamRight_g = glowShader.getUniformLocation("u_camRight");
+        uCamUp_g = glowShader.getUniformLocation("u_camUp");
+        uCameraPos_g = glowShader.getUniformLocation("u_cameraPos");
+        uRefDist_g = glowShader.getUniformLocation("u_refDist");
+        uMinBoost_g = glowShader.getUniformLocation("u_minBoost");
+        uMaxBoost_g = glowShader.getUniformLocation("u_maxBoost");
+        uMinSizeScale_g = glowShader.getUniformLocation("u_minSizeScale");
+        uMaxSizeScale_g = glowShader.getUniformLocation("u_maxSizeScale");
+        uLodFar_g = glowShader.getUniformLocation("u_lodFar");
+        uShrinkFar_g = glowShader.getUniformLocation("u_shrinkFar");
+        iPositionLoc_g = glowShader.getAttributeLocation("i_position");
+        iColorLoc_g = glowShader.getAttributeLocation("i_color");
+        iSizeLoc_g = glowShader.getAttributeLocation("i_size");
+
+        //  锐利发光点层
+        coreShader = new ShaderProgram(VERT_SHADER, FRAG_CORE);
+        if (!coreShader.isCompiled()) {
+            throw new GdxRuntimeException("恒星光晕(亮核层)着色器编译失败: " + coreShader.getLog());
+        }
+        uProjViewTrans_c = coreShader.getUniformLocation("u_projViewTrans");
+        uCamRight_c = coreShader.getUniformLocation("u_camRight");
+        uCamUp_c = coreShader.getUniformLocation("u_camUp");
+        uCameraPos_c = coreShader.getUniformLocation("u_cameraPos");
+        uRefDist_c = coreShader.getUniformLocation("u_refDist");
+        uMinBoost_c = coreShader.getUniformLocation("u_minBoost");
+        uMaxBoost_c = coreShader.getUniformLocation("u_maxBoost");
+        uMinSizeScale_c = coreShader.getUniformLocation("u_minSizeScale");
+        uMaxSizeScale_c = coreShader.getUniformLocation("u_maxSizeScale");
+        uLodFar_c = coreShader.getUniformLocation("u_lodFar");
+        uShrinkFar_c = coreShader.getUniformLocation("u_shrinkFar");
+        iPositionLoc_c = coreShader.getAttributeLocation("i_position");
+        iColorLoc_c = coreShader.getAttributeLocation("i_color");
+        iSizeLoc_c = coreShader.getAttributeLocation("i_size");
     }
 
     /** 单位 quad（4 顶点，2 三角形），corner 属性存角点坐标 */
@@ -230,7 +285,7 @@ public class StarHaloRenderer {
         built = true;
     }
 
-    /** 渲染全部恒星光晕。每帧一次 instanced draw call，additive 混合。 */
+    /** 渲染全部恒星光晕。两层各一次 instanced draw call，additive 混合。 */
     public void render(WorldCamera camera) {
         if (!built || instanceCount == 0) return;
 
@@ -238,8 +293,7 @@ public class StarHaloRenderer {
         tmpRight.set(camera.camera.direction).crs(camera.camera.up).nor();
         tmpUp.set(camera.camera.up).nor();
 
-        //  光晕开启深度测试（被前方恒星球遮挡）、关闭深度写入（不污染深度缓冲）
-        //  渲染顺序：光晕在 StarBatchRenderer 之后，恒星球已写入深度，故前方球能遮挡后方光晕
+        //  光晕开启深度测试（被前方恒星球遮挡）、关闭深度写入（不污染深度缓冲，光晕间 additive 叠加）
         Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
         Gdx.gl.glDepthFunc(GL20.GL_LEQUAL);
         Gdx.gl.glDepthMask(false);
@@ -247,30 +301,54 @@ public class StarHaloRenderer {
         Gdx.gl.glEnable(GL20.GL_BLEND);
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
 
-        shader.bind();
-        shader.setUniformMatrix(uProjViewTrans, camera.camera.combined);
-        shader.setUniformf(uCamRight, tmpRight);
-        shader.setUniformf(uCamUp, tmpUp);
-        shader.setUniformf(uCameraPos, camera.camera.position);
-        shader.setUniformf(uRefDist, refDist);
-        shader.setUniformf(uMinBoost, minBoost);
-        shader.setUniformf(uMaxBoost, maxBoost);
-        shader.setUniformf(uMinSizeScale, minSizeScale);
-        shader.setUniformf(uMaxSizeScale, maxSizeScale);
+        //  先画模糊扩散层（大、弱），再画锐利发光点层（小、强），additive 叠加
+        renderLayer(glowShader, uProjViewTrans_g, uCamRight_g, uCamUp_g, uCameraPos_g, uRefDist_g,
+                uMinBoost_g, uMaxBoost_g, uMinSizeScale_g, uMaxSizeScale_g, uLodFar_g, uShrinkFar_g,
+                iPositionLoc_g, iColorLoc_g, iSizeLoc_g,
+                glowMinBoost, glowMaxBoost, glowMinSizeScale, glowMaxSizeScale, camera);
+        renderLayer(coreShader, uProjViewTrans_c, uCamRight_c, uCamUp_c, uCameraPos_c, uRefDist_c,
+                uMinBoost_c, uMaxBoost_c, uMinSizeScale_c, uMaxSizeScale_c, uLodFar_c, uShrinkFar_c,
+                iPositionLoc_c, iColorLoc_c, iSizeLoc_c,
+                coreMinBoost, coreMaxBoost, coreMinSizeScale, coreMaxSizeScale, camera);
 
-        quadMesh.bind(shader);
+        //  恢复混合/深度状态
+        Gdx.gl.glDisable(GL20.GL_BLEND);
+        Gdx.gl.glDepthMask(true);
+        Gdx.gl.glDepthFunc(GL20.GL_LESS);
+    }
+
+    /** 渲染单层光晕（一次 instanced draw call） */
+    private void renderLayer(ShaderProgram sh, int uProj, int uRight, int uUp, int uCamPos, int uRef,
+                             int uMinB, int uMaxB, int uMinS, int uMaxS, int uLod, int uShrink,
+                             int iPos, int iCol, int iSz,
+                             float minBoost, float maxBoost, float minSizeScale, float maxSizeScale,
+                             WorldCamera camera) {
+        sh.bind();
+        sh.setUniformMatrix(uProj, camera.camera.combined);
+        sh.setUniformf(uRight, tmpRight);
+        sh.setUniformf(uUp, tmpUp);
+        sh.setUniformf(uCamPos, camera.camera.position);
+        sh.setUniformf(uRef, refDist);
+        sh.setUniformf(uMinB, minBoost);
+        sh.setUniformf(uMaxB, maxBoost);
+        sh.setUniformf(uMinS, minSizeScale);
+        sh.setUniformf(uMaxS, maxSizeScale);
+        sh.setUniformf(uLod, lodFar);
+        sh.setUniformf(uShrink, shrinkFar);
+
+        quadMesh.bind(sh);
 
         //  绑定实例属性
         Gdx.gl32.glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
-        Gdx.gl32.glEnableVertexAttribArray(iPositionLoc);
-        Gdx.gl32.glVertexAttribPointer(iPositionLoc, 3, GL_FLOAT, false, BYTES_PER_INSTANCE, 0);
-        Gdx.gl32.glVertexAttribDivisor(iPositionLoc, 1);
-        Gdx.gl32.glEnableVertexAttribArray(iColorLoc);
-        Gdx.gl32.glVertexAttribPointer(iColorLoc, 3, GL_FLOAT, false, BYTES_PER_INSTANCE, 12);
-        Gdx.gl32.glVertexAttribDivisor(iColorLoc, 1);
-        Gdx.gl32.glEnableVertexAttribArray(iSizeLoc);
-        Gdx.gl32.glVertexAttribPointer(iSizeLoc, 1, GL_FLOAT, false, BYTES_PER_INSTANCE, 24);
-        Gdx.gl32.glVertexAttribDivisor(iSizeLoc, 1);
+        Gdx.gl32.glEnableVertexAttribArray(iPos);
+        Gdx.gl32.glVertexAttribPointer(iPos, 3, GL_FLOAT, false, BYTES_PER_INSTANCE, 0);
+        Gdx.gl32.glVertexAttribDivisor(iPos, 1);
+        Gdx.gl32.glEnableVertexAttribArray(iCol);
+        Gdx.gl32.glVertexAttribPointer(iCol, 3, GL_FLOAT, false, BYTES_PER_INSTANCE, 12);
+        Gdx.gl32.glVertexAttribDivisor(iCol, 1);
+        Gdx.gl32.glEnableVertexAttribArray(iSz);
+        Gdx.gl32.glVertexAttribPointer(iSz, 1, GL_FLOAT, false, BYTES_PER_INSTANCE, 24);
+        Gdx.gl32.glVertexAttribDivisor(iSz, 1);
 
         Gdx.gl32.glDrawElementsInstanced(
                 GL_TRIANGLES,
@@ -279,17 +357,12 @@ public class StarHaloRenderer {
                 0,
                 instanceCount);
 
-        //  清理
-        Gdx.gl32.glDisableVertexAttribArray(iPositionLoc);
-        Gdx.gl32.glDisableVertexAttribArray(iColorLoc);
-        Gdx.gl32.glDisableVertexAttribArray(iSizeLoc);
+        //  清理本层属性绑定
+        Gdx.gl32.glDisableVertexAttribArray(iPos);
+        Gdx.gl32.glDisableVertexAttribArray(iCol);
+        Gdx.gl32.glDisableVertexAttribArray(iSz);
         Gdx.gl32.glBindBuffer(GL_ARRAY_BUFFER, 0);
-        quadMesh.unbind(shader);
-
-        //  恢复混合/深度状态
-        Gdx.gl.glDisable(GL20.GL_BLEND);
-        Gdx.gl.glDepthMask(true);
-        Gdx.gl.glDepthFunc(GL20.GL_LESS);
+        quadMesh.unbind(sh);
     }
 
     public boolean isBuilt() {
@@ -302,7 +375,8 @@ public class StarHaloRenderer {
 
     public void dispose() {
         if (quadMesh != null) quadMesh.dispose();
-        if (shader != null) shader.dispose();
+        if (glowShader != null) glowShader.dispose();
+        if (coreShader != null) coreShader.dispose();
         if (instanceVBO != 0) {
             IntBuffer buf = BufferUtils.newByteBuffer(4).order(ByteOrder.nativeOrder()).asIntBuffer();
             buf.put(0, instanceVBO);

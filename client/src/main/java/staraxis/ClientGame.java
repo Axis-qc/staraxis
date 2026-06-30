@@ -33,6 +33,7 @@ import staraxis.ui.screens.InGameHudScreen;
 import staraxis.ui.screens.SettingsScreen;
 import staraxis.ui.screens.WorldSettingsScreen;
 import staraxis.ui.widgets.DevelopingDialog;
+import staraxis.ui.widgets.PauseMenu;
 import staraxis.ui.widgets.StarfieldBackground;
 
 /**
@@ -66,6 +67,9 @@ public class ClientGame implements ApplicationListener {
 
     // UI 调试叠加层（F3 切换），显示坐标原点/鼠标坐标/悬停元素边框
     private UiDebug uiDebug;
+
+    // 暂停菜单
+    private PauseMenu pauseMenu;
 
     // ── 加载状态 ──────────────────────────────────────────────
     public enum GameState { MENU, LOADING, PLAYING }
@@ -189,6 +193,10 @@ public class ClientGame implements ApplicationListener {
         gui.register(SettingsScreen.class, settingsScreen);
         gui.register(DevelopingDialog.class, developingDialog);
 
+        // 暂停菜单
+        pauseMenu = new PauseMenu(gui, sr, vectorFont);
+        stage.addActor(pauseMenu);
+
         resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 
         initSpaceRendering();
@@ -278,6 +286,8 @@ public class ClientGame implements ApplicationListener {
         }
 
         stage.act(dt);
+        //  UI 始终渲染在最上层，不受深度测试影响
+        Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
         stage.draw();
 
         // UI 调试叠加层（F3 开关）
@@ -330,17 +340,34 @@ public class ClientGame implements ApplicationListener {
         gameState = GameState.PLAYING;
         gui.hideLoadingScreen();
         gui.dispatchAction("START_GAME");
+        // 将暂停菜单重新添加到舞台（switchScreen 的 stage.clear() 会清除它）
+        if (pauseMenu.getStage() == null) {
+            stage.addActor(pauseMenu);
+        }
     }
 
     private void renderPlaying(float dt) {
-        if (runtime == null) {
+        if (runtime == null || gui.getRuntime() == null) {
+            if (runtime != null) {
+                runtime.stop();
+                runtime = null;
+            }
             gameState = GameState.MENU;
             return;
         }
-        runtime.update(dt);
-        runtime.publishRealtimeSnapshotIfNeeded();
 
-        renderSpaceScene(dt);
+        // ESC 切换暂停菜单
+        if (Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.ESCAPE)) {
+            pauseMenu.toggle();
+        }
+
+        boolean paused = pauseMenu.isMenuVisible();
+        if (!paused) {
+            runtime.update(dt);
+            runtime.publishRealtimeSnapshotIfNeeded();
+            renderSpaceScene(dt);
+        }
+
     }
 
     private void renderSpaceScene(float dt) {
@@ -349,12 +376,13 @@ public class ClientGame implements ApplicationListener {
         Gdx.gl.glClearColor(0.005f, 0.005f, 0.02f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
 
-        if (Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.ESCAPE)) {
+        // M 键从 System View 返回 Galaxy View
+        if (Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.M)) {
             if (viewManager.isInSystemView()) {
                 viewManager.switchToGalaxy();
                 currentSystem = null;
                 systemViewRenderer.resetTime();
-                spaceCamera.setMaxOrbitDist(50000); // 回到 Galaxy 放宽最远距离
+                spaceCamera.setMaxOrbitDist(50000);
                 spaceCamera.resetView();
             }
         }
