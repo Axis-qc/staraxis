@@ -277,8 +277,8 @@ public class SettingsScreen implements Disposable {
         for (TabBinding binding : tabBindings.values()) {
             Actor a = rootGroup.findActor(binding.buttonActorName);
             boolean active = binding.tabId.equals(activeTab);
-            if (a instanceof MenuEntry) {
-                ((MenuEntry) a).setSelected(active);
+            if (a instanceof MenuEntry me) {
+                me.setSelected(true);
                 continue;
             }
             if (!(a instanceof VectorButton)) {
@@ -497,7 +497,7 @@ public class SettingsScreen implements Disposable {
             int w = Integer.parseInt(p[0]);
             int h = Integer.parseInt(p[1]);
             Gdx.graphics.setWindowedMode(w, h);
-        } catch (Exception ignored) {
+        } catch (NumberFormatException ignored) {
         }
         refreshResolutionButton();
         renderResolutionRepeat();
@@ -513,12 +513,12 @@ public class SettingsScreen implements Disposable {
             selectedFpsText = fpsText;
             try {
                 Gdx.graphics.setForegroundFPS(v);
-            } catch (Exception ignored) {
+            } catch (IllegalArgumentException ignored) {
             }
             refreshFpsLimitButton();
             renderFpsRepeat();
             hidePopups();
-        } catch (Exception ignored) {
+        } catch (NumberFormatException ignored) {
         }
     }
 
@@ -618,56 +618,56 @@ public class SettingsScreen implements Disposable {
     }
 
     private void refreshUiScaleLabel() {
-        if (root instanceof Group) {
-            VectorLabel label = ((Group) root).findActor("ui_scale_label");
+        if (root instanceof Group g) {
+            VectorLabel label = g.findActor("ui_scale_label");
             if (label != null)
                 label.setText(String.format("%.1fx", currentSettings.uiScale));
         }
     }
 
     private void refreshFontScaleLabel() {
-        if (root instanceof Group) {
-            VectorLabel label = ((Group) root).findActor("font_scale_label");
+        if (root instanceof Group g) {
+            VectorLabel label = g.findActor("font_scale_label");
             if (label != null)
                 label.setText(String.format("%.1fx", currentSettings.fontScale));
         }
     }
 
     private void refreshResolutionButton() {
-        if (root instanceof Group) {
-            VectorButton b = ((Group) root).findActor("resolution_button");
+        if (root instanceof Group g) {
+            VectorButton b = g.findActor("resolution_button");
             if (b != null)
                 b.setText(currentSettings.resolution);
         }
     }
 
     private void refreshMasterVolumeSlider() {
-        if (root instanceof Group) {
-            Slider s = ((Group) root).findActor("master_volume_slider");
+        if (root instanceof Group g) {
+            Slider s = g.findActor("master_volume_slider");
             if (s != null)
                 s.setValue(currentSettings.masterVolume);
         }
     }
 
     private void refreshVsyncButton() {
-        if (root instanceof Group) {
-            VectorButton b = ((Group) root).findActor("vsync_button");
+        if (root instanceof Group g) {
+            VectorButton b = g.findActor("vsync_button");
             if (b != null)
                 updateVsyncButtonText(b);
         }
     }
 
     private void refreshFpsLimitButton() {
-        if (root instanceof Group) {
-            VectorButton b = ((Group) root).findActor("fps_limit_button");
+        if (root instanceof Group g) {
+            VectorButton b = g.findActor("fps_limit_button");
             if (b != null)
                 updateFpsLimitButtonText(b);
         }
     }
 
     private void refreshGpuButton() {
-        if (root instanceof Group) {
-            VectorButton b = ((Group) root).findActor("gpu_button");
+        if (root instanceof Group g) {
+            VectorButton b = g.findActor("gpu_button");
             if (b != null) {
                 String raw = staraxis.ui.settings.GpuService.getSelectedName(currentSettings.gpuIndex);
                 // 按钮 280px 约容纳 28 个英文字符，超长则截断
@@ -747,8 +747,8 @@ public class SettingsScreen implements Disposable {
                 if (expandLabel != null) {
                     expandLabel.setText(newVisible ? "v" : ">");
                 }
-                if (repeatActor instanceof com.badlogic.gdx.scenes.scene2d.ui.Table) {
-                    ((com.badlogic.gdx.scenes.scene2d.ui.Table) repeatActor).invalidateHierarchy();
+                if (repeatActor instanceof com.badlogic.gdx.scenes.scene2d.ui.Table rt) {
+                    rt.invalidateHierarchy();
                 }
             };
 
@@ -786,8 +786,7 @@ public class SettingsScreen implements Disposable {
             }
         });
 
-        if (repeatActor instanceof com.badlogic.gdx.scenes.scene2d.ui.Table) {
-            Table t = (Table) repeatActor;
+        if (repeatActor instanceof Table t) {
             t.invalidateHierarchy();
             setupModListDragAndDrop(t);
         }
@@ -823,12 +822,12 @@ public class SettingsScreen implements Disposable {
         preview.setSize(rowActor.getWidth(), rowActor.getHeight());
         preview.getColor().a = 0.75f;
 
-        if (rowActor instanceof Group) {
-            Actor modName = ((Group) rowActor).findActor("mod_name");
-            Actor compat = ((Group) rowActor).findActor("mod_compat");
+        if (rowActor instanceof Group rg) {
+            Actor modName = rg.findActor("mod_name");
+            Actor compat = rg.findActor("mod_compat");
 
-            String nameText = modName instanceof VectorLabel ? ((VectorLabel) modName).getText() : "";
-            String compatText = compat instanceof VectorLabel ? ((VectorLabel) compat).getText() : "";
+            String nameText = modName instanceof VectorLabel vl ? vl.getText() : "";
+            String compatText = compat instanceof VectorLabel vl2 ? vl2.getText() : "";
 
             VectorLabel nameLabel = new VectorLabel(gui.get(com.badlogic.gdx.graphics.g2d.BitmapFont.class), nameText);
             VectorLabel compatLabel = new VectorLabel(gui.get(com.badlogic.gdx.graphics.g2d.BitmapFont.class), compatText);
@@ -897,17 +896,13 @@ public class SettingsScreen implements Disposable {
         @Override
         public boolean drag(DragAndDrop.Source source, DragAndDrop.Payload payload, float x, float y, int pointer) {
             // 只允许在同一个列表内拖拽
-            if (!(payload.getObject() instanceof Actor)) {
-                return false;
-            }
-            return true;
+            return payload.getObject() instanceof Actor;
         }
 
         @Override
         public void drop(DragAndDrop.Source source, DragAndDrop.Payload payload, float x, float y, int pointer) {
-            if (!(payload.getObject() instanceof Actor)) {
-                return;
-            }
+            if (!(payload.getObject() instanceof Actor)) return;
+
             Actor draggedRow = (Actor) payload.getObject();
 
             int from = indexOf(repeatTable, draggedRow);
@@ -923,9 +918,8 @@ public class SettingsScreen implements Disposable {
 
             List<String> newOrder = new ArrayList<>();
             for (Actor a : repeatTable.getChildren()) {
-                Object uo = a.getUserObject();
-                if (uo instanceof String) {
-                    newOrder.add((String) uo);
+                if (a.getUserObject() instanceof String s) {
+                    newOrder.add(s);
                 }
             }
             modManager.saveOrder(newOrder);

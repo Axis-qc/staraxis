@@ -19,7 +19,6 @@ public class VectorButton extends Actor {
     private final BitmapFont font;
     private final VectorButtonEffect effect;
     private String text;
-    private Runnable onClick;
 
     private boolean hovered;
     private boolean pressed;
@@ -33,7 +32,6 @@ public class VectorButton extends Actor {
         this.font = font;
         this.effect = effect != null ? effect : DEFAULT_EFFECT;
         this.text = text;
-        this.onClick = onClick;
 
         addListener(new InputListener() {
             @Override

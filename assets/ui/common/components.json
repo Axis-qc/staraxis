@@ -1,6 +1,6 @@
 {
   "btn-small": {
-    "type": "button",
+    "type": "vector_button",
     "properties": {
       "class": "btn-small",
       "text": "${text}",
@@ -8,18 +8,18 @@
     }
   },
   "divider": {
-    "type": "image",
+    "type": "vector_image",
     "properties": {
-      "drawable": "split",
+      "color": "#4AC9FF22",
       "cell": {
         "height": 2
       }
     }
   },
   "divider-vert": {
-    "type": "image",
+    "type": "vector_image",
     "properties": {
-      "drawable": "split",
+      "color": "#4AC9FF22",
       "cell": {
         "width": 2
       }
@@ -28,7 +28,6 @@
   "panel-rounded": {
     "type": "container",
     "properties": {
-      "background": "Rounded_background",
       "pad": 14
     },
     "children": []
@@ -41,7 +40,7 @@
     "children": []
   },
   "scroll-vert": {
-    "type": "scroll",
+    "type": "vector_scrollpane",
     "properties": {
       "scrollX": false,
       "scrollY": true

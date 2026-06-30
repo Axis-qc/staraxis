@@ -18,7 +18,7 @@
       }
     },
     {
-      "type": "scroll",
+      "type": "vector_scrollpane",
       "name": "nation_scroll",
       "properties": {
         "scrollX": false,

@@ -35,6 +35,15 @@
         "menu_entry",
         "vector_button",
         "vector_label",
+        "vector_image",
+        "vector_checkbox",
+        "vector_slider",
+        "vector_progressbar",
+        "vector_textfield",
+        "vector_selectbox",
+        "vector_scrollpane",
+        "vector_window",
+        "vector_dialog",
         "starfield"
       ]
     },

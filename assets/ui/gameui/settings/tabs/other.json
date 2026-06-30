@@ -1,5 +1,5 @@
 {
-  "type": "scroll",
+  "type": "vector_scrollpane",
   "name": "other_scroll",
   "properties": {
     "cell": {
@@ -31,10 +31,9 @@
           }
         },
         {
-          "type": "image",
+          "type": "vector_image",
           "properties": {
-            "drawable": "line-h",
-            "color": "#4AC9FF99",
+            "color": "#4AC9FF33",
             "cell": {
               "width": 260,
               "height": 2,

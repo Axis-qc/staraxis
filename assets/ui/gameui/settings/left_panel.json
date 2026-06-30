@@ -30,11 +30,10 @@
           }
         },
         {
-          "type": "image",
+          "type": "vector_image",
           "name": "settings_title_line",
           "properties": {
-            "drawable": "line-h",
-            "color": "#4AC9FF99",
+            "color": "#4AC9FF33",
             "cell": {
               "width": 210,
               "height": 2,

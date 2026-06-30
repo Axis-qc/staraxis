@@ -87,10 +87,10 @@ public class DevConsole extends InputAdapter implements ConsoleOutput {
     public DevConsole(Gui gui) {
         this.gui = gui;
         Skin skin = gui.get(Skin.class);
-        this.view = new DevConsoleView(skin);
+        this.view = new DevConsoleView();
 
-        this.window = new Table(skin);
-        this.titleBar = new Table(skin);
+        this.window = new Table();
+        this.titleBar = new Table();
         this.titleLabel = new Label("Console", skin);
         this.dragListener = new DragAndClampListener(window);
 
@@ -356,8 +356,8 @@ public class DevConsole extends InputAdapter implements ConsoleOutput {
 
         @Override
         public void execute(String[] args, ConsoleOutput out) {
-            out.info("Opening UI components test screen...");
-            gui.showUiComponentsTestScreen();
+            out.info("Opening vector UI test screen...");
+            gui.showVectorComponentsTestScreen();
         }
     }
 

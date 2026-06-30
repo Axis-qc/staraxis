@@ -5,7 +5,6 @@ import com.badlogic.gdx.scenes.scene2d.ui.ScrollPane;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextField;
-import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
 import com.badlogic.gdx.utils.Align;
 
 /**
@@ -22,29 +21,19 @@ public class DevConsoleView extends Table {
     private final ScrollPane scrollPane;
     private final TextField inputField;
 
-    public DevConsoleView(Skin skin) {
-        super(skin);
-
-        // NOTE: 不同 Skin 不一定提供 "default-pane"；这里做容错，避免控制台因为皮肤资源缺失而崩溃。
-        if (skin != null) {
-            try {
-                Drawable bg = skin.getDrawable("default-pane");
-                setBackground(bg);
-            } catch (Exception ignored) {
-                // 保持无背景
-            }
-        }
+    public DevConsoleView() {
+        super();
 
         align(Align.topLeft);
 
-        logArea = new Table(skin);
+        logArea = new Table();
         logArea.align(Align.topLeft);
 
-        scrollPane = new ScrollPane(logArea, skin);
+        scrollPane = new ScrollPane(logArea);
         scrollPane.setFadeScrollBars(false);
         scrollPane.setScrollingDisabled(true, false);
 
-        inputField = new TextField("", skin);
+        inputField = new TextField("", new Skin());
 
         add(scrollPane).expand().fill().row();
         add(inputField).expandX().fillX().height(32).pad(4);
@@ -68,6 +57,7 @@ public class DevConsoleView extends Table {
         return inputField;
     }
 
+    @Override
     public void clear() {
         logArea.clearChildren();
     }

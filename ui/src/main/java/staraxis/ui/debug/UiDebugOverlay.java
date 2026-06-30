@@ -8,19 +8,17 @@ import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Stage;
-import com.badlogic.gdx.scenes.scene2d.ui.Label;
-import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
-import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.Disposable;
 import com.badlogic.gdx.utils.viewport.Viewport;
+import staraxis.ui.widgets.VectorLabel;
 
 public class UiDebugOverlay extends InputAdapter implements Disposable {
 
     private final Stage stage;
 
     private final Table root;
-    private final Label label;
+    private final VectorLabel label;
 
     private final ShapeRenderer shapeRenderer;
 
@@ -29,21 +27,20 @@ public class UiDebugOverlay extends InputAdapter implements Disposable {
     private Actor lastHit;
     private final Vector2 tmp = new Vector2();
 
-    public UiDebugOverlay(Stage stage, Skin skin) {
+    public UiDebugOverlay(Stage stage, VectorLabel labelWidget, ShapeRenderer shapeRenderer) {
         this.stage = stage;
 
-        this.root = new Table(skin);
+        this.root = new Table();
         this.root.setFillParent(true);
         this.root.setTouchable(com.badlogic.gdx.scenes.scene2d.Touchable.disabled);
         this.root.top().left();
 
-        this.label = new Label("UI Debug", skin);
-        this.label.setAlignment(Align.topLeft);
+        this.label = labelWidget;
 
         this.root.add(label).pad(8).left().top();
         this.root.setVisible(false);
 
-        this.shapeRenderer = new ShapeRenderer();
+        this.shapeRenderer = shapeRenderer;
 
         stage.addActor(root);
     }

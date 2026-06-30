@@ -47,6 +47,30 @@ public class EffectRegistry {
                     case "container":
                         def = ContainerEffect.fromMap(name, map);
                         break;
+                    case "vector_image":
+                        def = VectorImageEffect.fromMap(name, map);
+                        break;
+                    case "vector_checkbox":
+                        def = VectorCheckBoxEffect.fromMap(name, map);
+                        break;
+                    case "vector_slider":
+                        def = VectorSliderEffect.fromMap(name, map);
+                        break;
+                    case "vector_progressbar":
+                        def = VectorProgressBarEffect.fromMap(name, map);
+                        break;
+                    case "vector_textfield":
+                        def = VectorTextFieldEffect.fromMap(name, map);
+                        break;
+                    case "vector_selectbox":
+                        def = VectorSelectBoxEffect.fromMap(name, map);
+                        break;
+                    case "vector_scrollpane":
+                        def = VectorScrollPaneEffect.fromMap(name, map);
+                        break;
+                    case "vector_window":
+                        def = VectorWindowEffect.fromMap(name, map);
+                        break;
                     default:
                         Gdx.app.error("EffectRegistry", "Unknown effect type: " + type);
                         continue;
@@ -59,7 +83,6 @@ public class EffectRegistry {
         }
     }
 
-    @SuppressWarnings("unchecked")
     public <T extends EffectDef> T get(String name, Class<T> type) {
         EffectDef def = effects.get(name);
         if (def == null) return null;

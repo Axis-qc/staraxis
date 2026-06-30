@@ -22,7 +22,6 @@ public class MenuEntry extends Actor {
     private final GlyphLayout layout;
     private final String text;
     private final String tagText;
-    private final Runnable onClick;
     private final MenuEntryEffect effect;
 
     private boolean hovered;
@@ -45,7 +44,6 @@ public class MenuEntry extends Actor {
         this.effect = effect != null ? effect : DEFAULT_EFFECT;
         this.text = text;
         this.tagText = tagText;
-        this.onClick = onClick;
 
         addListener(new InputListener() {
             @Override
@@ -95,8 +93,10 @@ public class MenuEntry extends Actor {
         float y = getY();
         float h = getHeight();
         float baseBulletSize = effect.bullet.size;
-        float pulseScale = hovered || selected ? (0.04f + 0.04f * (float) Math.sin(pulse * 7f)) * p : 0f;
-        float bulletSize = baseBulletSize * (1f + 0.42f * p + pulseScale);
+        // 减慢动效 (原 7f → 3f)
+        float pulseScale = hovered || selected ? (0.02f + 0.02f * (float) Math.sin(pulse * 3f)) * p : 0f;
+        // 缩小最大变大值 (原 0.42f → 0.25f)
+        float bulletSize = baseBulletSize * (1f + 0.25f * p + pulseScale);
         float bulletCenterX = x + baseBulletSize * 0.5f;
         float bulletCenterY = y + h * 0.5f;
 
@@ -105,20 +105,37 @@ public class MenuEntry extends Actor {
         sr.setProjectionMatrix(batch.getProjectionMatrix());
         sr.setTransformMatrix(batch.getTransformMatrix());
 
+        // 发光效果（从中心到边缘渐变透明）
         if (effect.bullet.glow && p > 0.001f) {
-            float glowPulse = 0.85f + 0.15f * (float) Math.sin(pulse * 6f);
+            float glowPulse = 0.85f + 0.15f * (float) Math.sin(pulse * 2.5f);
             float glowRadius = effect.bullet.glowRadius * p * glowPulse;
-            sr.setColor(effect.bullet.hoverColor.r, effect.bullet.hoverColor.g, effect.bullet.hoverColor.b,
-                    p * effect.bullet.glowAlpha);
+            Color gc = effect.bullet.hoverColor;
+            float ga = p * effect.bullet.glowAlpha;
+            int glowLayers = 8;
             sr.begin(ShapeType.Filled);
-            sr.circle(bulletCenterX, bulletCenterY, glowRadius);
+            // 从外到内绘制：外层低透明度先画，内层高透明度叠加在中心
+            for (int i = glowLayers; i >= 1; i--) {
+                float t = (float) i / glowLayers;
+                float a = ga * (1f - t * 0.92f);
+                sr.setColor(gc.r, gc.g, gc.b, Math.max(0.01f, a));
+                sr.circle(bulletCenterX, bulletCenterY, glowRadius * t);
+            }
             sr.end();
         }
 
+        // 圆点径向渐变：从中心到边缘渐变透明
         Color bulletColor = effect.bullet.color.cpy().lerp(effect.bullet.hoverColor, p);
-        sr.setColor(bulletColor);
+        float maxR = bulletSize / 2f;
+        int dotLayers = 8;
         sr.begin(ShapeType.Filled);
-        sr.circle(bulletCenterX, bulletCenterY, bulletSize / 2f);
+        // 从外到内绘制：大圆低 alpha 先画，小圆高 alpha 后画叠在中心，产生中心实色边缘透明的渐变
+        for (int i = dotLayers; i >= 1; i--) {
+            float t = (float) i / dotLayers;
+            float r = maxR * t;
+            float a = bulletColor.a * (1f - t * 0.92f);
+            sr.setColor(bulletColor.r, bulletColor.g, bulletColor.b, Math.max(0.01f, a));
+            sr.circle(bulletCenterX, bulletCenterY, r);
+        }
         sr.end();
 
         batch.begin();

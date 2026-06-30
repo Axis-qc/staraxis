@@ -17,10 +17,27 @@ import staraxis.ui.Gui;
 import staraxis.ui.effects.EffectRegistry;
 import staraxis.ui.effects.MenuEntryEffect;
 import staraxis.ui.effects.VectorButtonEffect;
+import staraxis.ui.effects.VectorCheckBoxEffect;
+import staraxis.ui.effects.VectorImageEffect;
 import staraxis.ui.effects.VectorLabelEffect;
+import staraxis.ui.effects.VectorProgressBarEffect;
+import staraxis.ui.effects.VectorScrollPaneEffect;
+import staraxis.ui.effects.VectorSelectBoxEffect;
+import staraxis.ui.effects.VectorSliderEffect;
+import staraxis.ui.effects.VectorTextFieldEffect;
+import staraxis.ui.effects.VectorWindowEffect;
 import staraxis.ui.widgets.MenuEntry;
 import staraxis.ui.widgets.VectorButton;
+import staraxis.ui.widgets.VectorCheckBox;
+import staraxis.ui.widgets.VectorDialog;
+import staraxis.ui.widgets.VectorImage;
 import staraxis.ui.widgets.VectorLabel;
+import staraxis.ui.widgets.VectorProgressBar;
+import staraxis.ui.widgets.VectorScrollPane;
+import staraxis.ui.widgets.VectorSelectBox;
+import staraxis.ui.widgets.VectorSlider;
+import staraxis.ui.widgets.VectorTextField;
+import staraxis.ui.widgets.VectorWindow;
 
 import java.util.HashMap;
 import java.util.List;
@@ -165,6 +182,34 @@ public class UiFactory {
             case "vector_label":
                 actor = buildVectorLabel(node);
                 break;
+            // ---- 新矢量控件（逐步替换 skin 控件） ----
+            case "vector_image":
+                actor = buildVectorImage(node);
+                break;
+            case "vector_checkbox":
+                actor = buildVectorCheckBox(node);
+                break;
+            case "vector_slider":
+                actor = buildVectorSlider(node);
+                break;
+            case "vector_progressbar":
+                actor = buildVectorProgressBar(node);
+                break;
+            case "vector_textfield":
+                actor = buildVectorTextField(node);
+                break;
+            case "vector_selectbox":
+                actor = buildVectorSelectBox(node);
+                break;
+            case "vector_scrollpane":
+                actor = buildVectorScrollPane(node);
+                break;
+            case "vector_window":
+                actor = buildVectorWindow(node);
+                break;
+            case "vector_dialog":
+                actor = buildVectorDialog(node);
+                break;
             default:
                 actor = new Group();
         }
@@ -206,8 +251,8 @@ public class UiFactory {
 
         Object display = node.properties.get("display");
         if (display != null && "block".equalsIgnoreCase(display.toString())) {
-            if (actor instanceof Table) {
-                ((Table) actor).defaults().growX().fillX();
+            if (actor instanceof Table t) {
+                t.defaults().growX().fillX();
             }
         }
     }
@@ -273,7 +318,7 @@ public class UiFactory {
         if (pad != null)
             try {
                 table.pad(Float.parseFloat(pad.toString()));
-            } catch (Exception ignored) {
+            } catch (NumberFormatException ignored) {
             }
         Object background = node.properties.get("background");
         if (background != null) {
@@ -478,7 +523,7 @@ public class UiFactory {
         if (c.containsKey("colspan"))
             try {
                 cell.colspan(Math.round(Float.parseFloat(c.get("colspan").toString())));
-            } catch (Exception ignored) {
+            } catch (NumberFormatException ignored) {
             }
         if (c.containsKey("pad"))
             cell.pad(toFloat(c.get("pad"), 0));
@@ -523,10 +568,10 @@ public class UiFactory {
                     setSize(baseW, baseH);
                 }
                 float targetW = !Float.isNaN(cfgWidth) ? cfgWidth
-                        : clamp(child instanceof Widget ? ((Widget) child).getPrefWidth() : child.getWidth(),
+                        : clamp(child instanceof Widget w ? w.getPrefWidth() : child.getWidth(),
                                 minAutoWidth, maxAutoWidth);
                 float targetH = !Float.isNaN(cfgHeight) ? cfgHeight
-                        : (child instanceof Widget ? ((Widget) child).getPrefHeight() : child.getHeight());
+                        : (child instanceof Widget w ? w.getPrefHeight() : child.getHeight());
                 if (Float.isNaN(cfgWidth))
                     targetW = Math.max(targetW, minAutoWidth);
                 child.setSize(targetW, targetH);
@@ -968,6 +1013,8 @@ public class UiFactory {
             d.setMinHeight(0);
             return d;
         }
+        // Skin 为空时不再尝试查找 drawable
+        if (skin == null) return null;
         try {
             return skin.getDrawable(name);
         } catch (Exception e) {
@@ -978,7 +1025,7 @@ public class UiFactory {
 
     private Color resolveColor(String value) {
         try {
-            return value.startsWith("#") ? Color.valueOf(value) : skin.getColor(value);
+            return value.startsWith("#") ? Color.valueOf(value) : null;
         } catch (Exception e) {
             return null;
         }
@@ -1234,5 +1281,223 @@ public class UiFactory {
         Map<String, Object> config = (Map<String, Object>) configObj;
         config.put("selectedIndex", index);
         renderListItems(listActor);
+    }
+
+    // ==================== 新矢量控件构建方法 ====================
+
+    private Actor buildVectorImage(ComponentNode node) {
+        String effectName = (String) node.properties.get("effect");
+        VectorImageEffect effect = null;
+        if (effectRegistry != null && effectName != null) {
+            effect = effectRegistry.get(effectName, VectorImageEffect.class);
+        }
+        if (shapeRenderer == null) {
+            Gdx.app.error("UiFactory", "ShapeRenderer not set for vector_image");
+            return new Group();
+        }
+        VectorImage img = new VectorImage(shapeRenderer, effect);
+        Object color = node.properties.get("color");
+        if (color != null) {
+            Color c = resolveColor(color.toString());
+            if (c != null) img.setTint(c);
+        }
+        float w = toFloat(node.properties.get("width"), 0);
+        float h = toFloat(node.properties.get("height"), 0);
+        if (w > 0) img.setSize(w, h > 0 ? h : img.getHeight());
+        return img;
+    }
+
+    private Actor buildVectorCheckBox(ComponentNode node) {
+        String effectName = (String) node.properties.get("effect");
+        VectorCheckBoxEffect effect = null;
+        if (effectRegistry != null && effectName != null) {
+            effect = effectRegistry.get(effectName, VectorCheckBoxEffect.class);
+        }
+        if (shapeRenderer == null || bitmapFont == null) {
+            Gdx.app.error("UiFactory", "ShapeRenderer/BitmapFont not set for vector_checkbox");
+            return new Group();
+        }
+        String text = gui.i18n((String) node.properties.getOrDefault("text", ""));
+        boolean checked = Boolean.parseBoolean((String) node.properties.getOrDefault("checked", "false"));
+        String onChange = (String) node.properties.get("onChange");
+        Runnable action = onChange != null ? () -> gui.dispatchAction(onChange) : null;
+        VectorCheckBox cb = new VectorCheckBox(shapeRenderer, bitmapFont, effect, text, checked, action);
+        float w = toFloat(node.properties.get("width"), 0);
+        float h = toFloat(node.properties.get("height"), 0);
+        if (w > 0 || h > 0) cb.setSize(w > 0 ? w : cb.getWidth(), h > 0 ? h : cb.getHeight());
+        return cb;
+    }
+
+    private Actor buildVectorSlider(ComponentNode node) {
+        String effectName = (String) node.properties.get("effect");
+        VectorSliderEffect effect = null;
+        if (effectRegistry != null && effectName != null) {
+            effect = effectRegistry.get(effectName, VectorSliderEffect.class);
+        }
+        if (shapeRenderer == null) {
+            Gdx.app.error("UiFactory", "ShapeRenderer not set for vector_slider");
+            return new Group();
+        }
+        float min = toFloat(node.properties.get("min"), 0f);
+        float max = toFloat(node.properties.get("max"), 1f);
+        float step = toFloat(node.properties.get("step"), 0.01f);
+        float value = toFloat(node.properties.get("value"), min);
+        boolean vertical = Boolean.TRUE.equals(node.properties.get("vertical"));
+        VectorSlider slider = new VectorSlider(shapeRenderer, effect, min, max, step, vertical);
+        slider.setValue(value);
+        String onChange = (String) node.properties.get("onChange");
+        if (onChange != null) {
+            slider.setOnChange(v -> gui.dispatchAction(onChange + ":" + v));
+        }
+        float w = toFloat(node.properties.get("width"), 0);
+        float h = toFloat(node.properties.get("height"), 0);
+        if (w > 0 || h > 0) slider.setSize(w > 0 ? w : slider.getWidth(), h > 0 ? h : slider.getHeight());
+        return slider;
+    }
+
+    private Actor buildVectorProgressBar(ComponentNode node) {
+        String effectName = (String) node.properties.get("effect");
+        VectorProgressBarEffect effect = null;
+        if (effectRegistry != null && effectName != null) {
+            effect = effectRegistry.get(effectName, VectorProgressBarEffect.class);
+        }
+        if (shapeRenderer == null) {
+            Gdx.app.error("UiFactory", "ShapeRenderer not set for vector_progressbar");
+            return new Group();
+        }
+        float min = toFloat(node.properties.get("min"), 0f);
+        float max = toFloat(node.properties.get("max"), 1f);
+        float step = toFloat(node.properties.get("step"), 0.01f);
+        float value = toFloat(node.properties.get("value"), min);
+        boolean vertical = Boolean.TRUE.equals(node.properties.get("vertical"));
+        VectorProgressBar pb = new VectorProgressBar(shapeRenderer, effect, min, max, step, vertical);
+        pb.setValue(value);
+        float w = toFloat(node.properties.get("width"), 0);
+        float h = toFloat(node.properties.get("height"), 0);
+        if (w > 0 || h > 0) pb.setSize(w > 0 ? w : pb.getWidth(), h > 0 ? h : pb.getHeight());
+        return pb;
+    }
+
+    private Actor buildVectorTextField(ComponentNode node) {
+        String effectName = (String) node.properties.get("effect");
+        VectorTextFieldEffect effect = null;
+        if (effectRegistry != null && effectName != null) {
+            effect = effectRegistry.get(effectName, VectorTextFieldEffect.class);
+        }
+        if (shapeRenderer == null || bitmapFont == null) {
+            Gdx.app.error("UiFactory", "ShapeRenderer/BitmapFont not set for vector_textfield");
+            return new Group();
+        }
+        String text = (String) node.properties.getOrDefault("text", "");
+        VectorTextField tf = new VectorTextField(shapeRenderer, bitmapFont, effect, text);
+        if (node.properties.get("messageText") != null) {
+            tf.setMessageText(gui.i18n(node.properties.get("messageText").toString()));
+        }
+        if (node.properties.get("passwordMode") != null) {
+            tf.setPasswordMode(Boolean.parseBoolean(node.properties.get("passwordMode").toString()));
+        }
+        String onChange = (String) node.properties.get("onChange");
+        if (onChange != null) {
+            tf.setOnChange(v -> gui.dispatchAction(onChange + ":" + v));
+        }
+        float w = toFloat(node.properties.get("width"), 0);
+        float h = toFloat(node.properties.get("height"), 0);
+        if (w > 0 || h > 0) tf.setSize(w > 0 ? w : tf.getWidth(), h > 0 ? h : tf.getHeight());
+        return tf;
+    }
+
+    private Actor buildVectorSelectBox(ComponentNode node) {
+        String effectName = (String) node.properties.get("effect");
+        VectorSelectBoxEffect effect = null;
+        if (effectRegistry != null && effectName != null) {
+            effect = effectRegistry.get(effectName, VectorSelectBoxEffect.class);
+        }
+        if (shapeRenderer == null || bitmapFont == null) {
+            Gdx.app.error("UiFactory", "ShapeRenderer/BitmapFont not set for vector_selectbox");
+            return new Group();
+        }
+        VectorSelectBox sb = new VectorSelectBox(shapeRenderer, bitmapFont, effect);
+        if (node.properties.get("items") instanceof String) {
+            String[] parts = ((String) node.properties.get("items")).split(",");
+            for (int i = 0; i < parts.length; i++) parts[i] = parts[i].trim();
+            sb.setItems(parts);
+        }
+        if (node.properties.get("selected") != null) {
+            sb.setSelected(node.properties.get("selected").toString());
+        }
+        String onChange = (String) node.properties.get("onChange");
+        if (onChange != null) {
+            sb.setOnChange(v -> gui.dispatchAction(onChange + ":" + v));
+        }
+        float w = toFloat(node.properties.get("width"), 0);
+        float h = toFloat(node.properties.get("height"), 0);
+        if (w > 0 || h > 0) sb.setSize(w > 0 ? w : sb.getWidth(), h > 0 ? h : sb.getHeight());
+        return sb;
+    }
+
+    private Actor buildVectorScrollPane(ComponentNode node) {
+        String effectName = (String) node.properties.get("effect");
+        VectorScrollPaneEffect effect = null;
+        if (effectRegistry != null && effectName != null) {
+            effect = effectRegistry.get(effectName, VectorScrollPaneEffect.class);
+        }
+        if (shapeRenderer == null) {
+            Gdx.app.error("UiFactory", "ShapeRenderer not set for vector_scrollpane");
+            return new Group();
+        }
+        Actor content = node.children.isEmpty() ? new Group() : create(node.children.get(0));
+        VectorScrollPane sp = new VectorScrollPane(shapeRenderer, effect, content);
+        boolean sx = node.properties.get("scrollX") != null
+                && Boolean.parseBoolean(node.properties.get("scrollX").toString());
+        boolean sy = node.properties.get("scrollY") == null
+                || Boolean.parseBoolean(node.properties.get("scrollY").toString());
+        sp.setScrollingDisabled(!sx, !sy);
+        return sp;
+    }
+
+    private Actor buildVectorWindow(ComponentNode node) {
+        String effectName = (String) node.properties.get("effect");
+        VectorWindowEffect effect = null;
+        if (effectRegistry != null && effectName != null) {
+            effect = effectRegistry.get(effectName, VectorWindowEffect.class);
+        }
+        if (shapeRenderer == null || bitmapFont == null) {
+            Gdx.app.error("UiFactory", "ShapeRenderer/BitmapFont not set for vector_window");
+            return new Group();
+        }
+        VectorWindow win = new VectorWindow(shapeRenderer, bitmapFont, effect,
+                gui.i18n((String) node.properties.getOrDefault("title", "")));
+        if (node.properties.get("movable") != null)
+            win.setMovable(Boolean.parseBoolean(node.properties.get("movable").toString()));
+        if (node.properties.get("resizable") != null)
+            win.setResizable(Boolean.parseBoolean(node.properties.get("resizable").toString()));
+        for (ComponentNode child : node.children) {
+            Actor a = create(child);
+            win.getContentGroup().addActor(a);
+        }
+        win.pack();
+        return win;
+    }
+
+    private Actor buildVectorDialog(ComponentNode node) {
+        String effectName = (String) node.properties.get("effect");
+        VectorWindowEffect effect = null;
+        if (effectRegistry != null && effectName != null) {
+            effect = effectRegistry.get(effectName, VectorWindowEffect.class);
+        }
+        if (shapeRenderer == null || bitmapFont == null) {
+            Gdx.app.error("UiFactory", "ShapeRenderer/BitmapFont not set for vector_dialog");
+            return new Group();
+        }
+        VectorDialog dlg = new VectorDialog(shapeRenderer, bitmapFont, effect,
+                gui.i18n((String) node.properties.getOrDefault("title", "")),
+                gui.i18n((String) node.properties.getOrDefault("text", "")));
+        String buttonText = (String) node.properties.get("buttonText");
+        if (buttonText != null) {
+            String onClick = (String) node.properties.get("onClick");
+            dlg.setButton(gui.i18n(buttonText),
+                    onClick != null ? () -> gui.dispatchAction(onClick) : dlg::hide);
+        }
+        return dlg;
     }
 }

@@ -10,12 +10,11 @@
       "type": "container",
       "name": "fps_popup_bg",
       "properties": {
-        "background": "Rounded_background",
         "pad": 10
       },
       "children": [
         {
-          "type": "scroll",
+          "type": "vector_scrollpane",
           "name": "fps_scroll",
           "properties": {
             "scrollX": false,
@@ -48,10 +47,10 @@
                   ]
                 },
                 {
-                  "type": "image",
+                  "type": "vector_image",
                   "name": "fps_divider",
                   "properties": {
-                    "drawable": "split",
+                    "color": "#4AC9FF22",
                     "cell": {
                       "height": 2,
                       "padTop": 2

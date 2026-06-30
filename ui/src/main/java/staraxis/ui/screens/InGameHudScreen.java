@@ -1,6 +1,5 @@
 package staraxis.ui.screens;
 
-import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Group;
 import com.badlogic.gdx.scenes.scene2d.Stage;
@@ -52,11 +51,10 @@ public class InGameHudScreen implements Disposable {
         RealTimeWorldState state = rt.getRealTimeWorldStateReadonly();
         if (state == null) return;
 
-        if (root instanceof Group) {
-            Group rootGroup = (Group) root;
+        if (root instanceof Group rootGroup) {
             Actor timeActor = rootGroup.findActor("time_label");
-            if (timeActor instanceof VectorLabel) {
-                ((VectorLabel) timeActor).setText(String.format("Y%d M%d D%d %02d:%02d",
+            if (timeActor instanceof VectorLabel vl) {
+                vl.setText(String.format("Y%d M%d D%d %02d:%02d",
                         state.year, state.month, state.day, state.hour, state.minute));
             }
         }

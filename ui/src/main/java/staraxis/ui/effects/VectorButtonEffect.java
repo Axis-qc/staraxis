@@ -59,7 +59,7 @@ public class VectorButtonEffect extends EffectDef {
 
     private static float toFloat(Object v, float def) {
         if (v == null) return def;
-        if (v instanceof Number) return ((Number) v).floatValue();
-        try { return Float.parseFloat(v.toString()); } catch (Exception ex) { return def; }
+        if (v instanceof Number n) return n.floatValue();
+        try { return Float.parseFloat(v.toString()); } catch (NumberFormatException ex) { return def; }
     }
 }

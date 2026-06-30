@@ -42,11 +42,10 @@
                   }
                 },
                 {
-                  "type": "image",
+                  "type": "vector_image",
                   "name": "title_line",
                   "properties": {
-                    "drawable": "line-h",
-                    "color": "#4AC9FF99",
+                    "color": "#4AC9FF33",
                     "cell": {
                       "width": 260,
                       "height": 2,
@@ -105,6 +104,17 @@
                     "text": "mainMenu.settings",
                     "onClick": "OPEN_SETTINGS",
                     "cell": { "width": 420, "height": 54, "padBottom": 8 }
+                  }
+                },
+                {
+                  "type": "menu_entry",
+                  "effect": "menu_item_secondary",
+                  "name": "btn_uitest",
+                  "properties": {
+                    "text": "UI 测试",
+                    "tag": "DEV",
+                    "onClick": "OPEN_VECTOR_UI_TEST",
+                    "cell": { "width": 420, "height": 50, "padBottom": 8 }
                   }
                 },
                 {

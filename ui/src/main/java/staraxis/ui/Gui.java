@@ -1,6 +1,10 @@
 package staraxis.ui;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
+import com.badlogic.gdx.scenes.scene2d.Group;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.utils.Disposable;
 
@@ -13,9 +17,10 @@ import staraxis.ui.json.UiParser;
 import staraxis.ui.screens.InGameHudScreen;
 import staraxis.ui.screens.JsonScreen;
 import staraxis.ui.screens.SettingsScreen;
-import staraxis.ui.screens.UiComponentsTestScreen;
 import staraxis.ui.screens.WorldSettingsScreen;
 import staraxis.ui.widgets.DevelopingDialog;
+import staraxis.ui.widgets.VectorLabel;
+import staraxis.ui.widgets.VectorProgressBar;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -38,6 +43,17 @@ public class Gui {
     private final Map<Class<?>, Object> componentsByType = new HashMap<>();
 
     private StarAxisGameRuntime runtime;
+
+    /** 由 ClientGame 设置，处理异步世界生成请求喵 */
+    private java.util.function.Consumer<staraxis.game.world.WorldGenConfig> onStartNewGame;
+
+    public void setOnStartNewGame(java.util.function.Consumer<staraxis.game.world.WorldGenConfig> callback) {
+        this.onStartNewGame = callback;
+    }
+
+    public java.util.function.Consumer<staraxis.game.world.WorldGenConfig> getOnStartNewGame() {
+        return onStartNewGame;
+    }
 
     private static final String[] THEME_PATHS = {
         "ui/effects/default.json",
@@ -62,6 +78,74 @@ public class Gui {
 
     /** 当前正在显示的 Screen，用于切换时清理旧界面。 */
     private Disposable activeScreen;
+
+    // ── 加载界面 ──────────────────────────────────────────────
+    private Group loadingRoot;
+    private VectorProgressBar loadingBar;
+    private VectorLabel loadingLabel;
+
+    /** 显示加载界面（替换当前 screen，显示进度条）喵 */
+    public void showLoadingScreen() {
+        if (activeScreen != null) {
+            try { activeScreen.dispose(); } catch (Exception ignored) {}
+            activeScreen = null;
+        }
+        stage.clear();
+
+        ShapeRenderer sr = tryGet(ShapeRenderer.class);
+        BitmapFont font = tryGet(BitmapFont.class);
+        if (sr == null || font == null) return;
+
+        Group root = new Group();
+        root.setSize(stage.getWidth(), stage.getHeight());
+
+        VectorLabel title = new VectorLabel(font, guiI18n("loading.generating"), Color.WHITE);
+        title.setPosition(stage.getWidth() / 2f - 150, stage.getHeight() / 2f + 50);
+        title.setSize(300, 40);
+
+        VectorProgressBar pb = new VectorProgressBar(sr, 0f, 1f, 0.001f, false);
+        pb.setPosition(stage.getWidth() / 2f - 250, stage.getHeight() / 2f - 10);
+        pb.setSize(500, 24);
+        pb.setAnimateDuration(0.1f);
+        loadingBar = pb;
+
+        VectorLabel label = new VectorLabel(font, "", new Color(0.7f, 0.7f, 0.7f, 1f));
+        label.setPosition(stage.getWidth() / 2f - 150, stage.getHeight() / 2f - 40);
+        label.setSize(300, 22);
+        loadingLabel = label;
+
+        root.addActor(title);
+        root.addActor(pb);
+        root.addActor(label);
+
+        stage.addActor(root);
+        loadingRoot = root;
+    }
+
+    /** 更新加载进度喵 */
+    public void updateLoadingProgress(float progress, String phase) {
+        if (loadingBar != null) {
+            loadingBar.setValue(progress);
+        }
+        if (loadingLabel != null && phase != null) {
+            loadingLabel.setText(phase);
+        }
+    }
+
+    /** 隐藏加载界面喵 */
+    public void hideLoadingScreen() {
+        if (loadingRoot != null) {
+            loadingRoot.remove();
+            loadingRoot = null;
+        }
+        loadingBar = null;
+        loadingLabel = null;
+    }
+
+    private String guiI18n(String key) {
+        I18nService svc = tryGet(I18nService.class);
+        return svc != null ? svc.get(key) : key;
+    }
 
     public Gui(Stage stage, Consumer<Float> uiScaleApplier, Consumer<Float> fontScaleApplier) {
         this.stage = stage;
@@ -183,11 +267,10 @@ public class Gui {
         }
     }
 
-    public void showUiComponentsTestScreen() {
-        UiComponentsTestScreen screen = get(UiComponentsTestScreen.class);
-        if (screen != null) {
-            switchScreen(screen, screen::show);
-        }
+    public void showVectorComponentsTestScreen() {
+        String jsonPath = "ui/gameui/vector-ui-test/test_screen.json";
+        JsonScreen screen = new JsonScreen(this, jsonPath);
+        switchScreen(screen, screen::show);
     }
 
     /**
@@ -362,6 +445,40 @@ public class Gui {
                 DevelopingDialog dialog = get(DevelopingDialog.class);
                 if (dialog != null) {
                     dialog.show(stage);
+                }
+                return;
+            }
+            case "OPEN_VECTOR_UI_TEST": {
+                showVectorComponentsTestScreen();
+                return;
+            }
+            case "SHOW_TEST_DIALOG": {
+                ShapeRenderer sr = tryGet(ShapeRenderer.class);
+                BitmapFont font = tryGet(BitmapFont.class);
+                if (sr != null && font != null) {
+                    staraxis.ui.widgets.VectorDialog dlg = new staraxis.ui.widgets.VectorDialog(sr, font, "提示", "这是一个矢量对话框！");
+                    dlg.setSize(300, 160);
+                    dlg.setButton("确定", dlg::hide);
+                    dlg.show(stage);
+                }
+                return;
+            }
+            case "SHOW_TEST_WINDOW": {
+                ShapeRenderer sr = tryGet(ShapeRenderer.class);
+                BitmapFont font = tryGet(BitmapFont.class);
+                if (sr != null && font != null) {
+                    staraxis.ui.widgets.VectorWindow win = new staraxis.ui.widgets.VectorWindow(sr, font, "示例窗口");
+                    win.setSize(280, 160);
+                    staraxis.ui.widgets.VectorLabel winLabel = new staraxis.ui.widgets.VectorLabel(font, "这是一个可拖拽的窗口（ESC 关闭）", com.badlogic.gdx.graphics.Color.WHITE);
+                    winLabel.setPosition(10, 80);
+                    winLabel.setSize(250, 22);
+                    win.getContentGroup().addActor(winLabel);
+                    staraxis.ui.widgets.VectorButton closeBtn = new staraxis.ui.widgets.VectorButton(sr, font, "关闭", win::remove);
+                    closeBtn.setPosition(80, 20);
+                    closeBtn.setSize(100, 36);
+                    win.getContentGroup().addActor(closeBtn);
+                    win.setPosition((stage.getWidth() - win.getWidth()) / 2f, (stage.getHeight() - win.getHeight()) / 2f);
+                    stage.addActor(win);
                 }
                 return;
             }

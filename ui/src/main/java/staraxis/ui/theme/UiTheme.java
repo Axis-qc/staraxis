@@ -1,7 +1,6 @@
 package staraxis.ui.theme;
 
 import com.badlogic.gdx.graphics.Color;
-import staraxis.ui.effects.EffectDef;
 import staraxis.ui.effects.EffectRegistry;
 import staraxis.ui.effects.MenuEntryEffect;
 import staraxis.ui.effects.VectorButtonEffect;

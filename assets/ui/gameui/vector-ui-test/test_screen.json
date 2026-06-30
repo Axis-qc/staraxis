@@ -1,0 +1,512 @@
+{
+  "schemaVersion": 2,
+  "type": "container",
+  "name": "test_root",
+  "properties": {
+    "fillParent": true,
+    "align": "topleft",
+    "pad": 0
+  },
+  "children": [
+    {
+      "type": "stack",
+      "name": "test_stack",
+      "properties": {
+        "cell": { "expand": true, "fill": true, "grow": true }
+      },
+      "children": [
+        {
+          "type": "vector_scrollpane",
+          "name": "main_scroll",
+          "properties": {
+            "scrollX": false,
+            "scrollY": true,
+            "cell": { "expand": true, "fill": true, "grow": true }
+          },
+          "children": [
+            {
+              "type": "container",
+              "name": "scroll_content",
+              "properties": {
+                "align": "topleft",
+                "pad": 20
+              },
+              "children": [
+                {
+                  "type": "vector_label",
+                  "effect": "title_hero",
+                  "name": "page_title",
+                  "properties": {
+                    "text": "矢量控件测试",
+                    "cell": { "width": 600, "height": 60, "padBottom": 6 }
+                  }
+                },
+                {
+                  "type": "vector_label",
+                  "effect": "body_dim",
+                  "properties": {
+                    "text": "ESC 返回主菜单",
+                    "cell": { "width": 400, "height": 22, "padBottom": 24 }
+                  }
+                },
+                {
+                  "type": "container",
+                  "name": "two_column_row",
+                  "properties": {
+                    "layout": "row",
+                    "cell": { "expand": true, "fill": true, "grow": true }
+                  },
+                  "children": [
+                    {
+                      "type": "container",
+                      "name": "left_col",
+                      "properties": {
+                        "align": "top",
+                        "pad": 8,
+                        "cell": { "expand": true, "fill": true, "grow": true, "align": "top" }
+                      },
+                      "children": [
+                        {
+                          "type": "vector_label",
+                          "effect": "subtitle_accent",
+                          "properties": {
+                            "text": "基础控件",
+                            "cell": { "width": 320, "height": 32, "padBottom": 14 }
+                          }
+                        },
+
+                        {
+                          "type": "vector_image",
+                          "properties": {
+                            "color": "#4AC9FF33",
+                            "cell": { "width": 320, "height": 1, "padBottom": 10 }
+                          }
+                        },
+                        {
+                          "type": "vector_label",
+                          "effect": "title_white",
+                          "properties": {
+                            "text": "文字展示",
+                            "cell": { "width": 320, "height": 28, "padBottom": 4 }
+                          }
+                        },
+                        {
+                          "type": "vector_label",
+                          "effect": "body_dim",
+                          "properties": {
+                            "text": "  标题文字（亮白）",
+                            "cell": { "width": 320, "height": 20, "padBottom": 2 }
+                          }
+                        },
+                        {
+                          "type": "vector_label",
+                          "effect": "subtitle_accent",
+                          "properties": {
+                            "text": "  副标题（主题色）",
+                            "cell": { "width": 320, "height": 20, "padBottom": 2 }
+                          }
+                        },
+                        {
+                          "type": "vector_label",
+                          "effect": "body_dim",
+                          "properties": {
+                            "text": "  正文说明（柔和灰）",
+                            "cell": { "width": 320, "height": 20, "padBottom": 16 }
+                          }
+                        },
+
+                        {
+                          "type": "vector_label",
+                          "effect": "title_white",
+                          "properties": {
+                            "text": "矢量色块",
+                            "cell": { "width": 320, "height": 28, "padBottom": 6 }
+                          }
+                        },
+                        {
+                          "type": "container",
+                          "properties": {
+                            "layout": "row",
+                            "cell": { "padBottom": 16 }
+                          },
+                          "children": [
+                            {
+                              "type": "vector_image",
+                              "properties": {
+                                "color": "#EF4444FF",
+                                "cell": { "width": 32, "height": 32, "padRight": 10 }
+                              }
+                            },
+                            {
+                              "type": "vector_image",
+                              "properties": {
+                                "color": "#10B981FF",
+                                "cell": { "width": 32, "height": 32, "padRight": 10 }
+                              }
+                            },
+                            {
+                              "type": "vector_image",
+                              "properties": {
+                                "color": "#3B82F6FF",
+                                "cell": { "width": 32, "height": 32, "padRight": 10 }
+                              }
+                            },
+                            {
+                              "type": "vector_image",
+                              "properties": {
+                                "color": "#4AC9FFFF",
+                                "cell": { "width": 32, "height": 32 }
+                              }
+                            }
+                          ]
+                        },
+
+                        {
+                          "type": "vector_label",
+                          "effect": "title_white",
+                          "properties": {
+                            "text": "复选框",
+                            "cell": { "width": 320, "height": 28, "padBottom": 6 }
+                          }
+                        },
+                        {
+                          "type": "container",
+                          "properties": {
+                            "layout": "row",
+                            "cell": { "padBottom": 16 }
+                          },
+                          "children": [
+                            {
+                              "type": "vector_checkbox",
+                              "properties": {
+                                "text": "启用特效",
+                                "checked": "true",
+                                "cell": { "padRight": 24 }
+                              }
+                            },
+                            {
+                              "type": "vector_checkbox",
+                              "properties": {
+                                "text": "显示网格",
+                                "checked": "false"
+                              }
+                            }
+                          ]
+                        },
+
+                        {
+                          "type": "vector_label",
+                          "effect": "title_white",
+                          "properties": {
+                            "text": "菜单项",
+                            "cell": { "width": 320, "height": 28, "padBottom": 6 }
+                          }
+                        },
+                        {
+                          "type": "menu_entry",
+                          "effect": "menu_item_primary",
+                          "properties": {
+                            "text": "主级菜单项",
+                            "cell": { "width": 320, "height": 44, "padBottom": 4 }
+                          }
+                        },
+                        {
+                          "type": "menu_entry",
+                          "effect": "menu_item_secondary",
+                          "properties": {
+                            "text": "次级带标记",
+                            "tag": "DEV",
+                            "cell": { "width": 320, "height": 44, "padBottom": 16 }
+                          }
+                        },
+
+                        {
+                          "type": "vector_label",
+                          "effect": "title_white",
+                          "properties": {
+                            "text": "文本输入框",
+                            "cell": { "width": 320, "height": 28, "padBottom": 6 }
+                          }
+                        },
+                        {
+                          "type": "vector_textfield",
+                          "properties": {
+                            "text": "",
+                            "messageText": "点击输入文字...",
+                            "cell": { "width": 320, "height": 34, "padBottom": 16 }
+                          }
+                        },
+
+                        {
+                          "type": "vector_label",
+                          "effect": "title_white",
+                          "properties": {
+                            "text": "下拉选择框",
+                            "cell": { "width": 320, "height": 28, "padBottom": 6 }
+                          }
+                        },
+                        {
+                          "type": "vector_selectbox",
+                          "properties": {
+                            "items": "默认选项, 选项 1, 选项 2, 选项 3, 选项 4",
+                            "selected": "默认选项",
+                            "cell": { "width": 320, "height": 34, "padBottom": 16 }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "container",
+                      "name": "right_col",
+                      "properties": {
+                        "align": "top",
+                        "pad": 8,
+                        "cell": { "expand": true, "fill": true, "grow": true, "align": "top" }
+                      },
+                      "children": [
+                        {
+                          "type": "vector_label",
+                          "effect": "subtitle_accent",
+                          "properties": {
+                            "text": "交互控件",
+                            "cell": { "width": 320, "height": 32, "padBottom": 14 }
+                          }
+                        },
+
+                        {
+                          "type": "vector_image",
+                          "properties": {
+                            "color": "#4AC9FF33",
+                            "cell": { "width": 320, "height": 1, "padBottom": 10 }
+                          }
+                        },
+                        {
+                          "type": "vector_label",
+                          "effect": "title_white",
+                          "properties": {
+                            "text": "按钮",
+                            "cell": { "width": 320, "height": 28, "padBottom": 6 }
+                          }
+                        },
+                        {
+                          "type": "container",
+                          "properties": {
+                            "layout": "row",
+                            "cell": { "padBottom": 8 }
+                          },
+                          "children": [
+                            {
+                              "type": "vector_button",
+                              "effect": "primary_button",
+                              "properties": {
+                                "text": "普通按钮",
+                                "cell": { "width": 145, "height": 36, "padRight": 10 }
+                              }
+                            },
+                            {
+                              "type": "vector_button",
+                              "effect": "primary_button",
+                              "properties": {
+                                "text": "悬浮变色",
+                                "cell": { "width": 145, "height": 36 }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "vector_button",
+                          "effect": "primary_button",
+                          "properties": {
+                            "text": "弹出对话框",
+                            "onClick": "SHOW_TEST_DIALOG",
+                            "cell": { "width": 300, "height": 36, "padBottom": 16 }
+                          }
+                        },
+
+                        {
+                          "type": "vector_label",
+                          "effect": "title_white",
+                          "properties": {
+                            "text": "滑动条",
+                            "cell": { "width": 320, "height": 28, "padBottom": 6 }
+                          }
+                        },
+                        {
+                          "type": "vector_slider",
+                          "properties": {
+                            "min": 0,
+                            "max": 100,
+                            "step": 1,
+                            "value": 42,
+                            "cell": { "width": 320, "height": 30, "padBottom": 16 }
+                          }
+                        },
+
+                        {
+                          "type": "vector_label",
+                          "effect": "title_white",
+                          "properties": {
+                            "text": "进度条",
+                            "cell": { "width": 320, "height": 28, "padBottom": 6 }
+                          }
+                        },
+                        {
+                          "type": "vector_progressbar",
+                          "properties": {
+                            "min": 0,
+                            "max": 100,
+                            "step": 0.1,
+                            "value": 65,
+                            "cell": { "width": 320, "height": 22, "padBottom": 16 }
+                          }
+                        },
+
+                        {
+                          "type": "vector_label",
+                          "effect": "title_white",
+                          "properties": {
+                            "text": "滚动面板（内含可滚动项）",
+                            "cell": { "width": 320, "height": 28, "padBottom": 6 }
+                          }
+                        },
+                        {
+                          "type": "vector_scrollpane",
+                          "name": "demo_scroll",
+                          "properties": {
+                            "scrollX": false,
+                            "scrollY": true,
+                            "cell": { "width": 320, "height": 200, "padBottom": 16 }
+                          },
+                          "children": [
+                            {
+                              "type": "container",
+                              "name": "scroll_demo_content",
+                              "properties": {
+                                "align": "topleft",
+                                "pad": 4
+                              },
+                              "children": [
+                                {
+                                  "type": "vector_label",
+                                  "effect": "body_dim",
+                                  "properties": {
+                                    "text": "  项目 #1",
+                                    "cell": { "width": 280, "height": 20, "padBottom": 4 }
+                                  }
+                                },
+                                {
+                                  "type": "vector_label",
+                                  "effect": "body_dim",
+                                  "properties": {
+                                    "text": "  项目 #2",
+                                    "cell": { "width": 280, "height": 20, "padBottom": 4 }
+                                  }
+                                },
+                                {
+                                  "type": "vector_label",
+                                  "effect": "body_dim",
+                                  "properties": {
+                                    "text": "  项目 #3",
+                                    "cell": { "width": 280, "height": 20, "padBottom": 4 }
+                                  }
+                                },
+                                {
+                                  "type": "vector_label",
+                                  "effect": "body_dim",
+                                  "properties": {
+                                    "text": "  项目 #4",
+                                    "cell": { "width": 280, "height": 20, "padBottom": 4 }
+                                  }
+                                },
+                                {
+                                  "type": "vector_label",
+                                  "effect": "body_dim",
+                                  "properties": {
+                                    "text": "  项目 #5",
+                                    "cell": { "width": 280, "height": 20, "padBottom": 4 }
+                                  }
+                                },
+                                {
+                                  "type": "vector_label",
+                                  "effect": "body_dim",
+                                  "properties": {
+                                    "text": "  项目 #6",
+                                    "cell": { "width": 280, "height": 20, "padBottom": 4 }
+                                  }
+                                },
+                                {
+                                  "type": "vector_label",
+                                  "effect": "body_dim",
+                                  "properties": {
+                                    "text": "  项目 #7",
+                                    "cell": { "width": 280, "height": 20, "padBottom": 4 }
+                                  }
+                                },
+                                {
+                                  "type": "vector_label",
+                                  "effect": "body_dim",
+                                  "properties": {
+                                    "text": "  项目 #8",
+                                    "cell": { "width": 280, "height": 20, "padBottom": 4 }
+                                  }
+                                },
+                                {
+                                  "type": "vector_label",
+                                  "effect": "body_dim",
+                                  "properties": {
+                                    "text": "  项目 #9",
+                                    "cell": { "width": 280, "height": 20, "padBottom": 4 }
+                                  }
+                                },
+                                {
+                                  "type": "vector_label",
+                                  "effect": "body_dim",
+                                  "properties": {
+                                    "text": "  项目 #10",
+                                    "cell": { "width": 280, "height": 20, "padBottom": 4 }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+
+                        {
+                          "type": "vector_label",
+                          "effect": "title_white",
+                          "properties": {
+                            "text": "可拖拽窗口",
+                            "cell": { "width": 320, "height": 28, "padBottom": 6 }
+                          }
+                        },
+                        {
+                          "type": "vector_button",
+                          "effect": "primary_button",
+                          "properties": {
+                            "text": "打开窗口",
+                            "onClick": "SHOW_TEST_WINDOW",
+                            "cell": { "width": 300, "height": 36, "padBottom": 24 }
+                          }
+                        },
+
+                        {
+                          "type": "vector_button",
+                          "effect": "primary_button",
+                          "properties": {
+                            "text": "返回主菜单 (ESC)",
+                            "onClick": "BACK_TO_MAIN_MENU",
+                            "cell": { "width": 300, "height": 40 }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

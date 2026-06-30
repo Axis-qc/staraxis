@@ -7,13 +7,9 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.scenes.scene2d.Stage;
-import com.badlogic.gdx.scenes.scene2d.ui.Label;
-import com.badlogic.gdx.scenes.scene2d.ui.Skin;
-import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import staraxis.ui.FontProvider;
 import staraxis.ui.Gui;
-import staraxis.ui.UiSkinLoader;
 import staraxis.ui.effects.EffectRegistry;
 import staraxis.ui.i18n.I18nService;
 import staraxis.ui.json.GameDataProvider;
@@ -46,23 +42,13 @@ public class UiPreviewApp implements ApplicationListener {
         gui.register(I18nService.class, i18nService);
         gui.register(SettingsRepository.class, new SettingsRepository());
 
-        Skin skin = UiSkinLoader.loadDefault("ui/uiskin/uiskin.json");
-
         BitmapFont defaultFont = FontProvider.createDefaultFont();
         BitmapFont ttfFont = FontProvider.createUiFont();
         BitmapFont finalFont = (ttfFont != null) ? ttfFont : defaultFont;
         BitmapFont vectorTtfFont = FontProvider.createVectorFont();
         BitmapFont vectorFont = (vectorTtfFont != null) ? vectorTtfFont : finalFont;
 
-        skin.add("default-font", finalFont, BitmapFont.class);
-
-        TextButton.TextButtonStyle textButtonStyle = skin.get(TextButton.TextButtonStyle.class);
-        textButtonStyle.font = finalFont;
-
-        Label.LabelStyle labelStyle = skin.get(Label.LabelStyle.class);
-        labelStyle.font = finalFont;
-
-        gui.register(Skin.class, skin);
+        gui.register(BitmapFont.class, vectorFont);
         gui.initJsonUi();
 
         ShapeRenderer sr = new ShapeRenderer();
@@ -83,7 +69,7 @@ public class UiPreviewApp implements ApplicationListener {
         WorldSettingsScreen worldSettingsScreen = new WorldSettingsScreen(gui);
         InGameHudScreen inGameHudScreen = new InGameHudScreen(gui);
         SettingsScreen settingsScreen = new SettingsScreen(gui);
-        DevelopingDialog developingDialog = new DevelopingDialog(skin, i18nService);
+        DevelopingDialog developingDialog = new DevelopingDialog(sr, vectorFont, i18nService);
 
         gui.register(WorldSettingsScreen.class, worldSettingsScreen);
         gui.register(InGameHudScreen.class, inGameHudScreen);
@@ -130,10 +116,6 @@ public class UiPreviewApp implements ApplicationListener {
     @Override
     public void dispose() {
         if (gui != null) {
-            Skin skin = gui.get(Skin.class);
-            if (skin != null) {
-                skin.dispose();
-            }
             ShapeRenderer sr = gui.get(ShapeRenderer.class);
             if (sr != null) {
                 sr.dispose();
