@@ -26,6 +26,7 @@ import staraxis.game.entity.Entity;
 import staraxis.game.entity.EntityType;
 import staraxis.game.ship.MovementCommand;
 import staraxis.game.ship.ShipBody;
+import staraxis.game.util.ProgressCallback;
 import staraxis.game.ship.ShipMovementSystem;
 import staraxis.game.sim.SimulationTime;
 import staraxis.game.sim.TimelineSystem;
@@ -44,7 +45,6 @@ import staraxis.game.space.galaxy.GalaxyType;
 import staraxis.game.space.galaxy.StarPosition;
 import staraxis.game.world.WorldGenConfig;
 import staraxis.game.world.WorldGenerator;
-import staraxis.game.world.WorldHexLayout;
 import staraxis.game.world.WorldSector;
 import staraxis.game.log.PerformanceMonitor;
 
@@ -92,12 +92,22 @@ public class StarAxisGameRuntime implements GameRuntime {
     }
 
     public static StarAxisGameRuntime newGame(WorldGenConfig cfg) {
+        return newGame(cfg, null);
+    }
+
+    public static StarAxisGameRuntime newGame(WorldGenConfig cfg, ProgressCallback progress) {
+        if (progress != null)
+            progress.onProgress(0.00f, "初始化时间系统");
         SimulationTime time = new SimulationTime();
         time.worldType = cfg == null || cfg.worldType == null ? staraxis.game.world.WorldType.SINGLE_PLAYER
                 : cfg.worldType;
 
+        if (progress != null)
+            progress.onProgress(0.02f, "生成世界地图");
         var worldMap = WorldGenerator.generate(cfg);
 
+        if (progress != null)
+            progress.onProgress(0.03f, "加载天体资源");
         AstroAssetRepository astroAssets = new AstroAssetRepository(new ObjectMapper());
         astroAssets.loadAll();
 
@@ -105,7 +115,8 @@ public class StarAxisGameRuntime implements GameRuntime {
                 new ObjectMapper());
         planetAssets.loadAll();
 
-        // 初始化全局配置注册中心并加载所有配置（含 Intel 等）喵
+        if (progress != null)
+            progress.onProgress(0.05f, "加载配置");
         staraxis.game.config.GlobalConfigRegistry configRegistry = new staraxis.game.config.GlobalConfigRegistry(
                 new ObjectMapper());
         configRegistry.loadAll();
@@ -116,24 +127,42 @@ public class StarAxisGameRuntime implements GameRuntime {
         int starCount = cfg.systemCount;
         GalaxyConfig galaxyCfg = GalaxyConfig.defaultSpiral();
         galaxyCfg.starCount = starCount;
-        galaxyCfg.worldSeed = (cfg.worldSeed == null || cfg.worldSeed.isBlank()) ? 42L : (long) cfg.worldSeed.hashCode();
+        galaxyCfg.worldSeed = (cfg.worldSeed == null || cfg.worldSeed.isBlank()) ? 42L
+                : (long) cfg.worldSeed.hashCode();
+        if (progress != null)
+            progress.onProgress(0.08f, "生成星系结构");
         GalaxyGenerator galaxyGen = GalaxyGeneratorFactory.create(GalaxyType.SPIRAL);
         GalaxyData galaxyData = galaxyGen.generate(galaxyCfg);
 
         List<StarSystem> systems = new java.util.ArrayList<>();
+        int totalStars = galaxyData.stars.size();
+        int i = 0;
         for (StarPosition sp : galaxyData.stars) {
+            if (progress != null) {
+                float p = 0.08f + 0.84f * i / totalStars;
+                progress.onProgress(p, "生成恒星系 " + (i + 1) + "/" + totalStars);
+            }
             SpacePosition pos = new SpacePosition(sp.galaxyX(), sp.galaxyY(), sp.galaxyZ());
             StarSystem sys = astroGenerator.generateSystemAtPosition(pos, sp.starId());
             systems.add(sys);
+            i++;
         }
 
+        if (progress != null)
+            progress.onProgress(0.93f, "构建天体数据");
         AstroData astro = new AstroData(systems);
+        if (progress != null)
+            progress.onProgress(0.95f, "创建世界状态");
         WorldState ws = new WorldState(time, worldMap, astro);
 
         // 初始化情报系统并挂载到 WorldState 喵
+        if (progress != null)
+            progress.onProgress(0.97f, "初始化情报系统");
         ws.intelSystem = new staraxis.game.intel.IntelSystem(ws, configRegistry.intel());
 
         // 初始化玩家国家并绑定出生点喵
+        if (progress != null)
+            progress.onProgress(0.98f, "初始化玩家国家");
         if (cfg.playerNationDef != null && cfg.playerNationDef.id != null && !cfg.playerNationDef.id.isBlank()) {
             String nationId = cfg.playerNationDef.id;
             if (!ws.nationManager.hasNation(nationId)) {
@@ -218,7 +247,8 @@ public class StarAxisGameRuntime implements GameRuntime {
                     // 世界生成时不分配任何归属，等待玩家选择位置生成殖民舰喵
                     // 仅记录出生星系，但星系内天体保持无主状态喵
                     if (ns != null && capital != null) {
-                        // ws.nationAssetManager.assignEntityToNation(capital.entityId, nationId); // 禁用初始归属分配喵
+                        // ws.nationAssetManager.assignEntityToNation(capital.entityId, nationId); //
+                        // 禁用初始归属分配喵
                         ns.capitalPlanetEntityId = 0L; // 无首都行星，等待殖民喵
                         ns.spawnSystemEntityId = sys.systemId; // 记录出生星系喵
                     }
@@ -228,6 +258,8 @@ public class StarAxisGameRuntime implements GameRuntime {
             }
         }
 
+        if (progress != null)
+            progress.onProgress(1.0f, "完成");
         return new StarAxisGameRuntime(ws);
     }
 
@@ -282,8 +314,7 @@ public class StarAxisGameRuntime implements GameRuntime {
 
         // 记录到性能监测器（快照生成时间在 SnapshotBroadcaster 中记录）喵
         PerformanceMonitor.getInstance().record(
-            tickTimeMs, 0, entityCount, sectorCount, activePlayerCount, simulationTick
-        );
+                tickTimeMs, 0, entityCount, sectorCount, activePlayerCount, simulationTick);
     }
 
     @Override
@@ -396,7 +427,7 @@ public class StarAxisGameRuntime implements GameRuntime {
             // 3.1 系统重心喵
             StarBody firstStar = system.stars.isEmpty() ? null : system.stars.get(0);
             SpacePosition systemPos = firstStar != null ? firstStar.posWorldGU
-                : new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y());
+                    : new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y());
             sectorBaselines.add(new EntitySnapshot(
                     system.barycenterEntityId,
                     EntityType.SYSTEM_BARYCENTER,
@@ -504,7 +535,7 @@ public class StarAxisGameRuntime implements GameRuntime {
             barycenter.parentEntityId = 0;
             barycenter.sectorCoord = system.sectorCoord;
             barycenter.posWorldGU = systemPos3d != null ? systemPos3d
-                : new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y());
+                    : new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y());
 
             // 权威注册到 WorldState 喵
             worldState.registerEntity(barycenter);
@@ -531,7 +562,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                 star.sectorCoord = system.sectorCoord;
                 if (star.posWorldGU == null) {
                     star.posWorldGU = systemPos3d != null ? systemPos3d
-                        : new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y());
+                            : new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y());
                 }
 
                 // 权威注册到 WorldState 喵
@@ -567,8 +598,8 @@ public class StarAxisGameRuntime implements GameRuntime {
                 planet.parentEntityId = system.barycenterEntityId;
                 planet.sectorCoord = system.sectorCoord;
                 planet.posWorldGU = planet.posWorldGU != null ? planet.posWorldGU
-                    : (systemPos3d != null ? systemPos3d
-                        : new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y()));
+                        : (systemPos3d != null ? systemPos3d
+                                : new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y()));
 
                 // 权威注册到 WorldState 喵
                 worldState.registerEntity(planet);
@@ -670,8 +701,9 @@ public class StarAxisGameRuntime implements GameRuntime {
             }
 
             // 获取情报需求等级（从 IntelSystem 查询，默认 4 级）喵
-            int intelRequiredLevel = worldState.intelSystem != null ?
-                    worldState.intelSystem.getRequiredIntelLevel(entity.entityType) : 4;
+            int intelRequiredLevel = worldState.intelSystem != null
+                    ? worldState.intelSystem.getRequiredIntelLevel(entity.entityType)
+                    : 4;
 
             // 调试日志：只在舰船正在移动时记录（降低日志频率）喵
             s.putEntitySnapshot(new EntitySnapshot(
@@ -686,7 +718,8 @@ public class StarAxisGameRuntime implements GameRuntime {
                     new EntitySnapshot.ShipDetails(customFlags, headingDeg, isMoving, movementTarget, velocity,
                             maxSpeed, baseAcceleration, bowAccelerationBonus, turnRate,
                             lateralSpeedPenalty, reverseSpeedPenalty,
-                            toMovementCommandDetails(entity instanceof ShipBody shipBody ? shipBody.movementCommand : null)),
+                            toMovementCommandDetails(
+                                    entity instanceof ShipBody shipBody ? shipBody.movementCommand : null)),
                     intelRequiredLevel));
         }
 

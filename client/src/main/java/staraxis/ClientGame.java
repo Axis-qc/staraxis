@@ -8,14 +8,14 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.scenes.scene2d.Stage;
-import com.badlogic.gdx.scenes.scene2d.ui.Label;
-import com.badlogic.gdx.scenes.scene2d.ui.Skin;
-import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 
 import staraxis.game.StarAxisGameRuntime;
 import staraxis.game.astro.StarSystem;
+import staraxis.game.util.ProgressCallback;
+import staraxis.game.world.WorldGenConfig;
 import staraxis.logging.GdxToSlf4jLogger;
+import staraxis.render.SkyboxRenderer;
 import staraxis.render.ViewManager;
 import staraxis.render.WorldCamera;
 import staraxis.render.util.MenuBackgroundLoader;
@@ -24,7 +24,6 @@ import staraxis.render.picking.RayPicker;
 import staraxis.render.system.SystemViewRenderer;
 import staraxis.ui.FontProvider;
 import staraxis.ui.Gui;
-import staraxis.ui.UiSkinLoader;
 import staraxis.ui.effects.EffectRegistry;
 import staraxis.ui.i18n.I18nService;
 import staraxis.ui.json.GameDataProvider;
@@ -59,11 +58,23 @@ public class ClientGame implements ApplicationListener {
     private SystemViewRenderer systemViewRenderer;
     private RayPicker rayPicker;
 
+    // 天空盒渲染器
+    private SkyboxRenderer skyboxRenderer;
+
     // 当前选中的恒星系（System View）
     private StarSystem currentSystem;
 
     // UI 调试叠加层（F3 切换），显示坐标原点/鼠标坐标/悬停元素边框
     private UiDebug uiDebug;
+
+    // ── 加载状态 ──────────────────────────────────────────────
+    public enum GameState { MENU, LOADING, PLAYING }
+    private GameState gameState = GameState.MENU;
+    private Thread genThread;
+    private volatile float genProgress;
+    private volatile String genPhase;
+    private volatile StarAxisGameRuntime genResult;
+    private volatile boolean genFailed;
 
     @Override
     public void create() {
@@ -144,23 +155,13 @@ public class ClientGame implements ApplicationListener {
         gui.register(I18nService.class, i18nService);
         gui.register(SettingsRepository.class, new SettingsRepository());
 
-        Skin skin = UiSkinLoader.loadDefault("ui/uiskin/uiskin.json");
-
         BitmapFont defaultFont = FontProvider.createDefaultFont();
         BitmapFont ttfFont = FontProvider.createUiFont();
         BitmapFont finalFont = (ttfFont != null) ? ttfFont : defaultFont;
         BitmapFont vectorTtfFont = FontProvider.createVectorFont();
         BitmapFont vectorFont = (vectorTtfFont != null) ? vectorTtfFont : finalFont;
 
-        skin.add("default-font", finalFont, BitmapFont.class);
-
-        TextButton.TextButtonStyle textButtonStyle = skin.get(TextButton.TextButtonStyle.class);
-        textButtonStyle.font = finalFont;
-
-        Label.LabelStyle labelStyle = skin.get(Label.LabelStyle.class);
-        labelStyle.font = finalFont;
-
-        gui.register(Skin.class, skin);
+        gui.register(BitmapFont.class, vectorFont);
         gui.initJsonUi();
 
         ShapeRenderer sr = new ShapeRenderer();
@@ -181,7 +182,7 @@ public class ClientGame implements ApplicationListener {
         WorldSettingsScreen worldSettingsScreen = new WorldSettingsScreen(gui);
         InGameHudScreen inGameHudScreen = new InGameHudScreen(gui);
         SettingsScreen settingsScreen = new SettingsScreen(gui);
-        DevelopingDialog developingDialog = new DevelopingDialog(skin, i18nService);
+        DevelopingDialog developingDialog = new DevelopingDialog(sr, vectorFont, i18nService);
 
         gui.register(WorldSettingsScreen.class, worldSettingsScreen);
         gui.register(InGameHudScreen.class, inGameHudScreen);
@@ -198,6 +199,9 @@ public class ClientGame implements ApplicationListener {
                 gui.get(staraxis.ui.json.UiFactory.class));
         uiDebug.setCamera(spaceCamera);
 
+        // 设置异步世界生成回调
+        gui.setOnStartNewGame(cfg -> startAsyncGen(cfg));
+
         gui.showMainMenu();
     }
 
@@ -208,6 +212,7 @@ public class ClientGame implements ApplicationListener {
         rayPicker = new RayPicker();
         galaxyViewRenderer = new GalaxyViewRenderer();
         systemViewRenderer = new SystemViewRenderer();
+        skyboxRenderer = new SkyboxRenderer();
     }
 
     @Override
@@ -223,23 +228,53 @@ public class ClientGame implements ApplicationListener {
         }
     }
 
+    /**
+     * 开始异步世界生成。由 WorldSettingsScreen 触发，在后台线程执行 newGame()
+     * 主线程每帧读取 genProgress/genPhase 更新进度条喵。
+     */
+    public void startAsyncGen(WorldGenConfig cfg) {
+        gameState = GameState.LOADING;
+        genProgress = 0f;
+        genPhase = "";
+        genResult = null;
+        genFailed = false;
+        gui.showLoadingScreen();
+
+        genThread = new Thread(() -> {
+            try {
+                StarAxisGameRuntime rt = StarAxisGameRuntime.newGame(cfg, new ProgressCallback() {
+                    @Override
+                    public void onProgress(float progress, String phase) {
+                        genProgress = progress;
+                        if (phase != null) genPhase = phase;
+                    }
+                });
+                genResult = rt;
+            } catch (Exception e) {
+                genFailed = true;
+                genPhase = "生成失败: " + e.getMessage();
+                Gdx.app.error("ClientGame", "World generation failed", e);
+            }
+        }, "WorldGen");
+        genThread.setDaemon(true);
+        genThread.start();
+    }
+
     @Override
     public void render() {
         float dt = Gdx.graphics.getDeltaTime();
 
-        runtime = gui.getRuntime();
-        if (runtime != null) {
-            runtime.update(dt);
-            runtime.publishRealtimeSnapshotIfNeeded();
-
-            renderSpaceScene(dt);
-        } else {
-            Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
-            Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-            if (starfield != null) {
-                starfield.act(dt);
-                starfield.render();
-            }
+        switch (gameState) {
+            case LOADING:
+                renderLoading(dt);
+                break;
+            case PLAYING:
+                renderPlaying(dt);
+                break;
+            case MENU:
+            default:
+                renderMenu(dt);
+                break;
         }
 
         stage.act(dt);
@@ -250,6 +285,62 @@ public class ClientGame implements ApplicationListener {
             uiDebug.update();
             uiDebug.render();
         }
+    }
+
+    private void renderMenu(float dt) {
+        Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        if (starfield != null) {
+            starfield.act(dt);
+            starfield.render();
+        }
+    }
+
+    private void renderLoading(float dt) {
+        // 绘制星空背景
+        Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        if (starfield != null) {
+            starfield.act(dt);
+            starfield.render();
+        }
+
+        // 更新进度条
+        gui.updateLoadingProgress(genProgress, genPhase);
+
+        // 检查生成线程是否完成
+        if (genResult != null) {
+            finishLoading();
+        } else if (genFailed) {
+            // 生成失败，退回主菜单
+            Gdx.app.error("ClientGame", "World generation failed: " + genPhase);
+            gameState = GameState.MENU;
+            gui.hideLoadingScreen();
+            gui.showMainMenu();
+        }
+    }
+
+    private void finishLoading() {
+        StarAxisGameRuntime rt = genResult;
+        genResult = null;
+        genThread = null;
+
+        runtime = rt;
+        gui.registerRuntime(rt);
+        gameState = GameState.PLAYING;
+        gui.hideLoadingScreen();
+        gui.dispatchAction("START_GAME");
+    }
+
+    private void renderPlaying(float dt) {
+        if (runtime == null) {
+            gameState = GameState.MENU;
+            return;
+        }
+        runtime.update(dt);
+        runtime.publishRealtimeSnapshotIfNeeded();
+
+        renderSpaceScene(dt);
     }
 
     private void renderSpaceScene(float dt) {
@@ -276,6 +367,8 @@ public class ClientGame implements ApplicationListener {
     }
 
     private void renderGalaxyView() {
+        skyboxRenderer.render(spaceCamera);
+
         var state = runtime.getRealTimeWorldStateReadonly();
 
         rayPicker.updateHovered(spaceCamera, state,
@@ -309,6 +402,8 @@ public class ClientGame implements ApplicationListener {
         if (currentSystem == null)
             return;
 
+        skyboxRenderer.render(spaceCamera);
+
         systemViewRenderer.advanceTime(dt);
         systemViewRenderer.render(currentSystem, spaceCamera);
     }
@@ -341,10 +436,6 @@ public class ClientGame implements ApplicationListener {
     @Override
     public void dispose() {
         if (gui != null) {
-            Skin skin = gui.get(Skin.class);
-            if (skin != null) {
-                skin.dispose();
-            }
             ShapeRenderer sr = gui.get(ShapeRenderer.class);
             if (sr != null) {
                 sr.dispose();
@@ -368,6 +459,10 @@ public class ClientGame implements ApplicationListener {
         if (systemViewRenderer != null) {
             systemViewRenderer.dispose();
             systemViewRenderer = null;
+        }
+        if (skyboxRenderer != null) {
+            skyboxRenderer.dispose();
+            skyboxRenderer = null;
         }
         if (runtime != null) {
             runtime.stop();
