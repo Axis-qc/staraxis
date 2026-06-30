@@ -6,7 +6,6 @@ import staraxis.game.entity.Entity;
 import staraxis.game.entity.EntityType;
 import staraxis.game.ship.ShipBody;
 import staraxis.game.space.SpacePosition;
-import staraxis.game.world.Vec2d;
 import staraxis.game.world.WorldGenConfig;
 import staraxis.game.world.hex.SectorCoord;
 import staraxis.webnet.game.GameSessions;

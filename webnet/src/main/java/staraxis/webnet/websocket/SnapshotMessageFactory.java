@@ -17,7 +17,6 @@ import staraxis.game.entity.EntityType;
 import staraxis.game.state.snapshot.EntitySnapshot;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;

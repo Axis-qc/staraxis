@@ -51,7 +51,6 @@ import staraxis.webnet.command.SpawnColonyShipCommand;
 import staraxis.webnet.command.ColonizePlanetWebCommand;
 import staraxis.webnet.ai.WebAiWebSocketHandler;
 import staraxis.webnet.ai.WebAiAutoStarter;
-import staraxis.webnet.websocket.SnapshotBroadcaster;
 import staraxis.webnet.websocket.WebPlayerWebSocketHandler;
 import io.undertow.Handlers;
 import io.undertow.Undertow;
