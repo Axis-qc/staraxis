@@ -62,8 +62,10 @@ public class WorldCamera {
             orbitDist = maxOrbitDist;
             // 逆推最小 zoomLevel，阻止 zoom 继续往远了漂
             double minZoom = 7 - (Math.log10(maxOrbitDist) - 2) / 0.67;
-            if (zoomLevel < minZoom) zoomLevel = minZoom;
-            if (targetZoom < minZoom) targetZoom = minZoom;
+            if (zoomLevel < minZoom)
+                zoomLevel = minZoom;
+            if (targetZoom < minZoom)
+                targetZoom = minZoom;
         }
         // 镜头位置不限制，允许自由越界喵
 
@@ -120,7 +122,7 @@ public class WorldCamera {
             scrollAccum = 0f;
         }
 
-        // WASD 镜头移动（地平面方向）喵
+        // WASD 镜头移动（地平面方向）—— 使用 cpy().scl() 避免 scl() 原地修改向量喵
         Vector3 fwd = new Vector3(camera.direction).nor();
         fwd.y = 0;
         if (fwd.len() < 0.01f)
@@ -129,13 +131,13 @@ public class WorldCamera {
         Vector3 rgt = new Vector3(fwd).crs(Vector3.Y).nor();
 
         if (Gdx.input.isKeyPressed(Input.Keys.W))
-            target.add(fwd.scl(sp));
+            target.add(fwd.cpy().scl(sp));
         if (Gdx.input.isKeyPressed(Input.Keys.S))
-            target.add(fwd.scl(-sp));
+            target.add(fwd.cpy().scl(-sp));
         if (Gdx.input.isKeyPressed(Input.Keys.A))
-            target.add(rgt.scl(-sp));
+            target.add(rgt.cpy().scl(-sp));
         if (Gdx.input.isKeyPressed(Input.Keys.D))
-            target.add(rgt.scl(sp));
+            target.add(rgt.cpy().scl(sp));
 
         // 限制 target（镜头中心点）在 100万³ 世界坐标内，镜头位置不受限喵
         float lim = 480000f;
@@ -155,6 +157,7 @@ public class WorldCamera {
             int dx = Gdx.input.getX() - lx, dy = Gdx.input.getY() - ly;
             yaw -= dx * ROT_SPEED;
             pitch += dy * ROT_SPEED;
+            pitch = MathUtils.clamp(pitch, -89f, 89f); // 限制 pitch 避免万向锁
             lx = Gdx.input.getX();
             ly = Gdx.input.getY();
         }

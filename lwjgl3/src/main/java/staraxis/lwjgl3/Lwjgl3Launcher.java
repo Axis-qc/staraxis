@@ -91,9 +91,9 @@ public class Lwjgl3Launcher {
             configuration.setIdleFPS(30);
         }
 
-        // 显式请求 OpenGL 3.2 Core Profile（确保使用 GPU 硬件加速）
+        // 显式请求 OpenGL 3.2 Core Profile，启用 GL30 模拟以暴露 gl30/gl31/gl32 API（实例化渲染需要）
         configuration.setOpenGLEmulation(
-                Lwjgl3ApplicationConfiguration.GLEmulation.GL20, 3, 2);
+                Lwjgl3ApplicationConfiguration.GLEmulation.GL32, 3, 3);
 
         try {
             String[] parts = settings.resolution.split("x");

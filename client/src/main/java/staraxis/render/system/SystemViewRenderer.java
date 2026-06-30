@@ -129,10 +129,6 @@ public class SystemViewRenderer {
             return;
         }
 
-        if (lod == LodLevel.FULL) {
-            orbitRing.render(orbit, camera.camera.combined, new Color(0.3f, 0.4f, 0.6f, 0.3f));
-        }
-
         float scale = (float) planet.radiusGU;
         float[] rgb = planetColor(planet.planetTypeId);
 
@@ -152,6 +148,11 @@ public class SystemViewRenderer {
         modelBatch.begin(camera.camera);
         modelBatch.render(instance, environment);
         modelBatch.end();
+
+        // 轨道环在行星之后绘制，利用行星已写入的深度值进行正确遮挡
+        if (lod == LodLevel.FULL) {
+            orbitRing.render(orbit, camera.camera.combined, new Color(0.3f, 0.4f, 0.6f, 0.3f));
+        }
     }
 
     public void advanceTime(double dtSeconds) {
