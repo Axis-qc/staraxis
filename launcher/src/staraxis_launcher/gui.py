@@ -267,18 +267,36 @@ class LauncherWindow:
             messagebox.showwarning("提示", "请先选择启动模式喵")
             return
 
+        # 锁定界面，防止重复点击喵
+        self._lock_ui()
+        self.status_var.set("正在启动游戏...")
+
         # 启动前自动应用 GPU 偏好喵
         pref = self.selected_pref_var.get()
         if pref != 0 and self.selected_mode.java_exe:
             apply_gpu_preference(self.selected_mode, pref)
 
         ok, msg = launch_game(self.selected_mode)
-        self.status_var.set(msg)
         if ok:
-            messagebox.showinfo("启动", msg + "\n启动器将在 2 秒后关闭喵")
-            self.root.after(2000, self.root.destroy)
+            self.status_var.set("游戏已启动，启动器即将关闭")
+            # 短暂延迟后自动关闭，确保游戏进程已拉起喵
+            self.root.after(500, self.root.destroy)
         else:
-            messagebox.showerror("失败", msg)
+            self.status_var.set(msg)
+            messagebox.showerror("启动失败", msg)
+            self._unlock_ui()
+
+    def _lock_ui(self) -> None:
+        """锁定启动器界面，防止启动过程中误操作喵。"""
+        self.apply_btn.config(state=tk.DISABLED)
+        self.launch_btn.config(state=tk.DISABLED)
+        self.mode_combo.config(state=tk.DISABLED)
+
+    def _unlock_ui(self) -> None:
+        """解锁启动器界面喵。"""
+        self.apply_btn.config(state=tk.NORMAL)
+        self.launch_btn.config(state=tk.NORMAL)
+        self.mode_combo.config(state="readonly")
 
     # ---------- 运行 ----------
 

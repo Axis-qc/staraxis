@@ -13,10 +13,23 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
+
+
+def _ensure_package():
+    """直接运行时把包父目录加入 sys.path，使相对导入可用喵。"""
+    this_file = Path(__file__).resolve()
+    # staraxis_launcher 包的父目录 = launcher/src
+    pkg_parent = this_file.parent.parent
+    if str(pkg_parent) not in sys.path:
+        sys.path.insert(0, str(pkg_parent))
+    # 设置 __package__ 以便相对导入喵
+    globals()["__package__"] = "staraxis_launcher"
 
 
 def main() -> int:
     """启动器主入口喵。"""
+    _ensure_package()
     parser = argparse.ArgumentParser(description="StarAxis 游戏启动器喵")
     parser.add_argument(
         "--cli",
