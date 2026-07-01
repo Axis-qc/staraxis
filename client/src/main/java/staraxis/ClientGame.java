@@ -11,6 +11,8 @@ import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 
 import staraxis.game.StarAxisGameRuntime;
+import staraxis.game.astro.PlanetBody;
+import staraxis.game.astro.StarBody;
 import staraxis.game.astro.StarSystem;
 import staraxis.game.util.ProgressCallback;
 import staraxis.game.world.WorldGenConfig;
@@ -419,9 +421,9 @@ public class ClientGame implements ApplicationListener {
         rayPicker.updateHovered(galaxyCamera, state,
                 Gdx.input.getX(), Gdx.input.getY(), galaxyViewRenderer);
 
-        // 更新悬停恒星坐标显示
         InGameHudScreen hud = gui.get(InGameHudScreen.class);
         if (hud != null) {
+            hud.updateViewInfo(String.format("星系视图  x%.1f", galaxyCamera.zoomLevel));
             hud.updateStarInfo(rayPicker.getHoveredStarId(), state);
         }
 
@@ -449,6 +451,36 @@ public class ClientGame implements ApplicationListener {
 
         systemViewRenderer.advanceTime(dt);
         systemViewRenderer.render(currentSystem, systemCamera);
+
+        // System View 悬停拾取 + HUD 更新
+        long hoveredId = systemViewRenderer.pick(systemCamera,
+                Gdx.input.getX(), Gdx.input.getY(), currentSystem);
+        InGameHudScreen hud = gui.get(InGameHudScreen.class);
+        if (hud != null) {
+            hud.updateViewInfo(String.format("恒星系视图  x%.1f", systemCamera.zoomLevel));
+            hud.setHoverInfoText(buildSystemHoverText(hoveredId));
+        }
+    }
+
+    /** 构建 System View 悬停天体描述文字 */
+    private String buildSystemHoverText(long entityId) {
+        if (entityId < 0 || currentSystem == null) return "";
+
+        // 检查恒星
+        for (StarBody star : currentSystem.stars) {
+            if (star.entityId == entityId) {
+                String type = star.starTypeId != null ? star.starTypeId : "?";
+                return String.format("恒星  %s  半径%.0fGU  %dK", type, star.radiusGU, star.temperatureK);
+            }
+        }
+        // 检查行星
+        for (PlanetBody planet : currentSystem.planets) {
+            if (planet.entityId == entityId) {
+                String type = planet.planetTypeId != null ? planet.planetTypeId : "?";
+                return String.format("行星  %s  半径%.0fGU  轨道%.0fGU", type, planet.radiusGU, planet.semiMajorAxisGU);
+            }
+        }
+        return "";
     }
 
     private StarSystem findSystemByStarId(long starId) {

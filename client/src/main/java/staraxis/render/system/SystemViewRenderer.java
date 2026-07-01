@@ -8,7 +8,9 @@ import com.badlogic.gdx.graphics.g3d.ModelBatch;
 import com.badlogic.gdx.graphics.g3d.ModelInstance;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
+import com.badlogic.gdx.math.Intersector;
 import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.math.collision.Ray;
 
 import staraxis.game.astro.PlanetBody;
 import staraxis.game.astro.StarBody;
@@ -61,6 +63,7 @@ public class SystemViewRenderer {
     /** 临时向量，避免每帧分配。 */
     private final Vector3 tmpVec = new Vector3();
     private final Vector3 tmpOffset = new Vector3();
+    private final Vector3 tmpIntersect = new Vector3();
 
     public SystemViewRenderer() {
         modelBatch = new ModelBatch();
@@ -264,6 +267,52 @@ public class SystemViewRenderer {
                 Math.toRadians(p.meanAnomalyDegAtEpoch),
                 0.0,
                 periodSeconds);
+    }
+
+    /**
+     * 拾取 System View 中屏幕坐标处的天体（恒星或行星）。
+     *
+     * @param camera  当前相机
+     * @param screenX 屏幕 X 坐标
+     * @param screenY 屏幕 Y 坐标
+     * @param system  当前渲染的恒星系
+     * @return 最近天体的 entityId，未命中返回 -1
+     */
+    public long pick(WorldCamera camera, int screenX, int screenY, StarSystem system) {
+        Ray ray = camera.camera.getPickRay(screenX, screenY);
+        long closestId = -1;
+        float closestDist = Float.MAX_VALUE;
+
+        // 检测所有恒星
+        for (StarBody star : system.stars) {
+            tmpVec.set((float) star.systemPos.x(), (float) star.systemPos.y(), (float) star.systemPos.z());
+            float radius = (float) star.radiusGU;
+            if (Intersector.intersectRaySphere(ray, tmpVec, radius, tmpIntersect)) {
+                float dist = tmpIntersect.dst2(ray.origin);
+                if (dist < closestDist) {
+                    closestDist = dist;
+                    closestId = star.entityId;
+                }
+            }
+        }
+
+        // 检测所有行星（使用当前轨道位置）
+        for (PlanetBody planet : system.planets) {
+            OrbitalElements orbit = toOrbitalElements(planet);
+            SpacePosition pos = OrbitSolver.solve(orbit, simulationTime);
+            getOrbitCenterPos(planet, tmpVec);
+            tmpOffset.set((float) pos.x() + tmpVec.x, (float) pos.y() + tmpVec.y, (float) pos.z() + tmpVec.z);
+            float radius = (float) planet.radiusGU;
+            if (Intersector.intersectRaySphere(ray, tmpOffset, radius, tmpIntersect)) {
+                float dist = tmpIntersect.dst2(ray.origin);
+                if (dist < closestDist) {
+                    closestDist = dist;
+                    closestId = planet.entityId;
+                }
+            }
+        }
+
+        return closestId;
     }
 
     private static float[] planetColor(String planetTypeId) {

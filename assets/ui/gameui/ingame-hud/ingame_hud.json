@@ -26,6 +26,24 @@
     },
     {
       "type": "container",
+      "name": "view_bar",
+      "properties": {
+        "align": "topleft",
+        "pad": 8
+      },
+      "children": [
+        {
+          "type": "vector_label",
+          "effect": "body_muted",
+          "name": "view_label",
+          "properties": {
+            "text": ""
+          }
+        }
+      ]
+    },
+    {
+      "type": "container",
       "name": "info_bar",
       "properties": {
         "align": "bottomleft",

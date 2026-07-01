@@ -8,6 +8,8 @@ import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
 import com.badlogic.gdx.scenes.scene2d.Group;
 import com.badlogic.gdx.scenes.scene2d.Touchable;
+import staraxis.game.StarAxisGameRuntime;
+import staraxis.game.save.WorldSaveService;
 import staraxis.ui.Gui;
 
 /**
@@ -86,7 +88,7 @@ public class PauseMenu extends Group {
                 if ("RESUME".equals(action)) {
                     // hide() 已处理
                 } else if ("SAVE_GAME".equals(action)) {
-                    // TODO: 保存游戏功能尚未实现
+                    saveGame();
                 } else {
                     gui.dispatchAction(action);
                 }
@@ -94,6 +96,23 @@ public class PauseMenu extends Group {
             btn.setSize(BTN_WIDTH, BTN_HEIGHT);
             btn.setPosition((viewW - BTN_WIDTH) / 2f, startY - i * (BTN_HEIGHT + BTN_GAP));
             addActor(btn);
+        }
+    }
+
+    /** 保存当前游戏存档 */
+    private void saveGame() {
+        StarAxisGameRuntime rt = gui.getRuntime();
+        if (rt == null) {
+            Gdx.app.log("PauseMenu", "保存失败：游戏未运行");
+            return;
+        }
+        // 使用世界种子 hash 作为单机存档标识
+        String worldId = "singleplayer";
+        try {
+            WorldSaveService.saveManual(rt, worldId, null);
+            Gdx.app.log("PauseMenu", "游戏已保存");
+        } catch (Exception e) {
+            Gdx.app.error("PauseMenu", "保存失败", e);
         }
     }
 

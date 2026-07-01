@@ -60,25 +60,49 @@ public class InGameHudScreen implements Disposable {
         }
     }
 
-    public void updateStarInfo(long hoveredStarId, RealTimeWorldState state) {
+    /**
+     * 更新视图标签（左上角），显示当前视图类型与缩放层级。
+     *
+     * @param text 视图标签文字，例如 "星系视图" 或 "恒星系视图 · 缩放 x4.0"
+     */
+    public void updateViewInfo(String text) {
         if (!(root instanceof Group)) return;
+        Actor actor = ((Group) root).findActor("view_label");
+        if (actor instanceof VectorLabel vl) {
+            vl.setText(text != null ? text : "");
+        }
+    }
 
+    /**
+     * 设置悬停信息文字（左下角），Galaxy View 和 System View 共用。
+     *
+     * @param text 悬停信息文字，空或 null 时清空
+     */
+    public void setHoverInfoText(String text) {
+        if (!(root instanceof Group)) return;
         Actor actor = ((Group) root).findActor("star_info_label");
-        if (!(actor instanceof VectorLabel label)) return;
+        if (actor instanceof VectorLabel label) {
+            label.setText(text != null ? text : "");
+        }
+    }
 
+    /**
+     * Galaxy View 悬停恒星信息更新（保留旧版兼容）。
+     */
+    public void updateStarInfo(long hoveredStarId, RealTimeWorldState state) {
         if (hoveredStarId < 0 || state == null) {
-            label.setText("");
+            setHoverInfoText("");
             return;
         }
 
         for (EntitySnapshot snap : state.getEntitySnapshotsView()) {
             if (snap != null && snap.entityId == hoveredStarId && snap.posWorldGU != null) {
                 var pos = snap.posWorldGU;
-                label.setText(String.format("(%.0f, %.0f, %.0f)", pos.x(), pos.y(), pos.z()));
+                setHoverInfoText(String.format("(%.0f, %.0f, %.0f)", pos.x(), pos.y(), pos.z()));
                 return;
             }
         }
-        label.setText("");
+        setHoverInfoText("");
     }
 
     @Override
