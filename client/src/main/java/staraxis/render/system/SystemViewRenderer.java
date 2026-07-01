@@ -315,6 +315,37 @@ public class SystemViewRenderer {
         return closestId;
     }
 
+    /**
+     * 获取天体当前在系统局部空间中的位置（用于镜头聚焦）。
+     *
+     * @param entityId 目标实体 ID
+     * @param system   当前恒星系
+     * @param out      输出位置（系统局部坐标）
+     * @return 找到返回 true，未找到返回 false
+     */
+    public boolean getBodyPosition(long entityId, StarSystem system, Vector3 out) {
+        // 检查恒星
+        for (StarBody star : system.stars) {
+            if (star.entityId == entityId) {
+                out.set((float) star.systemPos.x(), (float) star.systemPos.y(), (float) star.systemPos.z());
+                return true;
+            }
+        }
+        // 检查行星
+        for (PlanetBody planet : system.planets) {
+            if (planet.entityId == entityId) {
+                OrbitalElements orbit = toOrbitalElements(planet);
+                SpacePosition pos = OrbitSolver.solve(orbit, simulationTime);
+                getOrbitCenterPos(planet, out);
+                out.x += (float) pos.x();
+                out.y += (float) pos.y();
+                out.z += (float) pos.z();
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static float[] planetColor(String planetTypeId) {
         if (planetTypeId == null) {
             return new float[] { 0.55f, 0.47f, 0.38f };

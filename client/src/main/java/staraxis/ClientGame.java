@@ -74,6 +74,13 @@ public class ClientGame implements ApplicationListener {
     // 暂停菜单
     private PauseMenu pauseMenu;
 
+    // ── System View 双击聚焦 ───────────────────────────────────
+    private long lastClickTimeNs;
+    private int lastClickX = -1, lastClickY = -1;
+    private static final long DOUBLE_CLICK_INTERVAL_NS = 400_000_000L; // 400ms
+    private static final int DOUBLE_CLICK_PX_THRESHOLD = 15;
+    private final com.badlogic.gdx.math.Vector3 focusTmp = new com.badlogic.gdx.math.Vector3();
+
     // ── 加载状态 ──────────────────────────────────────────────
     public enum GameState { MENU, LOADING, PLAYING }
     private GameState gameState = GameState.MENU;
@@ -460,6 +467,9 @@ public class ClientGame implements ApplicationListener {
             hud.updateViewInfo(String.format("恒星系视图  x%.1f", systemCamera.zoomLevel));
             hud.setHoverInfoText(buildSystemHoverText(hoveredId));
         }
+
+        // 双击天体聚焦
+        handleSystemViewDoubleClick(hoveredId);
     }
 
     /** 构建 System View 悬停天体描述文字 */
@@ -481,6 +491,35 @@ public class ClientGame implements ApplicationListener {
             }
         }
         return "";
+    }
+
+    /**
+     * 检测 System View 中的双击并聚焦镜头到目标天体。
+     * 双击判定：400ms 内同一位置（15px 容差）的左键点击。
+     */
+    private void handleSystemViewDoubleClick(long hoveredId) {
+        if (!Gdx.input.isButtonJustPressed(com.badlogic.gdx.Input.Buttons.LEFT)) return;
+
+        long now = System.nanoTime();
+        int screenX = Gdx.input.getX();
+        int screenY = Gdx.input.getY();
+
+        boolean isDoubleClick = (now - lastClickTimeNs) < DOUBLE_CLICK_INTERVAL_NS
+                && Math.abs(screenX - lastClickX) < DOUBLE_CLICK_PX_THRESHOLD
+                && Math.abs(screenY - lastClickY) < DOUBLE_CLICK_PX_THRESHOLD;
+
+        lastClickTimeNs = now;
+        lastClickX = screenX;
+        lastClickY = screenY;
+
+        if (!isDoubleClick) return;
+
+        // 双击命中天体 → 聚焦镜头
+        if (hoveredId < 0 || currentSystem == null) return;
+
+        if (systemViewRenderer.getBodyPosition(hoveredId, currentSystem, focusTmp)) {
+            systemCamera.target.set(focusTmp);
+        }
     }
 
     private StarSystem findSystemByStarId(long starId) {
