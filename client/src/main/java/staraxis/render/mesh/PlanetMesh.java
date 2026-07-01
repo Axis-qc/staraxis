@@ -24,13 +24,13 @@ public class PlanetMesh {
     public PlanetMesh() {
         ModelBuilder builder = new ModelBuilder();
 
-        // 高精度：32x24 段
-        highDetail = builder.createSphere(1f, 1f, 1f, 32, 24,
+        // 高精度：32x24 段，直径 2（半径 1），scl(radiusGU) 后半径 = radiusGU
+        highDetail = builder.createSphere(2f, 2f, 2f, 32, 24,
             new Material(ColorAttribute.createDiffuse(Color.WHITE)),
             VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal);
 
         // 低精度：12x8 段
-        lowDetail = builder.createSphere(1f, 1f, 1f, 12, 8,
+        lowDetail = builder.createSphere(2f, 2f, 2f, 12, 8,
             new Material(ColorAttribute.createDiffuse(Color.WHITE)),
             VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal);
     }

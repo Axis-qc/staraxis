@@ -19,8 +19,8 @@ public class StarMesh {
     public StarMesh() {
         ModelBuilder builder = new ModelBuilder();
 
-        // 恒星球体：24x18 段
-        model = builder.createSphere(1f, 1f, 1f, 24, 18,
+        // 恒星球体：24x18 段，直径 2（半径 1），scl(radiusGU) 后半径 = radiusGU
+        model = builder.createSphere(2f, 2f, 2f, 24, 18,
             new Material(),
             VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal);
     }
