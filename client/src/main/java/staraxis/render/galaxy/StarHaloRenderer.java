@@ -136,9 +136,9 @@ public class StarHaloRenderer {
     private float refDist = 4000f;   // 满亮参考距离（两层共享）
 
     //  模糊扩散层独立参数
-    private float glowMinBoost = 0.2f;   // 模糊层近处亮度下限
+    private float glowMinBoost = 0.8f;   // 模糊层近处亮度下限
     private float glowMaxBoost = 1.0f;  // 模糊层远处亮度上限
-    private float glowMinSizeScale = 0.8f; // 模糊层缩到恒星球大小
+    private float glowMinSizeScale = 1.0f; // 模糊层缩到恒星球大小
     private float glowMaxSizeScale = 3.0f; // 模糊层满尺寸上限
 
     //  锐利发光点层独立参数
@@ -147,9 +147,12 @@ public class StarHaloRenderer {
     private float coreMinSizeScale = 0.6f; // 亮核层缩到恒星球大小（更小，清晰点）
     private float coreMaxSizeScale = 1.0f; // 亮核层满尺寸上限
 
-    // ── LOD 距离阈值（与 StarBatchRenderer 一致，两层共享） ──
-    private float lodFar = 5000f;    // 近于此距离：光晕缩到球大小，球出现接管
-    private float shrinkFar = 8000f; // 远于此距离：光晕满尺寸，不再继续放大
+    // ── LOD 距离阈值（模糊扩散层与锐利发光点层独立） ──
+    private float glowLodFar = 10f;    // 模糊层：近于此距离光晕缩到球大小
+    private float glowShrinkFar = 6000f; // 模糊层：远于此距离光晕满尺寸
+
+    private float coreLodFar = 5000f;    // 亮核层：近于此距离光晕缩到球大小
+    private float coreShrinkFar = 8000f; // 亮核层：远于此距离光晕满尺寸
 
     // ── 临时向量（避免每帧 GC） ──────────────────────────────────
     private final Vector3 tmpRight = new Vector3();
@@ -305,11 +308,13 @@ public class StarHaloRenderer {
         renderLayer(glowShader, uProjViewTrans_g, uCamRight_g, uCamUp_g, uCameraPos_g, uRefDist_g,
                 uMinBoost_g, uMaxBoost_g, uMinSizeScale_g, uMaxSizeScale_g, uLodFar_g, uShrinkFar_g,
                 iPositionLoc_g, iColorLoc_g, iSizeLoc_g,
-                glowMinBoost, glowMaxBoost, glowMinSizeScale, glowMaxSizeScale, camera);
+                glowMinBoost, glowMaxBoost, glowMinSizeScale, glowMaxSizeScale, camera,
+                glowLodFar, glowShrinkFar);
         renderLayer(coreShader, uProjViewTrans_c, uCamRight_c, uCamUp_c, uCameraPos_c, uRefDist_c,
                 uMinBoost_c, uMaxBoost_c, uMinSizeScale_c, uMaxSizeScale_c, uLodFar_c, uShrinkFar_c,
                 iPositionLoc_c, iColorLoc_c, iSizeLoc_c,
-                coreMinBoost, coreMaxBoost, coreMinSizeScale, coreMaxSizeScale, camera);
+                coreMinBoost, coreMaxBoost, coreMinSizeScale, coreMaxSizeScale, camera,
+                coreLodFar, coreShrinkFar);
 
         //  恢复混合/深度状态
         Gdx.gl.glDisable(GL20.GL_BLEND);
@@ -322,7 +327,8 @@ public class StarHaloRenderer {
                              int uMinB, int uMaxB, int uMinS, int uMaxS, int uLod, int uShrink,
                              int iPos, int iCol, int iSz,
                              float minBoost, float maxBoost, float minSizeScale, float maxSizeScale,
-                             WorldCamera camera) {
+                             WorldCamera camera,
+                             float lodVal, float shrinkVal) {
         sh.bind();
         sh.setUniformMatrix(uProj, camera.camera.combined);
         sh.setUniformf(uRight, tmpRight);
@@ -333,8 +339,8 @@ public class StarHaloRenderer {
         sh.setUniformf(uMaxB, maxBoost);
         sh.setUniformf(uMinS, minSizeScale);
         sh.setUniformf(uMaxS, maxSizeScale);
-        sh.setUniformf(uLod, lodFar);
-        sh.setUniformf(uShrink, shrinkFar);
+        sh.setUniformf(uLod, lodVal);
+        sh.setUniformf(uShrink, shrinkVal);
 
         quadMesh.bind(sh);
 

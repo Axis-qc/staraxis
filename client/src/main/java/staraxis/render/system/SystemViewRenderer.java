@@ -13,8 +13,8 @@ import com.badlogic.gdx.math.Vector3;
 import staraxis.game.astro.PlanetBody;
 import staraxis.game.astro.StarBody;
 import staraxis.game.astro.StarSystem;
-import staraxis.game.space.OrbitalElements;
 import staraxis.game.space.OrbitSolver;
+import staraxis.game.space.OrbitalElements;
 import staraxis.game.space.SpacePosition;
 import staraxis.render.WorldCamera;
 import staraxis.render.lod.LodCalculator;
@@ -94,9 +94,29 @@ public class SystemViewRenderer {
         }
 
         // 第二遍：渲染所有轨道环，利用完整的深度缓冲实现正确遮挡
-        for (int i = 0; i < planetCount; i++) {
-            renderOrbitRing(system.planets.get(i), camera);
+        // 显式重置深度状态，防止 modelBatch 结束后的状态残留影响 ShapeRenderer
+        Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
+        Gdx.gl.glDepthMask(true);
+        Gdx.gl.glDepthFunc(GL20.GL_LEQUAL);
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+
+        // 轨道环 LOD：以镜头的 Orbit 距离统一控制所有轨道环
+        double orbitDist = camera.getOrbitDistance();
+        float orbitAlpha;
+        if (orbitDist > 20000) {
+            orbitAlpha = 0.9f;
+        } else if (orbitDist > 5000) {
+            orbitAlpha = 0.9f * (float) ((orbitDist - 5000) / 15000.0);
+        } else {
+            orbitAlpha = 0f;
         }
+        if (orbitAlpha > 0f) {
+            for (int i = 0; i < planetCount; i++) {
+                renderOrbitRing(system.planets.get(i), camera, orbitAlpha);
+            }
+        }
+        Gdx.gl.glDisable(GL20.GL_BLEND);
 
         Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
     }
@@ -108,11 +128,11 @@ public class SystemViewRenderer {
         // 复用池内实例，重置变换
         starInstance.transform.idt();
         starInstance.transform.scl(scale);
+        // 无光照渲染（不传 environment），仅用 Diffuse 输出星体颜色
         starInstance.materials.get(0).set(ColorAttribute.createDiffuse(rgb[0], rgb[1], rgb[2], 1f));
-        starInstance.materials.get(0).set(ColorAttribute.createEmissive(rgb[0], rgb[1], rgb[2], 1f));
 
         modelBatch.begin(camera.camera);
-        modelBatch.render(starInstance); // 不传 environment，方向光不影响恒星
+        modelBatch.render(starInstance);
         modelBatch.end();
     }
 
@@ -154,23 +174,10 @@ public class SystemViewRenderer {
         modelBatch.end();
     }
 
-    private void renderOrbitRing(PlanetBody planet, WorldCamera camera) {
+    private void renderOrbitRing(PlanetBody planet, WorldCamera camera, float orbitAlpha) {
         OrbitalElements orbit = toOrbitalElements(planet);
-        SpacePosition pos = OrbitSolver.solve(orbit, simulationTime);
-        float px = (float) pos.x();
-        float py = (float) pos.y();
-        float pz = (float) pos.z();
 
-        Vector3 cameraPos = camera.camera.position;
-        double distance = Math.sqrt(
-                (cameraPos.x - px) * (cameraPos.x - px) +
-                        (cameraPos.y - py) * (cameraPos.y - py) +
-                        (cameraPos.z - pz) * (cameraPos.z - pz));
-        LodLevel lod = LodCalculator.calculate(distance);
-
-        if (lod == LodLevel.FULL) {
-            orbitRing.render(orbit, camera.camera.combined, new Color(0.3f, 0.4f, 0.6f, 0.3f));
-        }
+        orbitRing.render(orbit, camera.camera.combined, new Color(0.3f, 0.4f, 0.6f, orbitAlpha));
     }
 
     public void advanceTime(double dtSeconds) {

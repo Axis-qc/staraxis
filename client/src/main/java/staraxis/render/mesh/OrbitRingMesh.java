@@ -52,6 +52,11 @@ public class OrbitRingMesh {
         double p31 = -sinO * cosW - cosO * cosI * sinW;
         double p33 = -sinO * sinW + cosO * cosI * cosW;
 
+        // 显式确保深度测试开启，保证轨道环被行星/恒星正确遮挡
+        Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
+        Gdx.gl.glDepthMask(true);
+        Gdx.gl.glDepthFunc(GL20.GL_LEQUAL);
+
         shapeRenderer.setProjectionMatrix(projectionView);
         shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
         shapeRenderer.setColor(color);
