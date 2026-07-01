@@ -52,8 +52,9 @@ public class ClientGame implements ApplicationListener {
     private StarAxisGameRuntime runtime;
     private StarfieldBackground starfield;
 
-    // 3D 宇宙渲染管线
-    private WorldCamera spaceCamera;
+    // 3D 宇宙渲染管线（galaxy 和 system 各持独立镜头，参数互不干扰）
+    private WorldCamera galaxyCamera;
+    private WorldCamera systemCamera;
     private ViewManager viewManager;
     private GalaxyViewRenderer galaxyViewRenderer;
     private SystemViewRenderer systemViewRenderer;
@@ -138,8 +139,11 @@ public class ClientGame implements ApplicationListener {
 
             @Override
             public boolean scrolled(float amountX, float amountY) {
-                if (spaceCamera != null) {
-                    spaceCamera.onScroll(amountY);
+                // 根据当前视图转发滚轮到对应镜头
+                if (viewManager != null && viewManager.isInSystemView()) {
+                    if (systemCamera != null) systemCamera.onScroll(amountY);
+                } else {
+                    if (galaxyCamera != null) galaxyCamera.onScroll(amountY);
                 }
                 return false;
             }
@@ -205,7 +209,7 @@ public class ClientGame implements ApplicationListener {
         uiDebug = new UiDebug(stage, gui.get(ShapeRenderer.class), vectorFont,
                 gui.get(staraxis.ui.json.UiParser.class),
                 gui.get(staraxis.ui.json.UiFactory.class));
-        uiDebug.setCamera(spaceCamera);
+        uiDebug.setCamera(galaxyCamera); // 默认显示 galaxy 镜头信息
 
         // 设置异步世界生成回调
         gui.setOnStartNewGame(cfg -> startAsyncGen(cfg));
@@ -214,8 +218,14 @@ public class ClientGame implements ApplicationListener {
     }
 
     private void initSpaceRendering() {
-        spaceCamera = new WorldCamera();
-        spaceCamera.setMaxOrbitDist(50000); // Galaxy 视图默认最远 5 万 GU
+        // galaxy 镜头：near=10 保证 far/near=10万:1 深度精度，far=1e6 保证拾取精度
+        galaxyCamera = new WorldCamera(10f, 1e6f, 480000f);
+        galaxyCamera.setMaxOrbitDist(50000);
+        // system 镜头：far=3e6 容纳最远 ~116 万 GU 的缩放后轨道
+        systemCamera = new WorldCamera(10f, 3e6f, 1000000f);
+        systemCamera.setMaxOrbitDist(2000000);
+        systemCamera.setZoom(5.0);
+        systemCamera.target.set(0, 0, 0);
         viewManager = new ViewManager();
         rayPicker = new RayPicker();
         galaxyViewRenderer = new GalaxyViewRenderer();
@@ -228,8 +238,11 @@ public class ClientGame implements ApplicationListener {
         if (stage != null) {
             stage.getViewport().update(width, height, true);
         }
-        if (spaceCamera != null) {
-            spaceCamera.resize(width, height);
+        if (galaxyCamera != null) {
+            galaxyCamera.resize(width, height);
+        }
+        if (systemCamera != null) {
+            systemCamera.resize(width, height);
         }
         if (starfield != null) {
             starfield.resize(width, height);
@@ -371,7 +384,12 @@ public class ClientGame implements ApplicationListener {
     }
 
     private void renderSpaceScene(float dt) {
-        spaceCamera.update(dt);
+        // 根据当前视图更新对应镜头
+        if (viewManager.isInSystemView()) {
+            systemCamera.update(dt);
+        } else {
+            galaxyCamera.update(dt);
+        }
 
         Gdx.gl.glClearColor(0.005f, 0.005f, 0.02f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
@@ -382,8 +400,8 @@ public class ClientGame implements ApplicationListener {
                 viewManager.switchToGalaxy();
                 currentSystem = null;
                 systemViewRenderer.resetTime();
-                spaceCamera.setMaxOrbitDist(50000);
-                spaceCamera.resetView();
+                galaxyCamera.resetView();
+                uiDebug.switchActiveCamera(galaxyCamera);
             }
         }
 
@@ -395,11 +413,11 @@ public class ClientGame implements ApplicationListener {
     }
 
     private void renderGalaxyView() {
-        skyboxRenderer.render(spaceCamera);
+        skyboxRenderer.render(galaxyCamera);
 
         var state = runtime.getRealTimeWorldStateReadonly();
 
-        rayPicker.updateHovered(spaceCamera, state,
+        rayPicker.updateHovered(galaxyCamera, state,
                 Gdx.input.getX(), Gdx.input.getY(), galaxyViewRenderer);
 
         // 更新悬停恒星坐标显示
@@ -416,24 +434,23 @@ public class ClientGame implements ApplicationListener {
                     currentSystem = system;
                     viewManager.switchToSystem(selectedStarId);
                     systemViewRenderer.resetTime();
-                    spaceCamera.setMaxOrbitDist(20000); // System 视图最远 2 万 GU
-                    spaceCamera.setZoom(5.0);
-                    spaceCamera.target.set(0, 0, 0);
+                    systemCamera.resetView();
+                    uiDebug.switchActiveCamera(systemCamera);
                 }
             }
         }
 
-        galaxyViewRenderer.render(state, spaceCamera, rayPicker.getHoveredStarId());
+        galaxyViewRenderer.render(state, galaxyCamera, rayPicker.getHoveredStarId());
     }
 
     private void renderSystemView(float dt) {
         if (currentSystem == null)
             return;
 
-        skyboxRenderer.render(spaceCamera);
+        skyboxRenderer.render(systemCamera);
 
         systemViewRenderer.advanceTime(dt);
-        systemViewRenderer.render(currentSystem, spaceCamera);
+        systemViewRenderer.render(currentSystem, systemCamera);
     }
 
     private StarSystem findSystemByStarId(long starId) {

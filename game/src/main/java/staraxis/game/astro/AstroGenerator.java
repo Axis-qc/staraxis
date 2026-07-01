@@ -188,13 +188,15 @@ public final class AstroGenerator {
 
         // 2. 生成行星喵
         StarBody primary = system.stars.get(0);
+        int planetIdx = 0;
         for (PresetStarSystemDef.PlanetDef pDef : def.system.planets) {
-            PlanetBody planet = generatePlanetFromDef(pDef, primary, playerNationId);
+            PlanetBody planet = generatePlanetFromDef(pDef, primary, playerNationId, planetIdx);
             planet.systemId = system.systemId;
             planet.parentEntityId = system.barycenterEntityId;
             planet.sectorCoord = system.sectorCoord;
             planet.posWorldGU = new staraxis.game.space.SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y());
             system.planets.add(planet);
+            planetIdx++;
         }
 
         return system;
@@ -233,7 +235,7 @@ public final class AstroGenerator {
     }
 
     private PlanetBody generatePlanetFromDef(PresetStarSystemDef.PlanetDef pDef, StarBody primary,
-            String playerNationId) {
+            String playerNationId, int planetIndex) {
         PlanetTypeDef type = assets.getPlanetTypes().stream()
                 .filter(t -> t.typeId != null && t.typeId.equals(pDef.planetTypeId))
                 .findFirst()
@@ -264,7 +266,7 @@ public final class AstroGenerator {
         planet.orbitCenterEntityId = primary.entityId;
 
         if (pDef.orbit != null) {
-            planet.semiMajorAxisGU = pDef.orbit.semiMajorAxisGU != null ? pDef.orbit.semiMajorAxisGU : 20000;
+            planet.semiMajorAxisGU = pDef.orbit.semiMajorAxisGU != null ? pDef.orbit.semiMajorAxisGU : 500000;
             planet.eccentricity = pDef.orbit.eccentricity != null ? pDef.orbit.eccentricity : 0;
             planet.inclinationDeg = pDef.orbit.inclinationDeg != null ? pDef.orbit.inclinationDeg : 0;
             planet.periapsisArgDeg = pDef.orbit.periapsisArgDeg != null ? pDef.orbit.periapsisArgDeg
@@ -272,15 +274,19 @@ public final class AstroGenerator {
             planet.meanAnomalyDegAtEpoch = pDef.orbit.meanAnomalyDegAtEpoch != null ? pDef.orbit.meanAnomalyDegAtEpoch
                     : randomDouble(0, 360);
         } else {
-            planet.semiMajorAxisGU = 30000;
+            planet.semiMajorAxisGU = 500000;
             planet.eccentricity = 0;
             planet.inclinationDeg = 0;
             planet.periapsisArgDeg = randomDouble(0, 360);
             planet.meanAnomalyDegAtEpoch = randomDouble(0, 360);
         }
 
-        double pYears = Math.sqrt(
-                Math.pow(planet.semiMajorAxisGU / staraxis.game.world.WorldConstants.AU_IN_GU, 3) / primary.massSolar);
+        // 累进缩放：最内 x40，每外移一颗 +x10
+        double orbitScale = 40 + planetIndex * 10;
+        planet.semiMajorAxisGU /= orbitScale;
+
+        double aAU = planet.semiMajorAxisGU / staraxis.game.world.WorldConstants.AU_IN_GU;
+        double pYears = Math.sqrt(aAU * aAU * aAU / primary.massSolar);
         planet.orbitalPeriodDays = pYears * 365.25;
 
         planet.surface = new staraxis.game.planet.PlanetSurface(planet.entityId);
@@ -385,15 +391,19 @@ public final class AstroGenerator {
             // 直接填充轨道字段到 PlanetBody
             planet.orbitCenterEntityId = primaryStar.entityId;
             planet.semiMajorAxisGU = currentOrbitGU;
+            // 累进缩放轨道：最内 x40，每外移一颗 +x10，使视觉上内行星不贴太阳、外行星不跑太远
+            double orbitScale = 40 + i * 10;
+            planet.semiMajorAxisGU /= orbitScale;
             planet.eccentricity = randomDouble(preset.eccentricityRange.get(0), preset.eccentricityRange.get(1));
             planet.inclinationDeg = randomDouble(preset.inclinationDegRange.get(0), preset.inclinationDegRange.get(1));
             planet.periapsisArgDeg = randomDouble(0, 360);
             planet.meanAnomalyDegAtEpoch = randomDouble(0, 360);
 
             // 开普勒第三定律估算公转周期: P^2 = a^3 / M (P in years, a in AU, M in solar masses)
-            double pYears = Math.sqrt(Math.pow(planet.semiMajorAxisGU / staraxis.game.world.WorldConstants.AU_IN_GU, 3)
-                    / primaryStar.massSolar);
-            planet.orbitalPeriodDays = pYears * 365.25; // 简化换算
+            // 使用缩放后的 semiMajorAxisGU 计算，使周期与视觉轨道匹配
+            double aAU = planet.semiMajorAxisGU / staraxis.game.world.WorldConstants.AU_IN_GU;
+            double pYears = Math.sqrt(aAU * aAU * aAU / primaryStar.massSolar);
+            planet.orbitalPeriodDays = pYears * 365.25;
 
             // 初始化行星地表组件喵
             planet.surface = new PlanetSurface(planet.entityId);

@@ -80,6 +80,11 @@ public class UiDebug {
         this.camera = camera;
     }
 
+    /** 切换活动镜头（galaxy/system 视图切换时调用，让调试面板显示当前镜头信息）喵 */
+    public void switchActiveCamera(WorldCamera camera) {
+        this.camera = camera;
+    }
+
     // ==================== 每帧调用 ====================
 
     public void update() {

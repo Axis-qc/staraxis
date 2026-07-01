@@ -1,5 +1,19 @@
-# Vue 3 + TypeScript + Vite
+# web - AI 控制台 / 管理控制台
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+Vue 3 + TypeScript + Vite 前端项目，定位为 AI 控制台和管理控制台，**不再作为主游戏画面客户端**。
 
-Learn more about the recommended Project Setup and IDE Support in the [Vue Docs TypeScript Guide](https://vuejs.org/guide/typescript/overview.html#project-setup).
+## 职责
+
+- AI 对话界面
+- 命令执行与结果展示
+- 世界摘要信息查看
+- 账号/世界/房间管理
+
+## 技术栈
+
+- **Vue 3**：UI 框架
+- **TypeScript**：类型安全
+- **Vite**：构建工具
+- **Three.js**：3D 可视化（辅助功能）
+
+> 注意：主游戏画面客户端由 `lwjgl3` + `client` + `ui` 模块提供原生桌面实现。

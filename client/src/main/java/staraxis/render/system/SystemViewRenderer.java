@@ -86,11 +86,16 @@ public class SystemViewRenderer {
             renderMainStar(system.stars.get(0), camera);
         }
 
-        // 遍历索引，保证每颗行星复用对应的池内实例
+        // 第一遍：渲染所有行星，填充深度缓冲
         int planetCount = system.planets.size();
         ensurePlanetInstances(planetCount);
         for (int i = 0; i < planetCount; i++) {
-            renderPlanet(i, system.planets.get(i), camera);
+            renderPlanetMesh(i, system.planets.get(i), camera);
+        }
+
+        // 第二遍：渲染所有轨道环，利用完整的深度缓冲实现正确遮挡
+        for (int i = 0; i < planetCount; i++) {
+            renderOrbitRing(system.planets.get(i), camera);
         }
 
         Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
@@ -111,7 +116,7 @@ public class SystemViewRenderer {
         modelBatch.end();
     }
 
-    private void renderPlanet(int index, PlanetBody planet, WorldCamera camera) {
+    private void renderPlanetMesh(int index, PlanetBody planet, WorldCamera camera) {
         OrbitalElements orbit = toOrbitalElements(planet);
         SpacePosition pos = OrbitSolver.solve(orbit, simulationTime);
         float px = (float) pos.x();
@@ -132,7 +137,6 @@ public class SystemViewRenderer {
         float scale = (float) planet.radiusGU;
         float[] rgb = planetColor(planet.planetTypeId);
 
-        // 复用池内实例，根据 LOD 选择高/低精度池
         ModelInstance instance = (lod == LodLevel.LOW)
                 ? planetLowInstances.get(index)
                 : planetHighInstances.get(index);
@@ -148,8 +152,22 @@ public class SystemViewRenderer {
         modelBatch.begin(camera.camera);
         modelBatch.render(instance, environment);
         modelBatch.end();
+    }
 
-        // 轨道环在行星之后绘制，利用行星已写入的深度值进行正确遮挡
+    private void renderOrbitRing(PlanetBody planet, WorldCamera camera) {
+        OrbitalElements orbit = toOrbitalElements(planet);
+        SpacePosition pos = OrbitSolver.solve(orbit, simulationTime);
+        float px = (float) pos.x();
+        float py = (float) pos.y();
+        float pz = (float) pos.z();
+
+        Vector3 cameraPos = camera.camera.position;
+        double distance = Math.sqrt(
+                (cameraPos.x - px) * (cameraPos.x - px) +
+                        (cameraPos.y - py) * (cameraPos.y - py) +
+                        (cameraPos.z - pz) * (cameraPos.z - pz));
+        LodLevel lod = LodCalculator.calculate(distance);
+
         if (lod == LodLevel.FULL) {
             orbitRing.render(orbit, camera.camera.combined, new Color(0.3f, 0.4f, 0.6f, 0.3f));
         }

@@ -13,11 +13,11 @@ import staraxis.game.space.galaxy.StarPosition;
  * 根据恒星位置数据延迟生成恒星系内容（行星数量、轨道、类型）。
  * 确定性：相同 systemSeed -> 完全相同的恒星系。
  *
- * 行星分布规则：
- * - 热区（近恒星，< 800 GU）：岩石/熔岩行星为主
- * - 宜居带（800-2000 GU）：岩石/海洋行星
- * - 冷区（2000-8000 GU）：气态巨星/冰封行星
- * - 远端（> 8000 GU）：冰封行星/小行星
+ * 行星分布规则（真实 GU 尺度，生成后累进缩放）：
+ * - 热区（近恒星，< 500000 GU）：岩石/熔岩行星为主
+ * - 宜居带（500000-2000000 GU）：岩石/海洋行星
+ * - 冷区（2000000-8000000 GU）：气态巨星/冰封行星
+ * - 远端（> 8000000 GU）：冰封行星/小行星
  */
 public class StarSystemGenerator {
 
@@ -25,16 +25,16 @@ public class StarSystemGenerator {
     private static final long PLANET_ID_START = 20_000_000L;
 
     /** 热区边界（GU）。 */
-    private static final double HOT_ZONE = 800.0;
+    private static final double HOT_ZONE = 500000.0;
 
     /** 宜居带外边界（GU）。 */
-    private static final double HABITABLE_ZONE = 2000.0;
+    private static final double HABITABLE_ZONE = 2000000.0;
 
     /** 冷区外边界（GU）。 */
-    private static final double COLD_ZONE = 8000.0;
+    private static final double COLD_ZONE = 8000000.0;
 
     /** 最大轨道半径（GU）。 */
-    private static final double MAX_ORBIT = 20000.0;
+    private static final double MAX_ORBIT = 20000000.0;
 
     /**
      * 根据恒星数据生成恒星系。
@@ -55,20 +55,24 @@ public class StarSystemGenerator {
         List<PlanetData> planets = new ArrayList<>(planetCount);
         long nextPlanetId = PLANET_ID_START + (star.starId() % 1_000_000) * 10;
 
-        // 生成行星轨道（从内到外递增）
-        double currentOrbit = 200.0 + rng.nextDouble() * 300.0;
+        // 生成行星轨道（从内到外递增，真实 GU 尺度）
+        double currentOrbit = 500000.0 + rng.nextDouble() * 500000.0;
 
         for (int i = 0; i < planetCount; i++) {
             // 轨道间距：递增
-            double orbitSpacing = 1.3 + rng.nextDouble() * 0.8;
+            double orbitSpacing = 1.4 + rng.nextDouble() * 0.6;
             currentOrbit *= orbitSpacing;
             if (currentOrbit > MAX_ORBIT) break;
 
             // 根据轨道位置决定行星类型
             PlanetType type = selectPlanetType(currentOrbit, rng);
 
-            // 轨道根数
-            OrbitalElements orbit = generateOrbitalElements(currentOrbit, i, rng);
+            // 累进缩放轨道
+            double orbitScale = 40 + i * 10;
+            double scaledOrbit = currentOrbit / orbitScale;
+
+            // 轨道根数（使用缩放后的轨道值）
+            OrbitalElements orbit = generateOrbitalElements(scaledOrbit, i, rng);
 
             // 行星半径（类型范围内随机）
             double radius = type.minRadiusGU + rng.nextDouble() * (type.maxRadiusGU - type.minRadiusGU);
@@ -163,9 +167,9 @@ public class StarSystemGenerator {
      */
     private double computeOrbitalPeriod(double semiMajorAxis) {
         // 简单模型：周期与半长轴的 1.5 次方成正比
-        // 参考：1000 GU -> ~600s（10分钟）
+        // 参考：10000 GU -> ~600s（10分钟）
         double basePeriod = 600.0;
-        double baseAxis = 1000.0;
+        double baseAxis = 10000.0;
         return basePeriod * Math.pow(semiMajorAxis / baseAxis, 1.5);
     }
 

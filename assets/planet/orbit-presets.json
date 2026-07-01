@@ -3,10 +3,10 @@
   "presets": [
     {
       "presetId": "DEFAULT",
-      "planetCountRange": [2, 6],
+      "planetCountRange": [3, 8],
       "orbitSpacingMethod": "EXPONENTIAL",
-      "firstOrbitGURange": [1800, 3000],
-      "orbitSeparationFactorRange": [1.2, 1.5],
+      "firstOrbitGURange": [500000, 1000000],
+      "orbitSeparationFactorRange": [1.4, 2.0],
       "eccentricityRange": [0, 0.15],
       "inclinationDegRange": [0, 5],
       "rotationPeriodHoursRange": [8, 48],

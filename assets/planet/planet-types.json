@@ -3,7 +3,7 @@
     "typeId": "TERRESTRIAL",
     "description": "Earth-like, with liquid water and a breathable atmosphere.",
     "weight": 10,
-    "radiusGURange": [8, 16],
+    "radiusGURange": [50, 80],
     "spriteCandidates": [
       "planet/Solid/Terrestrial/Terrestrial_01-512x512.png",
       "planet/Solid/Terrestrial/Terrestrial_02-512x512.png",
@@ -18,7 +18,7 @@
     "typeId": "ROCKY_BARREN",
     "description": "A desolate, rocky world with little to no atmosphere.",
     "weight": 50,
-    "radiusGURange": [4, 10],
+    "radiusGURange": [25, 45],
     "spriteCandidates": [
       "planet/Solid/Rocky/Rocky_01-512x512.png",
       "planet/Solid/Barren/Barren_01-512x512.png",
@@ -35,7 +35,7 @@
     "typeId": "GAS_GIANT",
     "description": "A large planet composed mostly of gases, such as hydrogen and helium.",
     "weight": 25,
-    "radiusGURange": [40, 100],
+    "radiusGURange": [500, 800],
     "spriteCandidates": [
       "planet/Gaseous/Blue Giant/BlueGiant_01-512x512.png",
       "planet/Gaseous/Red Giant/RedGiant_01-512x512.png",
@@ -48,7 +48,7 @@
     "typeId": "ICE_GIANT",
     "description": "A giant planet composed mainly of elements heavier than hydrogen and helium, such as oxygen, carbon, nitrogen, and sulfur.",
     "weight": 20,
-    "radiusGURange": [30, 70],
+    "radiusGURange": [200, 300],
     "spriteCandidates": [
       "planet/Gaseous/Blue Giant/BlueGiant_02-512x512.png",
       "planet/Gaseous/Blue Giant/BlueGiant_03-512x512.png"
@@ -59,7 +59,7 @@
     "typeId": "OCEAN_WORLD",
     "description": "A world covered almost entirely by a liquid ocean.",
     "weight": 8,
-    "radiusGURange": [6, 12],
+    "radiusGURange": [50, 70],
     "spriteCandidates": [
       "planet/Solid/Ocean/Ocean_01-512x512.png",
       "planet/Solid/Aquamarine/Aquamarine_01-512x512.png"
@@ -73,7 +73,7 @@
     "typeId": "LAVA_WORLD",
     "description": "A terrestrial planet with a surface mostly or entirely covered by molten lava.",
     "weight": 5,
-    "radiusGURange": [4, 10],
+    "radiusGURange": [40, 60],
     "spriteCandidates": [
       "planet/Solid/Magma/Magma_01-512x512.png",
       "planet/Solid/Magma/Magma_02-512x512.png"
@@ -87,7 +87,7 @@
     "typeId": "FROZEN_WORLD",
     "description": "An icy world, with surface temperatures far below the freezing point of water.",
     "weight": 20,
-    "radiusGURange": [4, 8],
+    "radiusGURange": [20, 35],
     "spriteCandidates": [
       "planet/Solid/Icy/Icy_01-512x512.png",
       "planet/Solid/Frozen/Frozen_01-512x512.png",
