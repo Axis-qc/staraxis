@@ -24,13 +24,16 @@ public class OrbitRingMesh {
     }
 
     /**
-     * 渲染轨道环。
+     * 渲染轨道环（带重力中心偏移）。
      *
      * @param orbit 轨道根数
+     * @param offsetX 引力中心 X 偏移
+     * @param offsetY 引力中心 Y 偏移
+     * @param offsetZ 引力中心 Z 偏移
      * @param projectionView 投影视图矩阵
      * @param color 轨道颜色
      */
-    public void render(OrbitalElements orbit, Matrix4 projectionView, Color color) {
+    public void render(OrbitalElements orbit, float offsetX, float offsetY, float offsetZ, Matrix4 projectionView, Color color) {
         double a = orbit.semiMajorAxis();
         double e = orbit.eccentricity();
         double i = orbit.inclination();
@@ -73,9 +76,9 @@ public class OrbitRingMesh {
             double zLocal = r * Math.sin(nu);
 
             // 旋转到星系坐标系
-            double x = p11 * xLocal + p13 * zLocal;
-            double y = p21 * xLocal + p23 * zLocal;
-            double z = p31 * xLocal + p33 * zLocal;
+            double x = p11 * xLocal + p13 * zLocal + offsetX;
+            double y = p21 * xLocal + p23 * zLocal + offsetY;
+            double z = p31 * xLocal + p33 * zLocal + offsetZ;
 
             if (seg > 0) {
                 shapeRenderer.line(

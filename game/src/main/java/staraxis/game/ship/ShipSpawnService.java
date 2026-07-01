@@ -4,6 +4,7 @@ import staraxis.game.astro.StarSystem;
 import staraxis.game.entity.EntityType;
 import staraxis.game.space.SpacePosition;
 import staraxis.game.state.WorldState;
+import staraxis.game.world.Vec2d;
 import staraxis.game.world.WorldHexLayout;
 import staraxis.game.world.hex.SectorCoord;
 
@@ -56,18 +57,19 @@ public final class ShipSpawnService {
         }
 
         // 2. 计算出生位置：星系中心偏移 500 GU（避免与星体重叠）喵
-        staraxis.game.world.Vec2d systemCenter = spawnSystem.centerWorldGU;
+        SpacePosition systemCenter = spawnSystem.galaxyPos;
         if (systemCenter == null) {
             // 若星系中心未定义，则使用星区中心喵
             SectorCoord sectorCoord = spawnSystem.sectorCoord;
             if (sectorCoord == null) {
                 return -1;
             }
-            systemCenter = WorldHexLayout.sectorCenterWorld2D_GU(sectorCoord);
+            Vec2d sectorCenter2d = WorldHexLayout.sectorCenterWorld2D_GU(sectorCoord);
+            systemCenter = new SpacePosition(sectorCenter2d.x(), 0, sectorCenter2d.y());
         }
 
         // 固定偏移向量（500 GU 在 X 轴正方向）喵，映射到 3D XZ 平面
-        SpacePosition shipPos = new SpacePosition(systemCenter.x() + 500.0, 0, systemCenter.y());
+        SpacePosition shipPos = new SpacePosition(systemCenter.x() + 500.0, systemCenter.y(), systemCenter.z());
 
         // 3. 计算星区坐标喵
         SectorCoord sectorCoord = WorldHexLayout.worldToSectorCoord(shipPos);

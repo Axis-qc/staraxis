@@ -93,8 +93,8 @@ public final class JoinGameApi {
             item.put("systemId", sys.systemId);
             item.put("sectorQ", sys.sectorCoord == null ? 0 : sys.sectorCoord.q());
             item.put("sectorR", sys.sectorCoord == null ? 0 : sys.sectorCoord.r());
-            item.put("centerX", sys.centerWorldGU == null ? 0 : sys.centerWorldGU.x());
-            item.put("centerY", sys.centerWorldGU == null ? 0 : sys.centerWorldGU.y());
+            item.put("centerX", sys.galaxyPos == null ? 0 : sys.galaxyPos.x());
+            item.put("centerY", sys.galaxyPos == null ? 0 : sys.galaxyPos.z());
             item.put("starCount", sys.stars == null ? 0 : sys.stars.size());
             item.put("planetCount", sys.planets == null ? 0 : sys.planets.size());
             arr.add(item);

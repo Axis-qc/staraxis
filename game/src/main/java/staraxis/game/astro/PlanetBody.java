@@ -37,6 +37,9 @@ public class PlanetBody extends Entity {
     /** 轨道倾角（度）。 */
     public double inclinationDeg;
 
+    /** 升交点经度（度），继承自所属恒星的黄道面角度。 */
+    public double longitudeOfAscendingNodeDeg;
+
     /** 近地点方向角（度）。 */
     public double periapsisArgDeg;
 

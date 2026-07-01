@@ -1,6 +1,6 @@
 package staraxis.game.astro;
 
-import staraxis.game.world.Vec2d;
+import staraxis.game.space.SpacePosition;
 import staraxis.game.world.hex.SectorCoord;
 
 import java.util.ArrayList;
@@ -9,7 +9,12 @@ import java.util.List;
 /**
  * StarSystem（恒星系）
  *
- * 恒星系：一个逻辑组织，用于表达“这几颗恒星与行星属于同一系统/同一重心参考系”。
+ * 恒星系：一个逻辑组织，用于表达"这几颗恒星与行星属于同一系统/同一重心参考系"。
+ *
+ * 坐标体系：
+ * - galaxyPos：星系坐标中的位置（3D，SpacePosition）
+ * - 恒星位置（StarBody.systemPos）和行星轨道均在系统局部空间定义
+ * - 系统重心 = galaxyPos，用于星系视图和FTL到达
  */
 public class StarSystem {
     /** 恒星系ID（systemId）。 */
@@ -21,8 +26,13 @@ public class StarSystem {
     /** 恒星系当前所在星区坐标（sectorCoord = sectorId 口径）。 */
     public SectorCoord sectorCoord;
 
-    /** 恒星系重心世界坐标（centerWorldGU），可随恒星运动更新。 */
-    public Vec2d centerWorldGU;
+    /** 恒星系在星系坐标中的 3D 位置（GU）。
+     *  替代旧的 centerWorldGU（Vec2d），Z 轴对应原 Vec2d.y()。 */
+    public SpacePosition galaxyPos;
+
+    /** 系统重力井半径（GU），定义 FTL 到达边界/禁入区。
+     *  由生成器在行星生成完毕后计算。 */
+    public double gravityWellRadiusGU;
 
     /** 属于该系统的恒星实体列表。 */
     public final List<StarBody> stars = new ArrayList<>();

@@ -181,14 +181,7 @@ public class StarAxisGameRuntime implements GameRuntime {
             }
 
             if (staraxis.game.nation.NationDef.SpawnStrategy.MODE_PRESET.equals(mode)) {
-                String presetId = cfg.playerNationDef.spawnStrategy == null ? null
-                        : cfg.playerNationDef.spawnStrategy.presetSystemId;
-                if (presetId != null && !presetId.isBlank()) {
-                    Long sid = astroGenerator.getPresetToSystemIdMap().get(presetId);
-                    if (sid != null) {
-                        spawnSystemId = sid;
-                    }
-                }
+                // 预设系统已随旧版本 WorldMap 体系清理，回退到随机选择
             }
 
             if (spawnSystemId == 0) {
@@ -427,7 +420,7 @@ public class StarAxisGameRuntime implements GameRuntime {
             // 3.1 系统重心喵
             StarBody firstStar = system.stars.isEmpty() ? null : system.stars.get(0);
             SpacePosition systemPos = firstStar != null ? firstStar.posWorldGU
-                    : new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y());
+                    : system.galaxyPos;
             sectorBaselines.add(new EntitySnapshot(
                     system.barycenterEntityId,
                     EntityType.SYSTEM_BARYCENTER,
@@ -535,7 +528,7 @@ public class StarAxisGameRuntime implements GameRuntime {
             barycenter.parentEntityId = 0;
             barycenter.sectorCoord = system.sectorCoord;
             barycenter.posWorldGU = systemPos3d != null ? systemPos3d
-                    : new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y());
+                    : system.galaxyPos;
 
             // 权威注册到 WorldState 喵
             worldState.registerEntity(barycenter);
@@ -562,7 +555,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                 star.sectorCoord = system.sectorCoord;
                 if (star.posWorldGU == null) {
                     star.posWorldGU = systemPos3d != null ? systemPos3d
-                            : new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y());
+                            : system.galaxyPos;
                 }
 
                 // 权威注册到 WorldState 喵
@@ -599,7 +592,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                 planet.sectorCoord = system.sectorCoord;
                 planet.posWorldGU = planet.posWorldGU != null ? planet.posWorldGU
                         : (systemPos3d != null ? systemPos3d
-                                : new SpacePosition(system.centerWorldGU.x(), 0, system.centerWorldGU.y()));
+                                : system.galaxyPos);
 
                 // 权威注册到 WorldState 喵
                 worldState.registerEntity(planet);
