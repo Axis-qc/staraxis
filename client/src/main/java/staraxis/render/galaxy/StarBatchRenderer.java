@@ -81,7 +81,6 @@ public class StarBatchRenderer {
     private int instanceVBO;
     private int instanceCount;
     private long[] starIds;
-    private float[] baseColors;  // 原始颜色（恢复 hover 用）
     private float[] positions;   // CPU 端位置缓存（pick 用）
 
     // ── 着色器 ──────────────────────────────────────────────────
@@ -96,7 +95,6 @@ public class StarBatchRenderer {
     private float lodFar = 5000f;   // 远于此距离：球 discard，光晕接管
 
     // ── 状态 ──────────────────────────────────────────────────
-    private int hoveredIndex = -1;
     private boolean built;
 
     public StarBatchRenderer() {
@@ -192,7 +190,6 @@ public class StarBatchRenderer {
         int n = stars.size();
         instanceCount = n;
         starIds = new long[n];
-        baseColors = new float[n * 3];
         positions = new float[n * 3];
 
         // 构建实例数据缓冲区：每实例 6 个 float（pos3 + color3）
@@ -220,9 +217,6 @@ public class StarBatchRenderer {
             } else {
                 rgb = new float[]{1f, 0.92f, 0.6f};
             }
-            baseColors[i * 3] = rgb[0];
-            baseColors[i * 3 + 1] = rgb[1];
-            baseColors[i * 3 + 2] = rgb[2];
             fb.put(rgb[0]);
             fb.put(rgb[1]);
             fb.put(rgb[2]);
@@ -234,30 +228,12 @@ public class StarBatchRenderer {
         Gdx.gl32.glBufferData(GL_ARRAY_BUFFER, bb.limit() * 4, bb, GL_STATIC_DRAW);
         Gdx.gl32.glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-        hoveredIndex = -1;
         built = true;
     }
 
     /** 渲染全部恒星。每帧仅一次 instanced draw call。 */
     public void render(WorldCamera camera, long hoveredStarId) {
         if (!built || instanceCount == 0) return;
-
-        // hover 切换时只更新 GPU 中对应实例的颜色
-        int newIdx = (hoveredStarId >= 0) ? indexOf(hoveredStarId) : -1;
-        if (newIdx != hoveredIndex) {
-            // 恢复旧 hover 的原始颜色
-            if (hoveredIndex >= 0) {
-                updateInstanceColor(hoveredIndex,
-                        baseColors[hoveredIndex * 3],
-                        baseColors[hoveredIndex * 3 + 1],
-                        baseColors[hoveredIndex * 3 + 2]);
-            }
-            // 设置新 hover 为白色高亮
-            if (newIdx >= 0) {
-                updateInstanceColor(newIdx, 1f, 1f, 1f);
-            }
-            hoveredIndex = newIdx;
-        }
 
         // ── 球不透明：开启深度测试 + 深度写入，正确遮挡后方球和光晕 ──
         Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
@@ -342,20 +318,6 @@ public class StarBatchRenderer {
             if (starIds[i] == starId) return i;
         }
         return -1;
-    }
-
-    /** 更新 GPU 实例缓冲区中某个实例的颜色（只更新 color 3 个 float） */
-    private void updateInstanceColor(int index, float r, float g, float b) {
-        ByteBuffer bb = BufferUtils.newByteBuffer(12);
-        bb.order(ByteOrder.nativeOrder());
-        bb.putFloat(r);
-        bb.putFloat(g);
-        bb.putFloat(b);
-        bb.flip();
-
-        Gdx.gl32.glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
-        Gdx.gl32.glBufferSubData(GL_ARRAY_BUFFER, index * BYTES_PER_INSTANCE + 12, 12, bb);
-        Gdx.gl32.glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
 
     // ═══════════════════════════════════════════════════════════

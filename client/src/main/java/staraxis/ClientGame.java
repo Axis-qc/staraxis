@@ -400,7 +400,6 @@ public class ClientGame implements ApplicationListener {
                 viewManager.switchToGalaxy();
                 currentSystem = null;
                 systemViewRenderer.resetTime();
-                galaxyCamera.resetView();
                 uiDebug.switchActiveCamera(galaxyCamera);
             }
         }
@@ -434,7 +433,6 @@ public class ClientGame implements ApplicationListener {
                     currentSystem = system;
                     viewManager.switchToSystem(selectedStarId);
                     systemViewRenderer.resetTime();
-                    systemCamera.resetView();
                     uiDebug.switchActiveCamera(systemCamera);
                 }
             }
