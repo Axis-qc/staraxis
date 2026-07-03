@@ -17,6 +17,9 @@ public class StarTypeDef {
     public List<Integer> temperatureKRange;
     public List<String> spriteCandidates;
 
+    /** 恒星系半径范围（GU），用于轨道生成的基准。 */
+    public List<Double> systemRadiusGURange;
+
     /**
      * 该恒星类型周围可能出现的行星类型及其权重。
      * key = PlanetTypeDef.typeId, value = 权重。

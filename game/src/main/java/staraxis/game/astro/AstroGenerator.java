@@ -9,8 +9,6 @@ import staraxis.game.planet.def.PlanetAssetRepository;
 import staraxis.game.space.SpacePosition;
 import staraxis.game.util.WeightedRandomUtil;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicLong;
@@ -34,9 +32,6 @@ public final class AstroGenerator {
     private final Random random;
     private final long worldSeedHash;
     private final AtomicLong idCounter = new AtomicLong(0);
-
-    /** 第一轨道距离 = 恒星半径 * 此倍数。 */
-    private static final double FIRST_ORBIT_MULTIPLIER = 6.0;
 
     public AstroGenerator(AstroAssetRepository assets, PlanetAssetRepository planetAssets, String worldSeed) {
         this.assets = assets;
@@ -86,20 +81,27 @@ public final class AstroGenerator {
 
     /**
      * 为恒星系生成一系列行星。
-     * 第一轨道距离基于恒星半径（D.7），黄道面角度从恒星获取（D.8）。
+     * 第一轨道距离基于 systemRadiusGU 的随机分数，而非恒星半径的固定倍数。
+     * 上限为 systemRadiusGU * 0.9，下限为 starRadius * 2.0（防落入恒星）。
      */
-    private void generatePlanetsForSystem(StarSystem system, StarBody primaryStar) {
+    private void generatePlanetsForSystem(StarSystem system, StarBody primaryStar, double systemRadiusGU) {
         OrbitPresetDef preset = assets.getOrbitPreset();
         if (preset == null) {
             return;
         }
 
         int planetCount = randomInt(preset.planetCountRange.get(0), preset.planetCountRange.get(1));
-        // D.7: 第一轨道距离 = 恒星半径 * FIRST_ORBIT_MULTIPLIER
-        double currentOrbitGU = primaryStar.radiusGU * FIRST_ORBIT_MULTIPLIER;
+        double firstOrbitFraction = randomDouble(0.03, 0.08);
+        double currentOrbitGU = systemRadiusGU * firstOrbitFraction;
+        double maxAllowedGU = systemRadiusGU * 0.9;
+        double minOrbitGU = primaryStar.radiusGU * 2.0;
 
         Map<String, Integer> effectiveWeights = assets.getPlanetWeightsForStarType(primaryStar.starTypeId);
-        for (int i = 0; i < planetCount; i++) {
+        for (int i = 0; i < planetCount && currentOrbitGU <= maxAllowedGU; i++) {
+            // 下限保护：防止行星落入恒星内部
+            if (currentOrbitGU < minOrbitGU) {
+                currentOrbitGU = minOrbitGU;
+            }
             PlanetTypeDef type = WeightedRandomUtil.weightedRandom(assets.getPlanetTypes(),
                     t -> effectiveWeights.getOrDefault(t.typeId, 1), random);
 
@@ -184,18 +186,13 @@ public final class AstroGenerator {
         primaryStar.orbitalElements = null;
         system.stars.add(primaryStar);
 
-        // 生成行星
-        generatePlanetsForSystem(system, primaryStar);
+        // 获取恒星类型的 systemRadiusGURange，抽取随机值作为行星生成基准
+        StarTypeDef typeDef = assets.getStarType(primaryStar.starTypeId);
+        double systemRadiusGU = randomDouble(typeDef.systemRadiusGURange.get(0), typeDef.systemRadiusGURange.get(1));
+        generatePlanetsForSystem(system, primaryStar, systemRadiusGU);
 
-        // D.9: 重力井半径 = max(最远行星半长轴 * 1.5, 恒星半径 * 10)
-        double farthestOrbit = 0;
-        for (PlanetBody p : system.planets) {
-            if (p.semiMajorAxisGU > farthestOrbit) {
-                farthestOrbit = p.semiMajorAxisGU;
-            }
-        }
-        double starMin = primaryStar.radiusGU * 10;
-        system.gravityWellRadiusGU = Math.max(farthestOrbit * 1.5, starMin);
+        // 重力井基于 systemRadius（势井范围与系统整体挂钩，而非最远行星）
+        system.gravityWellRadiusGU = systemRadiusGU * 1.5;
 
         return system;
     }

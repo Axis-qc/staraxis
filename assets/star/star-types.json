@@ -4,6 +4,7 @@
     "description": "Yellow main-sequence star, like the Sun.",
     "weight": 20,
     "radiusGURange": [6000, 8000],
+    "systemRadiusGURange": [150000, 280000],
     "massSolarRange": [0.8, 1.04],
     "temperatureKRange": [5200, 6000],
     "spriteCandidates": [
@@ -18,6 +19,7 @@
     "description": "Orange main-sequence star.",
     "weight": 30,
     "radiusGURange": [4000, 6000],
+    "systemRadiusGURange": [100000, 200000],
     "massSolarRange": [0.45, 0.8],
     "temperatureKRange": [3700, 5200],
     "spriteCandidates": [
@@ -32,6 +34,7 @@
     "description": "Red dwarf, the most common type of star.",
     "weight": 100,
     "radiusGURange": [1500, 2500],
+    "systemRadiusGURange": [60000, 120000],
     "massSolarRange": [0.08, 0.45],
     "temperatureKRange": [2400, 3700],
     "spriteCandidates": [
@@ -46,6 +49,7 @@
     "description": "White main-sequence star.",
     "weight": 5,
     "radiusGURange": [10000, 14000],
+    "systemRadiusGURange": [200000, 300000],
     "massSolarRange": [1.4, 2.1],
     "temperatureKRange": [7500, 10000],
     "spriteCandidates": [
@@ -60,6 +64,7 @@
     "description": "Blue-white main-sequence star.",
     "weight": 2,
     "radiusGURange": [20000, 40000],
+    "systemRadiusGURange": [250000, 300000],
     "massSolarRange": [2.1, 16],
     "temperatureKRange": [10000, 30000],
     "spriteCandidates": [
@@ -74,6 +79,7 @@
     "description": "A large, luminous star in a late phase of stellar evolution.",
     "weight": 3,
     "radiusGURange": [30000, 40000],
+    "systemRadiusGURange": [250000, 300000],
     "massSolarRange": [0.3, 8],
     "temperatureKRange": [3300, 4800],
     "spriteCandidates": [
@@ -88,6 +94,7 @@
     "description": "A hot, luminous giant star.",
     "weight": 1,
     "radiusGURange": [30000, 40000],
+    "systemRadiusGURange": [280000, 300000],
     "massSolarRange": [2, 150],
     "temperatureKRange": [20000, 50000],
     "spriteCandidates": [
