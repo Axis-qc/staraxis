@@ -8,7 +8,9 @@ import com.badlogic.gdx.graphics.g3d.ModelBatch;
 import com.badlogic.gdx.graphics.g3d.ModelInstance;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Intersector;
+import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.math.collision.Ray;
 
@@ -19,6 +21,7 @@ import staraxis.game.space.OrbitSolver;
 import staraxis.game.space.OrbitalElements;
 import staraxis.game.space.SpacePosition;
 import staraxis.render.WorldCamera;
+import staraxis.render.debug.ChunkGridDebugRenderer;
 import staraxis.render.lod.LodCalculator;
 import staraxis.render.lod.LodLevel;
 import staraxis.render.mesh.OrbitRingMesh;
@@ -60,10 +63,38 @@ public class SystemViewRenderer {
 
     private double simulationTime = 0.0;
 
+    /** 区块网格调试渲染器（null = 关闭）。 */
+    private ChunkGridDebugRenderer chunkDebug;
+
     /** 临时向量，避免每帧分配。 */
     private final Vector3 tmpVec = new Vector3();
     private final Vector3 tmpOffset = new Vector3();
     private final Vector3 tmpIntersect = new Vector3();
+    private final Vector3 tmpScreenPos = new Vector3();
+
+    /** 2D 行星圆标渲染器（叠加层，渲染太小的行星球体）。 */
+    private final ShapeRenderer shapeRenderer = new ShapeRenderer();
+
+    /** 当前帧的行星 UI 圆标信息（每帧重建，供拾取用）。 */
+    private final java.util.ArrayList<PlanetDotInfo> planetDotInfos = new java.util.ArrayList<>();
+
+    /** 行星球体在屏幕上的直径小于此值时改用固定圆标标示位置。 */
+    private static final float MIN_DIAMETER_PX = 20f;
+
+    /** 屏幕圆标固定绘制半径（像素）。 */
+    private static final float DOT_RADIUS_PX = MIN_DIAMETER_PX * 0.5f;
+
+    /** 行星屏幕圆标信息（每帧重建）。 */
+    private static class PlanetDotInfo {
+        final long entityId;
+        final float screenX;
+        final float screenY;
+        PlanetDotInfo(long id, float x, float y) {
+            entityId = id;
+            screenX = x;
+            screenY = y;
+        }
+    }
 
     public SystemViewRenderer() {
         modelBatch = new ModelBatch();
@@ -137,15 +168,7 @@ public class SystemViewRenderer {
         Gdx.gl.glEnable(GL20.GL_BLEND);
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
 
-        double orbitDist = camera.getOrbitDistance();
-        float orbitAlpha;
-        if (orbitDist > 20000) {
-            orbitAlpha = 0.9f;
-        } else if (orbitDist > 5000) {
-            orbitAlpha = 0.9f * (float) ((orbitDist - 5000) / 15000.0);
-        } else {
-            orbitAlpha = 0f;
-        }
+        float orbitAlpha = LodCalculator.calculateOrbitAlpha(camera.getOrbitDistance());
         if (orbitAlpha > 0f) {
             for (int i = 0; i < planetCount; i++) {
                 renderOrbitRing(system.planets.get(i), camera, orbitAlpha);
@@ -153,7 +176,16 @@ public class SystemViewRenderer {
         }
         Gdx.gl.glDisable(GL20.GL_BLEND);
 
+        // 区块网格调试渲染（始终在最上层）
+        if (chunkDebug != null) {
+            Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
+            chunkDebug.render(camera.camera.combined, camera.camera.position);
+        }
+
         Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
+
+        // 最上层：渲染行星 UI 圆标（深度测试已关闭）
+        renderPlanetDots(system, camera);
     }
 
     /** D.10+D.11: 渲染所有恒星，每颗按 systemPos 偏移 */
@@ -226,6 +258,76 @@ public class SystemViewRenderer {
         modelBatch.end();
     }
 
+    /**
+     * 渲染行星 UI 圆标（淡入淡出 LOD）。
+     *
+     * 基于相机 orbitDist 做 alpha 渐变，逻辑与轨道环 LOD 一致：
+     *   orbitDist > 20000 → 完全不透明
+     *   5000 < orbitDist < 20000 → 线性淡入
+     *   orbitDist < 5000 → 完全透明（消失）
+     * 每帧重建 planetDotInfos 供 pick() 做 2D 屏幕空间拾取。
+     */
+    private void renderPlanetDots(StarSystem system, WorldCamera camera) {
+        planetDotInfos.clear();
+
+        int count = system.planets.size();
+        if (count == 0) return;
+
+        // 计算圆标透明度（由 LodCalculator 统一管理 LOD 参数）
+        float dotAlpha = LodCalculator.calculateDotAlpha(camera.getOrbitDistance());
+        if (dotAlpha <= 0f) {
+            // 完全透明时不绘制也不拾取
+            return;
+        }
+
+        float gfxW = Gdx.graphics.getWidth();
+        float gfxH = Gdx.graphics.getHeight();
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        shapeRenderer.setProjectionMatrix(new Matrix4().setToOrtho(0f, gfxW, gfxH, 0f, -1f, 1f));
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+
+        Vector3 camPos = camera.camera.position;
+
+        for (int i = 0; i < count; i++) {
+            PlanetBody planet = system.planets.get(i);
+
+            // 计算世界坐标
+            OrbitalElements orbit = toOrbitalElements(planet);
+            SpacePosition pos = OrbitSolver.solve(orbit, simulationTime);
+            getOrbitCenterPos(planet, tmpVec);
+            float px = (float) pos.x() + tmpVec.x;
+            float py = (float) pos.y() + tmpVec.y;
+            float pz = (float) pos.z() + tmpVec.z;
+
+            // 跳过 HIDDEN 的行星
+            double dist = Math.sqrt(
+                    (camPos.x - px) * (camPos.x - px) +
+                            (camPos.y - py) * (camPos.y - py) +
+                            (camPos.z - pz) * (camPos.z - pz));
+            if (LodCalculator.calculate(dist) == LodLevel.HIDDEN) continue;
+
+            // 投影到屏幕坐标
+            tmpScreenPos.set(px, py, pz);
+            camera.camera.project(tmpScreenPos);
+            if (tmpScreenPos.z < 0f || tmpScreenPos.z > 1f) continue;
+
+            // 翻转 Y：project() 左下角原点 → 左上角原点（与 Gdx.input 一致）
+            float dotY = gfxH - tmpScreenPos.y;
+
+            // 绘制固定大小彩色圆形（带 alpha 渐变）
+            float[] rgb = planetColor(planet.planetTypeId);
+            shapeRenderer.setColor(rgb[0], rgb[1], rgb[2], dotAlpha);
+            shapeRenderer.circle(tmpScreenPos.x, dotY, DOT_RADIUS_PX);
+
+            // 记录供拾取
+            planetDotInfos.add(new PlanetDotInfo(planet.entityId, tmpScreenPos.x, dotY));
+        }
+
+        shapeRenderer.end();
+        Gdx.gl.glDisable(GL20.GL_BLEND);
+    }
+
     /** 轨道环带偏移 */
     private void renderOrbitRing(PlanetBody planet, WorldCamera camera, float orbitAlpha) {
         OrbitalElements orbit = toOrbitalElements(planet);
@@ -248,11 +350,35 @@ public class SystemViewRenderer {
         simulationTime = time;
     }
 
+    /**
+     * 开启或关闭区块网格调试渲染。
+     * 开启后按 F4 可见 System View 中以原点为中心的区块边界线。
+     */
+    public void setDebugChunksEnabled(boolean enabled) {
+        if (enabled && chunkDebug == null) {
+            chunkDebug = new ChunkGridDebugRenderer();
+        } else if (!enabled) {
+            if (chunkDebug != null) {
+                chunkDebug.dispose();
+                chunkDebug = null;
+            }
+        }
+    }
+
+    public boolean isDebugChunksEnabled() {
+        return chunkDebug != null;
+    }
+
     public void dispose() {
         modelBatch.dispose();
         planetMesh.dispose();
         starMesh.dispose();
         orbitRing.dispose();
+        shapeRenderer.dispose();
+        if (chunkDebug != null) {
+            chunkDebug.dispose();
+            chunkDebug = null;
+        }
     }
 
     /** D.15: 写入实际的 longitudeOfAscendingNode 和 epoch */
@@ -308,6 +434,31 @@ public class SystemViewRenderer {
                 if (dist < closestDist) {
                     closestDist = dist;
                     closestId = planet.entityId;
+                }
+            }
+        }
+
+        // 检测 2D 行星圆标（屏幕空间）
+        for (PlanetDotInfo dot : planetDotInfos) {
+            float dx = screenX - dot.screenX;
+            float dy = screenY - dot.screenY;
+            if (dx * dx + dy * dy <= DOT_RADIUS_PX * DOT_RADIUS_PX) {
+                // 命中圆标，用该行星的 3D 距离作为深度排序（与 3D 命中比较）
+                for (PlanetBody planet : system.planets) {
+                    if (planet.entityId == dot.entityId) {
+                        OrbitalElements orbit = toOrbitalElements(planet);
+                        SpacePosition pPos = OrbitSolver.solve(orbit, simulationTime);
+                        getOrbitCenterPos(planet, tmpVec);
+                        float px = (float) pPos.x() + tmpVec.x;
+                        float py = (float) pPos.y() + tmpVec.y;
+                        float pz = (float) pPos.z() + tmpVec.z;
+                        float dist = camera.camera.position.dst2(px, py, pz);
+                        if (dist < closestDist) {
+                            closestDist = dist;
+                            closestId = dot.entityId;
+                        }
+                        break;
+                    }
                 }
             }
         }

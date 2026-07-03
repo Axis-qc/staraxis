@@ -19,9 +19,6 @@ import java.util.SplittableRandom;
  */
 public class SpiralGalaxyGenerator implements GalaxyGenerator {
 
-    /** 恒星ID起始值（避免与预留ID冲突）。 */
-    private static final long STAR_ID_START = 10_000_000L;
-
     /** bulge 区域恒星占比。 */
     private static final double BULGE_FRACTION = 0.15;
 
@@ -131,30 +128,4 @@ public class SpiralGalaxyGenerator implements GalaxyGenerator {
         return createStar(id, x, y, z, rng);
     }
 
-    /**
-     * 根据位置创建恒星数据。
-     * 随机分配光谱类型和半径。
-     */
-    private StarPosition createStar(long id, double x, double y, double z, SplittableRandom rng) {
-        SpectralType type = randomSpectralType(rng);
-        double radius = type.minRadiusGU + rng.nextDouble() * (type.maxRadiusGU - type.minRadiusGU);
-        long systemSeed = rng.nextLong();
-
-        return new StarPosition(id, x, y, z, type, radius, systemSeed);
-    }
-
-    /**
-     * 随机光谱类型（按真实比例加权）。
-     * M 型最常见（~73%），O 型最稀少（~0.1%）。
-     */
-    private SpectralType randomSpectralType(SplittableRandom rng) {
-        double roll = rng.nextDouble();
-        if (roll < 0.001) return SpectralType.O;
-        if (roll < 0.01) return SpectralType.B;
-        if (roll < 0.04) return SpectralType.A;
-        if (roll < 0.10) return SpectralType.F;
-        if (roll < 0.20) return SpectralType.G;
-        if (roll < 0.40) return SpectralType.K;
-        return SpectralType.M;
-    }
 }

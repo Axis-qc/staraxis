@@ -8,6 +8,16 @@ import staraxis.game.entity.EntityType;
 import staraxis.game.space.SpacePosition;
 import staraxis.game.world.hex.SectorCoord;
 
+/**
+ * EntitySnapshot（实体快照）
+ *
+ * 作用：
+ * - 游戏世界实体的一次性快照，通过 RealTimeWorldState / DailySettlementState 发布。
+ * - 单机模式下 Java 客户端通过内存共享直接读权威状态（EntitySnapshot 仅用于渲染器读取恒星数据）。
+ * - 多人联机模式下作为主→客的完整下行快照契约，远端 Java 客户端通过此 DTO 渲染世界。
+ *
+ * TODO 多人联机：此为下行快照通信契约，即使当前无消费者字段也不可删除。
+ */
 @JsonInclude(JsonInclude.Include.ALWAYS)
 public class EntitySnapshot {
 
@@ -94,28 +104,6 @@ public class EntitySnapshot {
     }
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
-    public static class SurfaceRegionSnapshot {
-        public final long regionId;
-        public final String regionType;
-        public final String name;
-        public final double surfacePercentage;
-        public final double developableSpaceRatio;
-
-        public SurfaceRegionSnapshot(
-                long regionId,
-                String regionType,
-                String name,
-                double surfacePercentage,
-                double developableSpaceRatio) {
-            this.regionId = regionId;
-            this.regionType = regionType;
-            this.name = name;
-            this.surfacePercentage = surfacePercentage;
-            this.developableSpaceRatio = developableSpaceRatio;
-        }
-    }
-
-    @JsonInclude(JsonInclude.Include.ALWAYS)
     public static class PlanetDetails {
         public final String planetTypeId;
         public final double radiusGU;
@@ -158,56 +146,17 @@ public class EntitySnapshot {
         }
     }
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonInclude(JsonInclude.Include.ALWAYS)
-    public static class MovementCommandDetails {
-        public final String commandType;
-        public final String clientCommandId;
-        public final SpacePosition targetPosition;
-        public final SpacePosition startPosition;
-        public final SpacePosition startVelocity;
-        public final double startHeadingDeg;
-        public final double startGameSeconds;
-        public final int startSimulationTick;
-        public final double maxSpeed;
-        public final double baseAcceleration;
-        public final double bowAccelerationBonus;
-        public final double turnRate;
-        public final double lateralSpeedPenalty;
-        public final double reverseSpeedPenalty;
-
-        public MovementCommandDetails(
-                String commandType,
-                String clientCommandId,
-                SpacePosition targetPosition,
-                SpacePosition startPosition,
-                SpacePosition startVelocity,
-                double startHeadingDeg,
-                double startGameSeconds,
-                int startSimulationTick,
-                double maxSpeed,
-                double baseAcceleration,
-                double bowAccelerationBonus,
-                double turnRate,
-                double lateralSpeedPenalty,
-                double reverseSpeedPenalty) {
-            this.commandType = commandType;
-            this.clientCommandId = clientCommandId;
-            this.targetPosition = targetPosition;
-            this.startPosition = startPosition;
-            this.startVelocity = startVelocity;
-            this.startHeadingDeg = startHeadingDeg;
-            this.startGameSeconds = startGameSeconds;
-            this.startSimulationTick = startSimulationTick;
-            this.maxSpeed = maxSpeed;
-            this.baseAcceleration = baseAcceleration;
-            this.bowAccelerationBonus = bowAccelerationBonus;
-            this.turnRate = turnRate;
-            this.lateralSpeedPenalty = lateralSpeedPenalty;
-            this.reverseSpeedPenalty = reverseSpeedPenalty;
-        }
-    }
-
+    /**
+     * ShipDetails（舰船快照 DTO）
+     *
+     * 作用：EntitySnapshot.details 的 SHIP 类型载荷，用于向客户端展示舰船的运行时状态。
+     *
+     * 注意：
+     * - 单机模式下 Java 客户端直接读 ShipBody 权威状态（内存共享），不读此 DTO。
+     * - 但此 DTO 是未来多人联机中远端客户端（非主机玩家）获知舰船状态的唯一途径。
+     *
+     * TODO 多人联机：此为下行快照契约的一部分，即使单机无消费者亦不可删除。
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public static class ShipDetails {
@@ -222,7 +171,6 @@ public class EntitySnapshot {
         public final double turnRate;
         public final double lateralSpeedPenalty;
         public final double reverseSpeedPenalty;
-        public final MovementCommandDetails movementCommand;
 
         public ShipDetails(
                 java.util.Set<String> customFlags,
@@ -235,8 +183,7 @@ public class EntitySnapshot {
                 double bowAccelerationBonus,
                 double turnRate,
                 double lateralSpeedPenalty,
-                double reverseSpeedPenalty,
-                MovementCommandDetails movementCommand) {
+                double reverseSpeedPenalty) {
             this.customFlags = customFlags == null ? java.util.Set.of() : java.util.Set.copyOf(customFlags);
             this.headingDeg = headingDeg;
             this.isMoving = isMoving;
@@ -248,11 +195,10 @@ public class EntitySnapshot {
             this.turnRate = turnRate;
             this.lateralSpeedPenalty = lateralSpeedPenalty;
             this.reverseSpeedPenalty = reverseSpeedPenalty;
-            this.movementCommand = movementCommand;
         }
 
         public ShipDetails(java.util.Set<String> customFlags, double headingDeg) {
-            this(customFlags, headingDeg, false, null, null, 20.0, 5.0, 5.0, 45.0, 0.6, 0.3, null);
+            this(customFlags, headingDeg, false, null, null, 20.0, 5.0, 5.0, 45.0, 0.6, 0.3);
         }
     }
 

@@ -7,9 +7,11 @@ import staraxis.game.astro.def.StarTypeDef;
 import staraxis.game.planet.PlanetSurface;
 import staraxis.game.planet.def.PlanetAssetRepository;
 import staraxis.game.space.SpacePosition;
+import staraxis.game.util.WeightedRandomUtil;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -52,7 +54,7 @@ public final class AstroGenerator {
      * 生成一颗随机恒星。
      */
     private StarBody generateStar() {
-        StarTypeDef type = weightedRandom(assets.getStarTypes(), t -> t.weight);
+        StarTypeDef type = WeightedRandomUtil.weightedRandom(assets.getStarTypes(), t -> t.weight, random);
 
         StarBody star = new StarBody();
         star.entityId = idCounter.incrementAndGet();
@@ -96,9 +98,10 @@ public final class AstroGenerator {
         // D.7: 第一轨道距离 = 恒星半径 * FIRST_ORBIT_MULTIPLIER
         double currentOrbitGU = primaryStar.radiusGU * FIRST_ORBIT_MULTIPLIER;
 
+        Map<String, Integer> effectiveWeights = assets.getPlanetWeightsForStarType(primaryStar.starTypeId);
         for (int i = 0; i < planetCount; i++) {
-            PlanetTypeDef type = weightedRandom(assets.getPlanetTypes(),
-                    t -> preset.planetTypeWeights.getOrDefault(t.typeId, 1));
+            PlanetTypeDef type = WeightedRandomUtil.weightedRandom(assets.getPlanetTypes(),
+                    t -> effectiveWeights.getOrDefault(t.typeId, 1), random);
 
             PlanetBody planet = new PlanetBody();
             planet.entityId = idCounter.incrementAndGet();
@@ -195,19 +198,6 @@ public final class AstroGenerator {
         system.gravityWellRadiusGU = Math.max(farthestOrbit * 1.5, starMin);
 
         return system;
-    }
-
-    private <T> T weightedRandom(List<T> items, java.util.function.ToDoubleFunction<T> weightFunc) {
-        double totalWeight = items.stream().mapToDouble(weightFunc).sum();
-        double value = random.nextDouble() * totalWeight;
-        double cumulativeWeight = 0;
-        for (T item : items) {
-            cumulativeWeight += weightFunc.applyAsDouble(item);
-            if (value < cumulativeWeight) {
-                return item;
-            }
-        }
-        return items.get(items.size() - 1); // fallback
     }
 
     private double randomDouble(double min, double max) {

@@ -33,6 +33,10 @@ import staraxis.render.util.TemperatureColor;
  * 在每个恒星球位置叠加一个面向相机的光晕四边形，additive 混合，
  * 亮度随镜头距离补偿提亮（远处亮、近处暗），让星系整体呈现明亮发光感。
  * 恒星球本身的自发光颜色不受影响（由 StarBatchRenderer 负责）。
+ *
+ * TODO 实例缓冲区管理：initInstanceBuffer/rebuild/dispose 中约 30 行 GL 操作
+ *      与 StarBatchRenderer 重复（genVBO/过滤 STAR/deleteVBO），但实例数据布局不同
+ *      （7 float vs 6 float），核心差异不可消除。待 Galaxy 渲染性能优化时一并重构。
  */
 public class StarHaloRenderer {
 

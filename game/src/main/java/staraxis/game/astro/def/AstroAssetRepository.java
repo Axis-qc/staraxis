@@ -5,7 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * AstroAssetRepository
@@ -48,6 +50,54 @@ public class AstroAssetRepository {
 
     public OrbitPresetDef getOrbitPreset() {
         return orbitPreset;
+    }
+
+    /**
+     * 按 typeId 查找恒星类型定义。
+     *
+     * @param typeId 恒星类型 ID
+     * @return 匹配的 StarTypeDef，未找到返回 null
+     */
+    public StarTypeDef getStarType(String typeId) {
+        for (StarTypeDef t : starTypes) {
+            if (t.typeId.equals(typeId)) {
+                return t;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 按 typeId 查找行星类型定义。
+     *
+     * @param typeId 行星类型 ID
+     * @return 匹配的 PlanetTypeDef，未找到返回 null
+     */
+    public PlanetTypeDef getPlanetType(String typeId) {
+        for (PlanetTypeDef t : planetTypes) {
+            if (t.typeId.equals(typeId)) {
+                return t;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 获取指定恒星类型的行星权重表。
+     * 如果恒星类型定义了专属权重表则使用之，否则使用全局 OrbitPreset 的权重。
+     *
+     * @param starTypeId 恒星类型 ID
+     * @return 行星类型到权重的映射，不会为 null
+     */
+    public Map<String, Integer> getPlanetWeightsForStarType(String starTypeId) {
+        StarTypeDef starType = getStarType(starTypeId);
+        if (starType != null && starType.planetTypeWeights != null && !starType.planetTypeWeights.isEmpty()) {
+            return starType.planetTypeWeights;
+        }
+        if (orbitPreset != null && orbitPreset.planetTypeWeights != null) {
+            return orbitPreset.planetTypeWeights;
+        }
+        return Collections.emptyMap();
     }
 
     private <T> T readObj(String path, Class<T> clazz) {

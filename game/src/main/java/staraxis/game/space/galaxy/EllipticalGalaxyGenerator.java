@@ -12,8 +12,6 @@ import java.util.SplittableRandom;
  */
 public class EllipticalGalaxyGenerator implements GalaxyGenerator {
 
-    private static final long STAR_ID_START = 10_000_000L;
-
     @Override
     public GalaxyData generate(GalaxyConfig config) {
         SplittableRandom rng = new SplittableRandom(config.worldSeed);
@@ -35,24 +33,10 @@ public class EllipticalGalaxyGenerator implements GalaxyGenerator {
             double z = r * Math.sin(phi) * Math.sin(theta);
             double y = r * Math.cos(phi) * (radiusY / radiusXZ);
 
-            SpectralType type = randomSpectralType(rng);
-            double radius = type.minRadiusGU + rng.nextDouble() * (type.maxRadiusGU - type.minRadiusGU);
-            long systemSeed = rng.nextLong();
-
-            stars.add(new StarPosition(nextId++, x, y, z, type, radius, systemSeed));
+            stars.add(createStar(nextId++, x, y, z, rng));
         }
 
         return new GalaxyData(config.worldSeed, GalaxyType.ELLIPTICAL, stars);
     }
 
-    private SpectralType randomSpectralType(SplittableRandom rng) {
-        double roll = rng.nextDouble();
-        if (roll < 0.001) return SpectralType.O;
-        if (roll < 0.01) return SpectralType.B;
-        if (roll < 0.04) return SpectralType.A;
-        if (roll < 0.10) return SpectralType.F;
-        if (roll < 0.20) return SpectralType.G;
-        if (roll < 0.40) return SpectralType.K;
-        return SpectralType.M;
-    }
 }

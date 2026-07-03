@@ -102,7 +102,10 @@ public class ClientGame implements ApplicationListener {
             Gdx.app.setApplicationLogger(new GdxToSlf4jLogger());
         }
 
-        stage = new Stage(new ScreenViewport());
+        BaseUiInit base = BaseUiInit.init();
+        stage = base.stage;
+        gui = base.gui;
+        starfield = base.starfield;
 
         // 滚轮事件处理器——将滚轮滚动转发给 WorldCamera
         InputProcessor scrollProcessor = new InputProcessor() {
@@ -163,51 +166,8 @@ public class ClientGame implements ApplicationListener {
         multiplexer.addProcessor(stage);
         Gdx.input.setInputProcessor(multiplexer);
 
-        I18nService i18nService = new I18nService();
-        i18nService.load("zh");
-
-        gui = new Gui(stage, s -> {
-        }, s -> {
-        });
-        gui.register(I18nService.class, i18nService);
-        gui.register(SettingsRepository.class, new SettingsRepository());
-
-        BitmapFont defaultFont = FontProvider.createDefaultFont();
-        BitmapFont ttfFont = FontProvider.createUiFont();
-        BitmapFont finalFont = (ttfFont != null) ? ttfFont : defaultFont;
-        BitmapFont vectorTtfFont = FontProvider.createVectorFont();
-        BitmapFont vectorFont = (vectorTtfFont != null) ? vectorTtfFont : finalFont;
-
-        gui.register(BitmapFont.class, vectorFont);
-        gui.initJsonUi();
-
-        ShapeRenderer sr = new ShapeRenderer();
-        gui.register(ShapeRenderer.class, sr);
-
-        starfield = new StarfieldBackground(sr, MenuBackgroundLoader.loadBackgroundImage());
-        starfield.init(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
-
-        UiFactory factory = gui.get(UiFactory.class);
-        EffectRegistry effectRegistry = gui.get(EffectRegistry.class);
-        if (factory != null) {
-            factory.setEffectRegistry(effectRegistry);
-            factory.setShapeRenderer(sr);
-            factory.setBitmapFont(vectorFont);
-            factory.setDataProvider(new GameDataProvider());
-        }
-
-        WorldSettingsScreen worldSettingsScreen = new WorldSettingsScreen(gui);
-        InGameHudScreen inGameHudScreen = new InGameHudScreen(gui);
-        SettingsScreen settingsScreen = new SettingsScreen(gui);
-        DevelopingDialog developingDialog = new DevelopingDialog(sr, vectorFont, i18nService);
-
-        gui.register(WorldSettingsScreen.class, worldSettingsScreen);
-        gui.register(InGameHudScreen.class, inGameHudScreen);
-        gui.register(SettingsScreen.class, settingsScreen);
-        gui.register(DevelopingDialog.class, developingDialog);
-
         // 暂停菜单
-        pauseMenu = new PauseMenu(gui, sr, vectorFont);
+        pauseMenu = new PauseMenu(gui, base.sr, base.vectorFont);
         stage.addActor(pauseMenu);
 
         resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
@@ -215,7 +175,7 @@ public class ClientGame implements ApplicationListener {
         initSpaceRendering();
 
         // UI 调试面板初始化（F3 打开，JSON 声明式 UI）
-        uiDebug = new UiDebug(stage, gui.get(ShapeRenderer.class), vectorFont,
+        uiDebug = new UiDebug(stage, gui.get(ShapeRenderer.class), base.vectorFont,
                 gui.get(staraxis.ui.json.UiParser.class),
                 gui.get(staraxis.ui.json.UiFactory.class));
         uiDebug.setCamera(galaxyCamera); // 默认显示 galaxy 镜头信息
@@ -453,6 +413,11 @@ public class ClientGame implements ApplicationListener {
     private void renderSystemView(float dt) {
         if (currentSystem == null)
             return;
+
+        // F4 切换区块网格调试
+        if (Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.F4)) {
+            systemViewRenderer.setDebugChunksEnabled(!systemViewRenderer.isDebugChunksEnabled());
+        }
 
         skyboxRenderer.render(systemCamera);
 

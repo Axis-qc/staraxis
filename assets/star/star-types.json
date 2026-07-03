@@ -73,7 +73,7 @@
     "typeId": "RED_GIANT",
     "description": "A large, luminous star in a late phase of stellar evolution.",
     "weight": 3,
-    "radiusGURange": [400000, 600000],
+    "radiusGURange": [30000, 40000],
     "massSolarRange": [0.3, 8],
     "temperatureKRange": [3300, 4800],
     "spriteCandidates": [
@@ -87,7 +87,7 @@
     "typeId": "BLUE_GIANT",
     "description": "A hot, luminous giant star.",
     "weight": 1,
-    "radiusGURange": [150000, 300000],
+    "radiusGURange": [30000, 40000],
     "massSolarRange": [2, 150],
     "temperatureKRange": [20000, 50000],
     "spriteCandidates": [

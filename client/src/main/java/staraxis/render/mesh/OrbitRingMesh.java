@@ -6,18 +6,27 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Matrix4;
 
+import staraxis.game.space.OrbitSolver;
 import staraxis.game.space.OrbitalElements;
+import staraxis.game.space.SpacePosition;
 
 /**
  * OrbitRingMesh（轨道环线网格）。
  *
  * 渲染行星轨道为半透明圆环。
  * 考虑偏心率（椭圆）和倾角（倾斜）。
+ *
+ * 轨道顶点在轨道根数未变化时自动缓存，避免每帧重复计算旋转矩阵和三角函数。
  */
 public class OrbitRingMesh {
 
     private static final int SEGMENTS = 128;
     private final ShapeRenderer shapeRenderer;
+
+    // ── 轨道顶点缓存 ──────────────────────────────────────────
+    private double cachedA, cachedE, cachedI, cachedOmega, cachedW;
+    private double[] cachedVerts; // [x0,y0,z0, x1,y1,z1, ...]，星系坐标系（不含 gravity 偏移）
+    private boolean cacheValid;
 
     public OrbitRingMesh() {
         shapeRenderer = new ShapeRenderer();
@@ -40,20 +49,11 @@ public class OrbitRingMesh {
         double omega = orbit.longitudeOfAscendingNode();
         double w = orbit.argumentOfPeriapsis();
 
-        // 预计算旋转矩阵（轨道面在 XZ，Y 朝上）
-        double cosI = Math.cos(i);
-        double sinI = Math.sin(i);
-        double cosO = Math.cos(omega);
-        double sinO = Math.sin(omega);
-        double cosW = Math.cos(w);
-        double sinW = Math.sin(w);
-
-        double p11 = cosO * cosW - sinO * cosI * sinW;
-        double p13 = cosO * sinW + sinO * cosI * cosW;
-        double p21 = sinO * sinI;
-        double p23 = -cosO * sinI;
-        double p31 = -sinO * cosW - cosO * cosI * sinW;
-        double p33 = -sinO * sinW + cosO * cosI * cosW;
+        // 轨道根数未变时复用缓存顶点
+        if (!cacheValid || cachedA != a || cachedE != e || cachedI != i
+                || cachedOmega != omega || cachedW != w) {
+            buildCache(a, e, i, omega, w);
+        }
 
         // 显式确保深度测试开启，保证轨道环被行星/恒星正确遮挡
         Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
@@ -65,9 +65,42 @@ public class OrbitRingMesh {
         shapeRenderer.setColor(color);
         Gdx.gl.glLineWidth(1f);
 
-        double prevX = 0, prevY = 0, prevZ = 0;
-
         for (int seg = 0; seg <= SEGMENTS; seg++) {
+            int idx = seg * 3;
+            float x = (float) (cachedVerts[idx]     + offsetX);
+            float y = (float) (cachedVerts[idx + 1] + offsetY);
+            float z = (float) (cachedVerts[idx + 2] + offsetZ);
+
+            if (seg > 0) {
+                shapeRenderer.line(
+                    (float) (cachedVerts[idx - 3] + offsetX),
+                    (float) (cachedVerts[idx - 2] + offsetY),
+                    (float) (cachedVerts[idx - 1] + offsetZ),
+                    x, y, z
+                );
+            }
+        }
+
+        shapeRenderer.end();
+    }
+
+    /**
+     * 计算 128 段轨道顶点并缓存。
+     * 使用 OrbitSolver.rotateToGalaxyFrame 将轨道面坐标变换到星系坐标系。
+     */
+    private void buildCache(double a, double e, double i, double omega, double w) {
+        cachedA = a;
+        cachedE = e;
+        cachedI = i;
+        cachedOmega = omega;
+        cachedW = w;
+
+        int vertCount = SEGMENTS + 1;
+        if (cachedVerts == null || cachedVerts.length != vertCount * 3) {
+            cachedVerts = new double[vertCount * 3];
+        }
+
+        for (int seg = 0; seg < vertCount; seg++) {
             double nu = 2.0 * Math.PI * seg / SEGMENTS;
 
             // 轨道平面极坐标 -> 直角坐标（轨道面在 XZ）
@@ -75,24 +108,20 @@ public class OrbitRingMesh {
             double xLocal = r * Math.cos(nu);
             double zLocal = r * Math.sin(nu);
 
-            // 旋转到星系坐标系
-            double x = p11 * xLocal + p13 * zLocal + offsetX;
-            double y = p21 * xLocal + p23 * zLocal + offsetY;
-            double z = p31 * xLocal + p33 * zLocal + offsetZ;
+            // 旋转到星系坐标系（使用 OrbitSolver 共享方法，消除矩阵重复）
+            SpacePosition pos = OrbitSolver.rotateToGalaxyFrame(xLocal, zLocal, omega, i, w);
 
-            if (seg > 0) {
-                shapeRenderer.line(
-                    (float) prevX, (float) prevY, (float) prevZ,
-                    (float) x, (float) y, (float) z
-                );
-            }
-
-            prevX = x;
-            prevY = y;
-            prevZ = z;
+            int idx = seg * 3;
+            cachedVerts[idx]     = pos.x();
+            cachedVerts[idx + 1] = pos.y();
+            cachedVerts[idx + 2] = pos.z();
         }
 
-        shapeRenderer.end();
+        cacheValid = true;
+    }
+
+    public void setCacheDirty() {
+        cacheValid = false;
     }
 
     public void dispose() {

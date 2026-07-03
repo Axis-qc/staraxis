@@ -24,7 +24,6 @@ import staraxis.game.command.SetSystemTimeScaleCommand;
 import staraxis.game.command.SetSystemTimeScaleHandler;
 import staraxis.game.entity.Entity;
 import staraxis.game.entity.EntityType;
-import staraxis.game.ship.MovementCommand;
 import staraxis.game.ship.ShipBody;
 import staraxis.game.util.ProgressCallback;
 import staraxis.game.ship.ShipMovementSystem;
@@ -710,9 +709,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                     false,
                     new EntitySnapshot.ShipDetails(customFlags, headingDeg, isMoving, movementTarget, velocity,
                             maxSpeed, baseAcceleration, bowAccelerationBonus, turnRate,
-                            lateralSpeedPenalty, reverseSpeedPenalty,
-                            toMovementCommandDetails(
-                                    entity instanceof ShipBody shipBody ? shipBody.movementCommand : null)),
+                            lateralSpeedPenalty, reverseSpeedPenalty),
                     intelRequiredLevel));
         }
 
@@ -722,34 +719,5 @@ public class StarAxisGameRuntime implements GameRuntime {
         realTimeBuffer.swapPublish();
     }
 
-    private EntitySnapshot.MovementCommandDetails toMovementCommandDetails(MovementCommand command) {
-        if (command == null) {
-            return null;
-        }
-        return new EntitySnapshot.MovementCommandDetails(
-                toMovementCommandType(command.commandType),
-                command.clientCommandId,
-                command.targetPosition,
-                command.startPosition,
-                command.startVelocity,
-                command.startHeadingDeg,
-                command.startGameSeconds,
-                command.startSimulationTick,
-                command.maxSpeed,
-                command.baseAcceleration,
-                command.bowAccelerationBonus,
-                command.turnRate,
-                command.lateralSpeedPenalty,
-                command.reverseSpeedPenalty);
-    }
 
-    private String toMovementCommandType(int commandType) {
-        if (commandType == MovementCommand.TYPE_MOVE_TO) {
-            return "MOVE_TO";
-        }
-        if (commandType == MovementCommand.TYPE_STOP) {
-            return "STOP";
-        }
-        return "UNKNOWN";
-    }
 }

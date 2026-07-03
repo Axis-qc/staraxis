@@ -5,6 +5,7 @@ import staraxis.game.planet.PlanetSurface;
 import staraxis.game.planet.def.NamePoolDef;
 import staraxis.game.planet.def.PlanetAssetRepository;
 import staraxis.game.planet.def.SurfaceRegionTypeDef;
+import staraxis.game.util.WeightedRandomUtil;
 
 import java.util.*;
 
@@ -103,24 +104,10 @@ public class SurfaceGenerator {
         // 使用行星自带的生成种子确保确定性喵
         Random rng = new Random(surface.surfaceGenerationSeed);
 
-        // 1. 计算总权重并准备候选类型喵
-        double totalWeight = 0;
-        List<String> typeIds = new ArrayList<>();
-        List<Double> cumulativeWeights = new ArrayList<>();
-
-        for (Map.Entry<String, Double> entry : type.surfaceRegionWeights.entrySet()) {
-            totalWeight += entry.getValue();
-            typeIds.add(entry.getKey());
-            cumulativeWeights.add(totalWeight);
-        }
-
-        if (totalWeight <= 0)
-            return;
-
-        // 2. 确定区域数量（暂定 3-6 个，未来可随行星大小/质量缩放）喵
+        // 1. 确定区域数量（暂定 3-6 个，未来可随行星大小/质量缩放）喵
         int regionCount = 3 + rng.nextInt(4);
 
-        // 3. 分配面积份额：先随机分配原始份额，再归一化到 1.0 喵
+        // 2. 分配面积份额：先随机分配原始份额，再归一化到 1.0 喵
         double[] shares = new double[regionCount];
         double totalShare = 0;
         for (int i = 0; i < regionCount; i++) {
@@ -129,16 +116,9 @@ public class SurfaceGenerator {
             totalShare += shares[i];
         }
 
-        // 4. 按权重抽取类型并生成区域喵
+        // 3. 按权重抽取类型并生成区域喵
         for (int i = 0; i < regionCount; i++) {
-            double r = rng.nextDouble() * totalWeight;
-            String selectedTypeId = typeIds.get(0);
-            for (int j = 0; j < cumulativeWeights.size(); j++) {
-                if (r <= cumulativeWeights.get(j)) {
-                    selectedTypeId = typeIds.get(j);
-                    break;
-                }
-            }
+            String selectedTypeId = WeightedRandomUtil.weightedKey(type.surfaceRegionWeights, rng);
 
             SurfaceRegionTypeDef regionDef = repo.getSurfaceRegionType(selectedTypeId);
             if (regionDef == null)

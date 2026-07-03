@@ -121,7 +121,7 @@ public final class OrbitSolver {
      * @param argumentOfPeriapsis 近心点幅角（弧度）
      * @return 星系坐标系中的位置
      */
-    private static SpacePosition rotateToGalaxyFrame(
+    public static SpacePosition rotateToGalaxyFrame(
         double xLocal, double zLocal,
         double omega, double inclination, double argumentOfPeriapsis
     ) {

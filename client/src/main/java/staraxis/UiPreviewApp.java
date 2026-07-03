@@ -30,51 +30,12 @@ public class UiPreviewApp implements ApplicationListener {
 
     @Override
     public void create() {
-        stage = new Stage(new ScreenViewport());
+        BaseUiInit base = BaseUiInit.init();
+        stage = base.stage;
+        gui = base.gui;
+        starfield = base.starfield;
+
         Gdx.input.setInputProcessor(new InputMultiplexer(stage));
-
-        I18nService i18nService = new I18nService();
-        i18nService.load("zh");
-
-        gui = new Gui(stage, s -> {
-        }, s -> {
-        });
-        gui.register(I18nService.class, i18nService);
-        gui.register(SettingsRepository.class, new SettingsRepository());
-
-        BitmapFont defaultFont = FontProvider.createDefaultFont();
-        BitmapFont ttfFont = FontProvider.createUiFont();
-        BitmapFont finalFont = (ttfFont != null) ? ttfFont : defaultFont;
-        BitmapFont vectorTtfFont = FontProvider.createVectorFont();
-        BitmapFont vectorFont = (vectorTtfFont != null) ? vectorTtfFont : finalFont;
-
-        gui.register(BitmapFont.class, vectorFont);
-        gui.initJsonUi();
-
-        ShapeRenderer sr = new ShapeRenderer();
-        gui.register(ShapeRenderer.class, sr);
-
-        starfield = new StarfieldBackground(sr, MenuBackgroundLoader.loadBackgroundImage());
-        starfield.init(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
-
-        UiFactory factory = gui.get(UiFactory.class);
-        EffectRegistry effectRegistry = gui.get(EffectRegistry.class);
-        if (factory != null) {
-            factory.setEffectRegistry(effectRegistry);
-            factory.setShapeRenderer(sr);
-            factory.setBitmapFont(vectorFont);
-            factory.setDataProvider(new GameDataProvider());
-        }
-
-        WorldSettingsScreen worldSettingsScreen = new WorldSettingsScreen(gui);
-        InGameHudScreen inGameHudScreen = new InGameHudScreen(gui);
-        SettingsScreen settingsScreen = new SettingsScreen(gui);
-        DevelopingDialog developingDialog = new DevelopingDialog(sr, vectorFont, i18nService);
-
-        gui.register(WorldSettingsScreen.class, worldSettingsScreen);
-        gui.register(InGameHudScreen.class, inGameHudScreen);
-        gui.register(SettingsScreen.class, settingsScreen);
-        gui.register(DevelopingDialog.class, developingDialog);
 
         gui.showMainMenu();
     }

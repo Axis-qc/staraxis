@@ -34,6 +34,10 @@ import staraxis.render.util.TemperatureColor;
  *
  * 恒星位置+颜色一次性上传到 GPU 实例缓冲区，每帧一次 glDrawElementsInstanced 绘制全部。
  * hover 变色时仅更新对应实例的颜色数据，无需 CPU 遍历或材质操作。
+ *
+ * TODO 实例缓冲区管理：initInstanceBuffer/rebuild/dispose 中约 30 行 GL 操作
+ *      与 StarHaloRenderer 重复（genVBO/过滤 STAR/deleteVBO），但实例数据布局不同
+ *      （6 float vs 7 float），核心差异不可消除。待 Galaxy 渲染性能优化时一并重构。
  */
 public class StarBatchRenderer {
 
