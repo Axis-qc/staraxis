@@ -15,6 +15,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import staraxis.game.space.event.CrossSystemEventTable;
 import java.util.Set;
 
 /**
@@ -106,7 +108,8 @@ public class WorldState {
      * - 由 StarAxisGameRuntime.newGame 初始化后注入喵。
      */
     public staraxis.game.intel.IntelSystem intelSystem;
-
+    /** 跨系统事件表（在途实体索引 + 按 tick 到达到期事件）。 */
+    public final CrossSystemEventTable crossSystemEventTable = new CrossSystemEventTable();
     /**
      * 全局实体 ID 生成器（nextEntityId）喵。
      *

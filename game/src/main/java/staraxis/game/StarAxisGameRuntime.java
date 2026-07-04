@@ -68,6 +68,8 @@ public class StarAxisGameRuntime implements GameRuntime {
 
     private final ShipMovementSystem shipMovementSystem = new ShipMovementSystem();
 
+    private final staraxis.game.ship.FTLTravelSystem ftlTravelSystem = new staraxis.game.ship.FTLTravelSystem();
+
     public StarAxisGameRuntime(WorldState worldState) {
         this.worldState = worldState;
 
@@ -271,10 +273,13 @@ public class StarAxisGameRuntime implements GameRuntime {
         TimelineSystem.TickAdvance tickAdvance = TimelineSystem.advanceOneTick(worldState.time);
         double dtGameHours = tickAdvance.dtGameHours;
 
+        // STAGE 1: 处理到期跨系统事件（到达事件：将实体恢复到目标星系）
+        ftlTravelSystem.processArrivingEvents(worldState, worldState.time.simulationTick);
+
         // 处理 Command 队列并更新 WorldState喵。
         commandBus.executeCommands(worldState, dtGameHours);
 
-        // 处理舰船移动喵
+        // 处理舰船移动喵（在途实体已被 entityIdsBySystem 排除，不会参与计算）
         shipMovementSystem.update(worldState, dtGameHours);
 
         // 更新所有国家的可见性状态（基于当前世界状态）
@@ -293,6 +298,10 @@ public class StarAxisGameRuntime implements GameRuntime {
         if (tickAdvance.dayChanged) {
             // 跨日逻辑可在此保留，用于未来的统计等，当前由定时/脏标记统一驱动低频快照发布喵
         }
+
+        // STAGE 4/5: 发布实时快照（双缓冲）
+        // 注意：阶段4合并新事件在单线程模式下由 FTLTravelSystem 直接写入事件表，无需合并
+        // 阶段5由外部定时调用 publishRealtimeSnapshotIfNeeded() / publishRealtimeSnapshotForced()
 
         // 记录性能数据喵
         long tickEndTime = System.nanoTime();
