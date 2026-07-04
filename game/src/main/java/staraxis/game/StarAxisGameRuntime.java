@@ -68,8 +68,6 @@ public class StarAxisGameRuntime implements GameRuntime {
 
     private final ShipMovementSystem shipMovementSystem = new ShipMovementSystem();
 
-    private final staraxis.game.ship.FTLTravelSystem ftlTravelSystem = new staraxis.game.ship.FTLTravelSystem();
-
     public StarAxisGameRuntime(WorldState worldState) {
         this.worldState = worldState;
 
@@ -274,12 +272,16 @@ public class StarAxisGameRuntime implements GameRuntime {
         double dtGameHours = tickAdvance.dtGameHours;
 
         // STAGE 1: 处理到期跨系统事件（到达事件：将实体恢复到目标星系）
-        ftlTravelSystem.processArrivingEvents(worldState, worldState.time.simulationTick);
+        worldState.tickDispatcher.stage1Arrivals(worldState, worldState.time.simulationTick);
 
         // STAGE 1.5: 重建星系八叉树空间索引（每 tick，只读查询）
-        worldState.galaxyOctree.rebuild(new java.util.ArrayList<>(worldState.entitiesById.values()));
+        worldState.tickDispatcher.stage1halfRebuildOctree(worldState);
 
-        // 处理 Command 队列并更新 WorldState喵。
+        // STAGE 2: LPT 负载分配
+        worldState.tickDispatcher.stage2LoadBalance(worldState, worldState.time.simulationTick);
+
+        // STAGE 3: 处理 Command 队列并更新 WorldState喵。
+        // 当前全局操作（非 per-system 拆分），后续可接入 TickDispatcher.stage3PerSystemCalc()
         commandBus.executeCommands(worldState, dtGameHours);
 
         // 处理舰船移动喵（在途实体已被 entityIdsBySystem 排除，不会参与计算）
@@ -302,9 +304,9 @@ public class StarAxisGameRuntime implements GameRuntime {
             // 跨日逻辑可在此保留，用于未来的统计等，当前由定时/脏标记统一驱动低频快照发布喵
         }
 
-        // STAGE 4/5: 发布实时快照（双缓冲）
-        // 注意：阶段4合并新事件在单线程模式下由 FTLTravelSystem 直接写入事件表，无需合并
-        // 阶段5由外部定时调用 publishRealtimeSnapshotIfNeeded() / publishRealtimeSnapshotForced()
+        // STAGE 4/5: TickDispatcher 合并 + 发布钩子
+        worldState.tickDispatcher.stage4Merge();
+        worldState.tickDispatcher.stage5Publish();
 
         // 记录性能数据喵
         long tickEndTime = System.nanoTime();

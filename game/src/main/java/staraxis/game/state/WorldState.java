@@ -18,6 +18,7 @@ import java.util.Map;
 
 import staraxis.game.space.event.CrossSystemEventTable;
 import staraxis.game.space.octree.GalaxyOctree;
+import staraxis.game.sim.TickDispatcher;
 import java.util.Set;
 
 /**
@@ -114,6 +115,9 @@ public class WorldState {
 
     /** 星系八叉树空间索引（只读，每 tick 重建，用于恒星拾取/传感器范围查询）。 */
     public final GalaxyOctree galaxyOctree = new GalaxyOctree();
+
+    /** Tick 分派器（管理 5 阶段流水线调度 + LPT 分配）。 */
+    public final TickDispatcher tickDispatcher = new TickDispatcher();
     /**
      * 全局实体 ID 生成器（nextEntityId）喵。
      *
