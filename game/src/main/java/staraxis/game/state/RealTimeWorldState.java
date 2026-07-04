@@ -50,16 +50,13 @@ public class RealTimeWorldState {
     /** 实体总表（entityId -> Entity），新的核心数据结构。 */
     private final Map<Long, Entity> entitiesById = new LinkedHashMap<>();
 
-    /** 空间索引（sectorCoord -> entityIds），用于按星区查询。 */
-    private final Map<SectorCoord, List<Long>> entityIdsBySector = new LinkedHashMap<>();
-
     /** 系统索引（systemId -> entityIds），用于按恒星系查询。 */
     private final Map<Long, List<Long>> entityIdsBySystem = new LinkedHashMap<>();
 
     /** 恒星系世界坐标索引（systemId -> 在银河中的3D坐标）。 */
     private final Map<Long, SpacePosition> systemPositions = new LinkedHashMap<>();
 
-    /** 星区中心点缓存（sectorCoord -> centerWorldGU）。 */
+    /** 星区中心点缓存（sectorCoord -> centerWorldGU），供 webnet 地图数据下发。 */
     private final Map<SectorCoord, Vec2d> sectorCentersWorldGU = new LinkedHashMap<>();
 
     /** 星区归属缓存（"q,r" -> ownerNationId）。 */
@@ -92,7 +89,6 @@ public class RealTimeWorldState {
         minute = 0;
         second = 0;
         entitiesById.clear();
-        entityIdsBySector.clear();
         entityIdsBySystem.clear();
         systemPositions.clear();
         sectorCentersWorldGU.clear();
@@ -140,7 +136,7 @@ public class RealTimeWorldState {
     }
 
     /**
-     * 模拟层填充：写入一个星区中心点。
+     * 模拟层填充：写入一个星区中心点（供 webnet 地图数据下发）。
      */
     public void putSectorCenter(SectorCoord coord, Vec2d centerWorldGU) {
         sectorCentersWorldGU.put(coord, centerWorldGU);
@@ -160,10 +156,6 @@ public class RealTimeWorldState {
 
     public Map<Long, Entity> getEntitiesByIdView() {
         return Collections.unmodifiableMap(entitiesById);
-    }
-
-    public Map<SectorCoord, List<Long>> getEntityIdsBySectorView() {
-        return Collections.unmodifiableMap(entityIdsBySector);
     }
 
     public Map<Long, List<Long>> getEntityIdsBySystemView() {

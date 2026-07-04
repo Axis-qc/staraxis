@@ -24,17 +24,10 @@ import staraxis.game.command.SetSystemTimeScaleCommand;
 import staraxis.game.command.SetSystemTimeScaleHandler;
 import staraxis.game.entity.Entity;
 import staraxis.game.entity.EntityType;
-import staraxis.game.ship.ShipBody;
-import staraxis.game.util.ProgressCallback;
+import staraxis.game.log.PerformanceMonitor;
 import staraxis.game.ship.ShipMovementSystem;
 import staraxis.game.sim.SimulationTime;
 import staraxis.game.sim.TimelineSystem;
-import staraxis.game.state.DailySettlementState;
-import staraxis.game.state.DailySettlementStateBuffer;
-import staraxis.game.state.RealTimeWorldState;
-import staraxis.game.state.RealTimeWorldStateBuffer;
-import staraxis.game.state.WorldState;
-import staraxis.game.state.snapshot.EntitySnapshot;
 import staraxis.game.space.SpacePosition;
 import staraxis.game.space.galaxy.GalaxyConfig;
 import staraxis.game.space.galaxy.GalaxyData;
@@ -42,10 +35,16 @@ import staraxis.game.space.galaxy.GalaxyGenerator;
 import staraxis.game.space.galaxy.GalaxyGeneratorFactory;
 import staraxis.game.space.galaxy.GalaxyType;
 import staraxis.game.space.galaxy.StarPosition;
+import staraxis.game.state.DailySettlementState;
+import staraxis.game.state.DailySettlementStateBuffer;
+import staraxis.game.state.RealTimeWorldState;
+import staraxis.game.state.RealTimeWorldStateBuffer;
+import staraxis.game.state.WorldState;
+import staraxis.game.state.snapshot.EntitySnapshot;
+import staraxis.game.util.ProgressCallback;
 import staraxis.game.world.WorldGenConfig;
 import staraxis.game.world.WorldGenerator;
 import staraxis.game.world.WorldSector;
-import staraxis.game.log.PerformanceMonitor;
 
 /**
  * StarAxisGameRuntime
