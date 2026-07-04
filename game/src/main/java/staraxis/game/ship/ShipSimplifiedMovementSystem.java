@@ -111,7 +111,6 @@ public class ShipSimplifiedMovementSystem extends AbstractShipMovementSystem {
             0,
             ship.posWorldGU.z() + ship.velWorldGU.z() * dtGameSeconds
         );
-        ship.sectorCoord = staraxis.game.world.WorldHexLayout.worldToSectorCoord(ship.posWorldGU);
         worldState.markRealtimeDirty();
 
         double targetHeading = Math.toDegrees(Math.atan2(dirZ, dirX));

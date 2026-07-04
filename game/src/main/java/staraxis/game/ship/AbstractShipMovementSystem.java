@@ -2,7 +2,6 @@ package staraxis.game.ship;
 
 import staraxis.game.space.SpacePosition;
 import staraxis.game.state.WorldState;
-import staraxis.game.world.WorldHexLayout;
 
 /**
  * AbstractShipMovementSystem（舰船移动共享工具基类）喵。
@@ -35,12 +34,10 @@ abstract class AbstractShipMovementSystem {
             return;
         }
 
-        var oldSectorCoord = ship.sectorCoord;
         SpacePosition previousPosition = ship.posWorldGU;
         double newX = ship.posWorldGU.x() + ship.velWorldGU.x() * dtGameSeconds;
         double newZ = ship.posWorldGU.z() + ship.velWorldGU.z() * dtGameSeconds;
         ship.posWorldGU = new SpacePosition(newX, 0, newZ);
-        ship.sectorCoord = WorldHexLayout.worldToSectorCoord(ship.posWorldGU);
 
         // 舰船实时移动时，每个逻辑 tick 的位置变化都必须进入高频快照喵，
         // 不能只在跨星区时才标记实时状态为脏喵。
@@ -48,12 +45,6 @@ abstract class AbstractShipMovementSystem {
             || Math.abs(previousPosition.x() - ship.posWorldGU.x()) > 1e-9
             || Math.abs(previousPosition.z() - ship.posWorldGU.z()) > 1e-9) {
             worldState.markRealtimeDirty();
-        }
-
-        if (oldSectorCoord != null && !oldSectorCoord.equals(ship.sectorCoord)) {
-            if (isDetectorSource(ship, worldState) && ship.ownerNationId != null) {
-                worldState.intelSystem.markDirty(ship.ownerNationId);
-            }
         }
     }
 

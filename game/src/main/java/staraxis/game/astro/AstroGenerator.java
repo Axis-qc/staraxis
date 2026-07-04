@@ -165,9 +165,6 @@ public final class AstroGenerator {
         system.systemId = idCounter.incrementAndGet();
         system.barycenterEntityId = idCounter.incrementAndGet();
 
-        // TODO: sectorCoord 是 hex 时代的遗留，后续应改用 galaxy 区域分区替代快照分组
-        staraxis.game.world.Vec2d pos2d = new staraxis.game.world.Vec2d(position.x(), position.z());
-        system.sectorCoord = staraxis.game.world.WorldHexLayout.worldToSectorCoord(pos2d);
         system.galaxyPos = position;
 
         // 生成主星
@@ -175,7 +172,6 @@ public final class AstroGenerator {
         primaryStar.entityId = starId;
         primaryStar.systemId = system.systemId;
         primaryStar.parentEntityId = system.barycenterEntityId;
-        primaryStar.sectorCoord = system.sectorCoord;
         primaryStar.posWorldGU = new SpacePosition(position.x(), position.y(), position.z());
         // D.5: 单星系统恒星在原点
         primaryStar.systemPos = SpacePosition.ORIGIN;

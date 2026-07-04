@@ -1,7 +1,6 @@
 package staraxis.game.entity;
 
 import staraxis.game.space.SpacePosition;
-import staraxis.game.world.hex.SectorCoord;
 
 /**
  * Entity
@@ -23,9 +22,6 @@ public class Entity {
 
     /** 父实体ID（parentEntityId），用于表达层级归属；无父级时为 0。 */
     public long parentEntityId;
-
-    /** 所在星区坐标（sectorCoord = sectorId 口径）。 */
-    public SectorCoord sectorCoord;
 
     /** 世界坐标（GU），XZ 为星系平面，Y 为垂直方向。 */
     public SpacePosition posWorldGU;

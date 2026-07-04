@@ -157,9 +157,9 @@ public class SnapshotBroadcaster {
                         nationId = connMgr.getNationIdByChannel(ch);
                     }
 
-                    // 可见星区由服务端权威计算：本国拥有实体所在星区 + 周边一圈喵
-                    Set<SectorCoord> visible = runtime.getWorldStateForSimOnly().visibilitySystem
-                            .computeIntelVisibleSectorsForNation(nationId);
+                    // 可见星系由服务端权威计算（3D Octree 版本）
+                    Set<Long> visible = runtime.getWorldStateForSimOnly().visibilitySystem
+                            .computeIntelVisibleSystems3D(nationId);
 
                     // ===== 分段计时：定位广播瓶颈喵 =====
                     long tDtoStart = System.nanoTime();

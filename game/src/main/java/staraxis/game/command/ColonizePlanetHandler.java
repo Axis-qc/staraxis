@@ -95,8 +95,11 @@ public class ColonizePlanetHandler implements CommandHandler<ColonizePlanetComma
         // 8.2 通过资产管理器注册资产归属喵
         worldState.nationAssetManager.assignEntityToNation(planetEntityId, nationId);
 
-        // 8.3 更新星区归属（该星区无主时由首次殖民确定归属）喵
-        updateSectorOwnership(worldState, planetEntity.sectorCoord, nationId);
+        // 8.3 更新星系归属标记（简化：systemId 关联的星系默认为该国势力范围）
+        if (planetEntity.systemId > 0) {
+            staraxis.game.log.GameLog.log("Colonization: system " + planetEntity.systemId +
+                    " claimed for " + nationId + " 喵");
+        }
 
         // 8.4 首都绑定：若该国尚未有首都，则将首次殖民行星设为首都喵
         staraxis.game.nation.NationState nationState = worldState.nationManager.getNationState(nationId);
@@ -108,63 +111,13 @@ public class ColonizePlanetHandler implements CommandHandler<ColonizePlanetComma
         if (shipEntity instanceof ShipBody) {
             worldState.nationAssetManager.releaseEntityOwnership(shipEntityId);
             worldState.entitiesById.remove(shipEntityId);
-            worldState.entitySectorById.remove(shipEntityId);
-            if (shipEntity.sectorCoord != null && worldState.worldMap != null) {
-                staraxis.game.world.WorldSector shipSector = worldState.worldMap.getSector(shipEntity.sectorCoord);
-                if (shipSector != null) {
-                    shipSector.entityIds.remove(shipEntityId);
-                }
-            }
 
             staraxis.game.log.GameLog.log("Colonization successful: ship=" + shipEntityId +
                     " colonized planet=" + planetEntityId + " for nation=" + nationId + " and consumed ship 喵");
         }
 
-        // 9. 标记情报系统为脏以重算探测范围喵
-        if (worldState.intelSystem != null) {
-            worldState.intelSystem.markDirty(nationId);
-        }
-
         // 10. 标记低频基线快照为脏以触发推送喵
         worldState.baselineDirty = true;
-    }
-
-    /**
-     * 更新星区归属喵。
-     * 如果该行星是星区内第一个被该国家殖民的实体，则更新星区归属喵。
-     */
-    private void updateSectorOwnership(WorldState worldState, staraxis.game.world.hex.SectorCoord sectorCoord, String nationId) {
-        if (sectorCoord == null || worldState.worldMap == null) {
-            return;
-        }
-
-        staraxis.game.world.WorldSector sector = worldState.worldMap.getSector(sectorCoord);
-        if (sector == null) {
-            return;
-        }
-
-        // 检查该星区是否已有归属喵
-        if (sector.ownerNationId != null && !sector.ownerNationId.isBlank()) {
-            // 星区已有归属，不改变喵
-            return;
-        }
-
-        // 检查该星区内是否有该国家的其他实体喵
-        boolean hasOtherNationEntity = false;
-        for (Long entityId : sector.entityIds) {
-            Entity e = worldState.entitiesById.get(entityId);
-            if (e != null && nationId.equals(e.ownerNationId)) {
-                hasOtherNationEntity = true;
-                break;
-            }
-        }
-
-        // 如果没有该国家的其他实体，则更新星区归属喵
-        if (!hasOtherNationEntity) {
-            sector.ownerNationId = nationId;
-            staraxis.game.log.GameLog.log("Sector [" + sectorCoord.q() + "," + sectorCoord.r() +
-                    "] ownership updated to nation " + nationId + " 喵");
-        }
     }
 
 }

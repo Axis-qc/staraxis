@@ -43,8 +43,6 @@ import staraxis.game.state.WorldState;
 import staraxis.game.state.snapshot.EntitySnapshot;
 import staraxis.game.util.ProgressCallback;
 import staraxis.game.world.WorldGenConfig;
-import staraxis.game.world.WorldGenerator;
-import staraxis.game.world.WorldSector;
 
 /**
  * StarAxisGameRuntime
@@ -101,10 +99,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                 : cfg.worldType;
 
         if (progress != null)
-            progress.onProgress(0.02f, "生成世界地图");
-        var worldMap = WorldGenerator.generate(cfg);
 
-        if (progress != null)
             progress.onProgress(0.03f, "加载天体资源");
         AstroAssetRepository astroAssets = new AstroAssetRepository(new ObjectMapper());
         astroAssets.loadAll();
@@ -151,7 +146,7 @@ public class StarAxisGameRuntime implements GameRuntime {
         AstroData astro = new AstroData(systems);
         if (progress != null)
             progress.onProgress(0.95f, "创建世界状态");
-        WorldState ws = new WorldState(time, worldMap, astro);
+        WorldState ws = new WorldState(time, cfg.systemCount, astro);
 
         // 初始化情报系统并挂载到 WorldState 喵
         if (progress != null)
@@ -313,7 +308,7 @@ public class StarAxisGameRuntime implements GameRuntime {
 
         // 获取实体数量和星区数量喵
         int entityCount = worldState.entitiesById.size();
-        int sectorCount = worldState.worldMap.getSectorsByCoordView().size();
+        int sectorCount = worldState.astro.getSystemsView().size();
         int activePlayerCount = worldState.nationManager.getAllNationIds().size();
         long simulationTick = worldState.time.simulationTick;
 
@@ -383,7 +378,7 @@ public class StarAxisGameRuntime implements GameRuntime {
         DailySettlementState next = new DailySettlementState();
         next.settledAtGameSeconds = worldState.time.getTotalGameSeconds();
         next.settledDay = worldState.time.gameDatetimeDay; // 兼容性保留
-        next.sectorCount = worldState.worldMap.getSectorsByCoordView().size();
+        next.sectorCount = worldState.astro.getSystemsView().size();
 
         // 1. 填充行星地表快照（低频/静态）喵
         HashMap<Long, DailySettlementState.PlanetSurfaceDailySnapshot> planetMap = new HashMap<>();
@@ -422,11 +417,10 @@ public class StarAxisGameRuntime implements GameRuntime {
         }
         next.nationAssetsByNationId = assetMap;
 
-        // 3. 填充公开实体基线快照（按星区聚合）喵
-        // 说明：此处全量生成全世界所有星区的公开实体（STAR/PLANET/BARYCENTER）快照喵。
+        // 3. 填充公开实体基线快照喵
         Map<String, List<EntitySnapshot>> baselineMap = new HashMap<>();
         for (StarSystem system : worldState.astro.getSystemsView()) {
-            String sectorKey = "q:" + system.sectorCoord.q() + ",r:" + system.sectorCoord.r();
+            String sectorKey = String.valueOf(system.systemId);
             List<EntitySnapshot> sectorBaselines = baselineMap.computeIfAbsent(sectorKey, k -> new ArrayList<>());
 
             // 3.1 系统重心喵
@@ -438,10 +432,9 @@ public class StarAxisGameRuntime implements GameRuntime {
                     EntityType.SYSTEM_BARYCENTER,
                     system.systemId,
                     0,
-                    system.sectorCoord,
                     systemPos,
-                    null, // 重心初始通常无主
-                    true, // 公开可见
+                    null,
+                    true,
                     new EntitySnapshot.SystemBarycenterDetails()));
 
             // 3.2 恒星喵
@@ -451,10 +444,9 @@ public class StarAxisGameRuntime implements GameRuntime {
                         star.entityType,
                         star.systemId,
                         system.barycenterEntityId,
-                        system.sectorCoord,
                         star.posWorldGU != null ? star.posWorldGU : systemPos,
                         star.ownerNationId,
-                        true, // 公开可见
+                        true,
                         new EntitySnapshot.StarDetails(star.starTypeId, star.radiusGU, star.massSolar,
                                 star.temperatureK, star.description, star.surfaceTexturePath)));
             }
@@ -474,10 +466,9 @@ public class StarAxisGameRuntime implements GameRuntime {
                         planet.entityType,
                         planet.systemId,
                         system.barycenterEntityId,
-                        system.sectorCoord,
                         systemPos,
                         planet.ownerNationId,
-                        true, // 公开可见
+                        true,
                         new EntitySnapshot.PlanetDetails(
                                 planet.planetTypeId,
                                 planet.radiusGU,
@@ -510,7 +501,7 @@ public class StarAxisGameRuntime implements GameRuntime {
         s.totalGameSeconds = worldState.time.getTotalGameSeconds();
         s.totalGameSecondsExact = worldState.time.totalGameSecondsAcc;
         s.deltaGameSeconds = worldState.time.lastDeltaGameSeconds;
-        s.worldRadius = worldState.worldMap.radius;
+        s.worldRadius = worldState.worldRadius;
         s.worldType = worldState.time.worldType;
         s.gameSecondsPerRealSecond = worldState.time.gameSecondsPerRealSecond;
         s.timeScale = worldState.time.timeScale;
@@ -521,9 +512,7 @@ public class StarAxisGameRuntime implements GameRuntime {
         s.minute = worldState.time.getMinute();
         s.second = worldState.time.getSecond();
 
-        for (WorldSector sector : worldState.worldMap.getSectorsView()) {
-            s.putSectorOwnerNationId(sector.coord, sector.ownerNationId);
-        }
+        // 删除旧 WorldSector 遍历（hex 地图停止开发）
 
         for (StarSystem system : worldState.astro.getSystemsView()) {
             // 0. 写入恒星系坐标索引
@@ -543,7 +532,6 @@ public class StarAxisGameRuntime implements GameRuntime {
             barycenter.entityType = EntityType.SYSTEM_BARYCENTER;
             barycenter.systemId = system.systemId;
             barycenter.parentEntityId = 0;
-            barycenter.sectorCoord = system.sectorCoord;
             barycenter.posWorldGU = systemPos3d != null ? systemPos3d
                     : system.galaxyPos;
 
@@ -559,7 +547,6 @@ public class StarAxisGameRuntime implements GameRuntime {
                     barycenter.entityType,
                     barycenter.systemId,
                     barycenter.parentEntityId,
-                    barycenter.sectorCoord,
                     barycenter.posWorldGU,
                     barycenter.ownerNationId,
                     true,
@@ -570,7 +557,7 @@ public class StarAxisGameRuntime implements GameRuntime {
             for (StarBody star : system.stars) {
                 star.systemId = system.systemId;
                 star.parentEntityId = system.barycenterEntityId; // 单星系统也挂在重心下
-                star.sectorCoord = system.sectorCoord;
+
                 if (star.posWorldGU == null) {
                     star.posWorldGU = systemPos3d != null ? systemPos3d
                             : system.galaxyPos;
@@ -588,7 +575,6 @@ public class StarAxisGameRuntime implements GameRuntime {
                         star.entityType,
                         star.systemId,
                         star.parentEntityId,
-                        star.sectorCoord,
                         star.posWorldGU,
                         star.ownerNationId,
                         true,
@@ -605,10 +591,9 @@ public class StarAxisGameRuntime implements GameRuntime {
 
             // 3. 注册行星实体
             for (PlanetBody planet : system.planets) {
-                // 修正：补全行星的 systemId/parentEntityId/sectorCoord/posWorldGU，确保能通过星区过滤并正确渲染喵
+                // 修正：补全行星的 systemId/parentEntityId/posWorldGU
                 planet.systemId = system.systemId;
                 planet.parentEntityId = system.barycenterEntityId;
-                planet.sectorCoord = system.sectorCoord;
                 planet.posWorldGU = planet.posWorldGU != null ? planet.posWorldGU
                         : (systemPos3d != null ? systemPos3d
                                 : system.galaxyPos);
@@ -633,7 +618,6 @@ public class StarAxisGameRuntime implements GameRuntime {
                         planet.entityType,
                         planet.systemId,
                         planet.parentEntityId,
-                        planet.sectorCoord,
                         planet.posWorldGU,
                         planet.ownerNationId,
                         true,
@@ -669,9 +653,9 @@ public class StarAxisGameRuntime implements GameRuntime {
                 continue;
             }
 
-            // 保障动态实体有星区索引，避免前端按星区过滤时丢失喵
-            if (entity.sectorCoord == null && entity.posWorldGU != null) {
-                entity.sectorCoord = staraxis.game.world.WorldHexLayout.worldToSectorCoord(entity.posWorldGU);
+            // 保障动态实体有系统索引
+            if (entity.systemId <= 0 && entity.posWorldGU != null) {
+                // 通过 Octree 查找最近的星系（暂缺，优先保留 systemId=0 标记为深空）
             }
 
             s.putEntity(entity);
@@ -727,7 +711,6 @@ public class StarAxisGameRuntime implements GameRuntime {
                     entity.entityType,
                     entity.systemId,
                     entity.parentEntityId,
-                    entity.sectorCoord,
                     entity.posWorldGU,
                     entity.ownerNationId,
                     false,
@@ -737,7 +720,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                     intelRequiredLevel));
         }
 
-        // 5. 对所有星区的实体快照按情报等级排序，供 Webnet 二分查找快速裁剪喵
+        // 5. 对所有实体快照按情报等级排序，供 Webnet 二分查找快速裁剪喵
         s.sortEntitySnapshotsByIntelLevel();
 
         realTimeBuffer.swapPublish();

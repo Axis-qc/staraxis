@@ -145,7 +145,7 @@ public final class WorldSaveService {
         root.put("savedAtEpochMs", System.currentTimeMillis());
 
         Map<String, Object> world = new LinkedHashMap<>();
-        world.put("worldRadius", ws.worldMap.radius);
+        world.put("worldRadius", ws.worldRadius);
         world.put("simulationTick", rt.simulationTick);
         world.put("totalGameSeconds", rt.totalGameSeconds);
         world.put("deltaGameSeconds", rt.deltaGameSeconds);
@@ -192,10 +192,8 @@ public final class WorldSaveService {
             e.put("entityType", entity.entityType.name());
             e.put("systemId", entity.systemId);
             e.put("parentEntityId", entity.parentEntityId);
-            if (entity.sectorCoord != null) {
-                e.put("sectorQ", entity.sectorCoord.q());
-                e.put("sectorR", entity.sectorCoord.r());
-            }
+            // 写入实体坐标系（systemId 替代旧 sectorCoord）
+            e.put("systemId", entity.systemId);
             if (entity.posWorldGU != null) {
                 e.put("posX", entity.posWorldGU.x());
                 e.put("posY", entity.posWorldGU.z());

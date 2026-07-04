@@ -4,9 +4,6 @@ import staraxis.game.astro.StarSystem;
 import staraxis.game.entity.EntityType;
 import staraxis.game.space.SpacePosition;
 import staraxis.game.state.WorldState;
-import staraxis.game.world.Vec2d;
-import staraxis.game.world.WorldHexLayout;
-import staraxis.game.world.hex.SectorCoord;
 
 /**
  * ShipSpawnService（舰船生成服务）喵。
@@ -59,13 +56,7 @@ public final class ShipSpawnService {
         // 2. 计算出生位置：星系中心偏移 500 GU（避免与星体重叠）喵
         SpacePosition systemCenter = spawnSystem.galaxyPos;
         if (systemCenter == null) {
-            // 若星系中心未定义，则使用星区中心喵
-            SectorCoord sectorCoord = spawnSystem.sectorCoord;
-            if (sectorCoord == null) {
-                return -1;
-            }
-            Vec2d sectorCenter2d = WorldHexLayout.sectorCenterWorld2D_GU(sectorCoord);
-            systemCenter = new SpacePosition(sectorCenter2d.x(), 0, sectorCenter2d.y());
+            return -1;
         }
 
         // 固定偏移向量（500 GU 在 X 轴正方向）喵，映射到 3D XZ 平面
@@ -121,13 +112,12 @@ public final class ShipSpawnService {
      * @param worldState 权威世界状态（必须非空）
      * @param nationId   所属国家ID（必须非空）
      * @param position   世界坐标（GU，必须非空）
-     * @param sectorCoord 星区坐标（可为空，自动计算）
      * @param systemId   所属星系ID（0 表示无）
      * @param customFlags 自定义标记集合（可为空）
      * @return 生成的舰船实体ID，失败时返回 -1
      */
     public static long spawnShipAtPosition(WorldState worldState, String nationId, SpacePosition position,
-                                          SectorCoord sectorCoord, long systemId, java.util.Set<String> customFlags) {
+                                          long systemId, java.util.Set<String> customFlags) {
         if (worldState == null) {
             throw new IllegalArgumentException("worldState_required");
         }
@@ -144,13 +134,7 @@ public final class ShipSpawnService {
             return -1;
         }
 
-        // 2. 计算星区坐标（若未提供）喵
-        SectorCoord finalSectorCoord = sectorCoord;
-        if (finalSectorCoord == null) {
-            finalSectorCoord = WorldHexLayout.worldToSectorCoord(position);
-        }
-
-        // 3. 创建舰船实体喵
+        // 2. 创建舰船实体喵
         ShipBody ship = new ShipBody();
         ship.entityId = entityId;
         ship.entityType = EntityType.SHIP;
@@ -158,7 +142,6 @@ public final class ShipSpawnService {
         ship.ownerNationId = nationId;
         ship.posWorldGU = position;
         ship.velWorldGU = SpacePosition.ORIGIN;
-        ship.sectorCoord = finalSectorCoord;
         ship.systemId = systemId;
 
         // 硬编码基础属性喵

@@ -1,7 +1,6 @@
 package staraxis.game.astro;
 
 import staraxis.game.space.SpacePosition;
-import staraxis.game.world.hex.SectorCoord;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,11 +22,7 @@ public class StarSystem {
     /** 恒星系重心实体ID（barycenterEntityId），用于行星轨道指向。 */
     public long barycenterEntityId;
 
-    /** 恒星系当前所在星区坐标（sectorCoord = sectorId 口径）。 */
-    public SectorCoord sectorCoord;
-
-    /** 恒星系在星系坐标中的 3D 位置（GU）。
-     *  替代旧的 centerWorldGU（Vec2d），Z 轴对应原 Vec2d.y()。 */
+    /** 恒星系在星系坐标中的 3D 位置（GU）。 */
     public SpacePosition galaxyPos;
 
     /** 系统重力井半径（GU），定义 FTL 到达边界/禁入区。

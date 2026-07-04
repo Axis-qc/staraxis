@@ -3,7 +3,6 @@ package staraxis.game.state;
 import staraxis.game.entity.Entity;
 import staraxis.game.space.SpacePosition;
 import staraxis.game.state.snapshot.EntitySnapshot;
-import staraxis.game.world.hex.SectorCoord;
 
 import java.util.*;
 
@@ -14,61 +13,42 @@ import java.util.*;
  *
  * 更新方式：每个 simulationTick 结束时，模拟层在 inactive 缓冲中全量填充后 swap 发布为 active。
  *
- * 核心数据结构：以扁平化的实体表（entitiesById）为核心，并提供按星区/星系的索引，以支持“归属可变”与高效查询。
+ * 核心数据结构：以扁平化的实体表（entitiesById）为核心，并提供按恒星系的索引。
+ * 3D 版本：已移除 hex 时代的所有 SectorCoord 相关数据。
  */
 public class RealTimeWorldState {
 
     public long simulationTick;
 
-    /** 权威累计游戏秒（向下取整）喵。 */
     public long totalGameSeconds;
     public double totalGameSecondsExact;
-
-    /** 本 tick 推进的游戏秒数（Δt）喵。 */
     public double deltaGameSeconds;
-
     public int worldRadius;
-
-    /** 世界类型：用于前端 HUD 与权限展示喵。 */
     public staraxis.game.world.WorldType worldType;
-
-    /** 现实 1 秒推进的游戏秒数（不含 timeScale）喵。 */
     public double gameSecondsPerRealSecond;
-
-    /** 系统时间倍率喵。 */
     public double timeScale;
+    public int year, month, day, hour, minute, second;
 
-    // 结构化游戏日期时间字段喵
-    public int year;
-    public int month;
-    public int day;
-    public int hour;
-    public int minute;
-    public int second;
-
-    /** 实体总表（entityId -> Entity），新的核心数据结构。 */
+    /** 实体总表（entityId -> Entity）。 */
     private final Map<Long, Entity> entitiesById = new LinkedHashMap<>();
 
-    /** 系统索引（systemId -> entityIds），用于按恒星系查询。 */
+    /** 恒星系实体索引（systemId -> entityId列表）。 */
     private final Map<Long, List<Long>> entityIdsBySystem = new LinkedHashMap<>();
 
-    /** 恒星系世界坐标索引（systemId -> 在银河中的3D坐标）。 */
+    /** 恒星系世界坐标索引（systemId -> 3D坐标）。 */
     private final Map<Long, SpacePosition> systemPositions = new LinkedHashMap<>();
 
-    /** 星区归属缓存（"q,r" -> ownerNationId）。 */
+    /** 星区归属缓存（"systemId" -> ownerNationId）。 */
     private final Map<String, String> sectorOwnerNationIdByCoord = new LinkedHashMap<>();
 
     private final List<EntitySnapshot> entitySnapshots = new ArrayList<>();
 
-    /** 按星区组织的实体快照索引（sectorCoord -> 快照列表）喵。 */
-    private final Map<SectorCoord, List<EntitySnapshot>> entitySnapshotsBySector = new LinkedHashMap<>();
+    /** 按恒星系组织的实体快照索引（systemId字符串 -> 快照列表）。 */
+    private final Map<String, List<EntitySnapshot>> entitySnapshotsBySystem = new LinkedHashMap<>();
 
     public RealTimeWorldState() {
     }
 
-    /**
-     * 全量填充前调用：清空并准备写入。
-     */
     public void resetForFill() {
         simulationTick = 0;
         totalGameSeconds = 0;
@@ -78,69 +58,47 @@ public class RealTimeWorldState {
         worldType = null;
         gameSecondsPerRealSecond = 0;
         timeScale = 0;
-        year = 0;
-        month = 0;
-        day = 0;
-        hour = 0;
-        minute = 0;
-        second = 0;
+        year = month = day = hour = minute = second = 0;
         entitiesById.clear();
         entityIdsBySystem.clear();
         systemPositions.clear();
         sectorOwnerNationIdByCoord.clear();
         entitySnapshots.clear();
-        entitySnapshotsBySector.clear();
+        entitySnapshotsBySystem.clear();
     }
 
-    /**
-     * 模拟层填充：注册一个实体及其索引。
-     */
     public void putEntity(Entity entity) {
-        if (entity == null)
-            return;
-
+        if (entity == null) return;
         entitiesById.put(entity.entityId, entity);
     }
 
     public void putEntitySnapshot(EntitySnapshot snapshot) {
-        if (snapshot == null)
-            return;
-
+        if (snapshot == null) return;
         entitySnapshots.add(snapshot);
 
-        // 同时按星区索引喵
-        if (snapshot.sectorCoord != null) {
-            entitySnapshotsBySector
-                .computeIfAbsent(snapshot.sectorCoord, k -> new ArrayList<>())
-                .add(snapshot);
+        // 按 systemId 索引
+        if (snapshot.systemId > 0) {
+            String key = String.valueOf(snapshot.systemId);
+            entitySnapshotsBySystem.computeIfAbsent(key, k -> new ArrayList<>()).add(snapshot);
         }
     }
 
-    /**
-     * 模拟层填充：注册实体到其所属的恒星系索引。
-     */
     public void putEntitySystem(long systemId, long entityId) {
         entityIdsBySystem.computeIfAbsent(systemId, k -> new ArrayList<>()).add(entityId);
     }
 
-    /**
-     * 模拟层填充：写入恒星系世界坐标。
-     */
     public void putSystemPosition(long systemId, SpacePosition position) {
         systemPositions.put(systemId, position);
     }
 
-    /**
-     * 模拟层填充：写入一个星区归属。
-     */
-    public void putSectorOwnerNationId(SectorCoord coord, String ownerNationId) {
-        if (coord == null) {
-            return;
+    /** 按 systemId 存储归属。 */
+    public void putSectorOwnerNationId(long systemId, String ownerNationId) {
+        if (ownerNationId != null) {
+            sectorOwnerNationIdByCoord.put(String.valueOf(systemId), ownerNationId);
         }
-        sectorOwnerNationIdByCoord.put(coord.q() + "," + coord.r(), ownerNationId);
     }
 
-    // --- 只读视图 --- //
+    // --- 只读视图 ---
 
     public Map<Long, Entity> getEntitiesByIdView() {
         return Collections.unmodifiableMap(entitiesById);
@@ -162,28 +120,14 @@ public class RealTimeWorldState {
         return Collections.unmodifiableList(entitySnapshots);
     }
 
-    /**
-     * 获取按星区组织的实体快照只读视图喵。
-     *
-     * @return 不可修改的 Map，key 为星区坐标，value 为该星区的实体快照列表喵
-     */
-    public Map<SectorCoord, List<EntitySnapshot>> getEntitySnapshotsBySectorView() {
-        // 返回不可修改的视图，但内部列表仍然是可变的（由填充层控制）喵
-        return Collections.unmodifiableMap(entitySnapshotsBySector);
+    public Map<String, List<EntitySnapshot>> getEntitySnapshotsBySystemView() {
+        return Collections.unmodifiableMap(entitySnapshotsBySystem);
     }
 
-    /**
-     * 对所有星区的实体快照按情报等级排序喵。
-     *
-     * 说明：
-     * - 用于 Webnet 二分查找快速裁剪可见实体喵。
-     * - 排序规则：按 intelRequiredLevel 升序（0级在前，高等级在后）喵。
-     * - 应在 publishRealTimeSnapshot() 填充完所有快照后调用喵。
-     */
     public void sortEntitySnapshotsByIntelLevel() {
-        for (List<EntitySnapshot> sectorSnapshots : entitySnapshotsBySector.values()) {
-            if (sectorSnapshots.size() > 1) {
-                sectorSnapshots.sort(java.util.Comparator.comparingInt(es -> es.intelRequiredLevel));
+        for (List<EntitySnapshot> snapshots : entitySnapshotsBySystem.values()) {
+            if (snapshots.size() > 1) {
+                snapshots.sort(java.util.Comparator.comparingInt(es -> es.intelRequiredLevel));
             }
         }
     }

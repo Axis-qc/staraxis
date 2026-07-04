@@ -227,17 +227,13 @@ public class WebPlayerWebSocketHandler {
                 nationId = connMgr.getNationIdByChannel(channel);
             }
 
-            // 可见星区由服务端权威计算：基于情报系统的完整探测等级喵
-            IntelSystem intelSystem = runtime.getWorldStateForSimOnly().intelSystem;
-            Set<SectorCoord> visible;
+            // 可见星系由服务端权威计算（3D Octree 版本）
+            Set<Long> visible;
             if (intelSystem != null) {
-                visible = intelSystem.computeIntelVisibleSectors(nationId);
+                visible = intelSystem.getVisibleEntities3D(nationId, 0);
             } else {
-                // 情报系统未初始化，回退到简化可见性计算喵
-                System.err.println(
-                        "[WebPlayerWebSocketHandler] IntelSystem not initialized, falling back to visibility system喵");
                 visible = runtime.getWorldStateForSimOnly().visibilitySystem
-                        .computeIntelVisibleSectorsForNation(nationId);
+                        .computeIntelVisibleSystems3D(nationId);
             }
 
             SnapshotMessageDto snapshotDto = SnapshotMessageFactory.buildSnapshotMessageWithNation(runtime, 0, visible,

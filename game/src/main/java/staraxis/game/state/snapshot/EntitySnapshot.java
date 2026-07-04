@@ -6,7 +6,6 @@ import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import staraxis.game.entity.EntityType;
 import staraxis.game.space.SpacePosition;
-import staraxis.game.world.hex.SectorCoord;
 
 /**
  * EntitySnapshot（实体快照）
@@ -15,8 +14,6 @@ import staraxis.game.world.hex.SectorCoord;
  * - 游戏世界实体的一次性快照，通过 RealTimeWorldState / DailySettlementState 发布。
  * - 单机模式下 Java 客户端通过内存共享直接读权威状态（EntitySnapshot 仅用于渲染器读取恒星数据）。
  * - 多人联机模式下作为主→客的完整下行快照契约，远端 Java 客户端通过此 DTO 渲染世界。
- *
- * TODO 多人联机：此为下行快照通信契约，即使当前无消费者字段也不可删除。
  */
 @JsonInclude(JsonInclude.Include.ALWAYS)
 public class EntitySnapshot {
@@ -25,7 +22,6 @@ public class EntitySnapshot {
     public final EntityType entityType;
     public final long systemId;
     public final long parentEntityId;
-    public final SectorCoord sectorCoord;
     public final SpacePosition posWorldGU;
     public final String ownerNationId;
     public final boolean isPublic;
@@ -46,12 +42,11 @@ public class EntitySnapshot {
             EntityType entityType,
             long systemId,
             long parentEntityId,
-            SectorCoord sectorCoord,
             SpacePosition posWorldGU,
             String ownerNationId,
             boolean isPublic,
             Object details) {
-        this(entityId, entityType, systemId, parentEntityId, sectorCoord, posWorldGU, ownerNationId, isPublic,
+        this(entityId, entityType, systemId, parentEntityId, posWorldGU, ownerNationId, isPublic,
                 details, 0);
     }
 
@@ -60,7 +55,6 @@ public class EntitySnapshot {
             EntityType entityType,
             long systemId,
             long parentEntityId,
-            SectorCoord sectorCoord,
             SpacePosition posWorldGU,
             String ownerNationId,
             boolean isPublic,
@@ -70,7 +64,6 @@ public class EntitySnapshot {
         this.entityType = entityType;
         this.systemId = systemId;
         this.parentEntityId = parentEntityId;
-        this.sectorCoord = sectorCoord;
         this.posWorldGU = posWorldGU;
         this.ownerNationId = ownerNationId;
         this.isPublic = isPublic;
