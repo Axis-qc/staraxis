@@ -514,6 +514,12 @@ public class StarAxisGameRuntime implements GameRuntime {
         }
 
         for (StarSystem system : worldState.astro.getSystemsView()) {
+            // 0. 写入恒星系坐标索引
+            SpacePosition sysPos = (!system.stars.isEmpty() && system.stars.get(0).posWorldGU != null)
+                    ? system.stars.get(0).posWorldGU
+                    : system.galaxyPos;
+            s.putSystemPosition(system.systemId, sysPos);
+
             // 1. 创建并注册重心实体
             SpacePosition systemPos3d = null;
             if (!system.stars.isEmpty() && system.stars.get(0).posWorldGU != null) {
@@ -533,6 +539,7 @@ public class StarAxisGameRuntime implements GameRuntime {
             worldState.registerEntity(barycenter);
 
             s.putEntity(barycenter);
+            s.putEntitySystem(system.systemId, barycenter.entityId);
             // 高频快照下发重心实体快照喵
             // 系统重心：情报等级 0（基础天文数据，公开可见）喵
             s.putEntitySnapshot(new EntitySnapshot(
@@ -561,6 +568,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                 worldState.registerEntity(star);
 
                 s.putEntity(star);
+                s.putEntitySystem(system.systemId, star.entityId);
                 // 高频快照下发恒星实体快照喵
                 // 恒星：情报等级 0（基础天文数据，公开可见）喵
                 s.putEntitySnapshot(new EntitySnapshot(
@@ -597,6 +605,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                 worldState.registerEntity(planet);
 
                 s.putEntity(planet);
+                s.putEntitySystem(system.systemId, planet.entityId);
                 // 高频快照下发行星实体快照喵
                 boolean isCapital = false;
                 // 根据 NationState.capitalPlanetEntityId 判定首都行星喵
@@ -642,6 +651,9 @@ public class StarAxisGameRuntime implements GameRuntime {
                 continue;
             }
             if (entity.entityType != EntityType.SHIP) {
+            if (entity.systemId > 0) {
+                s.putEntitySystem(entity.systemId, entity.entityId);
+            }
                 continue;
             }
 

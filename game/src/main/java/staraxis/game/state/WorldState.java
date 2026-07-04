@@ -8,9 +8,12 @@ import staraxis.game.world.WorldSector;
 import staraxis.game.world.hex.SectorCoord;
 import staraxis.game.nation.NationManager;
 import staraxis.game.nation.NationSpawnService;
+import staraxis.game.space.SpacePosition;
 import staraxis.game.nation.VisibilitySystem;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -63,6 +66,12 @@ public class WorldState {
      * 实体总表（entityId -> Entity）。
      */
     public final Map<Long, Entity> entitiesById = new HashMap<>();
+
+    /** 恒星系实体索引（systemId -> entityId列表），由 registerEntity 自动维护。 */
+    public final Map<Long, List<Long>> entityIdsBySystem = new HashMap<>();
+
+    /** 恒星系世界坐标索引（systemId -> 在银河中的3D坐标）。 */
+    public final Map<Long, SpacePosition> systemPositions = new HashMap<>();
 
     /**
      * 空间索引（entityId -> sectorCoord）。
@@ -136,6 +145,11 @@ public class WorldState {
         }
 
         entitiesById.put(entity.entityId, entity);
+
+        // 维护恒星系实体索引
+        if (entity.systemId > 0) {
+            entityIdsBySystem.computeIfAbsent(entity.systemId, k -> new ArrayList<>()).add(entity.entityId);
+        }
 
         if (entity.sectorCoord != null) {
             entitySectorById.put(entity.entityId, entity.sectorCoord);

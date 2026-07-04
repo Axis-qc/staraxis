@@ -1,6 +1,7 @@
 package staraxis.game.state;
 
 import staraxis.game.entity.Entity;
+import staraxis.game.space.SpacePosition;
 import staraxis.game.state.snapshot.EntitySnapshot;
 import staraxis.game.world.Vec2d;
 import staraxis.game.world.hex.SectorCoord;
@@ -55,6 +56,9 @@ public class RealTimeWorldState {
     /** 系统索引（systemId -> entityIds），用于按恒星系查询。 */
     private final Map<Long, List<Long>> entityIdsBySystem = new LinkedHashMap<>();
 
+    /** 恒星系世界坐标索引（systemId -> 在银河中的3D坐标）。 */
+    private final Map<Long, SpacePosition> systemPositions = new LinkedHashMap<>();
+
     /** 星区中心点缓存（sectorCoord -> centerWorldGU）。 */
     private final Map<SectorCoord, Vec2d> sectorCentersWorldGU = new LinkedHashMap<>();
 
@@ -90,6 +94,7 @@ public class RealTimeWorldState {
         entitiesById.clear();
         entityIdsBySector.clear();
         entityIdsBySystem.clear();
+        systemPositions.clear();
         sectorCentersWorldGU.clear();
         sectorOwnerNationIdByCoord.clear();
         entitySnapshots.clear();
@@ -121,6 +126,20 @@ public class RealTimeWorldState {
     }
 
     /**
+     * 模拟层填充：注册实体到其所属的恒星系索引。
+     */
+    public void putEntitySystem(long systemId, long entityId) {
+        entityIdsBySystem.computeIfAbsent(systemId, k -> new ArrayList<>()).add(entityId);
+    }
+
+    /**
+     * 模拟层填充：写入恒星系世界坐标。
+     */
+    public void putSystemPosition(long systemId, SpacePosition position) {
+        systemPositions.put(systemId, position);
+    }
+
+    /**
      * 模拟层填充：写入一个星区中心点。
      */
     public void putSectorCenter(SectorCoord coord, Vec2d centerWorldGU) {
@@ -149,6 +168,10 @@ public class RealTimeWorldState {
 
     public Map<Long, List<Long>> getEntityIdsBySystemView() {
         return Collections.unmodifiableMap(entityIdsBySystem);
+    }
+
+    public Map<Long, SpacePosition> getSystemPositionsView() {
+        return Collections.unmodifiableMap(systemPositions);
     }
 
     public Map<SectorCoord, Vec2d> getSectorCentersWorldGUView() {
