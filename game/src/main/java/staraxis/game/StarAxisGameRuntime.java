@@ -522,7 +522,6 @@ public class StarAxisGameRuntime implements GameRuntime {
         s.second = worldState.time.getSecond();
 
         for (WorldSector sector : worldState.worldMap.getSectorsView()) {
-            s.putSectorCenter(sector.coord, sector.centerWorldGU);
             s.putSectorOwnerNationId(sector.coord, sector.ownerNationId);
         }
 

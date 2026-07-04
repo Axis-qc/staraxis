@@ -3,12 +3,10 @@ package staraxis.webnet.websocket;
 import staraxis.game.StarAxisGameRuntime;
 import staraxis.game.state.RealTimeWorldState;
 import staraxis.game.state.DailySettlementState;
-import staraxis.game.world.Vec2d;
 import staraxis.game.world.hex.SectorCoord;
 import staraxis.webnet.dto.CommandResultMessageDto;
 import staraxis.webnet.dto.DailySettlementStateDto;
 import staraxis.webnet.dto.RealTimeStateDto;
-import staraxis.webnet.dto.SectorCenterDto;
 import staraxis.webnet.dto.SnapshotHighFreqMessageDto;
 import staraxis.webnet.dto.SnapshotLowFreqMessageDto;
 import staraxis.webnet.dto.SnapshotMessageDto;
@@ -98,28 +96,8 @@ public final class SnapshotMessageFactory {
         runtime.publishRealtimeSnapshotIfNeeded();
         RealTimeWorldState rt = runtime.getRealTimeWorldStateReadonly();
 
-        // 1. 转换实时星区中心数据：星区分布是公开数据，推送给所有国家喵
-        List<SectorCenterDto> sectorCenters = new ArrayList<>();
-        Map<SectorCoord, Vec2d> allCenters = rt.getSectorCentersWorldGUView();
-
-        // 无条件推送所有星区中心点（地图基础数据）喵
-        for (Map.Entry<SectorCoord, Vec2d> entry : allCenters.entrySet()) {
-            SectorCoord coord = entry.getKey();
-            Vec2d p = entry.getValue();
-            sectorCenters.add(new SectorCenterDto(coord.q(), coord.r(), p.x(), p.y()));
-        }
-
         // 为实体过滤创建实际的可见星区集合喵
         Set<SectorCoord> filterSectors = visibleSectors != null ? visibleSectors : new HashSet<>();
-
-        // 调试日志：降低频率至每分钟一次喵
-        long now = System.currentTimeMillis();
-        if (now - lastLogTimeMs >= 60000) {
-            lastLogTimeMs = now;
-            System.out.println("[SnapshotMessageFactory] 星区中心点全图推送: " + sectorCenters.size() +
-                    "个, 情报过滤星区: " + filterSectors.size() +
-                    "个, nationId=" + nationId + " 喵");
-        }
 
         // 2. 过滤实体快照并按情报等级分层聚合喵
         // 使用预先构建的按星区组织的快照索引喵
@@ -314,7 +292,6 @@ public final class SnapshotMessageFactory {
                 rt.hour,
                 rt.minute,
                 rt.second,
-                sectorCenters,
                 rt.getSectorOwnerNationIdByCoordView(),
                 filteredPublicSnapshots,
                 privateEntitiesByIntelLevel);
@@ -422,7 +399,6 @@ public final class SnapshotMessageFactory {
                 rt.hour,
                 rt.minute,
                 rt.second,
-                rt.sectorCenters,
                 rt.sectorOwnerNationIdByCoord,
                 legacySnapshot.dailySettlementState,
                 legacySnapshot.playerNationId,

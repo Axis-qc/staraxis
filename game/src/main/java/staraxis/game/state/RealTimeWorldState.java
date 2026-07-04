@@ -3,7 +3,6 @@ package staraxis.game.state;
 import staraxis.game.entity.Entity;
 import staraxis.game.space.SpacePosition;
 import staraxis.game.state.snapshot.EntitySnapshot;
-import staraxis.game.world.Vec2d;
 import staraxis.game.world.hex.SectorCoord;
 
 import java.util.*;
@@ -56,9 +55,6 @@ public class RealTimeWorldState {
     /** 恒星系世界坐标索引（systemId -> 在银河中的3D坐标）。 */
     private final Map<Long, SpacePosition> systemPositions = new LinkedHashMap<>();
 
-    /** 星区中心点缓存（sectorCoord -> centerWorldGU），供 webnet 地图数据下发。 */
-    private final Map<SectorCoord, Vec2d> sectorCentersWorldGU = new LinkedHashMap<>();
-
     /** 星区归属缓存（"q,r" -> ownerNationId）。 */
     private final Map<String, String> sectorOwnerNationIdByCoord = new LinkedHashMap<>();
 
@@ -91,7 +87,6 @@ public class RealTimeWorldState {
         entitiesById.clear();
         entityIdsBySystem.clear();
         systemPositions.clear();
-        sectorCentersWorldGU.clear();
         sectorOwnerNationIdByCoord.clear();
         entitySnapshots.clear();
         entitySnapshotsBySector.clear();
@@ -136,13 +131,6 @@ public class RealTimeWorldState {
     }
 
     /**
-     * 模拟层填充：写入一个星区中心点（供 webnet 地图数据下发）。
-     */
-    public void putSectorCenter(SectorCoord coord, Vec2d centerWorldGU) {
-        sectorCentersWorldGU.put(coord, centerWorldGU);
-    }
-
-    /**
      * 模拟层填充：写入一个星区归属。
      */
     public void putSectorOwnerNationId(SectorCoord coord, String ownerNationId) {
@@ -164,10 +152,6 @@ public class RealTimeWorldState {
 
     public Map<Long, SpacePosition> getSystemPositionsView() {
         return Collections.unmodifiableMap(systemPositions);
-    }
-
-    public Map<SectorCoord, Vec2d> getSectorCentersWorldGUView() {
-        return Collections.unmodifiableMap(sectorCentersWorldGU);
     }
 
     public Map<String, String> getSectorOwnerNationIdByCoordView() {

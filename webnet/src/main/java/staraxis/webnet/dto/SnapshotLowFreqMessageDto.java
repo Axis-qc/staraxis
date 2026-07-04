@@ -40,7 +40,6 @@ public class SnapshotLowFreqMessageDto {
     public final Integer hour;
     public final Integer minute;
     public final Integer second;
-    public final List<SectorCenterDto> sectorCenters;
     public final Map<String, String> sectorOwnerNationIdByCoord;
     public final DailySettlementStateDto dailySettlementState;
     public final String playerNationId;
@@ -64,7 +63,6 @@ public class SnapshotLowFreqMessageDto {
             Integer hour,
             Integer minute,
             Integer second,
-            List<SectorCenterDto> sectorCenters,
             Map<String, String> sectorOwnerNationIdByCoord,
             DailySettlementStateDto dailySettlementState,
             String playerNationId,
@@ -85,7 +83,6 @@ public class SnapshotLowFreqMessageDto {
         this.hour = hour;
         this.minute = minute;
         this.second = second;
-        this.sectorCenters = sectorCenters;
         this.sectorOwnerNationIdByCoord = sectorOwnerNationIdByCoord;
         this.dailySettlementState = dailySettlementState;
         this.playerNationId = playerNationId;
@@ -105,7 +102,6 @@ public class SnapshotLowFreqMessageDto {
             Integer hour,
             Integer minute,
             Integer second,
-            List<SectorCenterDto> sectorCenters,
             Map<String, String> sectorOwnerNationIdByCoord,
             DailySettlementStateDto dailySettlementState,
             String playerNationId,
@@ -114,7 +110,7 @@ public class SnapshotLowFreqMessageDto {
                 true, null, simulationTick, version, "full", null,
                 worldRadius, worldType, gameSecondsPerRealSecond, timeScale,
                 year, month, day, hour, minute, second,
-                sectorCenters, sectorOwnerNationIdByCoord, dailySettlementState, playerNationId,
+                sectorOwnerNationIdByCoord, dailySettlementState, playerNationId,
                 entities);
     }
 
@@ -132,7 +128,6 @@ public class SnapshotLowFreqMessageDto {
             Integer hour,
             Integer minute,
             Integer second,
-            List<SectorCenterDto> sectorCenters,
             Map<String, String> sectorOwnerNationIdByCoord,
             DailySettlementStateDto dailySettlementState,
             String playerNationId,
@@ -141,7 +136,7 @@ public class SnapshotLowFreqMessageDto {
                 true, null, simulationTick, version, "delta", baseVersion,
                 worldRadius, worldType, gameSecondsPerRealSecond, timeScale,
                 year, month, day, hour, minute, second,
-                sectorCenters, sectorOwnerNationIdByCoord, dailySettlementState, playerNationId,
+                sectorOwnerNationIdByCoord, dailySettlementState, playerNationId,
                 entities);
     }
 
@@ -150,6 +145,6 @@ public class SnapshotLowFreqMessageDto {
                 false, error, 0L, 0L, "full", null,
                 null, null, null, null,
                 null, null, null, null, null, null,
-                null, null, null, null, null);
+                null, null, null, null);
     }
 }
