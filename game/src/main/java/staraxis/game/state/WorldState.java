@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 import staraxis.game.space.event.CrossSystemEventTable;
+import staraxis.game.space.octree.GalaxyOctree;
 import java.util.Set;
 
 /**
@@ -110,6 +111,9 @@ public class WorldState {
     public staraxis.game.intel.IntelSystem intelSystem;
     /** 跨系统事件表（在途实体索引 + 按 tick 到达到期事件）。 */
     public final CrossSystemEventTable crossSystemEventTable = new CrossSystemEventTable();
+
+    /** 星系八叉树空间索引（只读，每 tick 重建，用于恒星拾取/传感器范围查询）。 */
+    public final GalaxyOctree galaxyOctree = new GalaxyOctree();
     /**
      * 全局实体 ID 生成器（nextEntityId）喵。
      *

@@ -276,6 +276,9 @@ public class StarAxisGameRuntime implements GameRuntime {
         // STAGE 1: 处理到期跨系统事件（到达事件：将实体恢复到目标星系）
         ftlTravelSystem.processArrivingEvents(worldState, worldState.time.simulationTick);
 
+        // STAGE 1.5: 重建星系八叉树空间索引（每 tick，只读查询）
+        worldState.galaxyOctree.rebuild(new java.util.ArrayList<>(worldState.entitiesById.values()));
+
         // 处理 Command 队列并更新 WorldState喵。
         commandBus.executeCommands(worldState, dtGameHours);
 

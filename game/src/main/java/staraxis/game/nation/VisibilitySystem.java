@@ -134,19 +134,68 @@ public class VisibilitySystem {
     }
 
     /**
-     * 计算指定国家的“情报可见星区”（服务端权威口径）喵。
+     * 计算指定国家的"情报可见恒星系"（Octree 版本，替代旧 hex 星区扩展）。
      *
-     * 规则喵：
-     * - 只要某星区内存在本国拥有实体（Entity.ownerNationId == nationId），该星区即为可见喵。
-     * - 并扩展到该星区周边一圈六邻居星区（hex distance=1）作为情报可见星区喵。
+     * 规则：
+     * - 本国拥有实体所在的星系可见
+     * - 扩展到该星系传感器范围内的其他星系
+     * - 使用 GalaxyOctree 球体查询替代旧的六邻居扩展
+     *
+     * @param nationId 国家ID
+     * @return 可见的恒星系ID集合
+     */
+    public java.util.Set<Long> computeIntelVisibleSystems3D(String nationId) {
+        java.util.Set<Long> result = new java.util.HashSet<>();
+        if (nationId == null || nationId.isBlank()) return result;
+
+        // 1. 找到所有本国拥有实体的星系
+        java.util.Set<Long> ownedSystems = new java.util.HashSet<>();
+        for (Entity entity : worldState.entitiesById.values()) {
+            if (entity == null || !nationId.equals(entity.ownerNationId)) continue;
+            if (entity.systemId > 0) ownedSystems.add(entity.systemId);
+        }
+        result.addAll(ownedSystems);
+
+        // 2. 对每个本国实体，使用 Octree 球体查询传感器范围内的其他实体
+        for (Entity entity : worldState.entitiesById.values()) {
+            if (entity == null || !nationId.equals(entity.ownerNationId)) continue;
+            if (entity.posWorldGU == null) continue;
+
+            // 传感器范围：默认 100000 GU（约 2 个 hex 距离）
+            double sensorRangeGU = 100_000.0;
+            var nationState = worldState.nationManager.getNationState(nationId);
+            if (nationState != null) {
+                sensorRangeGU = nationState.getSensorRangeGU();
+            }
+
+            java.util.List<Long> nearby = worldState.galaxyOctree.querySphere(entity.posWorldGU, sensorRangeGU);
+            for (long targetId : nearby) {
+                Entity target = worldState.entitiesById.get(targetId);
+                if (target != null && target.systemId > 0) {
+                    result.add(target.systemId);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * 计算指定国家的"情报可见星区"（服务端权威口径）喵。
+     *
+     * @deprecated 基于 hex 的旧路径，将由 computeIntelVisibleSystems3D 替代。
+     * 规则：
+     * - 只要某星区内存在本国拥有实体，该星区即为可见喵。
+     * - 并扩展到该星区周边一圈六邻居星区作为情报可见星区喵。
      *
      * 说明喵：
-     * - 返回 SectorCoord 集合，供 webnet 用于过滤“细节/私有数据”下发喵。
+     * - 返回 SectorCoord 集合，供 webnet 用于过滤实体下发喵。
      * - 前端不参与该计算，避免伪造可见范围导致越权喵。
      *
      * @param nationId 国家ID
      * @return 情报可见星区坐标集合
      */
+    @Deprecated
     public Set<SectorCoord> computeIntelVisibleSectorsForNation(String nationId) {
         Set<SectorCoord> result = new HashSet<>();
         if (nationId == null || nationId.isBlank()) {

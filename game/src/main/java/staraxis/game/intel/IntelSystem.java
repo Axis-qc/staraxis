@@ -9,6 +9,7 @@ import staraxis.game.world.hex.SectorCoord;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -95,7 +96,10 @@ public class IntelSystem {
 
     /**
      * 获取指定国家在指定星区的有效探测等级（优先读缓存）喵。
+     *
+     * @deprecated 基于 hex 的旧路径，将由 Octree 版本替代。
      */
+    @Deprecated
     public int getEffectiveDetectorLevel(String nationId, SectorCoord targetSector) {
         if (nationId == null || targetSector == null)
             return -1;
@@ -207,8 +211,44 @@ public class IntelSystem {
     }
 
     /**
-     * 获取指定国家的情报可见星区集合（有效等级 > 0）喵。
+     * 使用 GalaxyOctree 球体查询获取指定国家的情报可见实体列表（替代旧的 hex 网格扩展）。
+     * 查询所有本国探测源实体周围的在轨实体，按距离计算探测等级。
+     *
+     * @param nationId 国家 ID
+     * @param minLevel 最低探测等级（含）
+     * @return 满足探测等级的实体 ID 集合
      */
+    public Set<Long> getVisibleEntities3D(String nationId, int minLevel) {
+        Set<Long> result = new HashSet<>();
+        if (nationId == null) return result;
+
+        for (Entity e : worldState.entitiesById.values()) {
+            if (e == null || !nationId.equals(e.ownerNationId) || e.posWorldGU == null) continue;
+
+            Integer strength = config.detectorSourceStrengthByEntityType.get(e.entityType);
+            Integer range = config.detectorSourceRangeByEntityType.get(e.entityType);
+            if (strength == null || range == null) continue;
+
+            double rangeGU = range * 50000.0;
+            List<Long> nearby = worldState.galaxyOctree.querySphere(e.posWorldGU, rangeGU);
+
+            for (long targetId : nearby) {
+                Entity target = worldState.entitiesById.get(targetId);
+                if (target == null || target.posWorldGU == null) continue;
+
+                double dist = target.posWorldGU.distanceTo(e.posWorldGU);
+                double falloff = 1.0 - (dist / rangeGU);
+                int level = (int) Math.round(strength * (0.5 + 0.5 * falloff));
+                level = Math.max(0, Math.min(10, level));
+
+                if (level >= minLevel) {
+                    result.add(targetId);
+                }
+            }
+        }
+
+        return result;
+    }
     public Set<SectorCoord> computeIntelVisibleSectors(String nationId) {
         Set<SectorCoord> result = new HashSet<>();
         if (nationId == null)
