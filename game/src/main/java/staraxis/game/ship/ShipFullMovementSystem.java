@@ -1,75 +1,77 @@
+/*
+ * ShipFullMovementSystem
+ *
+ * 文件作用：
+ * - 自由移动（直飞）子系统，纯直飞：加速→巡航→减速→到达。
+ *
+ * 使用方式：
+ * - 由 ShipMovementSystem 在 isMoving=true 且 movementTarget!=null 时调用。
+ *
+ * 注意事项：
+ * - 不处理轨道物理，不处理朝向/转向。
+ * - Y 轴在此系统中被忽略（保持现有行为），后续 3D 化时统一处理。
+ */
+
 package staraxis.game.ship;
 
 import staraxis.game.space.SpacePosition;
 import staraxis.game.state.WorldState;
 
 /**
- * ShipFullMovementSystem（舰船完整移动系统）喵。
+ * ShipFullMovementSystem（舰船自由移动系统）。
  *
- * 作用喵：
- * - 承载玩家视野内舰船的逐 Tick 权威完整计算喵。
- * - 保留完整的转向、加减速、刹车距离和到点收敛逻辑喵。
+ * 纯直飞模式：直线加速到目标，到达收敛。
  */
 public class ShipFullMovementSystem extends AbstractShipMovementSystem {
 
-    public void updateShip(ShipBody ship, double dtGameSeconds, WorldState worldState) {
-        updateHeading(ship, dtGameSeconds);
-
+    /**
+     * 更新舰船自由移动。
+     *
+     * @param ship          舰船
+     * @param dtGameSeconds 时间步长（游戏秒）
+     * @param worldState    世界状态
+     */
+    public void updateFreeMove(ShipBody ship, double dtGameSeconds, WorldState worldState) {
         if (!ship.isMoving || ship.movementTarget == null) {
             decelerateToStop(ship, dtGameSeconds, worldState);
             return;
         }
 
-        updateShipMovement(ship, dtGameSeconds, worldState);
-    }
-
-    void updateShipMovement(ShipBody ship, double dtGameSeconds, WorldState worldState) {
         double dx = ship.movementTarget.x() - ship.posWorldGU.x();
+        double dy = ship.movementTarget.y() - ship.posWorldGU.y();
         double dz = ship.movementTarget.z() - ship.posWorldGU.z();
-        double distanceToTarget = Math.sqrt(dx * dx + dz * dz);
+        double distanceToTarget = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
         if (distanceToTarget < TARGET_ARRIVAL_THRESHOLD_GU) {
             completeMoveAtTarget(ship, ship.movementTarget, worldState);
             return;
         }
 
-        double moveDirX = dx / distanceToTarget;
-        double moveDirZ = dz / distanceToTarget;
+        double dirX = dx / distanceToTarget;
+        double dirY = dy / distanceToTarget;
+        double dirZ = dz / distanceToTarget;
 
-        double headingRad = Math.toRadians(ship.currentHeadingDeg);
-        double bowX = Math.cos(headingRad);
-        double bowZ = Math.sin(headingRad);
-        double dotProduct = moveDirX * bowX + moveDirZ * bowZ;
-        double angleDiff = Math.toDegrees(Math.acos(Math.max(-1.0, Math.min(1.0, dotProduct))));
-
-        double effectiveMaxSpeed;
-        double effectiveAcceleration;
-        if (angleDiff < 45.0) {
-            effectiveMaxSpeed = ship.maxSpeed;
-            effectiveAcceleration = ship.baseAcceleration + ship.bowAccelerationBonus;
-        } else if (angleDiff > 135.0) {
-            effectiveMaxSpeed = ship.maxSpeed * ship.reverseSpeedPenalty;
-            effectiveAcceleration = ship.baseAcceleration;
-        } else {
-            effectiveMaxSpeed = ship.maxSpeed * ship.lateralSpeedPenalty;
-            effectiveAcceleration = ship.baseAcceleration;
-        }
+        // 从 calculator 获取速度/加速度
+        var stats = ShipStatsCalculator.computeMovementStats(ship, null, null);
+        double targetSpeed = stats.maxSpeed();
+        double accel = stats.baseAcceleration();
 
         double currentSpeed = ship.velWorldGU != null ? speedOf(ship.velWorldGU) : 0.0;
-        double stopDistance = (currentSpeed * currentSpeed) / (2 * effectiveAcceleration);
+        double stopDistance = (currentSpeed * currentSpeed) / (2 * accel);
         boolean needDecelerate = stopDistance >= distanceToTarget;
 
-        double targetVelX = moveDirX * effectiveMaxSpeed;
-        double targetVelZ = moveDirZ * effectiveMaxSpeed;
+        double targetVelX = dirX * targetSpeed;
+        double targetVelY = dirY * targetSpeed;
+        double targetVelZ = dirZ * targetSpeed;
 
         if (needDecelerate) {
-            double decelAmount = effectiveAcceleration * dtGameSeconds;
+            double decelAmount = accel * dtGameSeconds;
             double newSpeed = Math.max(0, currentSpeed - decelAmount);
             if (currentSpeed > VELOCITY_THRESHOLD) {
                 double scale = newSpeed / currentSpeed;
                 ship.velWorldGU = new SpacePosition(
                     ship.velWorldGU.x() * scale,
-                    0,
+                    ship.velWorldGU.y() * scale,
                     ship.velWorldGU.z() * scale
                 );
             } else {
@@ -77,19 +79,21 @@ public class ShipFullMovementSystem extends AbstractShipMovementSystem {
             }
         } else {
             double currentVelX = ship.velWorldGU != null ? ship.velWorldGU.x() : 0.0;
+            double currentVelY = ship.velWorldGU != null ? ship.velWorldGU.y() : 0.0;
             double currentVelZ = ship.velWorldGU != null ? ship.velWorldGU.z() : 0.0;
             double velDiffX = targetVelX - currentVelX;
+            double velDiffY = targetVelY - currentVelY;
             double velDiffZ = targetVelZ - currentVelZ;
-            double velDiff = Math.sqrt(velDiffX * velDiffX + velDiffZ * velDiffZ);
+            double velDiff = Math.sqrt(velDiffX * velDiffX + velDiffY * velDiffY + velDiffZ * velDiffZ);
 
             if (velDiff < VELOCITY_THRESHOLD) {
-                ship.velWorldGU = new SpacePosition(targetVelX, 0, targetVelZ);
+                ship.velWorldGU = new SpacePosition(targetVelX, targetVelY, targetVelZ);
             } else {
-                double accelAmount = Math.min(velDiff, effectiveAcceleration * dtGameSeconds);
+                double accelAmount = Math.min(velDiff, accel * dtGameSeconds);
                 double ratio = accelAmount / velDiff;
                 ship.velWorldGU = new SpacePosition(
                     currentVelX + velDiffX * ratio,
-                    0,
+                    currentVelY + velDiffY * ratio,
                     currentVelZ + velDiffZ * ratio
                 );
             }
@@ -104,39 +108,28 @@ public class ShipFullMovementSystem extends AbstractShipMovementSystem {
         applyVelocity(ship, dtGameSeconds, worldState);
     }
 
-    private void updateHeading(ShipBody ship, double dtGameSeconds) {
-        double headingDiff = normalizeAngle(ship.targetHeadingDeg - ship.currentHeadingDeg);
-        double maxTurn = ship.turnRate * dtGameSeconds;
-
-        if (Math.abs(headingDiff) <= maxTurn) {
-            ship.currentHeadingDeg = ship.targetHeadingDeg;
-        } else {
-            ship.currentHeadingDeg += Math.signum(headingDiff) * maxTurn;
-        }
-        ship.currentHeadingDeg = normalizeAngle(ship.currentHeadingDeg);
-    }
-
     private void decelerateToStop(ShipBody ship, double dtGameSeconds, WorldState worldState) {
-        if (ship.velWorldGU == null) {
+        if (ship.velWorldGU == null || speedOf(ship.velWorldGU) < VELOCITY_THRESHOLD) {
             ship.velWorldGU = SpacePosition.ORIGIN;
             return;
         }
 
+        var stats = ShipStatsCalculator.computeMovementStats(ship, null, null);
+        double accel = stats.baseAcceleration();
         double currentSpeed = speedOf(ship.velWorldGU);
-        if (currentSpeed < 1.0) {
-            ship.velWorldGU = SpacePosition.ORIGIN;
-            return;
-        }
-
-        double decelAmount = ship.baseAcceleration * dtGameSeconds;
+        double decelAmount = accel * dtGameSeconds;
         double newSpeed = Math.max(0, currentSpeed - decelAmount);
         double scale = newSpeed / currentSpeed;
 
         ship.velWorldGU = new SpacePosition(
             ship.velWorldGU.x() * scale,
-            0,
+            ship.velWorldGU.y() * scale,
             ship.velWorldGU.z() * scale
         );
+
+        if (newSpeed <= VELOCITY_THRESHOLD) {
+            ship.velWorldGU = SpacePosition.ORIGIN;
+        }
 
         applyVelocity(ship, dtGameSeconds, worldState);
     }

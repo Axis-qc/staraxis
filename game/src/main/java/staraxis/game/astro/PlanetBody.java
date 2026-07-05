@@ -3,6 +3,7 @@ package staraxis.game.astro;
 import staraxis.game.entity.Entity;
 import staraxis.game.entity.EntityType;
 import staraxis.game.planet.PlanetSurface;
+import staraxis.game.space.OrbitalElements;
 
 /**
  * PlanetBody（行星实体）
@@ -89,6 +90,25 @@ public class PlanetBody extends Entity {
      */
     public boolean hasCities() {
         return surface != null && surface.cities != null && !surface.cities.isEmpty();
+    }
+
+    /**
+     * 转为轨道根数 OrbitalElements。
+     * 运行时转为 OrbitalElements 使用，平铺字段保留用于序列化和配置定义。
+     *
+     * @return 轨道根数（弧度制，游戏秒）
+     */
+    public OrbitalElements toOrbitalElements() {
+        return new OrbitalElements(
+            semiMajorAxisGU,
+            eccentricity,
+            Math.toRadians(inclinationDeg),
+            Math.toRadians(longitudeOfAscendingNodeDeg),
+            Math.toRadians(periapsisArgDeg),
+            Math.toRadians(meanAnomalyDegAtEpoch),
+            0.0,
+            orbitalPeriodDays * 86400.0
+        );
     }
 
     /**

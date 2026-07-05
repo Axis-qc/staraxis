@@ -211,7 +211,7 @@ public final class WorldSaveService {
                 e.put("designId", ship.designId);
                 e.put("hpHull", ship.hpHull);
                 e.put("power", ship.power);
-                e.put("fuel", ship.fuel);
+                e.put("fuelMass", ship.fuelMass);
                 if (ship.customFlags != null && !ship.customFlags.isEmpty()) {
                     e.put("customFlags", new ArrayList<>(ship.customFlags));
                 }

@@ -47,8 +47,11 @@ public class ShipBody extends Entity {
     /** 能源（占位）。 */
     public double power;
 
-    /** 燃料（占位）。 */
-    public double fuel;
+    /** 当前剩余推进剂质量（t）。 */
+    public double fuelMass;
+
+    /** 最大推进剂容量（t），用于 UI 显示百分比。 */
+    public double maxFuelMass;
 
     /**
      * 舰船自定义标记集合（customFlags）喵。
@@ -86,65 +89,12 @@ public class ShipBody extends Entity {
      */
     public double targetHeadingDeg = 0.0;
 
-    // ========== 舰船性能数据（TODO: 应从 ShipDesign 配置读取，并支持科技等级加成）==========
-
     /**
-     * 最大速度（GU/游戏秒）喵。
-     * 全向移动时的理论最大速度。
-     * TODO: 当前为殖民舰默认值，后续应根据舰船设计和科技等级计算喵。
-     */
-    public double maxSpeed = 20.0;
-
-    /**
-     * 基础加速度（GU/游戏秒²）喵。
-     * 侧向/反向移动时的加速度。
-     * TODO: 后续应根据舰船设计和科技等级计算喵。
-     */
-    public double baseAcceleration = 5.0;
-
-    /**
-     * 舰首朝向加速度加成（GU/游戏秒²）喵。
-     * 当移动方向与舰首朝向一致时的额外加速度。
-     * 总加速度 = baseAcceleration + bowAccelerationBonus
-     * TODO: 后续应根据舰船设计和科技等级计算喵。
-     */
-    public double bowAccelerationBonus = 5.0;
-
-    /**
-     * 转向角速度（度/游戏秒）喵。
-     * 舰首旋转的速度。
-     * TODO: 后续应根据舰船设计和科技等级计算喵。
-     */
-    public double turnRate = 45.0;
-
-    /**
-     * 侧向移动速度惩罚系数（0.0~1.0）喵。
-     * 垂直于舰首方向移动时的速度惩罚。
-     * 实际最大速度 = maxSpeed * lateralSpeedPenalty
-     */
-    public double lateralSpeedPenalty = 0.6;
-
-    /**
-     * 反向移动速度惩罚系数（0.0~1.0）喵。
-     * 与舰首相反方向移动时的速度惩罚。
-     * 实际最大速度 = maxSpeed * reverseSpeedPenalty
-     */
-    public double reverseSpeedPenalty = 0.3;
-
-    /**
-     * 当前移动指令（简化计算模式）喵。
-     * 当启用简化计算时，存储移动指令信息喵。
+     * 当前移动指令喵。
      */
     public MovementCommand movementCommand;
 
     public String activeClientCommandId;
 
     public String lastCompletedClientCommandId;
-
-    /**
-     * 是否启用简化计算模式喵。
-     * 为 true 时，ShipMovementSystem 使用基于指令的推测计算喵。
-     * 为 false 时，使用完整的物理计算（向后兼容）喵。
-     */
-    public boolean simplifiedMovementEnabled = true;
 }

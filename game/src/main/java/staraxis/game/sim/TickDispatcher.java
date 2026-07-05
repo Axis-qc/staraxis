@@ -84,19 +84,29 @@ public class TickDispatcher {
         }
     }
 
+    /** Octree 重建间隔（tick 数），降低每 tick 全量重建开销。 */
+    private static final int OCTREE_REBUILD_INTERVAL = 20; // 每秒重建一次（20tick/s）
+
     /**
      * 阶段1.5：重建 Octree 空间索引。
-     * 在实体到达处理完毕后执行，确保索引包含最新实体分布。
+     * 每 OCTREE_REBUILD_INTERVAL tick 重建一次，降低开销。
      */
     public void stage1halfRebuildOctree(WorldState worldState) {
+        if (worldState.time.simulationTick % OCTREE_REBUILD_INTERVAL != 0) {
+            return;
+        }
         worldState.galaxyOctree.rebuild(new ArrayList<>(worldState.entitiesById.values()));
     }
 
     /**
      * 阶段2：LPT 分配 + 收集 SystemLoad。
-     * 收集所有非空星系的负载，运行 LPT 算法，更新分配映射。
+     * 单线程模式（workerCount=1）下跳过，无需分配。
      */
     public Map<Integer, List<Long>> stage2LoadBalance(WorldState worldState, long currentTick) {
+        if (workerCount <= 1) {
+            return Map.of(0, new ArrayList<>(worldState.entityIdsBySystem.keySet()));
+        }
+
         List<SystemLoad> allLoads = new ArrayList<>();
 
         for (Map.Entry<Long, List<Long>> entry : worldState.entityIdsBySystem.entrySet()) {

@@ -14,6 +14,7 @@ import staraxis.game.StarAxisGameRuntime;
 import staraxis.game.astro.PlanetBody;
 import staraxis.game.astro.StarBody;
 import staraxis.game.astro.StarSystem;
+import staraxis.game.log.TickProfiler;
 import staraxis.game.util.ProgressCallback;
 import staraxis.game.world.WorldGenConfig;
 import staraxis.logging.GdxToSlf4jLogger;
@@ -80,6 +81,21 @@ public class ClientGame implements ApplicationListener {
     private static final long DOUBLE_CLICK_INTERVAL_NS = 400_000_000L; // 400ms
     private static final int DOUBLE_CLICK_PX_THRESHOLD = 15;
     private final com.badlogic.gdx.math.Vector3 focusTmp = new com.badlogic.gdx.math.Vector3();
+
+    // ── 舰船选中与移动（Homeworld 式 3D 移动） ─────────────
+    /** 当前选中的舰船实体ID，-1 = 无选中。 */
+    private long selectedShipId = -1;
+
+    /** 镜头跟踪目标实体ID（双击设定）。-1 = 不跟踪。WASDQE 取消。 */
+    private long cameraFollowTargetId = -1;
+
+    /** 移动模式状态。 */
+    private boolean moveModeActive = false;
+    private double moveTargetX, moveTargetY, moveTargetZ;
+    private double moveBaseY;             // 舰船的基准 Y 高度
+    private int moveDragStartScreenY;     // 右键拖动起始屏幕Y
+    private static final double Y_SENSITIVITY = 50.0;
+    private int frameCount;
 
     // ── 加载状态 ──────────────────────────────────────────────
     public enum GameState { MENU, LOADING, PLAYING }
@@ -345,9 +361,17 @@ public class ClientGame implements ApplicationListener {
 
         boolean paused = pauseMenu.isMenuVisible();
         if (!paused) {
+            long updateStart = System.nanoTime();
             runtime.update(dt);
+            long updateEnd = System.nanoTime();
             runtime.publishRealtimeSnapshotIfNeeded();
+            long renderStart = System.nanoTime();
             renderSpaceScene(dt);
+            long renderEnd = System.nanoTime();
+            // 每 60 帧输出一次渲染耗时
+            if (frameCount++ % 60 == 0) {
+                TickProfiler.logRender(updateEnd - updateStart, renderEnd - renderStart);
+            }
         }
 
     }
@@ -370,6 +394,7 @@ public class ClientGame implements ApplicationListener {
                 currentSystem = null;
                 systemViewRenderer.resetTime();
                 uiDebug.switchActiveCamera(galaxyCamera);
+                runtime.setActiveSystemId(0);
             }
         }
 
@@ -422,6 +447,33 @@ public class ClientGame implements ApplicationListener {
         skyboxRenderer.render(systemCamera);
 
         systemViewRenderer.advanceTime(dt);
+        // 通知 game 引擎当前活跃星系（优先计算）
+        runtime.setActiveSystemId(currentSystem.systemId);
+
+        // 只有 WASDQE 能取消镜头跟踪（提前清标志，跟循环在底部）
+        if (systemCamera.isUserControlled()) {
+            cameraFollowTargetId = -1;
+        }
+
+        // 传递当前星系的舰船列表给渲染器
+        var ws = runtime.getWorldStateForSimOnly();
+        java.util.List<staraxis.game.ship.ShipBody> systemShips = java.util.List.of();
+        if (ws != null) {
+            var entityIds = ws.entityIdsBySystem.get(currentSystem.systemId);
+            if (entityIds != null && !entityIds.isEmpty()) {
+                java.util.ArrayList<staraxis.game.ship.ShipBody> ships =
+                    new java.util.ArrayList<>();
+                for (long id : entityIds) {
+                    var entity = ws.entitiesById.get(id);
+                    if (entity instanceof staraxis.game.ship.ShipBody ship) {
+                        ships.add(ship);
+                    }
+                }
+                systemShips = ships;
+            }
+        }
+        systemViewRenderer.setShips(systemShips);
+        systemViewRenderer.setHighlightShip(selectedShipId);
         systemViewRenderer.render(currentSystem, systemCamera);
 
         // System View 悬停拾取 + HUD 更新
@@ -433,8 +485,228 @@ public class ClientGame implements ApplicationListener {
             hud.setHoverInfoText(buildSystemHoverText(hoveredId));
         }
 
-        // 双击天体聚焦
-        handleSystemViewDoubleClick(hoveredId);
+        // ── 左键处理 ──
+        if (Gdx.input.isButtonJustPressed(com.badlogic.gdx.Input.Buttons.LEFT)) {
+            long now = System.nanoTime();
+            int screenX = Gdx.input.getX();
+            int screenY = Gdx.input.getY();
+
+            boolean isDoubleClick = (now - lastClickTimeNs) < DOUBLE_CLICK_INTERVAL_NS
+                    && Math.abs(screenX - lastClickX) < DOUBLE_CLICK_PX_THRESHOLD
+                    && Math.abs(screenY - lastClickY) < DOUBLE_CLICK_PX_THRESHOLD;
+
+            lastClickTimeNs = now;
+            lastClickX = screenX;
+            lastClickY = screenY;
+
+            if (isDoubleClick) {
+                if (hoveredId >= 0 && currentSystem != null) {
+                    cameraFollowTargetId = hoveredId;
+                    selectedShipId = hoveredId;
+                    // 用 getBodyPosition 获取位置（支持恒星/行星/舰船）
+                    if (systemViewRenderer.getBodyPosition(hoveredId, currentSystem, focusTmp)) {
+                        systemCamera.target.set(focusTmp);
+                    } else {
+                        // fallback: 从 entitiesById 直接读位置
+                        var ws2 = runtime.getWorldStateForSimOnly();
+                        if (ws2 != null) {
+                            var entity = ws2.entitiesById.get(hoveredId);
+                            if (entity != null && entity.posWorldGU != null) {
+                                systemCamera.target.set(
+                                    (float) entity.posWorldGU.x(),
+                                    (float) entity.posWorldGU.y(),
+                                    (float) entity.posWorldGU.z());
+                            }
+                        }
+                    }
+                }
+            } else if (moveModeActive) {
+                // 移动模式中左键 → 确认移动
+                var ws2 = runtime.getWorldStateForSimOnly();
+                if (ws2 != null) {
+                    var entity = ws2.entitiesById.get(selectedShipId);
+                    if (entity instanceof staraxis.game.ship.ShipBody ship) {
+                        ship.movementTarget = new staraxis.game.space.SpacePosition(
+                            moveTargetX, moveTargetY, moveTargetZ);
+                        ship.isMoving = true;
+                        ship.velWorldGU = staraxis.game.space.SpacePosition.ORIGIN;
+                        ws2.markRealtimeDirty();
+                    }
+                }
+                moveModeActive = false;
+            } else {
+                // 单击选中/取消舰船
+                var ws2 = runtime.getWorldStateForSimOnly();
+                if (ws2 != null) {
+                    var entity = ws2.entitiesById.get(hoveredId);
+                    if (entity instanceof staraxis.game.ship.ShipBody) {
+                        selectedShipId = hoveredId;
+                    } else {
+                        selectedShipId = -1;
+                    }
+                }
+            }
+        }
+
+        // ── 右键 Homeworld 式移动 ──
+        // 进入移动模式后，以舰船 Y 高度为基准创建一个 ZX 平面
+        // 鼠标在屏幕上移动时，目标点在这个平面上实时跟随鼠标
+        // 按住右键上下拖动调整 Y 高度，左键确认移动
+        if (selectedShipId >= 0 && runtime != null) {
+            var ws2 = runtime.getWorldStateForSimOnly();
+            if (ws2 != null) {
+                var entity = ws2.entitiesById.get(selectedShipId);
+                if (entity instanceof staraxis.game.ship.ShipBody ship) {
+                    boolean rightDown = Gdx.input.isButtonPressed(com.badlogic.gdx.Input.Buttons.RIGHT);
+                    boolean rightJustPressed = Gdx.input.isButtonJustPressed(com.badlogic.gdx.Input.Buttons.RIGHT);
+
+                    if (rightJustPressed) {
+                        // 右键按下 → 进入移动模式
+                        moveBaseY = ship.posWorldGU != null ? ship.posWorldGU.y() : 0;
+                        moveTargetY = moveBaseY;
+                        moveDragStartScreenY = Gdx.input.getY();
+                        moveModeActive = true;
+                    }
+
+                    if (moveModeActive) {
+                        // 移动模式下每帧更新目标点（鼠标移动即更新平面位置）
+                        var ray = systemCamera.camera.getPickRay(
+                                Gdx.input.getX(), Gdx.input.getY());
+                        double planeY = moveTargetY;
+                        double t = (planeY - ray.origin.y) / ray.direction.y;
+                        moveTargetX = ray.origin.x + ray.direction.x * t;
+                        moveTargetZ = ray.origin.z + ray.direction.z * t;
+
+                        // 右键按住时调整 Y
+                        if (rightDown) {
+                            int dy = Gdx.input.getY() - moveDragStartScreenY;
+                            moveTargetY = moveBaseY - (double) dy * Y_SENSITIVITY;
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── 移动模式：渲染目标点标记 ──
+        if (moveModeActive) {
+            var shapeRenderer = gui != null ? gui.get(com.badlogic.gdx.graphics.glutils.ShapeRenderer.class) : null;
+            // 获取舰船位置作为圆心
+            double shipX = 0, shipY = 0, shipZ = 0;
+            var w = runtime.getWorldStateForSimOnly();
+            if (w != null) {
+                var e = w.entitiesById.get(selectedShipId);
+                if (e != null && e.posWorldGU != null) {
+                    shipX = e.posWorldGU.x(); shipY = e.posWorldGU.y(); shipZ = e.posWorldGU.z();
+                }
+            }
+
+            if (shapeRenderer != null) {
+                Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
+                Gdx.gl.glEnable(GL20.GL_BLEND);
+                Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+                shapeRenderer.setProjectionMatrix(systemCamera.camera.combined);
+                shapeRenderer.begin(com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType.Line);
+                float sx = (float) shipX, sy = (float) shipY, sz = (float) shipZ;
+                float mx = (float) moveTargetX, my = (float) moveTargetY, mz = (float) moveTargetZ;
+                float baseY = (float) moveBaseY;
+
+                // 大圆环：以舰船为圆心手动绘制分段圆
+                float dx = mx - sx, dz = mz - sz;
+                float circleRadius = (float) Math.sqrt(dx * dx + dz * dz);
+                if (circleRadius > 10) {
+                    shapeRenderer.setColor(0.4f, 0.8f, 1.0f, 0.25f);
+                    int segs = 48;
+                    for (int i = 0; i < segs; i++) {
+                        float a1 = (float) (i * 2.0 * Math.PI / segs);
+                        float a2 = (float) ((i + 1) * 2.0 * Math.PI / segs);
+                        shapeRenderer.line(
+                            sx + circleRadius * (float) Math.cos(a1), baseY, sz + circleRadius * (float) Math.sin(a1),
+                            sx + circleRadius * (float) Math.cos(a2), baseY, sz + circleRadius * (float) Math.sin(a2));
+                    }
+                }
+
+                // 移动路径：从舰船到目标点
+                shapeRenderer.setColor(0.4f, 0.8f, 1.0f, 0.4f);
+                shapeRenderer.line(sx, sy, sz, mx, my, mz);
+
+                // 垂直指示线：从基准Y到目标Y
+                shapeRenderer.setColor(0.4f, 0.8f, 1.0f, 0.5f);
+                shapeRenderer.line(mx, baseY, mz, mx, my, mz);
+
+                // 目标点小圆环
+                shapeRenderer.setColor(0.4f, 0.8f, 1.0f, 0.7f);
+                int segs2 = 24;
+                for (int i = 0; i < segs2; i++) {
+                    float a1 = (float) (i * 2.0 * Math.PI / segs2);
+                    float a2 = (float) ((i + 1) * 2.0 * Math.PI / segs2);
+                    shapeRenderer.line(
+                        mx + 30f * (float) Math.cos(a1), my, mz + 30f * (float) Math.sin(a1),
+                        mx + 30f * (float) Math.cos(a2), my, mz + 30f * (float) Math.sin(a2));
+                }
+
+                shapeRenderer.end();
+                Gdx.gl.glDisable(GL20.GL_BLEND);
+            }
+        }
+
+        // ── 选中舰船有移动目标时显示路径 ──
+        if (!moveModeActive && selectedShipId >= 0 && runtime != null) {
+            var w = runtime.getWorldStateForSimOnly();
+            if (w != null) {
+                var e = w.entitiesById.get(selectedShipId);
+                if (e instanceof staraxis.game.ship.ShipBody ship && ship.isMoving && ship.movementTarget != null) {
+                    var shapeRenderer = gui != null ? gui.get(com.badlogic.gdx.graphics.glutils.ShapeRenderer.class) : null;
+                    if (shapeRenderer != null) {
+                        Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
+                        Gdx.gl.glEnable(GL20.GL_BLEND);
+                        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+                        shapeRenderer.setProjectionMatrix(systemCamera.camera.combined);
+                        shapeRenderer.begin(com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType.Line);
+
+                        float sx = (float) e.posWorldGU.x(), sy = (float) e.posWorldGU.y(), sz = (float) e.posWorldGU.z();
+                        float tx = (float) ship.movementTarget.x(), ty = (float) ship.movementTarget.y(), tz = (float) ship.movementTarget.z();
+
+                        // 移动路径线
+                        shapeRenderer.setColor(0.4f, 0.8f, 1.0f, 0.3f);
+                        shapeRenderer.line(sx, sy, sz, tx, ty, tz);
+
+                        // 目标点小圈（仅标记，不带平面圆环）
+                        shapeRenderer.setColor(0.4f, 0.8f, 1.0f, 0.5f);
+                        int segs3 = 20;
+                        for (int i = 0; i < segs3; i++) {
+                            float a1 = (float) (i * 2.0 * Math.PI / segs3);
+                            float a2 = (float) ((i + 1) * 2.0 * Math.PI / segs3);
+                            shapeRenderer.line(
+                                tx + 20f * (float) Math.cos(a1), ty, tz + 20f * (float) Math.sin(a1),
+                                tx + 20f * (float) Math.cos(a2), ty, tz + 20f * (float) Math.sin(a2));
+                        }
+
+                        shapeRenderer.end();
+                        Gdx.gl.glDisable(GL20.GL_BLEND);
+                    }
+                }
+            }
+        }
+
+        // ── 镜头跟踪：在所有输入处理后执行 ──
+        if (cameraFollowTargetId >= 0) {
+            // 优先用 getBodyPosition（支持恒星/行星/舰船，返回正确视觉位置）
+            if (systemViewRenderer.getBodyPosition(cameraFollowTargetId, currentSystem, focusTmp)) {
+                systemCamera.target.set(focusTmp);
+            } else {
+                // fallback: 从 entitiesById 读（非当前系统的实体）
+                var wsFollow = runtime.getWorldStateForSimOnly();
+                if (wsFollow != null) {
+                    var entity = wsFollow.entitiesById.get(cameraFollowTargetId);
+                    if (entity != null && entity.posWorldGU != null) {
+                        systemCamera.target.set(
+                            (float) entity.posWorldGU.x(),
+                            (float) entity.posWorldGU.y(),
+                            (float) entity.posWorldGU.z());
+                    }
+                }
+            }
+        }
     }
 
     /** 构建 System View 悬停天体描述文字 */
@@ -455,36 +727,21 @@ public class ClientGame implements ApplicationListener {
                 return String.format("行星  %s  半径%.0fGU  轨道%.0fGU", type, planet.radiusGU, planet.semiMajorAxisGU);
             }
         }
-        return "";
-    }
-
-    /**
-     * 检测 System View 中的双击并聚焦镜头到目标天体。
-     * 双击判定：400ms 内同一位置（15px 容差）的左键点击。
-     */
-    private void handleSystemViewDoubleClick(long hoveredId) {
-        if (!Gdx.input.isButtonJustPressed(com.badlogic.gdx.Input.Buttons.LEFT)) return;
-
-        long now = System.nanoTime();
-        int screenX = Gdx.input.getX();
-        int screenY = Gdx.input.getY();
-
-        boolean isDoubleClick = (now - lastClickTimeNs) < DOUBLE_CLICK_INTERVAL_NS
-                && Math.abs(screenX - lastClickX) < DOUBLE_CLICK_PX_THRESHOLD
-                && Math.abs(screenY - lastClickY) < DOUBLE_CLICK_PX_THRESHOLD;
-
-        lastClickTimeNs = now;
-        lastClickX = screenX;
-        lastClickY = screenY;
-
-        if (!isDoubleClick) return;
-
-        // 双击命中天体 → 聚焦镜头
-        if (hoveredId < 0 || currentSystem == null) return;
-
-        if (systemViewRenderer.getBodyPosition(hoveredId, currentSystem, focusTmp)) {
-            systemCamera.target.set(focusTmp);
+        // 检查舰船（从 WorldState 读取）
+        var ws = runtime.getWorldStateForSimOnly();
+        if (ws != null) {
+            var entity = ws.entitiesById.get(entityId);
+            if (entity instanceof staraxis.game.ship.ShipBody ship) {
+                String sel = entityId == selectedShipId
+                    ? (moveModeActive
+                        ? String.format(" [选中] 目标Y=%.0f 左键确认", moveTargetY)
+                        : " [选中] 右键设目标+拖动调Y 左键确认") : "";
+                String flags = ship.customFlags != null && !ship.customFlags.isEmpty()
+                    ? " " + String.join(",", ship.customFlags) : "";
+                return String.format("舰船 实体%d%s%s", entityId, flags, sel);
+            }
         }
+        return "";
     }
 
     private StarSystem findSystemByStarId(long starId) {

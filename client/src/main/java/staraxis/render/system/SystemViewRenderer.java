@@ -17,6 +17,7 @@ import com.badlogic.gdx.math.collision.Ray;
 import staraxis.game.astro.PlanetBody;
 import staraxis.game.astro.StarBody;
 import staraxis.game.astro.StarSystem;
+import staraxis.game.ship.ShipBody;
 import staraxis.game.space.OrbitSolver;
 import staraxis.game.space.OrbitalElements;
 import staraxis.game.space.SpacePosition;
@@ -26,6 +27,7 @@ import staraxis.render.lod.LodCalculator;
 import staraxis.render.lod.LodLevel;
 import staraxis.render.mesh.OrbitRingMesh;
 import staraxis.render.mesh.PlanetMesh;
+import staraxis.render.mesh.ShipMesh;
 import staraxis.render.mesh.StarMesh;
 import staraxis.render.util.TemperatureColor;
 
@@ -50,6 +52,12 @@ public class SystemViewRenderer {
     private final PlanetMesh planetMesh;
     private final StarMesh starMesh;
     private final OrbitRingMesh orbitRing;
+
+    /** 舰船正方体网格。 */
+    private final ShipMesh shipMesh;
+
+    /** 舰船 ModelInstance 对象池（懒增长）。 */
+    private final java.util.ArrayList<ModelInstance> shipInstances = new java.util.ArrayList<>();
 
     /** 对象池：恒星 ModelInstance（懒增长） */
     private final java.util.ArrayList<ModelInstance> starInstances = new java.util.ArrayList<>();
@@ -78,6 +86,9 @@ public class SystemViewRenderer {
     /** 当前帧的行星 UI 圆标信息（每帧重建，供拾取用）。 */
     private final java.util.ArrayList<PlanetDotInfo> planetDotInfos = new java.util.ArrayList<>();
 
+    /** 当前帧的舰船 UI 圆标信息（每帧重建，供拾取用）。 */
+    private final java.util.ArrayList<ShipDotInfo> shipDotInfos = new java.util.ArrayList<>();
+
     /** 行星球体在屏幕上的直径小于此值时改用固定圆标标示位置。 */
     private static final float MIN_DIAMETER_PX = 20f;
 
@@ -96,6 +107,18 @@ public class SystemViewRenderer {
         }
     }
 
+    /** 舰船屏幕圆标信息（每帧重建）。 */
+    private static class ShipDotInfo {
+        final long entityId;
+        final float screenX;
+        final float screenY;
+        ShipDotInfo(long id, float x, float y) {
+            entityId = id;
+            screenX = x;
+            screenY = y;
+        }
+    }
+
     public SystemViewRenderer() {
         modelBatch = new ModelBatch();
         environment = new Environment();
@@ -106,7 +129,14 @@ public class SystemViewRenderer {
         planetMesh = new PlanetMesh();
         starMesh = new StarMesh();
         orbitRing = new OrbitRingMesh();
+        shipMesh = new ShipMesh();
     }
+
+    /** 当前帧待渲染的舰船列表（由 ClientGame 每帧设置）。 */
+    private java.util.List<ShipBody> currentFrameShips = java.util.List.of();
+
+    /** 当前选中的舰船ID（高亮用）。 */
+    private long highlightShipId = -1L;
 
     /** 确保恒星实例池足够大 */
     private void ensureStarInstances(int needed) {
@@ -123,6 +153,27 @@ public class SystemViewRenderer {
         while (planetLowInstances.size() < needed) {
             planetLowInstances.add(new ModelInstance(planetMesh.getLowDetail(), 0, 0, 0));
         }
+    }
+
+    /** 确保舰船实例池足够大 */
+    private void ensureShipInstances(int needed) {
+        while (shipInstances.size() < needed) {
+            shipInstances.add(new ModelInstance(shipMesh.getModel(), 0, 0, 0));
+        }
+    }
+
+    /**
+     * 设置当前帧要渲染的舰船列表（由 ClientGame 在每帧渲染前调用）。
+     */
+    public void setShips(java.util.List<ShipBody> ships) {
+        currentFrameShips = ships != null ? ships : java.util.List.of();
+    }
+
+    /**
+     * 设置选中高亮舰船ID。-1 = 无选中。
+     */
+    public void setHighlightShip(long shipId) {
+        this.highlightShipId = shipId;
     }
 
     /** 构建恒星 ID 索引 */
@@ -161,6 +212,13 @@ public class SystemViewRenderer {
             renderPlanetMesh(i, system.planets.get(i), camera);
         }
 
+        // 渲染所有舰船（System View 内该星系的舰船）
+        int shipCount = currentFrameShips.size();
+        ensureShipInstances(shipCount);
+        for (int i = 0; i < shipCount; i++) {
+            renderShipMesh(i, currentFrameShips.get(i), camera);
+        }
+
         // 第二遍：渲染所有轨道环，利用完整的深度缓冲实现正确遮挡
         Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
         Gdx.gl.glDepthMask(true);
@@ -170,6 +228,7 @@ public class SystemViewRenderer {
 
         float orbitAlpha = LodCalculator.calculateOrbitAlpha(camera.getOrbitDistance());
         if (orbitAlpha > 0f) {
+            // 舰船轨道线已移除（变轨移动系统已废弃）
             for (int i = 0; i < planetCount; i++) {
                 renderOrbitRing(system.planets.get(i), camera, orbitAlpha);
             }
@@ -186,6 +245,9 @@ public class SystemViewRenderer {
 
         // 最上层：渲染行星 UI 圆标（深度测试已关闭）
         renderPlanetDots(system, camera);
+
+        // 最上层：渲染舰船 UI 圆标
+        renderShipDots(camera);
     }
 
     /** D.10+D.11: 渲染所有恒星，每颗按 systemPos 偏移 */
@@ -328,6 +390,65 @@ public class SystemViewRenderer {
         Gdx.gl.glDisable(GL20.GL_BLEND);
     }
 
+    /** 渲染舰船 LOD 圆标（距离远时用圆圈替代立方体渲染） */
+    private void renderShipDots(WorldCamera camera) {
+        if (currentFrameShips.isEmpty()) return;
+
+        shipDotInfos.clear();
+
+        float gfxW = Gdx.graphics.getWidth();
+        float gfxH = Gdx.graphics.getHeight();
+        Vector3 camPos = camera.camera.position;
+
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        shapeRenderer.setProjectionMatrix(new Matrix4().setToOrtho(0f, gfxW, gfxH, 0f, -1f, 1f));
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+
+        for (ShipBody ship : currentFrameShips) {
+            if (ship.posWorldGU == null) continue;
+
+            float px = (float) ship.posWorldGU.x();
+            float py = (float) ship.posWorldGU.y();
+            float pz = (float) ship.posWorldGU.z();
+
+            double dist = Math.sqrt(
+                    (camPos.x - px) * (camPos.x - px) +
+                    (camPos.y - py) * (camPos.y - py) +
+                    (camPos.z - pz) * (camPos.z - pz));
+
+            // 投影到屏幕坐标
+            tmpScreenPos.set(px, py, pz);
+            camera.camera.project(tmpScreenPos);
+            if (tmpScreenPos.z < 0f || tmpScreenPos.z > 1f) continue;
+
+            float dotY = gfxH - tmpScreenPos.y;
+
+            // 根据距离决定圆圈透明度
+            // < 500GU 全透明（立方体可见，不画圆圈遮挡）
+            // 500~2000GU 线性淡入
+            // > 2000GU 完全不透明
+            float circleAlpha;
+            if (dist < 500) {
+                circleAlpha = 0f;
+            } else if (dist > 2000) {
+                circleAlpha = 0.9f;
+            } else {
+                circleAlpha = 0.9f * (float)((dist - 500) / 1500.0);
+            }
+
+            if (circleAlpha > 0.01f) {
+                shapeRenderer.setColor(0.4f, 0.6f, 1.0f, circleAlpha);
+                shapeRenderer.circle(tmpScreenPos.x, dotY, DOT_RADIUS_PX * 0.6f);
+            }
+
+            shipDotInfos.add(new ShipDotInfo(ship.entityId, tmpScreenPos.x, dotY));
+        }
+
+        shapeRenderer.end();
+        Gdx.gl.glDisable(GL20.GL_BLEND);
+    }
+
     /** 轨道环带偏移 */
     private void renderOrbitRing(PlanetBody planet, WorldCamera camera, float orbitAlpha) {
         OrbitalElements orbit = toOrbitalElements(planet);
@@ -336,6 +457,30 @@ public class SystemViewRenderer {
         orbitRing.render(orbit,
                 tmpVec.x, tmpVec.y, tmpVec.z,
                 camera.camera.combined, new Color(0.3f, 0.4f, 0.6f, orbitAlpha));
+    }
+
+    /** 渲染舰船立方体 */
+    private void renderShipMesh(int index, ShipBody ship, WorldCamera camera) {
+        if (ship.posWorldGU == null) return;
+
+        float px = (float) ship.posWorldGU.x();
+        float py = (float) ship.posWorldGU.y();
+        float pz = (float) ship.posWorldGU.z();
+
+        ModelInstance instance = shipInstances.get(index);
+        instance.transform.idt();
+        instance.transform.translate(px, py, pz);
+        instance.transform.scl(5f); // 边长 10 GU（半径为5）
+        // 舰船颜色：选中为亮黄色，否则淡蓝色
+        if (ship.entityId == highlightShipId) {
+            instance.materials.get(0).set(ColorAttribute.createDiffuse(1.0f, 0.9f, 0.2f, 1f));
+        } else {
+            instance.materials.get(0).set(ColorAttribute.createDiffuse(0.4f, 0.6f, 1.0f, 1f));
+        }
+
+        modelBatch.begin(camera.camera);
+        modelBatch.render(instance, environment);
+        modelBatch.end();
     }
 
     public void advanceTime(double dtSeconds) {
@@ -374,6 +519,7 @@ public class SystemViewRenderer {
         planetMesh.dispose();
         starMesh.dispose();
         orbitRing.dispose();
+        shipMesh.dispose();
         shapeRenderer.dispose();
         if (chunkDebug != null) {
             chunkDebug.dispose();
@@ -463,6 +609,41 @@ public class SystemViewRenderer {
             }
         }
 
+        // 检测所有舰船（使用当前位置）
+        for (ShipBody ship : currentFrameShips) {
+            if (ship.posWorldGU == null) continue;
+            tmpOffset.set((float) ship.posWorldGU.x(), (float) ship.posWorldGU.y(), (float) ship.posWorldGU.z());
+            float radius = 5f; // 10GU 边长半边长
+            if (Intersector.intersectRaySphere(ray, tmpOffset, radius, tmpIntersect)) {
+                float dist = tmpIntersect.dst2(ray.origin);
+                if (dist < closestDist) {
+                    closestDist = dist;
+                    closestId = ship.entityId;
+                }
+            }
+        }
+
+        // 检测 2D 舰船圆标（屏幕空间）
+        for (ShipDotInfo dot : shipDotInfos) {
+            float dx = screenX - dot.screenX;
+            float dy = screenY - dot.screenY;
+            if (dx * dx + dy * dy <= (DOT_RADIUS_PX * 0.6f) * (DOT_RADIUS_PX * 0.6f)) {
+                for (ShipBody ship : currentFrameShips) {
+                    if (ship.entityId == dot.entityId && ship.posWorldGU != null) {
+                        float dist = camera.camera.position.dst2(
+                            (float) ship.posWorldGU.x(),
+                            (float) ship.posWorldGU.y(),
+                            (float) ship.posWorldGU.z());
+                        if (dist < closestDist) {
+                            closestDist = dist;
+                            closestId = dot.entityId;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
         return closestId;
     }
 
@@ -491,6 +672,13 @@ public class SystemViewRenderer {
                 out.x += (float) pos.x();
                 out.y += (float) pos.y();
                 out.z += (float) pos.z();
+                return true;
+            }
+        }
+        // 检查舰船
+        for (ShipBody ship : currentFrameShips) {
+            if (ship.entityId == entityId && ship.posWorldGU != null) {
+                out.set((float) ship.posWorldGU.x(), (float) ship.posWorldGU.y(), (float) ship.posWorldGU.z());
                 return true;
             }
         }

@@ -594,7 +594,8 @@ public final class WorldSavesApi {
                 ship.designId = e.get("designId") == null ? null : String.valueOf(e.get("designId"));
                 ship.hpHull = e.get("hpHull") instanceof Number n ? n.doubleValue() : 1.0;
                 ship.power = e.get("power") instanceof Number n ? n.doubleValue() : 100.0;
-                ship.fuel = e.get("fuel") instanceof Number n ? n.doubleValue() : 100.0;
+                ship.fuelMass = e.get("fuelMass") instanceof Number n ? n.doubleValue()
+                    : e.get("fuel") instanceof Number n ? n.doubleValue() : 0.0;
                 Object flagsObj = e.get("customFlags");
                 if (flagsObj instanceof List<?> flagList) {
                     for (Object flag : flagList) {

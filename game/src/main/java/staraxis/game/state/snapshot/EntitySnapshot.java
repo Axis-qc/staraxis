@@ -154,6 +154,8 @@ public class EntitySnapshot {
      * - 但此 DTO 是未来多人联机中远端客户端（非主机玩家）获知舰船状态的唯一途径。
      *
      * TODO 多人联机：此为下行快照契约的一部分，即使单机无消费者亦不可删除。
+     * TODO Phase 5+：maxSpeed/baseAcceleration 等字段已不再由 game 维护，后续客户端应通过
+     *   ShipStatsCalculator 在本地计算或由服务端下发计算结果。
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     @JsonInclude(JsonInclude.Include.ALWAYS)
@@ -163,13 +165,23 @@ public class EntitySnapshot {
         public final boolean isMoving;
         public final SpacePosition movementTarget;
         public final SpacePosition velocity;
+
+        // 以下字段已不再由 game 引擎维护（Phase 5），保留用于旧客户端兼容。
+        // 新客户端应忽略这些值。
+        @Deprecated
         public final double maxSpeed;
+        @Deprecated
         public final double baseAcceleration;
+        @Deprecated
         public final double bowAccelerationBonus;
+        @Deprecated
         public final double turnRate;
+        @Deprecated
         public final double lateralSpeedPenalty;
+        @Deprecated
         public final double reverseSpeedPenalty;
 
+        /** 完整构造函数（含旧字段，保持 JSON 兼容）。 */
         public ShipDetails(
                 java.util.Set<String> customFlags,
                 double headingDeg,
@@ -195,8 +207,15 @@ public class EntitySnapshot {
             this.reverseSpeedPenalty = reverseSpeedPenalty;
         }
 
-        public ShipDetails(java.util.Set<String> customFlags, double headingDeg) {
-            this(customFlags, headingDeg, false, null, null, 20.0, 5.0, 5.0, 45.0, 0.6, 0.3);
+        /** 简化构造函数（旧字段使用默认值）。 */
+        public ShipDetails(
+                java.util.Set<String> customFlags,
+                double headingDeg,
+                boolean isMoving,
+                SpacePosition movementTarget,
+                SpacePosition velocity) {
+            this(customFlags, headingDeg, isMoving, movementTarget, velocity,
+                    20.0, 5.0, 5.0, 45.0, 0.6, 0.3);
         }
     }
 

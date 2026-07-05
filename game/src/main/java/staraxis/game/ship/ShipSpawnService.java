@@ -74,7 +74,7 @@ public final class ShipSpawnService {
         // 硬编码初始属性喵
         ship.hpHull = 1.0;      // 满耐久喵
         ship.power = 100.0;     // 初始能源喵
-        ship.fuel = 100.0;      // 初始燃料喵
+        ship.fuelMass = 100.0;  // 初始燃料喵
         ship.customFlags.add("INITIAL_SPAWN_SHIP"); // 标记为初始出生舰船喵
 
         // 初始化舰船性能数据（从 ShipDesign 配置读取，当前使用 ShipBody 默认值）喵
@@ -134,7 +134,7 @@ public final class ShipSpawnService {
         // 硬编码基础属性喵
         ship.hpHull = 1.0;      // 满耐久喵
         ship.power = 100.0;     // 初始能源喵
-        ship.fuel = 100.0;      // 初始燃料喵
+        ship.fuelMass = 100.0;  // 初始燃料喵
         if (customFlags != null) {
             ship.customFlags.addAll(customFlags);
         }

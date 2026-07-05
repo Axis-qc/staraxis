@@ -3,9 +3,11 @@ package staraxis.game.ship;
 import java.util.List;
 
 import staraxis.game.entity.Entity;
+import staraxis.game.ship.ShipBody;
+import staraxis.game.ship.ShipStatsCalculator;
+import staraxis.game.sim.SimulationClock;
 import staraxis.game.space.SpacePosition;
 import staraxis.game.space.event.CrossSystemEvent;
-import staraxis.game.space.event.CrossSystemEventTable;
 import staraxis.game.state.WorldState;
 import staraxis.game.state.snapshot.EntitySnapshot;
 
@@ -14,48 +16,72 @@ import staraxis.game.state.snapshot.EntitySnapshot;
  *
  * 管理舰船在恒星系之间的 FTL 跳跃（出发 → 在途 → 到达）。
  *
- * 当前为单线程版本（阶段2），核心功能：
- * - initiateFTL()：出发时从源星系移除实体，写入跨系统事件表
- * - processArrivingEvents()：每 tick 处理到达事件，将实体恢复到目标星系
- *
- * 多线程版本（阶段4）将引入 Worker 本地缓冲区分发合并。
+ * 核心逻辑：
+ * - 只接受 ShipBody 实体（非舰船实体无法跳跃）。
+ * - 读取 ShipBody.galaxySpeedGUps 计算旅行时间（GU/游戏秒 → ticks）。
+ * - 读取 ShipBody.fuelPerJump 一次性扣减燃料。
+ * - 到达事件由 stage1Arrivals 处理，恢复星系归属。
  */
 public class FTLTravelSystem {
 
-    /** 默认 FTL 速度（GU/tick），约 3333 GU/tick = 2,000,000 GU/600 tick ≈ 10s 穿越星系间距。 */
-    public static final double DEFAULT_FTL_SPEED_GU_PER_TICK = 3_333.0;
+    /** 默认 FTL 速度（GU/游戏秒），非舰船实体使用。 */
+    public static final double DEFAULT_FTL_SPEED_GU_PER_SECOND = 60_000.0;
 
     /** FTL 事件ID 起始值（避免与实体ID冲突）。 */
     private long nextEventId = 1_000_000_000L;
 
     /**
      * 发起一次 FTL 跳跃。
-     * 将实体从源星系的 entityIdsBySystem 中移除，写入跨系统事件表标记为在途。
      *
-     * @param worldState 世界状态
-     * @param entity     要跳跃的实体
-     * @param targetSystemId 目标星系ID（须存在于 systemPositions 中）
-     * @param currentTick   当前游戏 tick
-     * @return 创建的事件，或 null（跳跃无效时）
+     * 校验顺序：
+     * 1. 实体必须是 ShipBody
+     * 2. galaxySpeedGUps <= 1 或 fuelPerJump <= 0 → 不能跳跃
+     * 3. fuelMass < fuelPerJump → 燃料不足
+     * 4. 计算旅行时间，扣减燃料，写入事件表
+     *
+     * @param worldState     世界状态
+     * @param entity         要跳跃的舰船实体
+     * @param targetSystemId 目标星系ID
+     * @param currentTick    当前游戏 tick
+     * @return 创建的事件，或 null（跳跃无效）
      */
     public CrossSystemEvent initiateFTL(WorldState worldState, Entity entity, long targetSystemId, long currentTick) {
         if (entity == null || entity.systemId <= 0 || targetSystemId <= 0) {
             return null;
         }
         if (entity.systemId == targetSystemId) {
-            return null; // 已在目标星系
+            return null;
         }
         if (worldState.crossSystemEventTable.isInTransit(entity.entityId)) {
-            return null; // 已在途中
+            return null;
+        }
+
+        // 校验 1：只接受 ShipBody
+        if (!(entity instanceof ShipBody ship)) {
+            return null;
+        }
+
+        // 从 calculator 获取舰船移动属性
+        var stats = ShipStatsCalculator.computeMovementStats(ship, null, null);
+
+        // 校验 2：引擎能力检查
+        if (stats.galaxySpeedGUps() <= 1.0 || stats.fuelPerJump() <= 0) {
+            return null; // 无曲速引擎或引擎不够快
+        }
+
+        // 校验 3：燃料检查
+        if (ship.fuelMass < stats.fuelPerJump()) {
+            return null; // 燃料不足
         }
 
         long sourceSystemId = entity.systemId;
 
-        // 计算旅行时间
-        long travelTimeTicks = computeTravelTime(worldState, sourceSystemId, targetSystemId);
-        if (travelTimeTicks <= 0) {
-            travelTimeTicks = 1; // 最小 1 tick
-        }
+        // 扣减燃料（fuelPerJump 从 stats 获取）
+        ship.fuelMass -= stats.fuelPerJump();
+
+        // 计算旅行时间：galaxySpeedGUps 是 GU/游戏秒，先转秒再转 tick
+        double travelTimeSeconds = computeTravelTimeSeconds(worldState, sourceSystemId, targetSystemId, stats.galaxySpeedGUps());
+        long travelTimeTicks = Math.max((long) Math.ceil(travelTimeSeconds * SimulationClock.TICKS_PER_SECOND), 10);
 
         // 从源星系索引中移除实体
         List<Long> sourceEntities = worldState.entityIdsBySystem.get(sourceSystemId);
@@ -63,10 +89,10 @@ public class FTLTravelSystem {
             sourceEntities.remove(entity.entityId);
         }
 
-        // 标记实体为在途（systemId=0 表示不归属任何星系）
+        // 标记实体为在途
         entity.systemId = 0;
 
-        // 创建实体快照（出发时状态快照，到达时用于结算）
+        // 创建实体快照
         EntitySnapshot snapshot = createSnapshot(entity);
 
         // 创建事件并写入事件表
@@ -82,55 +108,38 @@ public class FTLTravelSystem {
     }
 
     /**
-     * 处理当前 tick 到期的到达事件（Tick 流水线阶段1）。
-     * 将实体恢复到目标星系的 entityIdsBySystem 中。
-     *
-     * @param worldState 世界状态
-     * @param currentTick 当前游戏 tick
+     * 处理到达事件的逻辑已统一归入 TickDispatcher.stage1Arrivals()。
+     * 此处保留方法签名供未来在途结算扩展使用，当前不调用。
      */
+    @SuppressWarnings("unused")
     public void processArrivingEvents(WorldState worldState, long currentTick) {
-        CrossSystemEventTable table = worldState.crossSystemEventTable;
-        List<CrossSystemEvent> dueEvents = table.getEventsDueAt(currentTick);
-
-        for (CrossSystemEvent event : dueEvents) {
-            Entity entity = worldState.entitiesById.get(event.entityId);
-            if (entity == null) continue;
-
-            // 恢复实体到目标星系
-            entity.systemId = event.targetSystemId;
-            worldState.entityIdsBySystem
-                    .computeIfAbsent(event.targetSystemId, k -> new java.util.ArrayList<>())
-                    .add(entity.entityId);
-
-            // 如果快照中有位置信息，恢复位置
-            if (event.snapshot != null) {
-                // 在途期间可能消耗了燃料等——将在完整版本中处理
-                // 当前单线程阶段仅恢复星系归属
-            }
-        }
+        // 到达逻辑由 TickDispatcher.stage1Arrivals() 在 tick 中处理
+        // 该方法预留用于：到达时恢复在途期间消耗（燃料、事件等）
     }
 
     /**
-     * 计算两个星系之间的 FTL 旅行时间（tick 数）。
+     * 计算两个星系之间的 FTL 旅行时间（游戏秒）。
+     *
+     * @param worldState  世界状态
+     * @param fromSystemId 源星系ID
+     * @param toSystemId   目标星系ID
+     * @param speedGUps   舰船 FTL 速度（GU/游戏秒）
+     * @return 旅行时间（游戏秒）
      */
-    private long computeTravelTime(WorldState worldState, long fromSystemId, long toSystemId) {
+    private double computeTravelTimeSeconds(WorldState worldState, long fromSystemId, long toSystemId, double speedGUps) {
         SpacePosition fromPos = worldState.systemPositions.get(fromSystemId);
         SpacePosition toPos = worldState.systemPositions.get(toSystemId);
         if (fromPos == null || toPos == null) {
-            return 600; // 默认 600 tick ≈ 10s
+            // 星系位置缺失，使用默认速度估算
+            double defaultDistance = 2_000_000.0;
+            return defaultDistance / (speedGUps > 0 ? speedGUps : DEFAULT_FTL_SPEED_GU_PER_SECOND);
         }
         double distance = fromPos.distanceTo(toPos);
-        long ticks = (long) Math.ceil(distance / DEFAULT_FTL_SPEED_GU_PER_TICK);
-        return Math.max(ticks, 10); // 至少 10 tick，避免秒到
+        return distance / speedGUps;
     }
 
-    /**
-     * 创建实体快照（当前为占位，后续扩展）。
-     */
     @SuppressWarnings("unused")
     private EntitySnapshot createSnapshot(Entity entity) {
-        // 单线程阶段不需要完整的深拷贝快照
-        // 传 null 表示"到达时保持 entitiesById 中的状态"
         return null;
     }
 }

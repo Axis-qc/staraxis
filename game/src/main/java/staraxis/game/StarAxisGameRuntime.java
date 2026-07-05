@@ -25,6 +25,8 @@ import staraxis.game.command.SetSystemTimeScaleHandler;
 import staraxis.game.entity.Entity;
 import staraxis.game.entity.EntityType;
 import staraxis.game.log.PerformanceMonitor;
+import staraxis.game.log.TickProfiler;
+import staraxis.game.ship.ShipBody;
 import staraxis.game.ship.ShipMovementSystem;
 import staraxis.game.sim.SimulationTime;
 import staraxis.game.sim.TimelineSystem;
@@ -64,6 +66,22 @@ public class StarAxisGameRuntime implements GameRuntime {
     private final CommandBus commandBus = new CommandBus();
 
     private final ShipMovementSystem shipMovementSystem = new ShipMovementSystem();
+
+    /** 玩家当前查看的恒星系ID（=0 表示不在任何星系内）。 */
+    private long activeSystemId;
+
+    /**
+     * 设置玩家当前查看的恒星系ID。
+     * 客户端进入 System View 时调用，game 层据此优先计算该星系舰船。
+     */
+    public void setActiveSystemId(long systemId) {
+        this.activeSystemId = systemId;
+    }
+
+    /** 获取玩家当前查看的恒星系ID。 */
+    public long getActiveSystemId() {
+        return activeSystemId;
+    }
 
     public StarAxisGameRuntime(WorldState worldState) {
         this.worldState = worldState;
@@ -154,7 +172,29 @@ public class StarAxisGameRuntime implements GameRuntime {
         ws.intelSystem = new staraxis.game.intel.IntelSystem(ws, configRegistry.intel());
 
         // 开局清空：不注册玩家、不注册国家、不分配任何归属喵
-        // 所有权相关操作待后续 AssetManager 统一处理
+
+        // ── 测试舰船：每个星系生成一艘，静止在恒星外安全位置 ──
+        for (StarSystem sys : systems) {
+            if (sys == null) continue;
+
+            double offset = sys.gravityWellRadiusGU * 0.04;
+            if (offset < 3000) offset = 3000;
+
+            long id = ws.generateEntityId();
+            ShipBody ship = new ShipBody();
+            ship.entityId = id;
+            ship.entityType = staraxis.game.entity.EntityType.SHIP;
+            ship.posWorldGU = new SpacePosition(
+                sys.galaxyPos.x() + offset,
+                sys.galaxyPos.y(),
+                sys.galaxyPos.z() + offset);
+            ship.velWorldGU = SpacePosition.ORIGIN;
+            ship.systemId = sys.systemId;
+            ship.hpHull = 1.0;
+            ship.fuelMass = 100.0;
+            ws.registerEntity(ship);
+        }
+
         if (progress != null)
             progress.onProgress(1.0f, "完成");
         return new StarAxisGameRuntime(ws);
@@ -162,6 +202,7 @@ public class StarAxisGameRuntime implements GameRuntime {
 
     @Override
     public void start() {
+        TickProfiler.init();
         publishRealTimeSnapshot();
         worldState.markRealtimeRevisionPublished();
         // 开局先发布一份低频基线快照：使用当前游戏总秒数作为时间戳喵
@@ -171,30 +212,43 @@ public class StarAxisGameRuntime implements GameRuntime {
     @Override
     public void update(float dtSeconds) {
         long tickStartTime = System.nanoTime();
+        TickProfiler.tickStart();
 
         // 独立时间轴系统推进：唯一权威时间入口喵
+        TickProfiler.begin("timeline");
         TimelineSystem.TickAdvance tickAdvance = TimelineSystem.advanceOneTick(worldState.time);
         double dtGameHours = tickAdvance.dtGameHours;
+        TickProfiler.end();
 
         // STAGE 1: 处理到期跨系统事件（到达事件：将实体恢复到目标星系）
+        TickProfiler.begin("arrivals");
         worldState.tickDispatcher.stage1Arrivals(worldState, worldState.time.simulationTick);
+        TickProfiler.end();
 
         // STAGE 1.5: 重建星系八叉树空间索引（每 tick，只读查询）
+        TickProfiler.begin("octree");
         worldState.tickDispatcher.stage1halfRebuildOctree(worldState);
+        TickProfiler.end();
 
         // STAGE 2: LPT 负载分配
+        TickProfiler.begin("loadBalance");
         worldState.tickDispatcher.stage2LoadBalance(worldState, worldState.time.simulationTick);
+        TickProfiler.end();
 
         // STAGE 3: 处理 Command 队列并更新 WorldState喵。
-        // 当前全局操作（非 per-system 拆分），后续可接入 TickDispatcher.stage3PerSystemCalc()
+        TickProfiler.begin("command");
         commandBus.executeCommands(worldState, dtGameHours);
+        TickProfiler.end();
 
         // 处理舰船移动喵（在途实体已被 entityIdsBySystem 排除，不会参与计算）
-        shipMovementSystem.update(worldState, dtGameHours);
+        TickProfiler.begin("movement");
+        shipMovementSystem.update(worldState, dtGameHours, activeSystemId);
+        TickProfiler.end();
 
         // 可见性由 SnapshotBroadcaster 按需通过 computeIntelVisibleSystems3D() 计算，不在 tick 中预存
 
-        // 检查是否需要推送低频基线快照（每分钟周期或事件触发/玩家操作触发脏标记）喵
+        // 检查是否需要推送低频基线快照
+        TickProfiler.begin("snapshot");
         long currentGameSeconds = worldState.time.getTotalGameSeconds();
         boolean intervalReached = (currentGameSeconds - worldState.lastBaselinePublishGameSeconds) >= 60;
         if (intervalReached || worldState.baselineDirty) {
@@ -211,8 +265,10 @@ public class StarAxisGameRuntime implements GameRuntime {
         // STAGE 4/5: TickDispatcher 合并 + 发布钩子
         worldState.tickDispatcher.stage4Merge();
         worldState.tickDispatcher.stage5Publish();
+        TickProfiler.end();
 
         // 记录性能数据喵
+        TickProfiler.tickEnd(worldState.entitiesById.size());
         long tickEndTime = System.nanoTime();
         long tickTimeMs = (tickEndTime - tickStartTime) / 1_000_000L;
 
@@ -555,73 +611,41 @@ public class StarAxisGameRuntime implements GameRuntime {
             }
         }
 
-        // 4. 追加私有/动态实体（当前主要是 SHIP）的实时快照下发喵
-        // 说明：该分支只处理非天体动态实体，避免与上方天体循环重复写入喵
-        java.util.ArrayList<Entity> dynamicEntities = new java.util.ArrayList<>(worldState.entitiesById.values());
-        for (Entity entity : dynamicEntities) {
-            if (entity == null || entity.entityType == null) {
+        // 4. 追加动态实体（仅 SHIP）的实时快照下发
+        // 说明：恒星与行星已在步骤 2-3 完成快照，此处只处理 ShipBody
+        for (Entity entity : worldState.entitiesById.values()) {
+            if (entity == null || entity.entityType != EntityType.SHIP) {
                 continue;
-            }
-            if (entity.entityType != EntityType.SHIP) {
-            if (entity.systemId > 0) {
-                s.putEntitySystem(entity.systemId, entity.entityId);
-            }
-                continue;
-            }
-
-            // 保障动态实体有系统索引
-            if (entity.systemId <= 0 && entity.posWorldGU != null) {
-                // 通过 Octree 查找最近的星系（暂缺，优先保留 systemId=0 标记为深空）
             }
 
             s.putEntity(entity);
-            // SHIP 为私有/情报数据，isPublic=false 喵
+            if (entity.systemId > 0) {
+                s.putEntitySystem(entity.systemId, entity.entityId);
+            }
+
+            // SHIP 为私有/情报数据，isPublic=false
             java.util.Set<String> customFlags = java.util.Set.of();
-            if (entity instanceof staraxis.game.ship.ShipBody shipBody && shipBody.customFlags != null) {
+            if (entity instanceof staraxis.game.ship.ShipBody shipBody && shipBody.customFlags != null
+                    && !shipBody.customFlags.isEmpty()) {
                 customFlags = java.util.Set.copyOf(shipBody.customFlags);
             }
 
-            // 朝向计算：优先由速度向量推导，静止时回退 0 度喵。
+            // 朝向计算：优先使用 ShipBody.currentHeadingDeg
             double headingDeg = 0.0;
-            if (entity.velWorldGU != null) {
-                double vx = entity.velWorldGU.x();
-                double vz = entity.velWorldGU.z();
-                if (Math.abs(vx) > 1e-9 || Math.abs(vz) > 1e-9) {
-                    headingDeg = Math.toDegrees(Math.atan2(vz, vx));
-                }
-            }
-
-            // 获取舰船的移动状态和物理属性喵
             boolean isMoving = false;
             SpacePosition movementTarget = null;
             SpacePosition velocity = null;
-            // 默认值与 ShipBody 一致，后续从 shipBody 读取实际值喵
-            double maxSpeed = 20.0;
-            double baseAcceleration = 5.0;
-            double bowAccelerationBonus = 5.0;
-            double turnRate = 45.0;
-            double lateralSpeedPenalty = 0.6;
-            double reverseSpeedPenalty = 0.3;
             if (entity instanceof staraxis.game.ship.ShipBody shipBody) {
                 isMoving = shipBody.isMoving;
                 movementTarget = shipBody.movementTarget;
                 velocity = shipBody.velWorldGU;
-                maxSpeed = shipBody.maxSpeed;
-                baseAcceleration = shipBody.baseAcceleration;
-                bowAccelerationBonus = shipBody.bowAccelerationBonus;
-                turnRate = shipBody.turnRate;
-                lateralSpeedPenalty = shipBody.lateralSpeedPenalty;
-                reverseSpeedPenalty = shipBody.reverseSpeedPenalty;
-                // 使用当前朝向作为headingDeg喵
                 headingDeg = shipBody.currentHeadingDeg;
             }
 
-            // 获取情报需求等级（从 IntelSystem 查询，默认 4 级）喵
             int intelRequiredLevel = worldState.intelSystem != null
                     ? worldState.intelSystem.getRequiredIntelLevel(entity.entityType)
                     : 4;
 
-            // 调试日志：只在舰船正在移动时记录（降低日志频率）喵
             s.putEntitySnapshot(new EntitySnapshot(
                     entity.entityId,
                     entity.entityType,
@@ -631,9 +655,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                     entity.ownerNationId,
                     entity.ownerPlayerId,
                     false,
-                    new EntitySnapshot.ShipDetails(customFlags, headingDeg, isMoving, movementTarget, velocity,
-                            maxSpeed, baseAcceleration, bowAccelerationBonus, turnRate,
-                            lateralSpeedPenalty, reverseSpeedPenalty),
+                    new EntitySnapshot.ShipDetails(customFlags, headingDeg, isMoving, movementTarget, velocity),
                     intelRequiredLevel));
         }
 

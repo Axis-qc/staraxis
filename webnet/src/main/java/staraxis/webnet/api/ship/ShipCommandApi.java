@@ -212,24 +212,14 @@ public final class ShipCommandApi {
         result.put("targetPosition", toSpacePosMap(command.targetPosition));
         result.put("startPosition", toSpacePosMap(command.startPosition));
         result.put("startVelocity", toSpacePosMap(command.startVelocity));
-        result.put("startHeadingDeg", command.startHeadingDeg);
         result.put("startGameSeconds", command.startGameSeconds);
         result.put("startSimulationTick", command.startSimulationTick);
-        result.put("maxSpeed", command.maxSpeed);
-        result.put("baseAcceleration", command.baseAcceleration);
-        result.put("bowAccelerationBonus", command.bowAccelerationBonus);
-        result.put("turnRate", command.turnRate);
-        result.put("lateralSpeedPenalty", command.lateralSpeedPenalty);
-        result.put("reverseSpeedPenalty", command.reverseSpeedPenalty);
         return result;
     }
 
     private static String toMovementCommandType(int commandType) {
         if (commandType == MovementCommand.TYPE_MOVE_TO) {
             return "MOVE_TO";
-        }
-        if (commandType == MovementCommand.TYPE_STOP) {
-            return "STOP";
         }
         return "UNKNOWN";
     }

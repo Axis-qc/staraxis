@@ -251,4 +251,16 @@ public class WorldCamera {
         pitch = 45f;
         target.set(0, 0, 0);
     }
+
+    /**
+     * 是否正在被 WASDQE 键移动镜头。
+     */
+    public boolean isUserControlled() {
+        return Gdx.input.isKeyPressed(Input.Keys.W)
+            || Gdx.input.isKeyPressed(Input.Keys.S)
+            || Gdx.input.isKeyPressed(Input.Keys.A)
+            || Gdx.input.isKeyPressed(Input.Keys.D)
+            || Gdx.input.isKeyPressed(Input.Keys.Q)
+            || Gdx.input.isKeyPressed(Input.Keys.E);
+    }
 }
