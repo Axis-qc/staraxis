@@ -76,9 +76,9 @@ public class NationAssetManager {
 
         // 标记情报系统为脏，触发探测等级重算喵
         if (worldState.intelSystem != null) {
-            worldState.intelSystem.markDirty(nationId);
+            // IntelSystem 3D 版本不依赖标记脏标记（每 tick Octree 自动重建）
             if (oldNation != null) {
-                worldState.intelSystem.markDirty(oldNation.nationId);
+                // IntelSystem 3D 版本不需要脏标记
             }
         }
         worldState.markRealtimeDirty();
@@ -131,7 +131,7 @@ public class NationAssetManager {
 
         // 标记情报系统为脏喵
         if (worldState.intelSystem != null && oldNationId != null) {
-            worldState.intelSystem.markDirty(oldNationId);
+            // IntelSystem 3D 版本不需要脏标记
         }
         worldState.markRealtimeDirty();
     }

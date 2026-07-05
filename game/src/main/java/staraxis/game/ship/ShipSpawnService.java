@@ -62,10 +62,7 @@ public final class ShipSpawnService {
         // 固定偏移向量（500 GU 在 X 轴正方向）喵，映射到 3D XZ 平面
         SpacePosition shipPos = new SpacePosition(systemCenter.x() + 500.0, systemCenter.y(), systemCenter.z());
 
-        // 3. 计算星区坐标喵
-        SectorCoord sectorCoord = WorldHexLayout.worldToSectorCoord(shipPos);
-
-        // 4. 创建舰船实体喵
+        // 3. 创建舰船实体喵
         ShipBody ship = new ShipBody();
         ship.entityId = entityId;
         ship.entityType = EntityType.SHIP;
@@ -73,7 +70,6 @@ public final class ShipSpawnService {
         ship.ownerNationId = nationId;
         ship.posWorldGU = shipPos;
         ship.velWorldGU = SpacePosition.ORIGIN;
-        ship.sectorCoord = sectorCoord;
         ship.systemId = spawnSystem.systemId; // 所属星系ID喵
 
         // 硬编码初始属性喵

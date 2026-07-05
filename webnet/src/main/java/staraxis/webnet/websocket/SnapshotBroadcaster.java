@@ -5,7 +5,6 @@ import io.undertow.websockets.core.WebSocketChannel;
 import io.undertow.websockets.core.WebSockets;
 import staraxis.game.log.GameLog;
 import staraxis.game.StarAxisGameRuntime;
-import staraxis.game.world.hex.SectorCoord;
 import staraxis.webnet.core.WsConnectionManager;
 import staraxis.webnet.dto.SnapshotHighFreqMessageDto;
 import staraxis.webnet.dto.SnapshotLowFreqMessageDto;

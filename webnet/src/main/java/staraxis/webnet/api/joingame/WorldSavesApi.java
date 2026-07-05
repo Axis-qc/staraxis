@@ -7,7 +7,6 @@ import staraxis.game.entity.EntityType;
 import staraxis.game.ship.ShipBody;
 import staraxis.game.space.SpacePosition;
 import staraxis.game.world.WorldGenConfig;
-import staraxis.game.world.hex.SectorCoord;
 import staraxis.webnet.game.GameSessions;
 
 import java.util.ArrayList;
@@ -67,7 +66,7 @@ public final class WorldSavesApi {
                 StarAxisGameRuntime runtime = GameSessions.getRuntime(worldId);
                 if (runtime != null) {
                     try {
-                        item.put("worldRadius", runtime.getWorldStateForSimOnly().worldMap.radius);
+                        item.put("worldRadius", runtime.getWorldStateForSimOnly().worldRadius);
                         item.put("simulationTick", runtime.getRealTimeWorldStateReadonly().simulationTick);
                         item.put("totalGameSeconds", runtime.getRealTimeWorldStateReadonly().totalGameSeconds);
                     } catch (Exception e) {
@@ -612,11 +611,7 @@ public final class WorldSavesApi {
             // 设置通用字段喵
             entity.systemId = e.get("systemId") instanceof Number n ? n.longValue() : 0L;
             entity.parentEntityId = e.get("parentEntityId") instanceof Number n ? n.longValue() : 0L;
-            Object sectorQ = e.get("sectorQ");
-            Object sectorR = e.get("sectorR");
-            if (sectorQ instanceof Number q && sectorR instanceof Number r) {
-                entity.sectorCoord = new SectorCoord(q.intValue(), r.intValue());
-            }
+            // sectorCoord 已删除（hex 地图停止开发）
             Object posX = e.get("posX");
             Object posY = e.get("posY");
             Object posZ = e.get("posZ");

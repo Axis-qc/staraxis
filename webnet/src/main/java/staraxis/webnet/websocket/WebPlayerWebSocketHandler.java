@@ -8,9 +8,6 @@ import io.undertow.websockets.core.WebSockets;
 import io.undertow.websockets.spi.WebSocketHttpExchange;
 import staraxis.game.log.GameLog;
 import staraxis.game.StarAxisGameRuntime;
-import staraxis.game.intel.IntelSystem;
-import staraxis.game.nation.VisibilitySystem;
-import staraxis.game.world.hex.SectorCoord;
 import staraxis.webnet.ai.WebAiAutoStarter;
 import staraxis.webnet.auth.AuthStore;
 import staraxis.webnet.command.WebCommandRegistry;
@@ -228,9 +225,10 @@ public class WebPlayerWebSocketHandler {
             }
 
             // 可见星系由服务端权威计算（3D Octree 版本）
+            var sysIntel = runtime.getWorldStateForSimOnly().intelSystem;
             Set<Long> visible;
-            if (intelSystem != null) {
-                visible = intelSystem.getVisibleEntities3D(nationId, 0);
+            if (sysIntel != null) {
+                visible = sysIntel.getVisibleEntities3D(nationId, 0);
             } else {
                 visible = runtime.getWorldStateForSimOnly().visibilitySystem
                         .computeIntelVisibleSystems3D(nationId);
