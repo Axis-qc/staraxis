@@ -32,6 +32,9 @@ public class Entity {
     /** 所属国家/文明 ID（nationId 口径，String 类型，与国家定义 ID 一致）。无归属时为 null。 */
     public String ownerNationId;
 
+    /** 所属玩家ID（playerId 口径，p_ 开头 UUID）。无归属时为 null。 */
+    public String ownerPlayerId;
+
     public Entity() {
     }
 }

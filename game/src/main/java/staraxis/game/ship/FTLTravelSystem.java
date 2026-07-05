@@ -1,13 +1,13 @@
 package staraxis.game.ship;
 
+import java.util.List;
+
 import staraxis.game.entity.Entity;
-import staraxis.game.state.WorldState;
-import staraxis.game.state.snapshot.EntitySnapshot;
 import staraxis.game.space.SpacePosition;
 import staraxis.game.space.event.CrossSystemEvent;
 import staraxis.game.space.event.CrossSystemEventTable;
-
-import java.util.List;
+import staraxis.game.state.WorldState;
+import staraxis.game.state.snapshot.EntitySnapshot;
 
 /**
  * FTLTravelSystem（FTL 跳跃系统）。

@@ -24,6 +24,8 @@ public class EntitySnapshot {
     public final long parentEntityId;
     public final SpacePosition posWorldGU;
     public final String ownerNationId;
+    /** 所属玩家ID（playerId）。无归属时为 null。 */
+    public final String ownerPlayerId;
     public final boolean isPublic;
 
     @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXTERNAL_PROPERTY, property = "entityType")
@@ -44,9 +46,10 @@ public class EntitySnapshot {
             long parentEntityId,
             SpacePosition posWorldGU,
             String ownerNationId,
+            String ownerPlayerId,
             boolean isPublic,
             Object details) {
-        this(entityId, entityType, systemId, parentEntityId, posWorldGU, ownerNationId, isPublic,
+        this(entityId, entityType, systemId, parentEntityId, posWorldGU, ownerNationId, ownerPlayerId, isPublic,
                 details, 0);
     }
 
@@ -57,6 +60,7 @@ public class EntitySnapshot {
             long parentEntityId,
             SpacePosition posWorldGU,
             String ownerNationId,
+            String ownerPlayerId,
             boolean isPublic,
             Object details,
             int intelRequiredLevel) {
@@ -66,6 +70,7 @@ public class EntitySnapshot {
         this.parentEntityId = parentEntityId;
         this.posWorldGU = posWorldGU;
         this.ownerNationId = ownerNationId;
+        this.ownerPlayerId = ownerPlayerId;
         this.isPublic = isPublic;
         this.details = details;
         this.intelRequiredLevel = Math.max(0, Math.min(10, intelRequiredLevel));

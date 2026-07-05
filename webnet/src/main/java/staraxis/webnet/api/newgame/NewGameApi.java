@@ -182,12 +182,10 @@ public final class NewGameApi {
 
         StarAxisGameRuntime runtime = StarAxisGameRuntime.newGame(cfg);
 
-        // 确保国家已注册并绑定玩家喵
-        var nm = runtime.getWorldStateForSimOnly().nationManager;
-        if (!nm.hasNation(d.nationId)) {
-            nm.registerNation(d.nationId);
-        }
-        nm.assignPlayerToNation(playerId, d.nationId);
+        // TODO 开局清空：暂不注册国家/绑定玩家，等 AssetManager 统一处理喵
+        // var nm = runtime.getWorldStateForSimOnly().nationManager;
+        // if (!nm.hasNation(d.nationId)) { nm.registerNation(d.nationId); }
+        // nm.assignPlayerToNation(playerId, d.nationId);
 
         runtime.start();
 

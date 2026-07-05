@@ -35,12 +35,6 @@ public class NationState {
     /** 外交关系映射：目标国家ID -> 关系类型（如：ALLIANCE, PEACE, WAR, NEUTRAL）。 */
     public final Map<String, String> diplomaticRelations = new HashMap<>();
 
-    /** 已探索的星区坐标集合（记忆层）。 */
-    public final Set<String> exploredSectorCoords = new HashSet<>();
-
-    /** 当前可见的星区坐标集合（实时层）。 */
-    public final Set<String> visibleSectorCoords = new HashSet<>();
-
     /** 传感器范围（基础+升级，单位：GU）。 */
     public double sensorRangeGU = 100.0;
 
@@ -69,8 +63,8 @@ public class NationState {
      * 按实体类型聚合的直接资产表：EntityType -> 该类型下本国直接拥有的实体ID集合。
      *
      * 说明：
-     * - 仅记录“直接所有权”的实体（如行星、城市、舰船等），不展开层级关系。
-     * - 维护逻辑由 NationAssetManager 负责调用本表的增删接口，避免业务层直接操作内部结构。
+     * - 仅记录"直接所有权"的实体（如行星、城市、舰船等），不展开层级关系。
+     * - 维护逻辑由 AssetManager 负责调用本表的增删接口，避免业务层直接操作内部结构。
      */
     public final Map<EntityType, Set<Long>> ownedEntityIdsByType = new HashMap<>();
 
@@ -151,52 +145,7 @@ public class NationState {
         return "ALLIANCE".equals(getDiplomaticRelation(targetNationId));
     }
 
-    /**
-     * 添加探索星区。
-     *
-     * @param sectorCoord 星区坐标（字符串表示，如 "0,0" 或 "q:0,r:0"）
-     */
-    public void addExploredSector(String sectorCoord) {
-        exploredSectorCoords.add(sectorCoord);
-    }
 
-    /**
-     * 添加可见星区。
-     *
-     * @param sectorCoord 星区坐标
-     */
-    public void addVisibleSector(String sectorCoord) {
-        visibleSectorCoords.add(sectorCoord);
-    }
-
-    /**
-     * 移除可见星区。
-     *
-     * @param sectorCoord 星区坐标
-     */
-    public void removeVisibleSector(String sectorCoord) {
-        visibleSectorCoords.remove(sectorCoord);
-    }
-
-    /**
-     * 检查星区是否已探索（记忆层）。
-     *
-     * @param sectorCoord 星区坐标
-     * @return 如果已探索则返回 true
-     */
-    public boolean isSectorExplored(String sectorCoord) {
-        return exploredSectorCoords.contains(sectorCoord);
-    }
-
-    /**
-     * 检查星区是否当前可见（实时层）。
-     *
-     * @param sectorCoord 星区坐标
-     * @return 如果当前可见则返回 true
-     */
-    public boolean isSectorVisible(String sectorCoord) {
-        return visibleSectorCoords.contains(sectorCoord);
-    }
 
     /**
      * 获取传感器范围（GU）。
@@ -239,7 +188,7 @@ public class NationState {
      *
      * 说明：
      * - 不检查实体当前的 ownerNationId，仅负责数据结构维护。
-     * - 资产归属的一致性由 NationAssetManager 负责在调用前后保证。
+     * - 资产归属的一致性由 AssetManager 负责在调用前后保证。
      *
      * @param entity 目标实体
      */

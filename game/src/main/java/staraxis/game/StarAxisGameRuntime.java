@@ -153,97 +153,8 @@ public class StarAxisGameRuntime implements GameRuntime {
             progress.onProgress(0.97f, "初始化情报系统");
         ws.intelSystem = new staraxis.game.intel.IntelSystem(ws, configRegistry.intel());
 
-        // 初始化玩家国家并绑定出生点喵
-        if (progress != null)
-            progress.onProgress(0.98f, "初始化玩家国家");
-        if (cfg.playerNationDef != null && cfg.playerNationDef.id != null && !cfg.playerNationDef.id.isBlank()) {
-            String nationId = cfg.playerNationDef.id;
-            if (!ws.nationManager.hasNation(nationId)) {
-                ws.nationManager.registerNation(nationId);
-            }
-            var ns = ws.nationManager.getNationState(nationId);
-            if (ns != null) {
-                ns.name = cfg.playerNationDef.name;
-                ns.governmentId = cfg.playerNationDef.governmentId;
-            }
-
-            long spawnSystemId = 0;
-            String mode = cfg.playerNationDef.spawnStrategy == null ? null : cfg.playerNationDef.spawnStrategy.mode;
-            if (mode == null || mode.isBlank()) {
-                mode = staraxis.game.nation.NationDef.SpawnStrategy.MODE_RANDOM;
-            }
-
-            if (staraxis.game.nation.NationDef.SpawnStrategy.MODE_PRESET.equals(mode)) {
-                // 预设系统已随旧版本 WorldMap 体系清理，回退到随机选择
-            }
-
-            if (spawnSystemId == 0) {
-                // random：从未归属星系中确定性选择一个喵
-                java.util.ArrayList<StarSystem> candidates = new java.util.ArrayList<>();
-                for (StarSystem sys : systems) {
-                    if (sys == null) {
-                        continue;
-                    }
-                    boolean owned = false;
-                    for (StarBody star : sys.stars) {
-                        if (star != null && star.ownerNationId != null && !star.ownerNationId.isBlank()) {
-                            owned = true;
-                            break;
-                        }
-                    }
-                    if (!owned) {
-                        for (PlanetBody planet : sys.planets) {
-                            if (planet != null && planet.ownerNationId != null && !planet.ownerNationId.isBlank()) {
-                                owned = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (!owned) {
-                        candidates.add(sys);
-                    }
-                }
-
-                if (!candidates.isEmpty()) {
-                    long mixed = astroGenerator.getWorldSeedHash() ^ (long) nationId.hashCode();
-                    java.util.Random rr = new java.util.Random(mixed);
-                    spawnSystemId = candidates.get(rr.nextInt(candidates.size())).systemId;
-                }
-            }
-
-            if (ns != null) {
-                ns.spawnSystemEntityId = spawnSystemId;
-            }
-
-            // 将出生星系内的天体归属到该国，并确定性选择首都行星喵
-            if (spawnSystemId != 0) {
-                for (StarSystem sys : systems) {
-                    if (sys == null || sys.systemId != spawnSystemId) {
-                        continue;
-                    }
-
-                    // 使用世界种子 + 国家ID 作为确定性随机源，从该星系中随机选择一颗行星作为首都行星喵
-                    PlanetBody capital = null;
-                    if (!sys.planets.isEmpty()) {
-                        long mixed = astroGenerator.getWorldSeedHash() ^ (long) nationId.hashCode();
-                        java.util.Random rr = new java.util.Random(mixed);
-                        capital = sys.planets.get(rr.nextInt(sys.planets.size()));
-                    }
-
-                    // 世界生成时不分配任何归属，等待玩家选择位置生成殖民舰喵
-                    // 仅记录出生星系，但星系内天体保持无主状态喵
-                    if (ns != null && capital != null) {
-                        // ws.nationAssetManager.assignEntityToNation(capital.entityId, nationId); //
-                        // 禁用初始归属分配喵
-                        ns.capitalPlanetEntityId = 0L; // 无首都行星，等待殖民喵
-                        ns.spawnSystemEntityId = sys.systemId; // 记录出生星系喵
-                    }
-
-                    break;
-                }
-            }
-        }
-
+        // 开局清空：不注册玩家、不注册国家、不分配任何归属喵
+        // 所有权相关操作待后续 AssetManager 统一处理
         if (progress != null)
             progress.onProgress(1.0f, "完成");
         return new StarAxisGameRuntime(ws);
@@ -281,8 +192,7 @@ public class StarAxisGameRuntime implements GameRuntime {
         // 处理舰船移动喵（在途实体已被 entityIdsBySystem 排除，不会参与计算）
         shipMovementSystem.update(worldState, dtGameHours);
 
-        // 更新所有国家的可见性状态（基于当前世界状态）
-        worldState.visibilitySystem.updateAllNationsVisibility();
+        // 可见性由 SnapshotBroadcaster 按需通过 computeIntelVisibleSystems3D() 计算，不在 tick 中预存
 
         // 检查是否需要推送低频基线快照（每分钟周期或事件触发/玩家操作触发脏标记）喵
         long currentGameSeconds = worldState.time.getTotalGameSeconds();
@@ -434,6 +344,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                     0,
                     systemPos,
                     null,
+                    null,
                     true,
                     new EntitySnapshot.SystemBarycenterDetails()));
 
@@ -446,6 +357,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                         system.barycenterEntityId,
                         star.posWorldGU != null ? star.posWorldGU : systemPos,
                         star.ownerNationId,
+                        star.ownerPlayerId,
                         true,
                         new EntitySnapshot.StarDetails(star.starTypeId, star.radiusGU, star.massSolar,
                                 star.temperatureK, star.description, star.surfaceTexturePath)));
@@ -468,6 +380,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                         system.barycenterEntityId,
                         systemPos,
                         planet.ownerNationId,
+                        planet.ownerPlayerId,
                         true,
                         new EntitySnapshot.PlanetDetails(
                                 planet.planetTypeId,
@@ -549,6 +462,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                     barycenter.parentEntityId,
                     barycenter.posWorldGU,
                     barycenter.ownerNationId,
+                    barycenter.ownerPlayerId,
                     true,
                     new EntitySnapshot.SystemBarycenterDetails(),
                     0));
@@ -577,6 +491,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                         star.parentEntityId,
                         star.posWorldGU,
                         star.ownerNationId,
+                        star.ownerPlayerId,
                         true,
                         new EntitySnapshot.StarDetails(
                                 star.starTypeId,
@@ -620,6 +535,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                         planet.parentEntityId,
                         planet.posWorldGU,
                         planet.ownerNationId,
+                        planet.ownerPlayerId,
                         true,
                         new EntitySnapshot.PlanetDetails(
                                 planet.planetTypeId,
@@ -713,6 +629,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                     entity.parentEntityId,
                     entity.posWorldGU,
                     entity.ownerNationId,
+                    entity.ownerPlayerId,
                     false,
                     new EntitySnapshot.ShipDetails(customFlags, headingDeg, isMoving, movementTarget, velocity,
                             maxSpeed, baseAcceleration, bowAccelerationBonus, turnRate,

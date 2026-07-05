@@ -541,7 +541,8 @@ public final class WorldSavesApi {
                     if (pid == null) {
                         continue;
                     }
-                    ws.nationManager.assignPlayerToNation(String.valueOf(pid), nationId);
+                    // TODO AssetManager 统一处理：存档加载暂不自动绑定玩家-国家归属喵
+                    // ws.nationManager.assignPlayerToNation(String.valueOf(pid), nationId);
                 }
             }
         }
@@ -631,10 +632,10 @@ public final class WorldSavesApi {
             // 注册到世界状态喵
             ws.registerEntity(entity);
 
-            // 分配国家资产归属喵
-            if (entity.ownerNationId != null && !entity.ownerNationId.isBlank()) {
-                ws.nationAssetManager.assignEntityToNation(entityId, entity.ownerNationId);
-            }
+            // TODO AssetManager 统一处理：存档加载暂不自动分配资产归属喵
+            // if (entity.ownerNationId != null && !entity.ownerNationId.isBlank()) {
+            //     ws.nationAssetManager.assignEntityToNation(entityId, entity.ownerNationId);
+            // }
         }
     }
 }

@@ -8,7 +8,6 @@ import staraxis.game.ship.MovementCommand;
 import staraxis.game.ship.ShipBody;
 import staraxis.game.state.WorldState;
 import staraxis.game.space.SpacePosition;
-import staraxis.game.world.Vec2d;
 import staraxis.webnet.game.GameSessions;
 
 import java.util.LinkedHashMap;

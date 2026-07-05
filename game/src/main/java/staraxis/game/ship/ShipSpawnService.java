@@ -67,7 +67,6 @@ public final class ShipSpawnService {
         ship.entityId = entityId;
         ship.entityType = EntityType.SHIP;
         ship.designId = null; // 暂不依赖设计文件喵
-        ship.ownerNationId = nationId;
         ship.posWorldGU = shipPos;
         ship.velWorldGU = SpacePosition.ORIGIN;
         ship.systemId = spawnSystem.systemId; // 所属星系ID喵
@@ -80,18 +79,11 @@ public final class ShipSpawnService {
 
         // 初始化舰船性能数据（从 ShipDesign 配置读取，当前使用 ShipBody 默认值）喵
         // 科技等级加成将在科技系统完成后接入喵
-        // ship.maxSpeed = ...;              // 继承 ShipBody 默认值 20.0 GU/s
-        // ship.baseAcceleration = ...;      // 继承 ShipBody 默认值 5.0 GU/s²
-        // ship.bowAccelerationBonus = ...;  // 继承 ShipBody 默认值 5.0 GU/s²
-        // ship.turnRate = ...;              // 继承 ShipBody 默认值 45.0 度/秒
-        // ship.lateralSpeedPenalty = ...;   // 继承 ShipBody 默认值 0.6
-        // ship.reverseSpeedPenalty = ...;   // 继承 ShipBody 默认值 0.3
 
         // 5. 注册到权威世界状态喵
         worldState.registerEntity(ship);
 
-        // 6. 通过资产管理器分配归属（确保国家资产列表更新）喵
-        worldState.nationAssetManager.assignEntityToNation(entityId, nationId);
+        // TODO AssetManager 统一处理：等归属转移设计完成后，通过 AssetManager.assignToPlayer/assignToNation 分配喵
 
         return entityId;
     }
@@ -135,7 +127,6 @@ public final class ShipSpawnService {
         ship.entityId = entityId;
         ship.entityType = EntityType.SHIP;
         ship.designId = null; // 暂不依赖设计文件喵
-        ship.ownerNationId = nationId;
         ship.posWorldGU = position;
         ship.velWorldGU = SpacePosition.ORIGIN;
         ship.systemId = systemId;
@@ -154,8 +145,7 @@ public final class ShipSpawnService {
         // 4. 注册到权威世界状态喵
         worldState.registerEntity(ship);
 
-        // 5. 通过资产管理器分配归属喵
-        worldState.nationAssetManager.assignEntityToNation(entityId, nationId);
+        // TODO AssetManager 统一处理：等归属转移设计完成后，通过 AssetManager.assignToPlayer/assignToNation 分配喵
 
         return entityId;
     }

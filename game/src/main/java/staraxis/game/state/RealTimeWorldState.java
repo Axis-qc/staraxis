@@ -38,9 +38,6 @@ public class RealTimeWorldState {
     /** 恒星系世界坐标索引（systemId -> 3D坐标）。 */
     private final Map<Long, SpacePosition> systemPositions = new LinkedHashMap<>();
 
-    /** 星区归属缓存（"systemId" -> ownerNationId）。 */
-    private final Map<String, String> sectorOwnerNationIdByCoord = new LinkedHashMap<>();
-
     private final List<EntitySnapshot> entitySnapshots = new ArrayList<>();
 
     /** 按恒星系组织的实体快照索引（systemId字符串 -> 快照列表）。 */
@@ -62,7 +59,6 @@ public class RealTimeWorldState {
         entitiesById.clear();
         entityIdsBySystem.clear();
         systemPositions.clear();
-        sectorOwnerNationIdByCoord.clear();
         entitySnapshots.clear();
         entitySnapshotsBySystem.clear();
     }
@@ -91,13 +87,6 @@ public class RealTimeWorldState {
         systemPositions.put(systemId, position);
     }
 
-    /** 按 systemId 存储归属。 */
-    public void putSectorOwnerNationId(long systemId, String ownerNationId) {
-        if (ownerNationId != null) {
-            sectorOwnerNationIdByCoord.put(String.valueOf(systemId), ownerNationId);
-        }
-    }
-
     // --- 只读视图 ---
 
     public Map<Long, Entity> getEntitiesByIdView() {
@@ -110,10 +99,6 @@ public class RealTimeWorldState {
 
     public Map<Long, SpacePosition> getSystemPositionsView() {
         return Collections.unmodifiableMap(systemPositions);
-    }
-
-    public Map<String, String> getSectorOwnerNationIdByCoordView() {
-        return Collections.unmodifiableMap(sectorOwnerNationIdByCoord);
     }
 
     public List<EntitySnapshot> getEntitySnapshotsView() {

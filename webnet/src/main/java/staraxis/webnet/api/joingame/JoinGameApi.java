@@ -91,8 +91,6 @@ public final class JoinGameApi {
 
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("systemId", sys.systemId);
-            item.put("sectorQ", sys.sectorCoord == null ? 0 : sys.sectorCoord.q());
-            item.put("sectorR", sys.sectorCoord == null ? 0 : sys.sectorCoord.r());
             item.put("centerX", sys.galaxyPos == null ? 0 : sys.galaxyPos.x());
             item.put("centerY", sys.galaxyPos == null ? 0 : sys.galaxyPos.z());
             item.put("starCount", sys.stars == null ? 0 : sys.stars.size());
@@ -192,6 +190,9 @@ public final class JoinGameApi {
 
         var ws = runtime.getWorldStateForSimOnly();
         var nm = ws.nationManager;
+
+        // TODO AssetManager 统一处理：暂不注册国家/绑定玩家/分配归属，等后续流程设计喵
+        /*
         if (!nm.hasNation(nationId)) {
             nm.registerNation(nationId);
         }
@@ -199,7 +200,6 @@ public final class JoinGameApi {
 
         var ns = nm.getNationState(nationId);
         if (ns != null) {
-            // 新策略：初始无首都、无预设国家路线，仅记录出生星系用于后续发展喵。
             if (ns.name == null || ns.name.isBlank()) {
                 ns.name = nationId;
             }
@@ -207,18 +207,16 @@ public final class JoinGameApi {
             ns.capitalPlanetEntityId = 0L;
         }
 
-        // 占用：系统级 owner + 系统内天体 owner 全量落账喵
         target.assignOwnership(nationId);
 
-        // 生成初始殖民舰喵
         long shipEntityId = ShipSpawnService.spawnInitialShip(ws, nationId, target);
         if (shipEntityId > 0) {
-            // 日志记录（可选）喵
             staraxis.webnet.core.WebNetLog.log("Spawned initial colony ship entityId=" + shipEntityId +
                     " for nation " + nationId + " in system " + target.systemId + " 喵");
         } else {
             staraxis.webnet.core.WebNetLog.log("WARNING: Failed to spawn initial colony ship for nation " + nationId + " 喵");
         }
+        */
 
         if (worldId != null && !worldId.isBlank()) {
             GameSessions.markPlayerSpawned(worldId, playerId);

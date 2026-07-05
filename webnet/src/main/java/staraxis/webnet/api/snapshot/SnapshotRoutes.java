@@ -433,15 +433,9 @@ public final class SnapshotRoutes {
 
                         : null;
 
-                String sectorQStr = exchange.getQueryParameters().get("sectorQ") != null
+                String systemIdStr = exchange.getQueryParameters().get("systemId") != null
 
-                        ? exchange.getQueryParameters().get("sectorQ").peekFirst()
-
-                        : null;
-
-                String sectorRStr = exchange.getQueryParameters().get("sectorR") != null
-
-                        ? exchange.getQueryParameters().get("sectorR").peekFirst()
+                        ? exchange.getQueryParameters().get("systemId").peekFirst()
 
                         : null;
 
@@ -479,17 +473,13 @@ public final class SnapshotRoutes {
 
                     offset = 0;
 
-                Integer sectorQ = null;
-
-                Integer sectorR = null;
+                Long systemIdFilter = null;
 
                 try {
 
-                    if (sectorQStr != null && sectorRStr != null) {
+                    if (systemIdStr != null && !systemIdStr.isBlank()) {
 
-                        sectorQ = Integer.parseInt(sectorQStr);
-
-                        sectorR = Integer.parseInt(sectorRStr);
+                        systemIdFilter = Long.parseLong(systemIdStr);
 
                     }
 
@@ -537,9 +527,9 @@ public final class SnapshotRoutes {
 
                     }
 
-                    if (sectorQ != null && sectorR != null) {
+                    if (systemIdFilter != null) {
 
-                        if (s.sectorCoord == null || s.sectorCoord.q() != sectorQ || s.sectorCoord.r() != sectorR) {
+                        if (s.systemId != systemIdFilter) {
 
                             continue;
 

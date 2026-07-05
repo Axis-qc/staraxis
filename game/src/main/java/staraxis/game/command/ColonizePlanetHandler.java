@@ -66,17 +66,12 @@ public class ColonizePlanetHandler implements CommandHandler<ColonizePlanetComma
             throw new IllegalArgumentException("target_is_not_planet");
         }
 
-        // 5. 验证行星是否无主喵
-        if (planetEntity.ownerNationId != null && !planetEntity.ownerNationId.isBlank()) {
-            throw new IllegalArgumentException("planet_already_owned");
+        // 5. 验证行星类型喵
+        if (planetEntity.entityType != staraxis.game.entity.EntityType.PLANET) {
+            throw new IllegalArgumentException("target_is_not_planet");
         }
 
-        // 6. 验证殖民舰所有权喵
-        if (!nationId.equals(shipEntity.ownerNationId)) {
-            throw new IllegalArgumentException("ship_not_owned_by_nation");
-        }
-
-        // 7. 验证距离喵
+        // 6. 验证距离喵
         if (shipEntity.posWorldGU == null || planetEntity.posWorldGU == null) {
             throw new IllegalArgumentException("entity_position_missing");
         }
@@ -88,35 +83,11 @@ public class ColonizePlanetHandler implements CommandHandler<ColonizePlanetComma
             throw new IllegalArgumentException("ship_too_far_from_planet");
         }
 
-        // 8. 执行殖民操作喵
-        // 8.1 分配行星所有权喵
-        planetEntity.ownerNationId = nationId;
+        // TODO AssetManager 统一处理：殖民操作暂禁用，等归属转移设计完成后重新实现喵
+        // 涉及：assignToPlayer、donateToNation、殖民舰消耗、首都绑定等
+        staraxis.game.log.GameLog.log("Colonization disabled: pending AssetManager redesign 喵");
 
-        // 8.2 通过资产管理器注册资产归属喵
-        worldState.nationAssetManager.assignEntityToNation(planetEntityId, nationId);
-
-        // 8.3 更新星系归属标记（简化：systemId 关联的星系默认为该国势力范围）
-        if (planetEntity.systemId > 0) {
-            staraxis.game.log.GameLog.log("Colonization: system " + planetEntity.systemId +
-                    " claimed for " + nationId + " 喵");
-        }
-
-        // 8.4 首都绑定：若该国尚未有首都，则将首次殖民行星设为首都喵
-        staraxis.game.nation.NationState nationState = worldState.nationManager.getNationState(nationId);
-        if (nationState != null && nationState.capitalPlanetEntityId <= 0) {
-            nationState.capitalPlanetEntityId = planetEntityId;
-        }
-
-        // 8.5 殖民舰状态处理：殖民成功后消耗殖民舰并同步资产关系喵
-        if (shipEntity instanceof ShipBody) {
-            worldState.nationAssetManager.releaseEntityOwnership(shipEntityId);
-            worldState.entitiesById.remove(shipEntityId);
-
-            staraxis.game.log.GameLog.log("Colonization successful: ship=" + shipEntityId +
-                    " colonized planet=" + planetEntityId + " for nation=" + nationId + " and consumed ship 喵");
-        }
-
-        // 10. 标记低频基线快照为脏以触发推送喵
+        // 标记低频基线快照为脏以触发推送喵
         worldState.baselineDirty = true;
     }
 

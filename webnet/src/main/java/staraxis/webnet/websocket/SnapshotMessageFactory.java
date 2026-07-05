@@ -102,7 +102,6 @@ public final class SnapshotMessageFactory {
                 rt.simulationTick, rt.totalGameSeconds, rt.totalGameSecondsExact, rt.deltaGameSeconds,
                 rt.worldRadius, rt.worldType.name(), rt.gameSecondsPerRealSecond, rt.timeScale,
                 rt.year, rt.month, rt.day, rt.hour, rt.minute, rt.second,
-                rt.getSectorOwnerNationIdByCoordView(),
                 filteredPublicSnapshots, privateEntitiesByIntelLevel);
 
         DailySettlementState dailyActive = runtime.getDailySettlementStateBufferForReadonly().getActive();
@@ -121,12 +120,28 @@ public final class SnapshotMessageFactory {
                             new DailySettlementStateDto.PlanetSurfaceSnapshotDto(entry.getKey(), regions));
                 }
             }
-            daily = new DailySettlementStateDto(dailyActive.settledAtGameSeconds,
-                    dailyActive.settledDay, planetSurfaces, dailyActive.nationAssetsByNationId);
+            // 转换 nationAssetsByNationId：EntityType enum -> String
+            Map<String, Map<String, List<Long>>> nationAssetsStr = new HashMap<>();
+            if (dailyActive.nationAssetsByNationId != null) {
+                for (var nationEntry : dailyActive.nationAssetsByNationId.entrySet()) {
+                    Map<String, List<Long>> typeStrMap = new HashMap<>();
+                    for (var typeEntry : nationEntry.getValue().entrySet()) {
+                        typeStrMap.put(typeEntry.getKey().name(), new ArrayList<>(typeEntry.getValue()));
+                    }
+                    nationAssetsStr.put(nationEntry.getKey(), typeStrMap);
+                }
+            }
+
+            daily = new DailySettlementStateDto(
+                    dailyActive.settledDay,
+                    dailyActive.settledAtGameSeconds,
+                    dailyActive.sectorCount,
+                    planetSurfaces,
+                    nationAssetsStr,
+                    dailyActive.publicEntityBaselinesBySectorKey);
         }
 
-        return new SnapshotMessageDto(true, null, realTime, daily, null, null,
-                runtime.getWorldStateForSimOnly().nationManager.getPlayerNationId());
+        return new SnapshotMessageDto(true, null, tickCostMs, realTime, daily, nationId);
     }
 
     /**
@@ -142,7 +157,23 @@ public final class SnapshotMessageFactory {
     }
 
     public static SnapshotHighFreqMessageDto buildHighFreqSnapshotMessage(SnapshotMessageDto snapshot) {
-        return SnapshotHighFreqMessageDto.from(snapshot);
+        if (snapshot == null || snapshot.realTimeWorldState == null) {
+            return SnapshotHighFreqMessageDto.forFull(
+                    null, 0, 0, 0, 0,
+                    java.util.Collections.emptyList(),
+                    java.util.Collections.emptyMap(),
+                    null);
+        }
+        var rt = snapshot.realTimeWorldState;
+        return SnapshotHighFreqMessageDto.forFull(
+                snapshot.tickCostMs,
+                rt.simulationTick,
+                rt.totalGameSeconds,
+                rt.totalGameSecondsExact,
+                rt.deltaGameSeconds,
+                rt.entities,
+                rt.privateEntitiesByIntelLevel,
+                snapshot.playerNationId);
     }
 
     public static SnapshotLowFreqMessageDto buildLowFreqSnapshotMessage(SnapshotMessageDto snapshot,
@@ -161,7 +192,6 @@ public final class SnapshotMessageFactory {
                 rt.simulationTick, version, rt.worldRadius, rt.worldType,
                 rt.gameSecondsPerRealSecond, rt.timeScale,
                 rt.year, rt.month, rt.day, rt.hour, rt.minute, rt.second,
-                rt.sectorOwnerNationIdByCoord,
                 snapshot.dailySettlementState, snapshot.playerNationId, publicEntities);
     }
 
@@ -174,8 +204,10 @@ public final class SnapshotMessageFactory {
 
     public static WorldSummaryDto buildWorldSummary(StarAxisGameRuntime runtime) {
         RealTimeWorldState rt = runtime.getRealTimeWorldStateReadonly();
-        int starCount = runtime.getWorldStateForSimOnly().astro.getSystemsView().size();
-        return new WorldSummaryDto(starCount, rt.worldRadius, rt.simulationTick);
+        WorldSummaryDto dto = new WorldSummaryDto();
+        dto.gameDay = rt.day;
+        dto.simulationTick = rt.simulationTick;
+        return dto;
     }
 
     public static String extractOwnerNationId(EntitySnapshot s) {

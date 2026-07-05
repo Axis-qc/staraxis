@@ -5,6 +5,7 @@ import staraxis.game.entity.Entity;
 import staraxis.game.sim.SimulationTime;
 import staraxis.game.nation.NationManager;
 import staraxis.game.nation.NationSpawnService;
+import staraxis.game.player.PlayerManager;
 import staraxis.game.space.SpacePosition;
 import staraxis.game.nation.VisibilitySystem;
 
@@ -76,10 +77,13 @@ public class WorldState {
     /** 国家管理器：管理所有国家的运行时状态、玩家归属和外交关系。 */
     public final NationManager nationManager = new NationManager();
 
+    /** 玩家管理器：管理所有玩家的运行时状态。与 NationManager 平行。 */
+    public final PlayerManager playerManager = new PlayerManager();
+
     /**
-     * 国家资产管理器：集中管理国家与实体之间的资产归属关系。
+     * 资产管理器：统一管理 Player 和 Nation 两个维度的实体所有权。
      */
-    public final staraxis.game.nation.NationAssetManager nationAssetManager = new staraxis.game.nation.NationAssetManager(
+    public final staraxis.game.nation.AssetManager assetManager = new staraxis.game.nation.AssetManager(
             this);
 
     /**

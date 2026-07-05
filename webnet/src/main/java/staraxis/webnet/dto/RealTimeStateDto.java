@@ -63,9 +63,6 @@ public class RealTimeStateDto {
     /** 结构化游戏日期时间：秒 [0,59] 喵。 */
     public final int second;
 
-    /** 星区归属映射："q,r" -> ownerNationId。 */
-    public final Map<String, String> sectorOwnerNationIdByCoord;
-
     /**
      * 公开实体列表（兼容字段）。
      * 现已主要由 DailySettlementStateDto.publicEntityBaselinesBySectorKey 承载喵。
@@ -83,7 +80,6 @@ public class RealTimeStateDto {
             int worldRadius,
             String worldType, double gameSecondsPerRealSecond, double timeScale,
             int year, int month, int day, int hour, int minute, int second,
-            Map<String, String> sectorOwnerNationIdByCoord,
             List<EntitySnapshot> entities,
             Map<Integer, List<EntitySnapshot>> privateEntitiesByIntelLevel) {
         this.simulationTick = simulationTick;
@@ -100,7 +96,6 @@ public class RealTimeStateDto {
         this.hour = hour;
         this.minute = minute;
         this.second = second;
-        this.sectorOwnerNationIdByCoord = sectorOwnerNationIdByCoord;
         this.entities = entities;
         this.privateEntitiesByIntelLevel = privateEntitiesByIntelLevel;
     }
