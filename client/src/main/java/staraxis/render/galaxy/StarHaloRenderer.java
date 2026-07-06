@@ -21,7 +21,6 @@ import com.badlogic.gdx.utils.BufferUtils;
 import com.badlogic.gdx.utils.GdxRuntimeException;
 
 import staraxis.game.entity.EntityType;
-import staraxis.game.state.RealTimeWorldState;
 import staraxis.game.state.snapshot.EntitySnapshot;
 import staraxis.game.state.snapshot.EntitySnapshot.StarDetails;
 import staraxis.render.WorldCamera;
@@ -245,10 +244,10 @@ public class StarHaloRenderer {
     //  公开 API
     // ═══════════════════════════════════════════════════════════
 
-    /** 从世界状态重建实例缓冲区（与 StarBatchRenderer 同源数据） */
-    public void rebuild(RealTimeWorldState state) {
+    /** 从恒星快照列表重建实例缓冲区（与 StarBatchRenderer 同源数据） */
+    public void rebuild(java.util.List<EntitySnapshot> starSnapshots) {
         java.util.ArrayList<EntitySnapshot> stars = new java.util.ArrayList<>();
-        for (EntitySnapshot snap : state.getEntitySnapshotsView()) {
+        for (EntitySnapshot snap : starSnapshots) {
             if (snap != null && snap.entityType == EntityType.STAR) {
                 stars.add(snap);
             }

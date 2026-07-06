@@ -85,7 +85,7 @@ public class SetSimTimeSpeedCommand implements WebCommandHandler {
 
             double currentStep = 1.0;
             try {
-                currentStep = runtime.getWorldStateForSimOnly().time.playerTimeStep;
+                currentStep = runtime.getRealTimeWorldStateReadonly().gameSecondsPerRealSecond;
             } catch (Exception ignored) {
             }
 

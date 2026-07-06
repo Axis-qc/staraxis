@@ -10,22 +10,20 @@ import staraxis.webnet.dto.SnapshotHighFreqMessageDto;
 import staraxis.webnet.dto.SnapshotLowFreqMessageDto;
 import staraxis.webnet.dto.SnapshotMessageDto;
 import staraxis.webnet.dto.WorldSummaryDto;
-import staraxis.game.entity.EntityType;
 import staraxis.game.state.snapshot.EntitySnapshot;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * SnapshotMessageFactory（精简 3D 版本）
+ * SnapshotMessageFactory
  *
  * 负责将 game 模块的权威状态快照转换为 webnet 模块的 DTO 并打包为消息喵。
- * 已移除所有 hex SectorCoord 依赖。
+ * 公开实体从 DailySettlementState 读取，动态实体从 RealTimeWorldState 读取，情报等级用预计算字段。
  */
 public final class SnapshotMessageFactory {
 
@@ -34,61 +32,73 @@ public final class SnapshotMessageFactory {
 
     private SnapshotMessageFactory() {}
 
-    private static long lastLogTimeMs = 0;
-    private static boolean hasLoggedEntityStatsOnce = false;
-
     /**
      * 构建包含实时状态与日结算状态的快照消息（支持系统可见性过滤）喵。
+     *
+     * 改造后：
+     * - 公开实体基线（STAR/PLANET/SYSTEM_BARYCENTER）从 DailySettlementState 读取
+     * - 私有动态实体（SHIP）从 RealTimeWorldState 读取
+     * - 情报等级从 DailySettlementState 预计算字段获取，不再读 WorldState
      */
     public static SnapshotMessageDto buildSnapshotMessageWithNation(StarAxisGameRuntime runtime, long tickCostMs,
             Set<Long> visibleSystemIds, String nationId) {
         runtime.publishRealtimeSnapshotIfNeeded();
         RealTimeWorldState rt = runtime.getRealTimeWorldStateReadonly();
+        DailySettlementState dailyActive = runtime.getDailySettlementStateBufferForReadonly().getActive();
 
-        Set<String> filterSystemKeys = visibleSystemIds != null
-                ? visibleSystemIds.stream().map(String::valueOf).collect(Collectors.toSet())
-                : new HashSet<>();
-
-        Map<String, List<EntitySnapshot>> snapshotsBySystem = rt.getEntitySnapshotsBySystemView();
+        // 公开实体：合并低频基线（静态天体） + 高频动态实体中公开的部分
         List<EntitySnapshot> filteredPublicSnapshots = new ArrayList<>();
-        Map<Integer, List<EntitySnapshot>> privateEntitiesByIntelLevel = new HashMap<>();
-
-        boolean hasNationId = nationId != null && !nationId.isBlank();
-        var intelSystem = runtime.getWorldStateForSimOnly().intelSystem;
-
-        // 公开实体：无条件
-        for (List<EntitySnapshot> sysSnapshots : snapshotsBySystem.values()) {
+        if (dailyActive != null && dailyActive.publicEntityBaselinesBySectorKey != null) {
+            for (List<EntitySnapshot> baselines : dailyActive.publicEntityBaselinesBySectorKey.values()) {
+                filteredPublicSnapshots.addAll(baselines);
+            }
+        }
+        Map<String, List<EntitySnapshot>> highFreqBySystem = rt.getEntitySnapshotsBySystemView();
+        for (List<EntitySnapshot> sysSnapshots : highFreqBySystem.values()) {
             for (EntitySnapshot s : sysSnapshots) {
-                if (s.isPublic) filteredPublicSnapshots.add(s);
+                if (s != null && s.isPublic) {
+                    filteredPublicSnapshots.add(s);
+                }
             }
         }
 
-        // 私有实体：按可见性过滤
-        Set<String> processKeys = !filterSystemKeys.isEmpty() ? filterSystemKeys : snapshotsBySystem.keySet();
-        for (String systemKey : processKeys) {
-            List<EntitySnapshot> snapshots = snapshotsBySystem.get(systemKey);
+        // 私有实体筛选：可见性 + 情报等级（用预计算字段）
+        Map<Integer, List<EntitySnapshot>> privateEntitiesByIntelLevel = new HashMap<>();
+        boolean hasNationId = nationId != null && !nationId.isBlank();
+
+        Map<String, Long> systemIdToDetectorLevel = null;
+        if (hasNationId && dailyActive != null && dailyActive.detectorLevelByNationAndSystem != null) {
+            Map<Long, Integer> nationDetector = dailyActive.detectorLevelByNationAndSystem.get(nationId);
+            if (nationDetector != null) {
+                systemIdToDetectorLevel = new HashMap<>();
+                for (Map.Entry<Long, Integer> entry : nationDetector.entrySet()) {
+                    systemIdToDetectorLevel.put(String.valueOf(entry.getKey()), (long) entry.getValue());
+                }
+            }
+        }
+
+        // 只处理高频快照中的私有实体（SHIP/STATION）
+        Set<String> filterSystemKeys = visibleSystemIds != null
+                ? visibleSystemIds.stream().map(String::valueOf).collect(Collectors.toSet())
+                : highFreqBySystem.keySet();
+
+        for (String systemKey : filterSystemKeys) {
+            List<EntitySnapshot> snapshots = highFreqBySystem.get(systemKey);
             if (snapshots == null || snapshots.isEmpty()) continue;
 
             int detectorLevel = -1;
-            if (hasNationId && intelSystem != null) {
-                for (EntitySnapshot se : snapshots) {
-                    if (se.posWorldGU != null) {
-                        detectorLevel = intelSystem.getEffectiveDetectorLevel3D(nationId, se.posWorldGU);
-                        break;
-                    }
-                }
+            if (systemIdToDetectorLevel != null && systemIdToDetectorLevel.containsKey(systemKey)) {
+                detectorLevel = systemIdToDetectorLevel.get(systemKey).intValue();
             }
             boolean hasDetector = detectorLevel >= 0;
-            int cutoffIndex = hasDetector ? findCutoffIndex(snapshots, detectorLevel) : 0;
 
-            for (int i = 0; i < snapshots.size(); i++) {
-                EntitySnapshot s = snapshots.get(i);
-                if (s.isPublic) continue;
+            for (EntitySnapshot s : snapshots) {
+                if (s == null || s.isPublic) continue;
 
                 boolean visible = false;
                 if (hasNationId) {
                     visible = nationId.equals(s.ownerNationId);
-                    if (!visible && hasDetector && i <= cutoffIndex) visible = true;
+                    if (!visible && hasDetector && s.intelRequiredLevel <= detectorLevel) visible = true;
                 }
                 if (!visible) continue;
 
@@ -104,7 +114,6 @@ public final class SnapshotMessageFactory {
                 rt.year, rt.month, rt.day, rt.hour, rt.minute, rt.second,
                 filteredPublicSnapshots, privateEntitiesByIntelLevel);
 
-        DailySettlementState dailyActive = runtime.getDailySettlementStateBufferForReadonly().getActive();
         DailySettlementStateDto daily = null;
         if (dailyActive != null) {
             Map<Long, DailySettlementStateDto.PlanetSurfaceSnapshotDto> planetSurfaces = null;
@@ -212,15 +221,5 @@ public final class SnapshotMessageFactory {
 
     public static String extractOwnerNationId(EntitySnapshot s) {
         return s != null ? s.ownerNationId : null;
-    }
-
-    private static int findCutoffIndex(List<EntitySnapshot> snapshots, int level) {
-        int lo = 0, hi = snapshots.size() - 1;
-        while (lo <= hi) {
-            int mid = (lo + hi) >>> 1;
-            if (snapshots.get(mid).intelRequiredLevel <= level) lo = mid + 1;
-            else hi = mid - 1;
-        }
-        return hi;
     }
 }

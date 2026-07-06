@@ -216,7 +216,10 @@ public class WebPlayerWebSocketHandler {
             try {
                 String pid = connMgr.getPlayerIdByChannel(channel);
                 if (pid != null) {
-                    nationId = runtime.getWorldStateForSimOnly().nationManager.getNationIdByPlayer(pid);
+                    var ds = runtime.getDailySettlementStateBufferForReadonly().getActive();
+                    if (ds != null && ds.playerToNationMap != null) {
+                        nationId = ds.playerToNationMap.get(pid);
+                    }
                 }
             } catch (Exception ignored) {
             }
@@ -224,14 +227,14 @@ public class WebPlayerWebSocketHandler {
                 nationId = connMgr.getNationIdByChannel(channel);
             }
 
-            // 可见星系由服务端权威计算（3D Octree 版本）
-            var sysIntel = runtime.getWorldStateForSimOnly().intelSystem;
-            Set<Long> visible;
-            if (sysIntel != null) {
-                visible = sysIntel.getVisibleEntities3D(nationId, 0);
-            } else {
-                visible = runtime.getWorldStateForSimOnly().visibilitySystem
-                        .computeIntelVisibleSystems3D(nationId);
+            // 可见星系从 DailySettlementState 预计算字段获取（替代实时 WorldState 查询）
+            Set<Long> visible = java.util.Collections.emptySet();
+            if (nationId != null) {
+                var ds = runtime.getDailySettlementStateBufferForReadonly().getActive();
+                if (ds != null && ds.visibleSystemIdsByNationId != null) {
+                    var sysSet = ds.visibleSystemIdsByNationId.get(nationId);
+                    if (sysSet != null) visible = sysSet;
+                }
             }
 
             SnapshotMessageDto snapshotDto = SnapshotMessageFactory.buildSnapshotMessageWithNation(runtime, 0, visible,

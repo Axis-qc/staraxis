@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -15,7 +16,12 @@ import staraxis.game.astro.StarSystem;
 import staraxis.game.astro.def.AstroAssetRepository;
 import staraxis.game.command.ColonizePlanetCommand;
 import staraxis.game.command.ColonizePlanetHandler;
+import staraxis.game.command.Command;
 import staraxis.game.command.CommandBus;
+import staraxis.game.command.JoinGameCommand;
+import staraxis.game.command.JoinGameHandler;
+import staraxis.game.command.LoadWorldCommand;
+import staraxis.game.command.LoadWorldHandler;
 import staraxis.game.command.MoveShipCommand;
 import staraxis.game.command.MoveShipHandler;
 import staraxis.game.command.SetPlayerTimeStepCommand;
@@ -90,6 +96,8 @@ public class StarAxisGameRuntime implements GameRuntime {
         commandBus.register(SetSystemTimeScaleCommand.class, new SetSystemTimeScaleHandler());
         commandBus.register(ColonizePlanetCommand.class, new ColonizePlanetHandler());
         commandBus.register(MoveShipCommand.class, new MoveShipHandler());
+        commandBus.register(LoadWorldCommand.class, new LoadWorldHandler());
+        commandBus.register(JoinGameCommand.class, new JoinGameHandler());
     }
 
     public CommandBus getCommandBusForSimOnly() {
@@ -101,8 +109,17 @@ public class StarAxisGameRuntime implements GameRuntime {
      *
      * @param command 要执行的命令
      */
-    public void submitCommand(staraxis.game.command.Command command) {
+    public void submitCommand(Command command) {
         commandBus.submit(command);
+    }
+
+    /**
+     * 立即同步执行命令（不入队列），用于启动阶段需要同步结果的场景喵。
+     *
+     * @param command 要执行的命令
+     */
+    public void executeCommandImmediately(Command command) {
+        commandBus.executeImmediately(command, worldState, 0);
     }
 
     public static StarAxisGameRuntime newGame(WorldGenConfig cfg) {
@@ -245,15 +262,10 @@ public class StarAxisGameRuntime implements GameRuntime {
         shipMovementSystem.update(worldState, dtGameHours, activeSystemId);
         TickProfiler.end();
 
-        // 可见性由 SnapshotBroadcaster 按需通过 computeIntelVisibleSystems3D() 计算，不在 tick 中预存
-
-        // 检查是否需要推送低频基线快照
+        // 检查是否需要推送低频基线快照（每 20 tick / 约现实 1 秒）
         TickProfiler.begin("snapshot");
-        long currentGameSeconds = worldState.time.getTotalGameSeconds();
-        boolean intervalReached = (currentGameSeconds - worldState.lastBaselinePublishGameSeconds) >= 60;
-        if (intervalReached || worldState.baselineDirty) {
+        if (worldState.time.simulationTick % 20 == 0 || worldState.baselineDirty) {
             publishBaselineSnapshot();
-            worldState.lastBaselinePublishGameSeconds = currentGameSeconds;
             worldState.baselineDirty = false;
             worldState.markRealtimeDirty();
         }
@@ -289,6 +301,13 @@ public class StarAxisGameRuntime implements GameRuntime {
         // 当前实现没有需要显式释放的资源，保留为空方法以供未来扩展喵。
     }
 
+    /**
+     * 获取 WorldState 引用（仅限 game 模块内部使用）喵。
+     *
+     * @deprecated game 模块内部过渡用，外部模块（webnet / client）禁止调用，禁止依赖此方法存在。
+     *     外部模块应使用 Command 或快照访问游戏状态喵。
+     */
+    @Deprecated
     public WorldState getWorldStateForSimOnly() {
         return worldState;
     }
@@ -337,13 +356,15 @@ public class StarAxisGameRuntime implements GameRuntime {
     }
 
     /**
-     * 发布低频基线快照（原 publishDailySettlementForDay）。
-     * 作用：同步国家资产表、行星地表等低频/大体量数据，降低高频同步压力喵。
+     * 发布低频基线快照（每 20 tick / 约现实 1 秒）。
+     * 使用双缓冲：beginFillInactive() + swapPublish()。
+     * 包含：天体基线 + 国家资产 + 行星地表 + 玩家→国家映射 + 可见星系 + 情报等级。
      */
     private void publishBaselineSnapshot() {
-        DailySettlementState next = new DailySettlementState();
+        DailySettlementState next = dailySettlementBuffer.beginFillInactive();
+        next.baselineTick = worldState.time.simulationTick;
         next.settledAtGameSeconds = worldState.time.getTotalGameSeconds();
-        next.settledDay = worldState.time.gameDatetimeDay; // 兼容性保留
+        next.settledDay = worldState.time.gameDatetimeDay; // 兼容保留
         next.sectorCount = worldState.astro.getSystemsView().size();
 
         // 1. 填充行星地表快照（低频/静态）喵
@@ -382,6 +403,47 @@ public class StarAxisGameRuntime implements GameRuntime {
             assetMap.put(ns.nationId, nationAssets);
         }
         next.nationAssetsByNationId = assetMap;
+
+        // 2b. 玩家→国家映射（供 webnet 查询，无需读 WorldState）
+        HashMap<String, String> playerToNation = new HashMap<>();
+        HashMap<String, List<String>> nationToPlayers = new HashMap<>();
+        for (staraxis.game.nation.NationState ns : worldState.nationManager.getAllNationStates()) {
+            ArrayList<String> playerList = new ArrayList<>(ns.playerIds);
+            nationToPlayers.put(ns.nationId, playerList);
+            for (String pid : ns.playerIds) {
+                playerToNation.put(pid, ns.nationId);
+            }
+        }
+        next.playerToNationMap = playerToNation;
+        next.nationToPlayerIdsMap = nationToPlayers;
+
+        // 2c. 预计算各国家可见星系（替代每 tick 实时 octree 查询）
+        if (worldState.visibilitySystem != null) {
+            HashMap<String, Set<Long>> visibleMap = new HashMap<>();
+            for (String nationId : worldState.nationManager.getAllNationIds()) {
+                visibleMap.put(nationId, worldState.visibilitySystem.computeIntelVisibleSystems3D(nationId));
+            }
+            next.visibleSystemIdsByNationId = visibleMap;
+        }
+
+        // 2d. 预计算各星系对各国家探测等级（替代每 tick 实时 octree 查询）
+        if (worldState.intelSystem != null) {
+            HashMap<String, Map<Long, Integer>> detectorMap = new HashMap<>();
+            for (String nationId : worldState.nationManager.getAllNationIds()) {
+                HashMap<Long, Integer> systemLevels = new HashMap<>();
+                for (StarSystem system : worldState.astro.getSystemsView()) {
+                    SpacePosition sysPos = (!system.stars.isEmpty() && system.stars.get(0).posWorldGU != null)
+                            ? system.stars.get(0).posWorldGU
+                            : system.galaxyPos;
+                    int level = worldState.intelSystem.getEffectiveDetectorLevel3D(nationId, sysPos);
+                    if (level >= 0) {
+                        systemLevels.put(system.systemId, level);
+                    }
+                }
+                detectorMap.put(nationId, systemLevels);
+            }
+            next.detectorLevelByNationAndSystem = detectorMap;
+        }
 
         // 3. 填充公开实体基线快照喵
         Map<String, List<EntitySnapshot>> baselineMap = new HashMap<>();
@@ -491,15 +553,14 @@ public class StarAxisGameRuntime implements GameRuntime {
         }
         next.publicEntityBaselinesBySectorKey = baselineMap;
 
-        dailySettlementBuffer.publish(next);
+        dailySettlementBuffer.swapPublish();
     }
 
     private void publishRealTimeSnapshot() {
         // 重要：RealTimeWorldState 同时包含 entitiesById（实体权威表）与 entitySnapshots（对外下发快照）喵。
-        // 历史问题：仅调用 putEntity() 会导致 getEntitySnapshotsView() 为空，webnet 下发
-        // entities=0，前端表现为“拿不到实体/星区内容”喵。
-        // 因此这里必须为需要前端展示/选择/聚焦的实体构造并写入 EntitySnapshot（putEntitySnapshot）喵。
-        // 后续若将恒星/行星等转为低频基线下发，也需要保留至少“壳快照”（id/type/pos/sector）或同步调整前端数据源喵。
+        // 改造后：STAR/PLANET/SYSTEM_BARYCENTER/MOON/ASTEROID 的 EntitySnapshot
+        // 已由 DailySettlementState（每 20 tick）承载，高频不再重复构造喵。
+        // registerEntity/putEntity 保留（WorldState 索引必需）喵。
         RealTimeWorldState s = realTimeBuffer.beginFillInactive();
 
         s.simulationTick = worldState.time.simulationTick;
@@ -545,19 +606,7 @@ public class StarAxisGameRuntime implements GameRuntime {
 
             s.putEntity(barycenter);
             s.putEntitySystem(system.systemId, barycenter.entityId);
-            // 高频快照下发重心实体快照喵
-            // 系统重心：情报等级 0（基础天文数据，公开可见）喵
-            s.putEntitySnapshot(new EntitySnapshot(
-                    barycenter.entityId,
-                    barycenter.entityType,
-                    barycenter.systemId,
-                    barycenter.parentEntityId,
-                    barycenter.posWorldGU,
-                    barycenter.ownerNationId,
-                    barycenter.ownerPlayerId,
-                    true,
-                    new EntitySnapshot.SystemBarycenterDetails(),
-                    0));
+            // 重心 EntitySnapshot 由低频 DailySettlementState 承载，高频跳过
 
             // 2. 注册恒星实体
             for (StarBody star : system.stars) {
@@ -574,25 +623,7 @@ public class StarAxisGameRuntime implements GameRuntime {
 
                 s.putEntity(star);
                 s.putEntitySystem(system.systemId, star.entityId);
-                // 高频快照下发恒星实体快照喵
-                // 恒星：情报等级 0（基础天文数据，公开可见）喵
-                s.putEntitySnapshot(new EntitySnapshot(
-                        star.entityId,
-                        star.entityType,
-                        star.systemId,
-                        star.parentEntityId,
-                        star.posWorldGU,
-                        star.ownerNationId,
-                        star.ownerPlayerId,
-                        true,
-                        new EntitySnapshot.StarDetails(
-                                star.starTypeId,
-                                star.radiusGU,
-                                star.massSolar,
-                                star.temperatureK,
-                                star.description,
-                                star.surfaceTexturePath),
-                        0));
+                // 恒星 EntitySnapshot 由低频 DailySettlementState 承载，高频跳过
 
             }
 
@@ -610,44 +641,12 @@ public class StarAxisGameRuntime implements GameRuntime {
 
                 s.putEntity(planet);
                 s.putEntitySystem(system.systemId, planet.entityId);
-                // 高频快照下发行星实体快照喵
-                boolean isCapital = false;
-                // 根据 NationState.capitalPlanetEntityId 判定首都行星喵
-                if (planet.ownerNationId != null) {
-                    var ns = worldState.nationManager.getNationState(planet.ownerNationId);
-                    if (ns != null && ns.capitalPlanetEntityId == planet.entityId) {
-                        isCapital = true;
-                    }
-                }
-                // 行星：情报等级 0（基础天文数据，公开可见）喵
-                s.putEntitySnapshot(new EntitySnapshot(
-                        planet.entityId,
-                        planet.entityType,
-                        planet.systemId,
-                        planet.parentEntityId,
-                        planet.posWorldGU,
-                        planet.ownerNationId,
-                        planet.ownerPlayerId,
-                        true,
-                        new EntitySnapshot.PlanetDetails(
-                                planet.planetTypeId,
-                                planet.radiusGU,
-                                planet.rotationPeriodHours,
-                                planet.surfaceTexturePath,
-                                isCapital,
-                                planet.orbitCenterEntityId,
-                                planet.semiMajorAxisGU,
-                                planet.eccentricity,
-                                planet.inclinationDeg,
-                                planet.periapsisArgDeg,
-                                planet.orbitalPeriodDays,
-                                planet.meanAnomalyDegAtEpoch),
-                        0));
+                // 行星 EntitySnapshot 由低频 DailySettlementState 承载，高频跳过
 
             }
         }
 
-        // 3b. 小行星实体（绕恒星小天体），附带基础快照供前端渲染
+        // 3b. 小行星实体（绕恒星小天体），注册索引但不构造高频快照（低频已承载）
         for (StarSystem system : worldState.astro.getSystemsView()) {
             SpacePosition sysPos = system.galaxyPos;
             for (PlanetBody asteroid : system.asteroids) {
@@ -657,25 +656,10 @@ public class StarAxisGameRuntime implements GameRuntime {
                 worldState.registerEntity(asteroid);
                 s.putEntity(asteroid);
                 s.putEntitySystem(system.systemId, asteroid.entityId);
-                s.putEntitySnapshot(new EntitySnapshot(
-                        asteroid.entityId, asteroid.entityType,
-                        asteroid.systemId, asteroid.parentEntityId,
-                        asteroid.posWorldGU,
-                        asteroid.ownerNationId, asteroid.ownerPlayerId,
-                        true,
-                        new EntitySnapshot.PlanetDetails(
-                                asteroid.planetTypeId, asteroid.radiusGU,
-                                asteroid.rotationPeriodHours, asteroid.surfaceTexturePath,
-                                false,
-                                asteroid.orbitCenterEntityId,
-                                asteroid.semiMajorAxisGU, asteroid.eccentricity,
-                                asteroid.inclinationDeg, asteroid.periapsisArgDeg,
-                                asteroid.orbitalPeriodDays, asteroid.meanAnomalyDegAtEpoch),
-                        0));
             }
         }
 
-        // 3c. 卫星实体（绕行星小天体），附带基础快照供前端渲染
+        // 3c. 卫星实体（绕行星小天体），注册索引但不构造高频快照（低频已承载）
         for (StarSystem system : worldState.astro.getSystemsView()) {
             SpacePosition sysPos = system.galaxyPos;
             for (PlanetBody moon : system.moons) {
@@ -685,21 +669,6 @@ public class StarAxisGameRuntime implements GameRuntime {
                 worldState.registerEntity(moon);
                 s.putEntity(moon);
                 s.putEntitySystem(system.systemId, moon.entityId);
-                s.putEntitySnapshot(new EntitySnapshot(
-                        moon.entityId, moon.entityType,
-                        moon.systemId, moon.parentEntityId,
-                        moon.posWorldGU,
-                        moon.ownerNationId, moon.ownerPlayerId,
-                        true,
-                        new EntitySnapshot.PlanetDetails(
-                                moon.planetTypeId, moon.radiusGU,
-                                moon.rotationPeriodHours, moon.surfaceTexturePath,
-                                false,
-                                moon.orbitCenterEntityId,
-                                moon.semiMajorAxisGU, moon.eccentricity,
-                                moon.inclinationDeg, moon.periapsisArgDeg,
-                                moon.orbitalPeriodDays, moon.meanAnomalyDegAtEpoch),
-                        0));
             }
         }
 

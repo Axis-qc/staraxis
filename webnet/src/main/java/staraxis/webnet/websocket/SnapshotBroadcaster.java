@@ -148,7 +148,10 @@ public class SnapshotBroadcaster {
                     try {
                         String pid = connMgr.getPlayerIdByChannel(ch);
                         if (pid != null) {
-                            nationId = runtime.getWorldStateForSimOnly().nationManager.getNationIdByPlayer(pid);
+                            var ds = runtime.getDailySettlementStateBufferForReadonly().getActive();
+                            if (ds != null && ds.playerToNationMap != null) {
+                                nationId = ds.playerToNationMap.get(pid);
+                            }
                         }
                     } catch (Exception ignored) {
                     }
@@ -156,9 +159,15 @@ public class SnapshotBroadcaster {
                         nationId = connMgr.getNationIdByChannel(ch);
                     }
 
-                    // 可见星系由服务端权威计算（3D Octree 版本）
-                    Set<Long> visible = runtime.getWorldStateForSimOnly().visibilitySystem
-                            .computeIntelVisibleSystems3D(nationId);
+                    // 可见星系从 DailySettlementState 预计算字段获取（替代实时 WorldState 查询）
+                    Set<Long> visible = java.util.Collections.emptySet();
+                    if (nationId != null) {
+                        var ds = runtime.getDailySettlementStateBufferForReadonly().getActive();
+                        if (ds != null && ds.visibleSystemIdsByNationId != null) {
+                            var sysSet = ds.visibleSystemIdsByNationId.get(nationId);
+                            if (sysSet != null) visible = sysSet;
+                        }
+                    }
 
                     // ===== 分段计时：定位广播瓶颈喵 =====
                     long tDtoStart = System.nanoTime();

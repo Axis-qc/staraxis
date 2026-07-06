@@ -6,7 +6,7 @@ import staraxis.game.command.MoveShipCommand;
 import staraxis.game.entity.Entity;
 import staraxis.game.ship.MovementCommand;
 import staraxis.game.ship.ShipBody;
-import staraxis.game.state.WorldState;
+import staraxis.game.state.RealTimeWorldState;
 import staraxis.game.space.SpacePosition;
 import staraxis.webnet.game.GameSessions;
 
@@ -48,13 +48,13 @@ public final class ShipCommandApi {
             return Map.of("ok", false, "error", "world_not_found");
         }
 
-        WorldState worldState = runtime.getWorldStateForSimOnly();
-        Entity entity = worldState.entitiesById.get(shipEntityId);
+        RealTimeWorldState rt = runtime.getRealTimeWorldStateReadonly();
+        Entity entity = rt.getEntitiesByIdView().get(shipEntityId);
         if (!(entity instanceof ShipBody ship)) {
-            return buildRejectedMoveResult(clientCommandId, shipEntityId, worldState, "ship_not_found");
+            return buildRejectedMoveResult(clientCommandId, shipEntityId, rt, "ship_not_found");
         }
         if (!nationId.equals(ship.ownerNationId)) {
-            return buildRejectedMoveResult(clientCommandId, shipEntityId, worldState, "ship_not_owned_by_nation");
+            return buildRejectedMoveResult(clientCommandId, shipEntityId, rt, "ship_not_owned_by_nation");
         }
 
         runtime.submitCommand(new MoveShipCommand(nationId, clientCommandId, shipEntityId, targetX, targetY));
@@ -65,8 +65,8 @@ public final class ShipCommandApi {
                 "message", "move_command_submitted",
                 "clientCommandId", clientCommandId,
                 "shipEntityId", shipEntityId,
-                "authoritativeTick", worldState.time.simulationTick,
-                "gameSeconds", worldState.time.totalGameSecondsAcc,
+                "authoritativeTick", rt.simulationTick,
+                "gameSeconds", rt.totalGameSecondsExact,
                 "target", Map.of("x", targetX, "y", targetY));
     }
 
@@ -101,8 +101,8 @@ public final class ShipCommandApi {
             return Map.of("ok", false, "error", "world_not_found");
         }
 
-        WorldState worldState = runtime.getWorldStateForSimOnly();
-        Entity entity = worldState.entitiesById.get(shipEntityId);
+        RealTimeWorldState rt = runtime.getRealTimeWorldStateReadonly();
+        Entity entity = rt.getEntitiesByIdView().get(shipEntityId);
         if (!(entity instanceof ShipBody ship)) {
             return Map.of("ok", false, "error", "ship_not_found");
         }
@@ -110,8 +110,8 @@ public final class ShipCommandApi {
             return Map.of("ok", false, "error", "ship_not_owned_by_nation");
         }
 
-        long authoritativeTick = worldState.time.simulationTick;
-        double authoritativeGameSeconds = worldState.time.totalGameSecondsAcc;
+        long authoritativeTick = rt.simulationTick;
+        double authoritativeGameSeconds = rt.totalGameSecondsExact;
         boolean matchesActive = clientCommandId.equals(ship.activeClientCommandId);
         boolean matchesCompleted = clientCommandId.equals(ship.lastCompletedClientCommandId);
         double distanceToAuthoritative = distance(ship.posWorldGU, reportedPosition);
@@ -150,7 +150,7 @@ public final class ShipCommandApi {
     private static Map<String, Object> buildRejectedMoveResult(
             String clientCommandId,
             long shipEntityId,
-            WorldState worldState,
+            RealTimeWorldState rt,
             String reason) {
         LinkedHashMap<String, Object> response = new LinkedHashMap<>();
         response.put("ok", false);
@@ -159,8 +159,8 @@ public final class ShipCommandApi {
         response.put("reason", reason);
         response.put("clientCommandId", clientCommandId);
         response.put("shipEntityId", shipEntityId);
-        response.put("authoritativeTick", worldState.time.simulationTick);
-        response.put("gameSeconds", worldState.time.totalGameSecondsAcc);
+        response.put("authoritativeTick", rt.simulationTick);
+        response.put("gameSeconds", rt.totalGameSecondsExact);
         return response;
     }
 

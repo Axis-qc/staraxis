@@ -5,13 +5,20 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.collision.Ray;
 
+import staraxis.game.state.DailySettlementState;
 import staraxis.game.state.RealTimeWorldState;
+import staraxis.game.state.snapshot.EntitySnapshot;
 import staraxis.render.WorldCamera;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * GalaxyViewRenderer（星系视图渲染器）。
  *
- * 从 RealTimeWorldState 中读取恒星快照并渲染。
+ * 从两份快照读取数据：
+ * - DailySettlementState：恒星/行星等静态天体基线（每 20 tick 更新）
+ * - RealTimeWorldState：动态实体（SHIP 等，每 tick 更新）
  * 使用 StarBatchRenderer 批量渲染（GPU 实例化，一次 draw call 绘制全部恒星）。
  */
 public class GalaxyViewRenderer {
@@ -26,25 +33,39 @@ public class GalaxyViewRenderer {
         this.haloRenderer = new StarHaloRenderer();
     }
 
-    public void render(RealTimeWorldState state, WorldCamera camera, long hoveredStarId) {
-        // 首次渲染或恒星列表变化时重建实例缓冲区
+    public void render(RealTimeWorldState highFreq, DailySettlementState lowFreq, WorldCamera camera, long hoveredStarId) {
+        // 首次渲染时从低频基线提取恒星快照重建实例缓冲区（恒星数据在游戏生命周期内不变）
         if (!batchRenderer.isBuilt()) {
-            batchRenderer.rebuild(state);
-            haloRenderer.rebuild(state);
+            List<EntitySnapshot> stars = extractStarsFromBaselines(lowFreq);
+            batchRenderer.rebuild(stars);
+            haloRenderer.rebuild(stars);
         }
 
         batchRenderer.render(camera, hoveredStarId);
-
-        //  光晕层：在恒星球之后叠加，距离补偿提亮让星系整体明亮
         haloRenderer.render(camera);
 
-        // 悬停恒星的选择环（面向镜头的圆环）
         if (hoveredStarId >= 0) {
             float[] pos = batchRenderer.getStarPosition(hoveredStarId);
             if (pos != null) {
                 drawSelectionRing(pos[0], pos[1], pos[2], camera);
             }
         }
+    }
+
+    /**
+     * 从低频基线中提取所有 STAR 类型实体快照。
+     */
+    private static List<EntitySnapshot> extractStarsFromBaselines(DailySettlementState lowFreq) {
+        List<EntitySnapshot> stars = new ArrayList<>();
+        if (lowFreq == null || lowFreq.publicEntityBaselinesBySectorKey == null) return stars;
+        for (List<EntitySnapshot> baselines : lowFreq.publicEntityBaselinesBySectorKey.values()) {
+            for (EntitySnapshot s : baselines) {
+                if (s != null && s.entityType == staraxis.game.entity.EntityType.STAR) {
+                    stars.add(s);
+                }
+            }
+        }
+        return stars;
     }
 
     public long pick(Ray ray, @SuppressWarnings("unused") RealTimeWorldState state) {

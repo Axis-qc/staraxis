@@ -4,11 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 import staraxis.game.StarAxisGameRuntime;
-import staraxis.game.astro.PlanetBody;
-import staraxis.game.astro.StarBody;
-import staraxis.game.astro.StarSystem;
-import staraxis.game.ship.ShipSpawnService;
-import staraxis.webnet.core.WebNetLog;
+import staraxis.game.command.JoinGameCommand;
+import staraxis.game.entity.EntityType;
+import staraxis.game.state.snapshot.EntitySnapshot;
 import staraxis.webnet.game.GameSessions;
 
 import java.nio.charset.StandardCharsets;
@@ -81,21 +79,34 @@ public final class JoinGameApi {
         }
 
         ArrayList<Map<String, Object>> arr = new ArrayList<>();
-        for (StarSystem sys : runtime.getWorldStateForSimOnly().astro.getSystemsView()) {
-            if (sys == null) {
-                continue;
-            }
-            if (!isSystemUnowned(sys)) {
-                continue;
-            }
+        var ds = runtime.getDailySettlementStateBufferForReadonly().getActive();
+        if (ds != null && ds.publicEntityBaselinesBySectorKey != null) {
+            for (var entry : ds.publicEntityBaselinesBySectorKey.entrySet()) {
+                long systemId = Long.parseLong(entry.getKey());
+                // 检查星系是否无主：所有基线实体都没有 ownerNationId
+                boolean unowned = true;
+                int starCount = 0, planetCount = 0;
+                double cx = 0, cy = 0;
+                for (EntitySnapshot snap : entry.getValue()) {
+                    if (snap == null) continue;
+                    if (snap.ownerNationId != null) unowned = false;
+                    if (snap.entityType == EntityType.STAR) starCount++;
+                    if (snap.entityType == EntityType.PLANET) planetCount++;
+                    if (snap.posWorldGU != null && cx == 0 && cy == 0) {
+                        cx = snap.posWorldGU.x();
+                        cy = snap.posWorldGU.z();
+                    }
+                }
+                if (!unowned) continue;
 
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("systemId", sys.systemId);
-            item.put("centerX", sys.galaxyPos == null ? 0 : sys.galaxyPos.x());
-            item.put("centerY", sys.galaxyPos == null ? 0 : sys.galaxyPos.z());
-            item.put("starCount", sys.stars == null ? 0 : sys.stars.size());
-            item.put("planetCount", sys.planets == null ? 0 : sys.planets.size());
-            arr.add(item);
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("systemId", systemId);
+                item.put("centerX", cx);
+                item.put("centerY", cy);
+                item.put("starCount", starCount);
+                item.put("planetCount", planetCount);
+                arr.add(item);
+            }
         }
 
         return Map.of(
@@ -152,71 +163,19 @@ public final class JoinGameApi {
                     "error", "playerId_required");
         }
 
-        StarSystem target = null;
-        if (randomSpawn) {
-            long bestId = Long.MAX_VALUE;
-            for (StarSystem sys : runtime.getWorldStateForSimOnly().astro.getSystemsView()) {
-                if (sys == null || !isSystemUnowned(sys)) {
-                    continue;
-                }
-                if (sys.systemId < bestId) {
-                    bestId = sys.systemId;
-                    target = sys;
-                }
-            }
-        } else {
-            for (StarSystem sys : runtime.getWorldStateForSimOnly().astro.getSystemsView()) {
-                if (sys != null && sys.systemId == chosenSystemId) {
-                    target = sys;
-                    break;
-                }
-            }
-        }
+        // 使用 JoinGameCommand 在 game 模块内完成星系查找和归属检查喵。
+        // TODO AssetManager 统一处理：暂不注册国家/绑定玩家/分配归属/生成舰船，等后续流程设计。
+        JoinGameCommand cmd = new JoinGameCommand(playerId, chosenSystemId);
+        runtime.executeCommandImmediately(cmd);
 
-        if (target == null) {
+        if (!cmd.isSuccess()) {
             return Map.of(
                     "ok", false,
-                    "error", randomSpawn ? "no_spawn_system_available" : "system_not_found");
+                    "error", cmd.getErrorMessage());
         }
 
-        if (!isSystemUnowned(target)) {
-            return Map.of(
-                    "ok", false,
-                    "error", "system_already_owned");
-        }
-
-        // 自动创建/分配 nationId：使用 playerId 派生稳定 ID 喵
-        String nationId = "nation_" + playerId;
-
-        var ws = runtime.getWorldStateForSimOnly();
-        var nm = ws.nationManager;
-
-        // TODO AssetManager 统一处理：暂不注册国家/绑定玩家/分配归属，等后续流程设计喵
-        /*
-        if (!nm.hasNation(nationId)) {
-            nm.registerNation(nationId);
-        }
-        nm.assignPlayerToNation(playerId, nationId);
-
-        var ns = nm.getNationState(nationId);
-        if (ns != null) {
-            if (ns.name == null || ns.name.isBlank()) {
-                ns.name = nationId;
-            }
-            ns.spawnSystemEntityId = target.systemId;
-            ns.capitalPlanetEntityId = 0L;
-        }
-
-        target.assignOwnership(nationId);
-
-        long shipEntityId = ShipSpawnService.spawnInitialShip(ws, nationId, target);
-        if (shipEntityId > 0) {
-            staraxis.webnet.core.WebNetLog.log("Spawned initial colony ship entityId=" + shipEntityId +
-                    " for nation " + nationId + " in system " + target.systemId + " 喵");
-        } else {
-            staraxis.webnet.core.WebNetLog.log("WARNING: Failed to spawn initial colony ship for nation " + nationId + " 喵");
-        }
-        */
+        String nationId = cmd.getNationId();
+        long spawnSystemId = cmd.getSpawnSystemId();
 
         if (worldId != null && !worldId.isBlank()) {
             GameSessions.markPlayerSpawned(worldId, playerId);
@@ -234,36 +193,8 @@ public final class JoinGameApi {
         return Map.of(
                 "ok", true,
                 "nationId", nationId,
-                "spawnSystemId", target.systemId,
+                "spawnSystemId", spawnSystemId,
                 "worldId", worldId,
                 "playerState", (worldId == null || worldId.isBlank()) ? "SPAWNED" : GameSessions.getPlayerState(worldId, playerId));
-    }
-
-    private static boolean isSystemUnowned(StarSystem sys) {
-        if (sys == null) {
-            return false;
-        }
-
-        if (sys.ownerNationId != null && !sys.ownerNationId.isBlank()) {
-            return false;
-        }
-
-        if (sys.stars != null) {
-            for (StarBody star : sys.stars) {
-                if (star != null && star.ownerNationId != null && !star.ownerNationId.isBlank()) {
-                    return false;
-                }
-            }
-        }
-
-        if (sys.planets != null) {
-            for (PlanetBody planet : sys.planets) {
-                if (planet != null && planet.ownerNationId != null && !planet.ownerNationId.isBlank()) {
-                    return false;
-                }
-            }
-        }
-
-        return true;
     }
 }

@@ -409,6 +409,7 @@ public class ClientGame implements ApplicationListener {
         skyboxRenderer.render(galaxyCamera);
 
         var state = runtime.getRealTimeWorldStateReadonly();
+        var lowFreq = runtime.getDailySettlementStateBufferForReadonly().getActive();
 
         rayPicker.updateHovered(galaxyCamera, state,
                 Gdx.input.getX(), Gdx.input.getY(), galaxyViewRenderer);
@@ -432,7 +433,7 @@ public class ClientGame implements ApplicationListener {
             }
         }
 
-        galaxyViewRenderer.render(state, galaxyCamera, rayPicker.getHoveredStarId());
+        galaxyViewRenderer.render(state, lowFreq, galaxyCamera, rayPicker.getHoveredStarId());
     }
 
     private void renderSystemView(float dt) {

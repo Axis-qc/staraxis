@@ -1,18 +1,16 @@
 package staraxis.webnet.api.joingame;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import staraxis.game.StarAxisGameRuntime;
-import staraxis.game.entity.Entity;
-import staraxis.game.entity.EntityType;
-import staraxis.game.ship.ShipBody;
-import staraxis.game.space.SpacePosition;
-import staraxis.game.world.WorldGenConfig;
-import staraxis.webnet.game.GameSessions;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import staraxis.game.StarAxisGameRuntime;
+import staraxis.game.command.LoadWorldCommand;
+import staraxis.game.world.WorldGenConfig;
+import staraxis.webnet.game.GameSessions;
 
 /**
  * WorldSavesApi（世界存档接口）喵。
@@ -66,7 +64,7 @@ public final class WorldSavesApi {
                 StarAxisGameRuntime runtime = GameSessions.getRuntime(worldId);
                 if (runtime != null) {
                     try {
-                        item.put("worldRadius", runtime.getWorldStateForSimOnly().worldRadius);
+                        item.put("worldRadius", runtime.getRealTimeWorldStateReadonly().worldRadius);
                         item.put("simulationTick", runtime.getRealTimeWorldStateReadonly().simulationTick);
                         item.put("totalGameSeconds", runtime.getRealTimeWorldStateReadonly().totalGameSeconds);
                     } catch (Exception e) {
@@ -442,25 +440,46 @@ public final class WorldSavesApi {
             StarAxisGameRuntime runtime = StarAxisGameRuntime.newGame(cfg);
             runtime.start();
 
-            // 恢复时间轴关键字段喵
+            // 使用 LoadWorldCommand 恢复状态（不再直接读写 WorldState）喵。
             if (state != null) {
+                Map<String, Object> worldData = null;
+                List<Map<String, Object>> nationsList = new ArrayList<>();
+                List<Map<String, Object>> entitiesList = new ArrayList<>();
+                long nextEntityId = 1L;
+
                 Object worldObj = state.get("world");
                 if (worldObj instanceof Map<?, ?> w) {
-                    applyTimeState(runtime, w);
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> wMap = (Map<String, Object>) w;
+                    worldData = wMap;
                 }
                 Object nationsObj = state.get("nations");
-                if (nationsObj instanceof List<?> list) {
-                    applyNationState(runtime, list);
+                if (nationsObj instanceof List<?> rawList) {
+                    for (Object item : rawList) {
+                        if (item instanceof Map<?, ?> m) {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> nm = (Map<String, Object>) m;
+                            nationsList.add(nm);
+                        }
+                    }
                 }
                 Object entitiesObj = state.get("entities");
-                if (entitiesObj instanceof List<?> list) {
-                    applyEntitiesState(runtime, list);
+                if (entitiesObj instanceof List<?> rawList) {
+                    for (Object item : rawList) {
+                        if (item instanceof Map<?, ?> m) {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> em = (Map<String, Object>) m;
+                            entitiesList.add(em);
+                        }
+                    }
                 }
-                // 恢复实体 ID 生成器状态喵
                 Object nextEntityIdObj = state.get("nextEntityId");
                 if (nextEntityIdObj instanceof Number n) {
-                    runtime.getWorldStateForSimOnly().setNextEntityId(n.longValue());
+                    nextEntityId = n.longValue();
                 }
+
+                runtime.executeCommandImmediately(
+                        new LoadWorldCommand(worldData, nationsList, entitiesList, nextEntityId));
             }
 
             String worldName = meta.get("worldName") == null ? worldId : String.valueOf(meta.get("worldName"));
@@ -469,174 +488,6 @@ public final class WorldSavesApi {
             return runtime;
         } catch (Exception e) {
             return null;
-        }
-    }
-
-    /**
-     * 恢复时间轴状态喵。
-     */
-    private static void applyTimeState(StarAxisGameRuntime runtime, Map<?, ?> worldMap) {
-        var ws = runtime.getWorldStateForSimOnly();
-        Object tick = worldMap.get("simulationTick");
-        Object totalSec = worldMap.get("totalGameSeconds");
-        Object timeScale = worldMap.get("timeScale");
-        Object gsprs = worldMap.get("gameSecondsPerRealSecond");
-
-        if (tick instanceof Number n) {
-            ws.time.simulationTick = n.longValue();
-        }
-        if (totalSec instanceof Number n) {
-            ws.time.totalGameSecondsAcc = n.doubleValue();
-            ws.time.gameDatetimeDay = (int) (Math.floor(ws.time.totalGameSecondsAcc / 86400.0) + 1);
-            double daySec = ws.time.totalGameSecondsAcc % 86400.0;
-            ws.time.accGameHoursInDay = daySec / 3600.0;
-        }
-        if (timeScale instanceof Number n) {
-            ws.time.timeScale = n.doubleValue();
-        }
-        if (gsprs instanceof Number n) {
-            ws.time.gameSecondsPerRealSecond = n.doubleValue();
-        }
-    }
-
-    /**
-     * 恢复国家状态（最小闭环字段）喵。
-     */
-    private static void applyNationState(StarAxisGameRuntime runtime, List<?> nationsList) {
-        var ws = runtime.getWorldStateForSimOnly();
-        for (Object item : nationsList) {
-            if (!(item instanceof Map<?, ?> n)) {
-                continue;
-            }
-            Object nationIdObj = n.get("nationId");
-            if (nationIdObj == null) {
-                continue;
-            }
-            String nationId = String.valueOf(nationIdObj);
-            if (!ws.nationManager.hasNation(nationId)) {
-                ws.nationManager.registerNation(nationId);
-            }
-            var ns = ws.nationManager.getNationState(nationId);
-            if (ns == null) {
-                continue;
-            }
-
-            Object name = n.get("name");
-            Object gov = n.get("governmentId");
-            Object spawn = n.get("spawnSystemEntityId");
-            Object capital = n.get("capitalPlanetEntityId");
-
-            ns.name = name == null ? ns.name : String.valueOf(name);
-            ns.governmentId = gov == null ? ns.governmentId : String.valueOf(gov);
-            if (spawn instanceof Number sn) {
-                ns.spawnSystemEntityId = sn.longValue();
-            }
-            if (capital instanceof Number cn) {
-                ns.capitalPlanetEntityId = cn.longValue();
-            }
-
-            Object playerIdsObj = n.get("playerIds");
-            if (playerIdsObj instanceof List<?> pidList) {
-                for (Object pid : pidList) {
-                    if (pid == null) {
-                        continue;
-                    }
-                    // TODO AssetManager 统一处理：存档加载暂不自动绑定玩家-国家归属喵
-                    // ws.nationManager.assignPlayerToNation(String.valueOf(pid), nationId);
-                }
-            }
-        }
-    }
-
-    /**
-     * 恢复动态实体状态（SHIP、STATION 等）喵。
-     */
-    private static void applyEntitiesState(StarAxisGameRuntime runtime, List<?> entitiesList) {
-        var ws = runtime.getWorldStateForSimOnly();
-        for (Object item : entitiesList) {
-            if (!(item instanceof Map<?, ?> e)) {
-                continue;
-            }
-            Object entityIdObj = e.get("entityId");
-            if (entityIdObj == null) {
-                continue;
-            }
-            long entityId = ((Number) entityIdObj).longValue();
-
-            // 检查实体是否已存在（例如天文实体），避免重复注册喵
-            if (ws.entitiesById.containsKey(entityId)) {
-                continue;
-            }
-
-            Object entityTypeObj = e.get("entityType");
-            EntityType entityType = null;
-            if (entityTypeObj instanceof String typeStr) {
-                try {
-                    entityType = EntityType.valueOf(typeStr);
-                } catch (IllegalArgumentException ignored) {
-                }
-            }
-            if (entityType == null) {
-                continue;
-            }
-
-            // 仅恢复动态实体（SHIP、STATION）喵
-            if (entityType != EntityType.SHIP && entityType != EntityType.STATION) {
-                continue;
-            }
-
-            // 创建实体实例喵
-            Entity entity = null;
-            if (entityType == EntityType.SHIP) {
-                ShipBody ship = new ShipBody();
-                ship.entityId = entityId;
-                ship.entityType = entityType;
-                ship.designId = e.get("designId") == null ? null : String.valueOf(e.get("designId"));
-                ship.hpHull = e.get("hpHull") instanceof Number n ? n.doubleValue() : 1.0;
-                ship.power = e.get("power") instanceof Number n ? n.doubleValue() : 100.0;
-                ship.fuelMass = e.get("fuelMass") instanceof Number n ? n.doubleValue()
-                    : e.get("fuel") instanceof Number n ? n.doubleValue() : 0.0;
-                Object flagsObj = e.get("customFlags");
-                if (flagsObj instanceof List<?> flagList) {
-                    for (Object flag : flagList) {
-                        if (flag != null) {
-                            ship.customFlags.add(String.valueOf(flag));
-                        }
-                    }
-                }
-                entity = ship;
-            } else {
-                // 未来支持 STATION 类型喵
-                continue;
-            }
-
-            // 设置通用字段喵
-            entity.systemId = e.get("systemId") instanceof Number n ? n.longValue() : 0L;
-            entity.parentEntityId = e.get("parentEntityId") instanceof Number n ? n.longValue() : 0L;
-            // sectorCoord 已删除（hex 地图停止开发）
-            Object posX = e.get("posX");
-            Object posY = e.get("posY");
-            Object posZ = e.get("posZ");
-            if (posX instanceof Number x && posY instanceof Number y) {
-                double z = posZ instanceof Number zn ? zn.doubleValue() : 0.0;
-                entity.posWorldGU = new SpacePosition(x.doubleValue(), y.doubleValue(), z);
-            }
-            Object velX = e.get("velX");
-            Object velY = e.get("velY");
-            Object velZ = e.get("velZ");
-            if (velX instanceof Number vx && velY instanceof Number vy) {
-                double vz = velZ instanceof Number vzn ? vzn.doubleValue() : 0.0;
-                entity.velWorldGU = new SpacePosition(vx.doubleValue(), vy.doubleValue(), vz);
-            }
-            entity.ownerNationId = e.get("ownerNationId") == null ? null : String.valueOf(e.get("ownerNationId"));
-
-            // 注册到世界状态喵
-            ws.registerEntity(entity);
-
-            // TODO AssetManager 统一处理：存档加载暂不自动分配资产归属喵
-            // if (entity.ownerNationId != null && !entity.ownerNationId.isBlank()) {
-            //     ws.nationAssetManager.assignEntityToNation(entityId, entity.ownerNationId);
-            // }
         }
     }
 }

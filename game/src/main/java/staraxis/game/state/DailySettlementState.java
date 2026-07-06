@@ -2,6 +2,7 @@ package staraxis.game.state;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import staraxis.game.entity.EntityType;
 import staraxis.game.state.snapshot.EntitySnapshot;
@@ -9,10 +10,11 @@ import staraxis.game.state.snapshot.EntitySnapshot;
 /**
  * DailySettlementState
  *
- * 低频结算/基线快照（Low-Frequency Baseline Snapshot）：
- * - 原语义为“上一日结算状态”，现扩展为承载经济/生产/人口等低频数据的通用快照。
- * - 不再强绑定“日”这一时间粒度，后续可按固定时间窗口或事件触发生成。
- * - 仍保留 settledDay 字段以兼容现有调用，但推荐使用 settledAtGameSeconds 作为主时间口径喵。
+ * 低频基线快照（Low-Frequency Baseline Snapshot）：
+ * - 每 20 tick 发布一次，承载不需要每 tick 更新的数据。
+ * - 包含：恒星/行星/卫星/重心 基线快照、国家资产表、行星地表数据、
+ *   玩家→国家映射、各国家可见星系列表、各星系情报探测等级。
+ * - 双缓冲 + volatile swap，外部只读。
  */
 public class DailySettlementState {
 
@@ -29,29 +31,33 @@ public class DailySettlementState {
      */
     public long settledAtGameSeconds;
 
-    /**
-     * 占位：星区总数（用于验证快照链路）。
-     */
+    /** 星区总数（用于验证快照链路）。 */
     public int sectorCount;
 
-    /**
-     * 行星地表（低频/静态）快照：Key 为 planetEntityId 喵。
-     */
+    /** 该快照对应的 simulationTick（主要版本号）。 */
+    public long baselineTick;
+
+    /** 行星地表（低频/静态）快照：Key 为 planetEntityId 喵。 */
     public Map<Long, PlanetSurfaceDailySnapshot> planetSurfacesByPlanetId;
 
-    /**
-     * 国家资产基线快照：nationId -> (EntityType -> 该类型下实体ID列表) 喵。
-     */
+    /** 国家资产基线快照：nationId -> (EntityType -> 该类型下实体ID列表) 喵。 */
     public Map<String, Map<EntityType, List<Long>>> nationAssetsByNationId;
 
-    /**
-     * 公开实体基线快照（按星区聚合）：sectorKey -> 公开实体快照列表 喵。
-     * 
-     * 说明：
-     * - 包含恒星、行星、系统重心等公开基础数据喵。
-     * - 用于实现“按星区分区加载”的星图骨架渲染喵。
-     */
+    /** 公开实体基线快照（按恒星系聚合）：systemId字符串 -> 公开实体快照列表 喵。 */
     public Map<String, List<EntitySnapshot>> publicEntityBaselinesBySectorKey;
+
+    /** 玩家→国家映射（playerId -> nationId）。供 webnet 查询玩家所属国家。 */
+    public Map<String, String> playerToNationMap;
+
+    /** 国家→玩家列表映射（nationId -> playerId 列表）。 */
+    public Map<String, List<String>> nationToPlayerIdsMap;
+
+    /** 各国家的可见星系 ID 列表（预计算，替代 visibilitySystem 实时查询）。 */
+    public Map<String, Set<Long>> visibleSystemIdsByNationId;
+
+    /** 各星系对各国家的探测等级（预计算，替代 intelSystem 实时查询）。
+     *  结构: nationId -> (systemId -> detectorLevel) */
+    public Map<String, Map<Long, Integer>> detectorLevelByNationAndSystem;
 
     public DailySettlementState() {
     }
@@ -60,9 +66,14 @@ public class DailySettlementState {
         settledDay = 0;
         settledAtGameSeconds = 0L;
         sectorCount = 0;
+        baselineTick = 0L;
         planetSurfacesByPlanetId = null;
         nationAssetsByNationId = null;
         publicEntityBaselinesBySectorKey = null;
+        playerToNationMap = null;
+        nationToPlayerIdsMap = null;
+        visibleSystemIdsByNationId = null;
+        detectorLevelByNationAndSystem = null;
     }
 
     /**

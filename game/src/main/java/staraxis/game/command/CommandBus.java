@@ -67,7 +67,6 @@ public class CommandBus {
      * @param <T>          命令类型
      * @throws IllegalArgumentException 如果参数为 null
      */
-    @SuppressWarnings("unchecked")
     public <T extends Command> void register(Class<T> commandClass, CommandHandler<T> handler) {
         if (commandClass == null) {
             throw new IllegalArgumentException("command_class_required");
@@ -89,6 +88,34 @@ public class CommandBus {
             throw new IllegalArgumentException("command_required");
         }
         commandQueue.offer(command);
+    }
+
+    /**
+     * 立即同步执行单个命令（不入队列）喵。
+     *
+     * 用于启动阶段等需要同步结果的场景（如 LoadWorldCommand、JoinGameCommand），
+     * 避免等待下一个 tick 的 executeCommands() 执行喵。
+     *
+     * @param command     要执行的命令
+     * @param worldState  当前世界状态
+     * @param dtGameHours 当前 tick 的游戏小时数
+     * @throws IllegalStateException 如果未注册对应类型的处理器
+     */
+    @SuppressWarnings("unchecked")
+    public <T extends Command> void executeImmediately(T command, WorldState worldState, double dtGameHours) {
+        if (command == null) {
+            throw new IllegalArgumentException("command_required");
+        }
+        CommandHandler<T> handler = (CommandHandler<T>) handlers.get(command.getClass());
+        if (handler == null) {
+            throw new IllegalStateException("No handler registered for command: " + command.type());
+        }
+        try {
+            handler.handle(command, worldState, dtGameHours);
+            totalProcessed.incrementAndGet();
+        } catch (Exception e) {
+            throw new RuntimeException("Command execution failed: " + command.type(), e);
+        }
     }
 
     /**

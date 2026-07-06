@@ -72,7 +72,11 @@ public final class SnapshotRoutes {
                     return;
                 }
 
-                String nationId = runtime.getWorldStateForSimOnly().nationManager.getNationIdByPlayer(session.playerId);
+                String nationId = null;
+                var ds = runtime.getDailySettlementStateBufferForReadonly().getActive();
+                if (ds != null && ds.playerToNationMap != null) {
+                    nationId = ds.playerToNationMap.get(session.playerId);
+                }
                 if (nationId == null) {
                     nationId = connMgr.getPlayerNationId(session.playerId);
                 }
@@ -151,12 +155,14 @@ public final class SnapshotRoutes {
 
                 }
 
-                String nationId = runtime.getWorldStateForSimOnly().nationManager.getNationIdByPlayer(session.playerId);
+                String nationId = null;
+                var ds2 = runtime.getDailySettlementStateBufferForReadonly().getActive();
+                if (ds2 != null && ds2.playerToNationMap != null) {
+                    nationId = ds2.playerToNationMap.get(session.playerId);
+                }
 
                 if (nationId == null) {
-
                     nationId = connMgr.getPlayerNationId(session.playerId);
-
                 }
 
                 var rt = runtime.getRealTimeWorldStateReadonly();
@@ -277,7 +283,11 @@ public final class SnapshotRoutes {
 
                 }
 
-                String nationId = runtime.getWorldStateForSimOnly().nationManager.getNationIdByPlayer(session.playerId);
+                String nationId = null;
+                var ds3 = runtime.getDailySettlementStateBufferForReadonly().getActive();
+                if (ds3 != null && ds3.playerToNationMap != null) {
+                    nationId = ds3.playerToNationMap.get(session.playerId);
+                }
 
                 if (nationId == null) {
 
@@ -401,7 +411,11 @@ public final class SnapshotRoutes {
 
                 }
 
-                String nationId = runtime.getWorldStateForSimOnly().nationManager.getNationIdByPlayer(session.playerId);
+                String nationId = null;
+                var ds4 = runtime.getDailySettlementStateBufferForReadonly().getActive();
+                if (ds4 != null && ds4.playerToNationMap != null) {
+                    nationId = ds4.playerToNationMap.get(session.playerId);
+                }
 
                 if (nationId == null) {
 
