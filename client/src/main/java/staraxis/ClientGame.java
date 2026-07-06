@@ -727,6 +727,20 @@ public class ClientGame implements ApplicationListener {
                 return String.format("行星  %s  半径%.0fGU  轨道%.0fGU", type, planet.radiusGU, planet.semiMajorAxisGU);
             }
         }
+        // 检查小行星
+        for (PlanetBody ast : currentSystem.asteroids) {
+            if (ast.entityId == entityId) {
+                String type = ast.planetTypeId != null ? ast.planetTypeId : "?";
+                return String.format("小行星  %s  半径%.0fGU  轨道%.0fGU", type, ast.radiusGU, ast.semiMajorAxisGU);
+            }
+        }
+        // 检查卫星
+        for (PlanetBody moon : currentSystem.moons) {
+            if (moon.entityId == entityId) {
+                String type = moon.planetTypeId != null ? moon.planetTypeId : "?";
+                return String.format("卫星  %s  半径%.0fGU  轨道%.0fGU", type, moon.radiusGU, moon.semiMajorAxisGU);
+            }
+        }
         // 检查舰船（从 WorldState 读取）
         var ws = runtime.getWorldStateForSimOnly();
         if (ws != null) {

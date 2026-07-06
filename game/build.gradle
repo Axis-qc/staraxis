@@ -1,8 +1,17 @@
 plugins {
-  id 'java-library'
+  id 'application'
 }
 
 group = 'staraxis'
+
+application {
+  mainClass = 'staraxis.game.server.HeadlessGameServer'
+}
+
+run {
+  workingDir = rootProject.rootDir
+  standardInput = System.in
+}
 
 repositories {
   mavenCentral()

@@ -13,4 +13,12 @@ public class OrbitPresetDef {
     public List<Double> inclinationDegRange;
     public List<Integer> rotationPeriodHoursRange;
     public Map<String, Integer> planetTypeWeights;
+
+    /**
+     * 轨道分区权重表。
+     * 按 maxOrbitFraction 递增排列，生成时根据 currentOrbitGU / systemRadiusGU
+     * 顺次匹配第一个满足条件的分区，使用该分区的权重表。
+     * 为 null 或空时回退到 planetTypeWeights。
+     */
+    public List<OrbitZoneWeightDef> zoneWeights;
 }

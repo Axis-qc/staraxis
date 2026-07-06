@@ -325,7 +325,11 @@ public final class SnapshotRoutes {
 
                         || found.entityType == staraxis.game.entity.EntityType.PLANET
 
-                        || found.entityType == staraxis.game.entity.EntityType.SYSTEM_BARYCENTER;
+                        || found.entityType == staraxis.game.entity.EntityType.SYSTEM_BARYCENTER
+
+                        || found.entityType == staraxis.game.entity.EntityType.ASTEROID
+
+                        || found.entityType == staraxis.game.entity.EntityType.MOON;
 
                 if (!owned && !isNatural) {
 

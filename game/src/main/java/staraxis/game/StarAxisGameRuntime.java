@@ -452,6 +452,42 @@ public class StarAxisGameRuntime implements GameRuntime {
                                 planet.orbitalPeriodDays,
                                 planet.meanAnomalyDegAtEpoch)));
             }
+
+            // 3.4 小行星喵
+            for (PlanetBody asteroid : system.asteroids) {
+                sectorBaselines.add(new EntitySnapshot(
+                        asteroid.entityId, asteroid.entityType,
+                        asteroid.systemId, system.barycenterEntityId,
+                        systemPos,
+                        asteroid.ownerNationId, asteroid.ownerPlayerId,
+                        true,
+                        new EntitySnapshot.PlanetDetails(
+                                asteroid.planetTypeId, asteroid.radiusGU,
+                                asteroid.rotationPeriodHours, asteroid.surfaceTexturePath,
+                                false,
+                                asteroid.orbitCenterEntityId,
+                                asteroid.semiMajorAxisGU, asteroid.eccentricity,
+                                asteroid.inclinationDeg, asteroid.periapsisArgDeg,
+                                asteroid.orbitalPeriodDays, asteroid.meanAnomalyDegAtEpoch)));
+            }
+
+            // 3.5 卫星喵
+            for (PlanetBody moon : system.moons) {
+                sectorBaselines.add(new EntitySnapshot(
+                        moon.entityId, moon.entityType,
+                        moon.systemId, system.barycenterEntityId,
+                        systemPos,
+                        moon.ownerNationId, moon.ownerPlayerId,
+                        true,
+                        new EntitySnapshot.PlanetDetails(
+                                moon.planetTypeId, moon.radiusGU,
+                                moon.rotationPeriodHours, moon.surfaceTexturePath,
+                                false,
+                                moon.orbitCenterEntityId,
+                                moon.semiMajorAxisGU, moon.eccentricity,
+                                moon.inclinationDeg, moon.periapsisArgDeg,
+                                moon.orbitalPeriodDays, moon.meanAnomalyDegAtEpoch)));
+            }
         }
         next.publicEntityBaselinesBySectorKey = baselineMap;
 
@@ -608,6 +644,62 @@ public class StarAxisGameRuntime implements GameRuntime {
                                 planet.meanAnomalyDegAtEpoch),
                         0));
 
+            }
+        }
+
+        // 3b. 小行星实体（绕恒星小天体），附带基础快照供前端渲染
+        for (StarSystem system : worldState.astro.getSystemsView()) {
+            SpacePosition sysPos = system.galaxyPos;
+            for (PlanetBody asteroid : system.asteroids) {
+                asteroid.systemId = system.systemId;
+                asteroid.parentEntityId = system.barycenterEntityId;
+                asteroid.posWorldGU = asteroid.posWorldGU != null ? asteroid.posWorldGU : sysPos;
+                worldState.registerEntity(asteroid);
+                s.putEntity(asteroid);
+                s.putEntitySystem(system.systemId, asteroid.entityId);
+                s.putEntitySnapshot(new EntitySnapshot(
+                        asteroid.entityId, asteroid.entityType,
+                        asteroid.systemId, asteroid.parentEntityId,
+                        asteroid.posWorldGU,
+                        asteroid.ownerNationId, asteroid.ownerPlayerId,
+                        true,
+                        new EntitySnapshot.PlanetDetails(
+                                asteroid.planetTypeId, asteroid.radiusGU,
+                                asteroid.rotationPeriodHours, asteroid.surfaceTexturePath,
+                                false,
+                                asteroid.orbitCenterEntityId,
+                                asteroid.semiMajorAxisGU, asteroid.eccentricity,
+                                asteroid.inclinationDeg, asteroid.periapsisArgDeg,
+                                asteroid.orbitalPeriodDays, asteroid.meanAnomalyDegAtEpoch),
+                        0));
+            }
+        }
+
+        // 3c. 卫星实体（绕行星小天体），附带基础快照供前端渲染
+        for (StarSystem system : worldState.astro.getSystemsView()) {
+            SpacePosition sysPos = system.galaxyPos;
+            for (PlanetBody moon : system.moons) {
+                moon.systemId = system.systemId;
+                moon.parentEntityId = system.barycenterEntityId;
+                moon.posWorldGU = moon.posWorldGU != null ? moon.posWorldGU : sysPos;
+                worldState.registerEntity(moon);
+                s.putEntity(moon);
+                s.putEntitySystem(system.systemId, moon.entityId);
+                s.putEntitySnapshot(new EntitySnapshot(
+                        moon.entityId, moon.entityType,
+                        moon.systemId, moon.parentEntityId,
+                        moon.posWorldGU,
+                        moon.ownerNationId, moon.ownerPlayerId,
+                        true,
+                        new EntitySnapshot.PlanetDetails(
+                                moon.planetTypeId, moon.radiusGU,
+                                moon.rotationPeriodHours, moon.surfaceTexturePath,
+                                false,
+                                moon.orbitCenterEntityId,
+                                moon.semiMajorAxisGU, moon.eccentricity,
+                                moon.inclinationDeg, moon.periapsisArgDeg,
+                                moon.orbitalPeriodDays, moon.meanAnomalyDegAtEpoch),
+                        0));
             }
         }
 

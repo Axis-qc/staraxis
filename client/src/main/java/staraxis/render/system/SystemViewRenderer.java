@@ -17,6 +17,7 @@ import com.badlogic.gdx.math.collision.Ray;
 import staraxis.game.astro.PlanetBody;
 import staraxis.game.astro.StarBody;
 import staraxis.game.astro.StarSystem;
+import staraxis.game.entity.EntityType;
 import staraxis.game.ship.ShipBody;
 import staraxis.game.space.OrbitSolver;
 import staraxis.game.space.OrbitalElements;
@@ -66,8 +67,8 @@ public class SystemViewRenderer {
     /** 对象池：低精度行星 ModelInstance（懒增长） */
     private final java.util.ArrayList<ModelInstance> planetLowInstances = new java.util.ArrayList<>();
 
-    /** 实体ID -> StarBody 查找表，每帧构建。 */
-    private final java.util.HashMap<Long, StarBody> starIndex = new java.util.HashMap<>();
+    /** 实体ID -> 天体在系统局部空间的位置查找表，每帧构建。包含恒星+行星+小行星+卫星。 */
+    private final java.util.HashMap<Long, Vector3> bodyCenterIndex = new java.util.HashMap<>();
 
     private double simulationTime = 0.0;
 
@@ -176,41 +177,85 @@ public class SystemViewRenderer {
         this.highlightShipId = shipId;
     }
 
-    /** 构建恒星 ID 索引 */
-    private void buildStarIndex(StarSystem system) {
-        starIndex.clear();
+    /** 构建所有天体的系统局部空间位置索引（恒星→行星→小行星→卫星，按轨道层级顺序）。 */
+    private void buildBodyIndex(StarSystem system) {
+        bodyCenterIndex.clear();
+
+        // 1. 恒星位于 systemPos
         for (StarBody star : system.stars) {
-            starIndex.put(star.entityId, star);
+            bodyCenterIndex.put(star.entityId,
+                new Vector3((float) star.systemPos.x(), (float) star.systemPos.y(), (float) star.systemPos.z()));
+        }
+
+        // 2. 行星/小行星：轨道解算 + 轨道中心偏移
+        for (PlanetBody p : system.planets) {
+            Vector3 center = bodyCenterIndex.get(p.orbitCenterEntityId);
+            if (center == null) center = tmpVecZero();
+            OrbitalElements orbit = toOrbitalElements(p);
+            SpacePosition pos = OrbitSolver.solve(orbit, simulationTime);
+            bodyCenterIndex.put(p.entityId, new Vector3(
+                (float) pos.x() + center.x,
+                (float) pos.y() + center.y,
+                (float) pos.z() + center.z));
+        }
+        for (PlanetBody a : system.asteroids) {
+            Vector3 center = bodyCenterIndex.get(a.orbitCenterEntityId);
+            if (center == null) center = tmpVecZero();
+            OrbitalElements orbit = toOrbitalElements(a);
+            SpacePosition pos = OrbitSolver.solve(orbit, simulationTime);
+            bodyCenterIndex.put(a.entityId, new Vector3(
+                (float) pos.x() + center.x,
+                (float) pos.y() + center.y,
+                (float) pos.z() + center.z));
+        }
+
+        // 3. 卫星：轨道解算 + 母行星位置偏移
+        for (PlanetBody m : system.moons) {
+            Vector3 center = bodyCenterIndex.get(m.orbitCenterEntityId);
+            if (center == null) center = tmpVecZero();
+            OrbitalElements orbit = toOrbitalElements(m);
+            SpacePosition pos = OrbitSolver.solve(orbit, simulationTime);
+            bodyCenterIndex.put(m.entityId, new Vector3(
+                (float) pos.x() + center.x,
+                (float) pos.y() + center.y,
+                (float) pos.z() + center.z));
         }
     }
 
-    /** 查找引力中心恒星在系统空间中的位置（SpacePosition -> float x/y/z），无则返回原点 */
-    private void getOrbitCenterPos(PlanetBody planet, Vector3 out) {
-        StarBody center = starIndex.get(planet.orbitCenterEntityId);
-        if (center != null) {
-            out.set((float) center.systemPos.x(), (float) center.systemPos.y(), (float) center.systemPos.z());
-        } else {
-            out.set(0, 0, 0);
+    /** 返回 (0,0,0) 向量（临时用，每次调用返回同一对象，不跨帧持有）。 */
+    private Vector3 tmpVecZero() {
+        tmpVec.set(0, 0, 0);
+        return tmpVec;
+    }
+
+    /** 从位置索引查找天体的系统局部空间位置。 */
+    private boolean getBodyPosition(long entityId, Vector3 out) {
+        Vector3 pos = bodyCenterIndex.get(entityId);
+        if (pos != null) {
+            out.set(pos);
+            return true;
         }
+        return false;
     }
 
     public void render(StarSystem system, WorldCamera camera) {
         Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
 
-        // 构建查找索引
-        buildStarIndex(system);
+        // 构建所有天体的层级位置索引（恒星→行星→小行星→卫星）
+        buildBodyIndex(system);
 
         // 第一遍：渲染所有恒星
         int starCount = system.stars.size();
         ensureStarInstances(starCount);
         renderAllStars(system, camera);
 
-        // 第一遍：渲染所有行星，填充深度缓冲
-        int planetCount = system.planets.size();
-        ensurePlanetInstances(planetCount);
-        for (int i = 0; i < planetCount; i++) {
-            renderPlanetMesh(i, system.planets.get(i), camera);
-        }
+        // 第一遍：渲染所有行星 + 小行星 + 卫星，填充深度缓冲
+        int bodyCount = system.planets.size() + system.asteroids.size() + system.moons.size();
+        ensurePlanetInstances(bodyCount);
+        int bodyIdx = 0;
+        for (PlanetBody p : system.planets) { renderPlanetBody(bodyIdx++, p, camera); }
+        for (PlanetBody a : system.asteroids) { renderPlanetBody(bodyIdx++, a, camera); }
+        for (PlanetBody m : system.moons) { renderPlanetBody(bodyIdx++, m, camera); }
 
         // 渲染所有舰船（System View 内该星系的舰船）
         int shipCount = currentFrameShips.size();
@@ -228,10 +273,10 @@ public class SystemViewRenderer {
 
         float orbitAlpha = LodCalculator.calculateOrbitAlpha(camera.getOrbitDistance());
         if (orbitAlpha > 0f) {
-            // 舰船轨道线已移除（变轨移动系统已废弃）
-            for (int i = 0; i < planetCount; i++) {
-                renderOrbitRing(system.planets.get(i), camera, orbitAlpha);
-            }
+            // 所有天体（行星、小行星、卫星）的轨道环
+            for (PlanetBody p : system.planets) { renderOrbitRing(p, camera, orbitAlpha); }
+            for (PlanetBody a : system.asteroids) { renderOrbitRing(a, camera, orbitAlpha * 0.5f); }
+            for (PlanetBody m : system.moons) { renderOrbitRing(m, camera, orbitAlpha * 0.4f); }
         }
         Gdx.gl.glDisable(GL20.GL_BLEND);
 
@@ -272,16 +317,11 @@ public class SystemViewRenderer {
         }
     }
 
-    /** 行星按引力中心恒星偏移渲染 */
-    private void renderPlanetMesh(int index, PlanetBody planet, WorldCamera camera) {
-        OrbitalElements orbit = toOrbitalElements(planet);
-        SpacePosition pos = OrbitSolver.solve(orbit, simulationTime);
-
-        // 查引力中心偏移，一次 lookup 供偏移 + 方向光共用
-        getOrbitCenterPos(planet, tmpOffset);
-        float px = (float) pos.x() + tmpOffset.x;
-        float py = (float) pos.y() + tmpOffset.y;
-        float pz = (float) pos.z() + tmpOffset.z;
+    /** 渲染单个天体（行星/小行星/卫星），位置从 bodyCenterIndex 取。 */
+    private void renderPlanetBody(int index, PlanetBody body, WorldCamera camera) {
+        // 从位置索引取系统局部坐标
+        if (!getBodyPosition(body.entityId, tmpVec)) return;
+        float px = tmpVec.x, py = tmpVec.y, pz = tmpVec.z;
 
         Vector3 cameraPos = camera.camera.position;
         double distance = Math.sqrt(
@@ -294,8 +334,8 @@ public class SystemViewRenderer {
             return;
         }
 
-        float scale = (float) planet.radiusGU;
-        float[] rgb = planetColor(planet.planetTypeId);
+        float scale = (float) body.radiusGU;
+        float[] rgb = planetColor(body.planetTypeId);
 
         ModelInstance instance = (lod == LodLevel.LOW)
                 ? planetLowInstances.get(index)
@@ -307,12 +347,10 @@ public class SystemViewRenderer {
         instance.materials.get(0)
                 .set(ColorAttribute.createEmissive(rgb[0] * 0.08f, rgb[1] * 0.08f, rgb[2] * 0.08f, 1f));
 
-        // 方向光：从行星绕的恒星指向行星
-        if (planet.orbitCenterEntityId != 0L) {
-            starLight.setDirection(
-                    px - tmpOffset.x,
-                    py - tmpOffset.y,
-                    pz - tmpOffset.z);
+        // 方向光：从轨道中心指向天体
+        Vector3 centerPos = bodyCenterIndex.get(body.orbitCenterEntityId);
+        if (centerPos != null) {
+            starLight.setDirection(px - centerPos.x, py - centerPos.y, pz - centerPos.z);
         }
 
         modelBatch.begin(camera.camera);
@@ -332,15 +370,17 @@ public class SystemViewRenderer {
     private void renderPlanetDots(StarSystem system, WorldCamera camera) {
         planetDotInfos.clear();
 
-        int count = system.planets.size();
+        // 合并所有天体：行星 + 小行星 + 卫星
+        java.util.ArrayList<PlanetBody> allBodies = new java.util.ArrayList<>();
+        allBodies.addAll(system.planets);
+        allBodies.addAll(system.asteroids);
+        allBodies.addAll(system.moons);
+        int count = allBodies.size();
         if (count == 0) return;
 
-        // 计算圆标透明度（由 LodCalculator 统一管理 LOD 参数）
+        // 计算圆标透明度
         float dotAlpha = LodCalculator.calculateDotAlpha(camera.getOrbitDistance());
-        if (dotAlpha <= 0f) {
-            // 完全透明时不绘制也不拾取
-            return;
-        }
+        if (dotAlpha <= 0f) return;
 
         float gfxW = Gdx.graphics.getWidth();
         float gfxH = Gdx.graphics.getHeight();
@@ -351,18 +391,14 @@ public class SystemViewRenderer {
 
         Vector3 camPos = camera.camera.position;
 
-        for (int i = 0; i < count; i++) {
-            PlanetBody planet = system.planets.get(i);
+        for (PlanetBody body : allBodies) {
+            // 从已预计算的位置索引取坐标
+            Vector3 bodyPos = bodyCenterIndex.get(body.entityId);
+            if (bodyPos == null) continue;
 
-            // 计算世界坐标
-            OrbitalElements orbit = toOrbitalElements(planet);
-            SpacePosition pos = OrbitSolver.solve(orbit, simulationTime);
-            getOrbitCenterPos(planet, tmpVec);
-            float px = (float) pos.x() + tmpVec.x;
-            float py = (float) pos.y() + tmpVec.y;
-            float pz = (float) pos.z() + tmpVec.z;
+            float px = bodyPos.x, py = bodyPos.y, pz = bodyPos.z;
 
-            // 跳过 HIDDEN 的行星
+            // 跳过 HIDDEN
             double dist = Math.sqrt(
                     (camPos.x - px) * (camPos.x - px) +
                             (camPos.y - py) * (camPos.y - py) +
@@ -374,16 +410,17 @@ public class SystemViewRenderer {
             camera.camera.project(tmpScreenPos);
             if (tmpScreenPos.z < 0f || tmpScreenPos.z > 1f) continue;
 
-            // 翻转 Y：project() 左下角原点 → 左上角原点（与 Gdx.input 一致）
             float dotY = gfxH - tmpScreenPos.y;
 
-            // 绘制固定大小彩色圆形（带 alpha 渐变）
-            float[] rgb = planetColor(planet.planetTypeId);
-            shapeRenderer.setColor(rgb[0], rgb[1], rgb[2], dotAlpha);
-            shapeRenderer.circle(tmpScreenPos.x, dotY, DOT_RADIUS_PX);
+            // 小行星/卫星用更小的圆标
+            float dotRadius = (body.entityType == EntityType.ASTEROID || body.entityType == EntityType.MOON)
+                ? DOT_RADIUS_PX * 0.5f : DOT_RADIUS_PX;
 
-            // 记录供拾取
-            planetDotInfos.add(new PlanetDotInfo(planet.entityId, tmpScreenPos.x, dotY));
+            float[] rgb = planetColor(body.planetTypeId);
+            shapeRenderer.setColor(rgb[0], rgb[1], rgb[2], dotAlpha);
+            shapeRenderer.circle(tmpScreenPos.x, dotY, dotRadius);
+
+            planetDotInfos.add(new PlanetDotInfo(body.entityId, tmpScreenPos.x, dotY));
         }
 
         shapeRenderer.end();
@@ -452,10 +489,12 @@ public class SystemViewRenderer {
     /** 轨道环带偏移 */
     private void renderOrbitRing(PlanetBody planet, WorldCamera camera, float orbitAlpha) {
         OrbitalElements orbit = toOrbitalElements(planet);
-        getOrbitCenterPos(planet, tmpVec);
+        Vector3 center = bodyCenterIndex.get(planet.orbitCenterEntityId);
+        float cx = 0, cy = 0, cz = 0;
+        if (center != null) { cx = center.x; cy = center.y; cz = center.z; }
 
         orbitRing.render(orbit,
-                tmpVec.x, tmpVec.y, tmpVec.z,
+                cx, cy, cz,
                 camera.camera.combined, new Color(0.3f, 0.4f, 0.6f, orbitAlpha));
     }
 
@@ -568,42 +607,36 @@ public class SystemViewRenderer {
             }
         }
 
-        // 检测所有行星（使用当前轨道位置）
-        for (PlanetBody planet : system.planets) {
-            OrbitalElements orbit = toOrbitalElements(planet);
-            SpacePosition pos = OrbitSolver.solve(orbit, simulationTime);
-            getOrbitCenterPos(planet, tmpVec);
-            tmpOffset.set((float) pos.x() + tmpVec.x, (float) pos.y() + tmpVec.y, (float) pos.z() + tmpVec.z);
-            float radius = (float) planet.radiusGU;
-            if (Intersector.intersectRaySphere(ray, tmpOffset, radius, tmpIntersect)) {
+        // 检测所有行星 + 小行星 + 卫星（使用预计算的位置索引）
+        java.util.ArrayList<PlanetBody> allBodies = new java.util.ArrayList<>();
+        allBodies.addAll(system.planets);
+        allBodies.addAll(system.asteroids);
+        allBodies.addAll(system.moons);
+        for (PlanetBody body : allBodies) {
+            Vector3 bodyPos = bodyCenterIndex.get(body.entityId);
+            if (bodyPos == null) continue;
+            float radius = (float) body.radiusGU;
+            if (Intersector.intersectRaySphere(ray, bodyPos, radius, tmpIntersect)) {
                 float dist = tmpIntersect.dst2(ray.origin);
                 if (dist < closestDist) {
                     closestDist = dist;
-                    closestId = planet.entityId;
+                    closestId = body.entityId;
                 }
             }
         }
 
-        // 检测 2D 行星圆标（屏幕空间）
+        // 检测 2D 天体圆标（屏幕空间）
         for (PlanetDotInfo dot : planetDotInfos) {
             float dx = screenX - dot.screenX;
             float dy = screenY - dot.screenY;
-            if (dx * dx + dy * dy <= DOT_RADIUS_PX * DOT_RADIUS_PX) {
-                // 命中圆标，用该行星的 3D 距离作为深度排序（与 3D 命中比较）
-                for (PlanetBody planet : system.planets) {
-                    if (planet.entityId == dot.entityId) {
-                        OrbitalElements orbit = toOrbitalElements(planet);
-                        SpacePosition pPos = OrbitSolver.solve(orbit, simulationTime);
-                        getOrbitCenterPos(planet, tmpVec);
-                        float px = (float) pPos.x() + tmpVec.x;
-                        float py = (float) pPos.y() + tmpVec.y;
-                        float pz = (float) pPos.z() + tmpVec.z;
-                        float dist = camera.camera.position.dst2(px, py, pz);
-                        if (dist < closestDist) {
-                            closestDist = dist;
-                            closestId = dot.entityId;
-                        }
-                        break;
+            if (dx * dx + dy * dy <= DOT_RADIUS_PX * DOT_RADIUS_PX * 4) {
+                // 命中圆标，用预计算位置的 3D 距离排序
+                Vector3 bodyPos = bodyCenterIndex.get(dot.entityId);
+                if (bodyPos != null) {
+                    float dist = camera.camera.position.dst2(bodyPos);
+                    if (dist < closestDist) {
+                        closestDist = dist;
+                        closestId = dot.entityId;
                     }
                 }
             }
@@ -663,17 +696,11 @@ public class SystemViewRenderer {
                 return true;
             }
         }
-        // 检查行星
-        for (PlanetBody planet : system.planets) {
-            if (planet.entityId == entityId) {
-                OrbitalElements orbit = toOrbitalElements(planet);
-                SpacePosition pos = OrbitSolver.solve(orbit, simulationTime);
-                getOrbitCenterPos(planet, out);
-                out.x += (float) pos.x();
-                out.y += (float) pos.y();
-                out.z += (float) pos.z();
-                return true;
-            }
+        // 从 bodyCenterIndex 查找（包含恒星、行星、小行星、卫星）
+        Vector3 cached = bodyCenterIndex.get(entityId);
+        if (cached != null) {
+            out.set(cached);
+            return true;
         }
         // 检查舰船
         for (ShipBody ship : currentFrameShips) {

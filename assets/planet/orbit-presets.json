@@ -18,7 +18,51 @@
         "OCEAN_WORLD": 8,
         "LAVA_WORLD": 5,
         "FROZEN_WORLD": 20
-      }
+      },
+      "zoneWeights": [
+        {
+          "zoneId": "inner",
+          "maxOrbitFraction": 0.12,
+          "planetTypeWeights": {
+            "ROCKY_BARREN": 60,
+            "LAVA_WORLD": 25,
+            "TERRESTRIAL": 10,
+            "FROZEN_WORLD": 5
+          }
+        },
+        {
+          "zoneId": "habitable",
+          "maxOrbitFraction": 0.35,
+          "planetTypeWeights": {
+            "TERRESTRIAL": 35,
+            "OCEAN_WORLD": 25,
+            "ROCKY_BARREN": 25,
+            "GAS_GIANT": 10,
+            "FROZEN_WORLD": 5
+          }
+        },
+        {
+          "zoneId": "outer",
+          "maxOrbitFraction": 0.65,
+          "planetTypeWeights": {
+            "GAS_GIANT": 35,
+            "ICE_GIANT": 25,
+            "ROCKY_BARREN": 20,
+            "FROZEN_WORLD": 15,
+            "TERRESTRIAL": 5
+          }
+        },
+        {
+          "zoneId": "fringe",
+          "maxOrbitFraction": 1.0,
+          "planetTypeWeights": {
+            "FROZEN_WORLD": 40,
+            "ICE_GIANT": 25,
+            "ROCKY_BARREN": 25,
+            "GAS_GIANT": 10
+          }
+        }
+      ]
     }
   ]
 }

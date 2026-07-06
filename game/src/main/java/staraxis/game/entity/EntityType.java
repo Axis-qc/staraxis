@@ -19,6 +19,12 @@ public enum EntityType {
      */
     SYSTEM_BARYCENTER,
 
+    /** An asteroid (small rocky/icy body orbiting a star). */
+    ASTEROID,
+
+    /** A moon orbiting a planet. */
+    MOON,
+
     /** A player or AI-controlled ship (for future use). */
     SHIP,
 

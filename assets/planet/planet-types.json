@@ -98,5 +98,30 @@
       "ICE_SHELF": 0.9,
       "CONTINENT": 0.1
     }
+  },
+  {
+    "typeId": "ASTEROID",
+    "description": "A small rocky body, too small to retain atmosphere or liquid water.",
+    "weight": 0,
+    "radiusGURange": [5, 20],
+    "spriteCandidates": [
+      "planet/Solid/Airless/Airless_01-512x512.png",
+      "planet/Solid/Rocky/Rocky_01-512x512.png",
+      "planet/Solid/Cratered/Cratered_01-512x512.png",
+      "planet/Solid/Lunar/Lunar_01-512x512.png"
+    ],
+    "surfaceRegionWeights": {}
+  },
+  {
+    "typeId": "ICE_ASTEROID",
+    "description": "A small icy body found in the outer regions of a star system.",
+    "weight": 0,
+    "radiusGURange": [5, 18],
+    "spriteCandidates": [
+      "planet/Solid/Icy/Icy_01-512x512.png",
+      "planet/Solid/Frozen/Frozen_01-512x512.png",
+      "planet/Solid/Glacial/Glacial_01-512x512.png"
+    ],
+    "surfaceRegionWeights": {}
   }
 ]

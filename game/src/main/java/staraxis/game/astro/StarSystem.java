@@ -35,6 +35,12 @@ public class StarSystem {
     /** 属于该系统的行星实体列表。 */
     public final List<PlanetBody> planets = new ArrayList<>();
 
+    /** 小行星列表（绕恒星公转的小天体，夹在行星轨道之间生成）。 */
+    public final List<PlanetBody> asteroids = new ArrayList<>();
+
+    /** 卫星列表（绕行星公转的小天体）。 */
+    public final List<PlanetBody> moons = new ArrayList<>();
+
     /** 恒星系所属国家ID（权威归属口径）。 */
     public String ownerNationId;
 

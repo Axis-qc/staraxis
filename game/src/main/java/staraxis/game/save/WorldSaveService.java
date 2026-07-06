@@ -183,7 +183,9 @@ public final class WorldSaveService {
             // 排除天文实体（由天文数据单独管理）喵
             if (entity.entityType == EntityType.STAR ||
                 entity.entityType == EntityType.PLANET ||
-                entity.entityType == EntityType.SYSTEM_BARYCENTER) {
+                entity.entityType == EntityType.SYSTEM_BARYCENTER ||
+                entity.entityType == EntityType.ASTEROID ||
+                entity.entityType == EntityType.MOON) {
                 continue;
             }
 
