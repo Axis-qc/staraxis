@@ -11,10 +11,9 @@ import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 
 import staraxis.game.StarAxisGameRuntime;
-import staraxis.game.astro.PlanetBody;
-import staraxis.game.astro.StarBody;
-import staraxis.game.astro.StarSystem;
+import staraxis.game.entity.EntityType;
 import staraxis.game.log.TickProfiler;
+import staraxis.game.state.snapshot.EntitySnapshot;
 import staraxis.game.util.ProgressCallback;
 import staraxis.game.world.WorldGenConfig;
 import staraxis.logging.GdxToSlf4jLogger;
@@ -22,6 +21,7 @@ import staraxis.render.SkyboxRenderer;
 import staraxis.render.ViewManager;
 import staraxis.render.WorldCamera;
 import staraxis.render.util.MenuBackgroundLoader;
+import staraxis.render.util.MenuGalaxyBackground;
 import staraxis.render.galaxy.GalaxyViewRenderer;
 import staraxis.render.picking.RayPicker;
 import staraxis.render.system.SystemViewRenderer;
@@ -54,6 +54,11 @@ public class ClientGame implements ApplicationListener {
     private Gui gui;
     private StarAxisGameRuntime runtime;
     private StarfieldBackground starfield;
+    private MenuGalaxyBackground menuGalaxy;
+    private GameSnapshotProvider snapshotProvider;
+
+    // 当前 System View 所在恒星系ID（替代直接引用 StarSystem 实例）
+    private long currentSystemId;
 
     // 3D 宇宙渲染管线（galaxy 和 system 各持独立镜头，参数互不干扰）
     private WorldCamera galaxyCamera;
@@ -65,9 +70,6 @@ public class ClientGame implements ApplicationListener {
 
     // 天空盒渲染器
     private SkyboxRenderer skyboxRenderer;
-
-    // 当前选中的恒星系（System View）
-    private StarSystem currentSystem;
 
     // UI 调试叠加层（F3 切换），显示坐标原点/鼠标坐标/悬停元素边框
     private UiDebug uiDebug;
@@ -173,6 +175,9 @@ public class ClientGame implements ApplicationListener {
 
         initSpaceRendering();
 
+        // 主菜单 3D 银河背景（纯数学生成 8000 星，毫秒级启动）
+        menuGalaxy = new MenuGalaxyBackground();
+
         // UI 调试面板初始化（F3 打开，JSON 声明式 UI）
         uiDebug = new UiDebug(stage, gui.get(ShapeRenderer.class), base.vectorFont,
                 gui.get(staraxis.ui.json.UiParser.class),
@@ -217,12 +222,10 @@ public class ClientGame implements ApplicationListener {
         if (starfield != null) {
             starfield.resize(width, height);
         }
+        if (menuGalaxy != null) {
+            menuGalaxy.resize(width, height);
+        }
     }
-
-    /**
-     * 开始异步世界生成。由 WorldSettingsScreen 触发，在后台线程执行 newGame()
-     * 主线程每帧读取 genProgress/genPhase 更新进度条喵。
-     */
     public void startAsyncGen(WorldGenConfig cfg) {
         gameState = GameState.LOADING;
         genProgress = 0f;
@@ -281,21 +284,27 @@ public class ClientGame implements ApplicationListener {
     }
 
     private void renderMenu(float dt) {
-        Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-        if (starfield != null) {
+        if (menuGalaxy != null) {
+            menuGalaxy.update(dt);
+            menuGalaxy.render();
+        } else if (starfield != null) {
+            // 降级：如果 3D 背景不可用，使用 2D 星空
             starfield.act(dt);
             starfield.render();
         }
     }
 
     private void renderLoading(float dt) {
-        // 绘制星空背景
-        Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-        if (starfield != null) {
+        // 3D 银河背景持续旋转
+        if (menuGalaxy != null) {
+            menuGalaxy.update(dt);
+            menuGalaxy.render();
+        } else if (starfield != null) {
             starfield.act(dt);
             starfield.render();
+        } else {
+            Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
+            Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
         }
 
         // 更新进度条
@@ -319,6 +328,8 @@ public class ClientGame implements ApplicationListener {
         genThread = null;
 
         runtime = rt;
+        snapshotProvider = new LocalSnapshotProvider(rt);
+        shipMoveController.setSnapshotProvider(snapshotProvider);
         gui.registerRuntime(rt);
         gameState = GameState.PLAYING;
         gui.hideLoadingScreen();
@@ -376,7 +387,7 @@ public class ClientGame implements ApplicationListener {
         if (Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.M)) {
             if (viewManager.isInSystemView()) {
                 viewManager.switchToGalaxy();
-                currentSystem = null;
+                currentSystemId = 0;
                 systemViewRenderer.resetTime();
                 uiDebug.switchActiveCamera(galaxyCamera);
                 runtime.setActiveSystemId(0);
@@ -393,8 +404,8 @@ public class ClientGame implements ApplicationListener {
     private void renderGalaxyView() {
         skyboxRenderer.render(galaxyCamera);
 
-        var state = runtime.getRealTimeWorldStateReadonly();
-        var lowFreq = runtime.getDailySettlementStateBufferForReadonly().getActive();
+        var state = snapshotProvider.getRealtimeState();
+        var lowFreq = snapshotProvider.getDailyState();
 
         rayPicker.updateHovered(galaxyCamera, state,
                 Gdx.input.getX(), Gdx.input.getY(), galaxyViewRenderer);
@@ -408,9 +419,9 @@ public class ClientGame implements ApplicationListener {
         if (Gdx.input.isButtonJustPressed(com.badlogic.gdx.Input.Buttons.LEFT)) {
             long selectedStarId = rayPicker.getHoveredStarId();
             if (selectedStarId >= 0) {
-                StarSystem system = findSystemByStarId(selectedStarId);
-                if (system != null) {
-                    currentSystem = system;
+                long sysId = findSystemByStarId(selectedStarId);
+                if (sysId > 0) {
+                    currentSystemId = sysId;
                     viewManager.switchToSystem(selectedStarId);
                     systemViewRenderer.resetTime();
                     uiDebug.switchActiveCamera(systemCamera);
@@ -422,7 +433,7 @@ public class ClientGame implements ApplicationListener {
     }
 
     private void renderSystemView(float dt) {
-        if (currentSystem == null)
+        if (currentSystemId <= 0)
             return;
 
         // F4 切换区块网格调试
@@ -434,37 +445,45 @@ public class ClientGame implements ApplicationListener {
 
         systemViewRenderer.advanceTime(dt);
         // 通知 game 引擎当前活跃星系（优先计算）
-        runtime.setActiveSystemId(currentSystem.systemId);
+        runtime.setActiveSystemId(currentSystemId);
 
         // 只有 WASDQE 能取消镜头跟踪（提前清标志，跟循环在底部）
         if (systemCamera.isUserControlled()) {
             shipMoveController.cancelCameraFollow();
         }
 
-        // 传递当前星系的舰船列表给渲染器
-        var ws = runtime.getWorldStateForSimOnly();
-        java.util.List<staraxis.game.ship.ShipBody> systemShips = java.util.List.of();
-        if (ws != null) {
-            var entityIds = ws.entityIdsBySystem.get(currentSystem.systemId);
-            if (entityIds != null && !entityIds.isEmpty()) {
-                java.util.ArrayList<staraxis.game.ship.ShipBody> ships =
-                    new java.util.ArrayList<>();
-                for (long id : entityIds) {
-                    var entity = ws.entitiesById.get(id);
-                    if (entity instanceof staraxis.game.ship.ShipBody ship) {
-                        ships.add(ship);
+        // 收集当前星系的完整快照数据
+        var state = snapshotProvider.getRealtimeState();
+        var ds = snapshotProvider.getDailyState();
+        java.util.List<EntitySnapshot> systemSnapshots = java.util.List.of();
+        java.util.List<EntitySnapshot> shipSnapshots = java.util.List.of();
+
+        // 恒星/行星等基线数据从每日基线快照取
+        if (ds != null && ds.publicEntityBaselinesBySectorKey != null) {
+            systemSnapshots = ds.publicEntityBaselinesBySectorKey.get(String.valueOf(currentSystemId));
+        }
+        if (systemSnapshots == null) systemSnapshots = java.util.List.of();
+
+        // 舰船从实时快照取（补充到基线快照中，或单独传）
+        if (state != null) {
+            var rtSnaps = state.getEntitySnapshotsBySystemView().get(String.valueOf(currentSystemId));
+            if (rtSnaps != null) {
+                java.util.ArrayList<EntitySnapshot> ships = new java.util.ArrayList<>();
+                for (EntitySnapshot snap : rtSnaps) {
+                    if (snap != null && snap.details instanceof EntitySnapshot.ShipDetails) {
+                        ships.add(snap);
                     }
                 }
-                systemShips = ships;
+                shipSnapshots = ships;
             }
         }
-        systemViewRenderer.setShips(systemShips);
+        systemViewRenderer.setShips(shipSnapshots);
         systemViewRenderer.setHighlightShip(shipMoveController.getSelectedShipId());
-        systemViewRenderer.render(currentSystem, systemCamera);
+        systemViewRenderer.render(systemSnapshots, systemCamera);
 
         // System View 悬停拾取 + HUD 更新
         long hoveredId = systemViewRenderer.pick(systemCamera,
-                Gdx.input.getX(), Gdx.input.getY(), currentSystem);
+                Gdx.input.getX(), Gdx.input.getY());
         InGameHudScreen hud = gui.get(InGameHudScreen.class);
         if (hud != null) {
             hud.updateViewInfo(String.format("恒星系视图  x%.1f", systemCamera.zoomLevel));
@@ -473,7 +492,7 @@ public class ClientGame implements ApplicationListener {
 
         // ── 左键处理 ──
         if (Gdx.input.isButtonJustPressed(com.badlogic.gdx.Input.Buttons.LEFT)) {
-            shipMoveController.handleLeftClick(hoveredId, currentSystem, runtime,
+            shipMoveController.handleLeftClick(hoveredId, runtime,
                     systemViewRenderer, systemCamera);
         }
 
@@ -488,75 +507,90 @@ public class ClientGame implements ApplicationListener {
         shipMoveController.renderMovePath(shapeRenderer, runtime, systemCamera);
 
         // ── 镜头跟踪：在所有输入处理后执行 ──
-        shipMoveController.updateCameraFollow(systemViewRenderer, currentSystem, runtime, systemCamera);
+        shipMoveController.updateCameraFollow(systemViewRenderer, runtime, systemCamera);
     }
 
-    /** 构建 System View 悬停天体描述文字 */
+    /** 构建 System View 悬停天体描述文字（从快照读取）。 */
     private String buildSystemHoverText(long entityId) {
-        if (entityId < 0 || currentSystem == null) return "";
+        if (entityId < 0 || currentSystemId <= 0) return "";
 
-        // 检查恒星
-        for (StarBody star : currentSystem.stars) {
-            if (star.entityId == entityId) {
-                String type = star.starTypeId != null ? star.starTypeId : "?";
-                return String.format("恒星  %s  半径%.0fGU  %dK", type, star.radiusGU, star.temperatureK);
+        // 从快照中搜索该 entityId（优先实时快照，回退每日基线）
+        var state = snapshotProvider.getRealtimeState();
+        java.util.List<EntitySnapshot> snapshots = null;
+        if (state != null) {
+            snapshots = state.getEntitySnapshotsBySystemView().get(String.valueOf(currentSystemId));
+        }
+        if (snapshots == null) {
+            var ds = snapshotProvider.getDailyState();
+            if (ds != null && ds.publicEntityBaselinesBySectorKey != null) {
+                snapshots = ds.publicEntityBaselinesBySectorKey.get(String.valueOf(currentSystemId));
             }
         }
-        // 检查行星
-        for (PlanetBody planet : currentSystem.planets) {
-            if (planet.entityId == entityId) {
-                String type = planet.planetTypeId != null ? planet.planetTypeId : "?";
-                return String.format("行星  %s  半径%.0fGU  轨道%.0fGU", type, planet.radiusGU, planet.semiMajorAxisGU);
+        if (snapshots == null) return "";
+
+        for (EntitySnapshot snap : snapshots) {
+            if (snap.entityId != entityId) continue;
+
+            if (snap.details instanceof EntitySnapshot.StarDetails sd) {
+                String type = sd.starTypeId != null ? sd.starTypeId : "?";
+                return String.format("恒星  %s  半径%.0fGU  %dK", type, sd.radiusGU, sd.temperatureK);
             }
-        }
-        // 检查小行星
-        for (PlanetBody ast : currentSystem.asteroids) {
-            if (ast.entityId == entityId) {
-                String type = ast.planetTypeId != null ? ast.planetTypeId : "?";
-                return String.format("小行星  %s  半径%.0fGU  轨道%.0fGU", type, ast.radiusGU, ast.semiMajorAxisGU);
+            if (snap.details instanceof EntitySnapshot.PlanetDetails pd) {
+                String prefix;
+                if (snap.entityType == EntityType.PLANET) prefix = "行星";
+                else if (snap.entityType == EntityType.ASTEROID) prefix = "小行星";
+                else if (snap.entityType == EntityType.MOON) prefix = "卫星";
+                else prefix = "天体";
+                String type = pd.planetTypeId != null ? pd.planetTypeId : "?";
+                return String.format("%s  %s  半径%.0fGU  轨道%.0fGU", prefix, type, pd.radiusGU, pd.semiMajorAxisGU);
             }
-        }
-        // 检查卫星
-        for (PlanetBody moon : currentSystem.moons) {
-            if (moon.entityId == entityId) {
-                String type = moon.planetTypeId != null ? moon.planetTypeId : "?";
-                return String.format("卫星  %s  半径%.0fGU  轨道%.0fGU", type, moon.radiusGU, moon.semiMajorAxisGU);
-            }
-        }
-        // 检查舰船（从 WorldState 读取）
-        var ws = runtime.getWorldStateForSimOnly();
-        if (ws != null) {
-            var entity = ws.entitiesById.get(entityId);
-            if (entity instanceof staraxis.game.ship.ShipBody ship) {
+            if (snap.details instanceof EntitySnapshot.ShipDetails shipDet) {
                 String sel = entityId == shipMoveController.getSelectedShipId()
                     ? (shipMoveController.isMoveModeActive()
                         ? String.format(" [选中] 目标Y=%.0f 左键确认", shipMoveController.getMoveTargetY())
                         : " [选中] 右键设目标+拖动调Y 左键确认") : "";
-                String flags = ship.customFlags != null && !ship.customFlags.isEmpty()
-                    ? " " + String.join(",", ship.customFlags) : "";
+                String flags = shipDet.customFlags != null && !shipDet.customFlags.isEmpty()
+                    ? " " + String.join(",", shipDet.customFlags) : "";
                 return String.format("舰船 实体%d%s%s", entityId, flags, sel);
             }
         }
         return "";
     }
 
-    private StarSystem findSystemByStarId(long starId) {
-        var ws = runtime.getWorldStateForSimOnly();
-        if (ws == null || ws.astro == null)
-            return null;
-
-        for (StarSystem sys : ws.astro.getSystemsView()) {
-            if (sys == null)
-                continue;
-            for (var star : sys.stars) {
-                if (star != null && star.entityId == starId) {
-                    return sys;
+    /**
+     * 根据恒星ID从快照中查找所属恒星系ID。
+     * 实时快照仅含舰船，恒星需从每日基线快照查。
+     */
+    private long findSystemByStarId(long starId) {
+        // 1. 优先从每日基线快照查（含 STAR 实体）
+        var ds = snapshotProvider.getDailyState();
+        if (ds != null && ds.publicEntityBaselinesBySectorKey != null) {
+            for (var entry : ds.publicEntityBaselinesBySectorKey.entrySet()) {
+                for (var snap : entry.getValue()) {
+                    if (snap != null && snap.entityId == starId) {
+                        return snap.systemId;
+                    }
                 }
             }
         }
-        return null;
+        // 2. 回退到实时快照查（仅含 SHIP，用于双击舰船入口）
+        var state = snapshotProvider.getRealtimeState();
+        if (state != null) {
+            for (var entry : state.getEntitySnapshotsBySystemView().entrySet()) {
+                for (var snap : entry.getValue()) {
+                    if (snap != null && snap.entityId == starId) {
+                        return snap.systemId;
+                    }
+                }
+            }
+        }
+        return 0;
     }
 
+    /**
+     * TODO Phase 3: 临时桥接——从快照构建最小 StarSystem 对象供尚未改造完的渲染器使用。
+     * Phase 3 中 SystemViewRenderer/SystemViewOverlay 改为直接接收快照后此方法可删除。
+     */
     @Override
     public void pause() {
     }
@@ -579,6 +613,10 @@ public class ClientGame implements ApplicationListener {
         if (starfield != null) {
             starfield.dispose();
             starfield = null;
+        }
+        if (menuGalaxy != null) {
+            menuGalaxy.dispose();
+            menuGalaxy = null;
         }
         if (uiDebug != null) {
             uiDebug.dispose();

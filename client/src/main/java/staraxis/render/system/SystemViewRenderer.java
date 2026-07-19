@@ -12,13 +12,14 @@ import com.badlogic.gdx.math.Intersector;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.math.collision.Ray;
 
-import staraxis.game.astro.PlanetBody;
-import staraxis.game.astro.StarBody;
-import staraxis.game.astro.StarSystem;
-import staraxis.game.ship.ShipBody;
+import staraxis.game.entity.EntityType;
 import staraxis.game.space.OrbitSolver;
 import staraxis.game.space.OrbitalElements;
 import staraxis.game.space.SpacePosition;
+import staraxis.game.state.snapshot.EntitySnapshot;
+import staraxis.game.state.snapshot.EntitySnapshot.PlanetDetails;
+import staraxis.game.state.snapshot.EntitySnapshot.ShipDetails;
+import staraxis.game.state.snapshot.EntitySnapshot.StarDetails;
 import staraxis.render.WorldCamera;
 import staraxis.render.debug.ChunkGridDebugRenderer;
 import staraxis.render.lod.LodCalculator;
@@ -33,7 +34,8 @@ import staraxis.render.util.TemperatureColor;
  * SystemViewRenderer（恒星系视图渲染器）。
  *
  * 渲染单个恒星系：所有恒星 + 行星 + 轨道环。
- * 恒星位置由 StarBody.systemPos 决定（单星在原点）。
+ * 纯快照驱动：所有天体数据由 EntitySnapshot 列表提供，不依赖 game 层类型。
+ * 恒星位置由 StarDetails.systemPosX/Y/Z 决定（单星在原点）。
  * 行星使用 OrbitSolver 实时计算位置，再加引力中心偏移。
  *
  * 三级 LOD：
@@ -93,8 +95,8 @@ public class SystemViewRenderer {
         shipMesh = new ShipMesh();
     }
 
-    /** 当前帧待渲染的舰船列表（由 ClientGame 每帧设置）。 */
-    private java.util.List<ShipBody> currentFrameShips = java.util.List.of();
+    /** 当前帧待渲染的舰船快照列表（由 ClientGame 每帧设置）。 */
+    private java.util.List<EntitySnapshot> currentFrameShips = java.util.List.of();
 
     /** 当前选中的舰船ID（高亮用）。 */
     private long highlightShipId = -1L;
@@ -124,9 +126,9 @@ public class SystemViewRenderer {
     }
 
     /**
-     * 设置当前帧要渲染的舰船列表（由 ClientGame 在每帧渲染前调用）。
+     * 设置当前帧要渲染的舰船快照列表（由 ClientGame 在每帧渲染前调用）。
      */
-    public void setShips(java.util.List<ShipBody> ships) {
+    public void setShips(java.util.List<EntitySnapshot> ships) {
         currentFrameShips = ships != null ? ships : java.util.List.of();
     }
 
@@ -137,45 +139,42 @@ public class SystemViewRenderer {
         this.highlightShipId = shipId;
     }
 
-    /** 构建所有天体的系统局部空间位置索引（恒星→行星→小行星→卫星，按轨道层级顺序）。 */
-    private void buildBodyIndex(StarSystem system) {
+    /** 构建所有天体的系统局部空间位置索引（从快照构建）。 */
+    private void buildBodyIndex(java.util.List<EntitySnapshot> snapshots) {
         bodyCenterIndex.clear();
 
-        // 1. 恒星位于 systemPos
-        for (StarBody star : system.stars) {
-            bodyCenterIndex.put(star.entityId,
-                new Vector3((float) star.systemPos.x(), (float) star.systemPos.y(), (float) star.systemPos.z()));
+        // 1. 恒星位于 systemPos（从 StarDetails 读取）
+        for (EntitySnapshot snap : snapshots) {
+            if (snap == null || snap.entityType != EntityType.STAR) continue;
+            if (!(snap.details instanceof StarDetails sd)) continue;
+            bodyCenterIndex.put(snap.entityId,
+                new Vector3((float) sd.systemPosX, (float) sd.systemPosY, (float) sd.systemPosZ));
         }
 
         // 2. 行星/小行星：轨道解算 + 轨道中心偏移
-        for (PlanetBody p : system.planets) {
-            Vector3 center = bodyCenterIndex.get(p.orbitCenterEntityId);
+        for (EntitySnapshot snap : snapshots) {
+            if (snap == null) continue;
+            if (snap.entityType != EntityType.PLANET && snap.entityType != EntityType.ASTEROID) continue;
+            if (!(snap.details instanceof PlanetDetails pd)) continue;
+            Vector3 center = bodyCenterIndex.get(pd.orbitCenterEntityId);
             if (center == null) center = tmpVecZero();
-            OrbitalElements orbit = toOrbitalElements(p);
+            OrbitalElements orbit = toOrbitalElements(snap);
             SpacePosition pos = OrbitSolver.solve(orbit, simulationTime);
-            bodyCenterIndex.put(p.entityId, new Vector3(
-                (float) pos.x() + center.x,
-                (float) pos.y() + center.y,
-                (float) pos.z() + center.z));
-        }
-        for (PlanetBody a : system.asteroids) {
-            Vector3 center = bodyCenterIndex.get(a.orbitCenterEntityId);
-            if (center == null) center = tmpVecZero();
-            OrbitalElements orbit = toOrbitalElements(a);
-            SpacePosition pos = OrbitSolver.solve(orbit, simulationTime);
-            bodyCenterIndex.put(a.entityId, new Vector3(
+            bodyCenterIndex.put(snap.entityId, new Vector3(
                 (float) pos.x() + center.x,
                 (float) pos.y() + center.y,
                 (float) pos.z() + center.z));
         }
 
         // 3. 卫星：轨道解算 + 母行星位置偏移
-        for (PlanetBody m : system.moons) {
-            Vector3 center = bodyCenterIndex.get(m.orbitCenterEntityId);
+        for (EntitySnapshot snap : snapshots) {
+            if (snap == null || snap.entityType != EntityType.MOON) continue;
+            if (!(snap.details instanceof PlanetDetails pd)) continue;
+            Vector3 center = bodyCenterIndex.get(pd.orbitCenterEntityId);
             if (center == null) center = tmpVecZero();
-            OrbitalElements orbit = toOrbitalElements(m);
+            OrbitalElements orbit = toOrbitalElements(snap);
             SpacePosition pos = OrbitSolver.solve(orbit, simulationTime);
-            bodyCenterIndex.put(m.entityId, new Vector3(
+            bodyCenterIndex.put(snap.entityId, new Vector3(
                 (float) pos.x() + center.x,
                 (float) pos.y() + center.y,
                 (float) pos.z() + center.z));
@@ -188,40 +187,39 @@ public class SystemViewRenderer {
         return tmpVec;
     }
 
-    /** 从位置索引查找天体的系统局部空间位置。 */
-    private boolean getBodyPosition(long entityId, Vector3 out) {
-        Vector3 pos = bodyCenterIndex.get(entityId);
-        if (pos != null) {
-            out.set(pos);
-            return true;
-        }
-        return false;
-    }
+    /** 从位置索引查找天体的系统局部空间位置（详见下方实现）。 */
 
-    public void render(StarSystem system, WorldCamera camera) {
+    public void render(java.util.List<EntitySnapshot> systemSnapshots, WorldCamera camera) {
         Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
 
+        // 从快照列表中分离恒星、行星体、舰船
+        java.util.List<EntitySnapshot> stars = new java.util.ArrayList<>();
+        java.util.List<EntitySnapshot> bodies = new java.util.ArrayList<>();
+        java.util.List<EntitySnapshot> ships = new java.util.ArrayList<>();
+        for (EntitySnapshot snap : systemSnapshots) {
+            if (snap == null) continue;
+            if (snap.entityType == EntityType.STAR) stars.add(snap);
+            else if (snap.details instanceof PlanetDetails) bodies.add(snap);
+        }
+        // 当前帧舰船从外部设置（来自快照）
+        ships = currentFrameShips;
+
         // 构建所有天体的层级位置索引（恒星→行星→小行星→卫星）
-        buildBodyIndex(system);
+        buildBodyIndex(systemSnapshots);
 
         // 第一遍：渲染所有恒星
-        int starCount = system.stars.size();
-        ensureStarInstances(starCount);
-        renderAllStars(system, camera);
+        ensureStarInstances(stars.size());
+        renderAllStars(stars, camera);
 
         // 第一遍：渲染所有行星 + 小行星 + 卫星，填充深度缓冲
-        int bodyCount = system.planets.size() + system.asteroids.size() + system.moons.size();
-        ensurePlanetInstances(bodyCount);
+        ensurePlanetInstances(bodies.size());
         int bodyIdx = 0;
-        for (PlanetBody p : system.planets) { renderPlanetBody(bodyIdx++, p, camera); }
-        for (PlanetBody a : system.asteroids) { renderPlanetBody(bodyIdx++, a, camera); }
-        for (PlanetBody m : system.moons) { renderPlanetBody(bodyIdx++, m, camera); }
+        for (EntitySnapshot snap : bodies) { renderPlanetBody(bodyIdx++, snap, camera); }
 
         // 渲染所有舰船（System View 内该星系的舰船）
-        int shipCount = currentFrameShips.size();
-        ensureShipInstances(shipCount);
-        for (int i = 0; i < shipCount; i++) {
-            renderShipMesh(i, currentFrameShips.get(i), camera);
+        ensureShipInstances(ships.size());
+        for (int i = 0; i < ships.size(); i++) {
+            renderShipMesh(i, ships.get(i), camera);
         }
 
         // 第二遍：渲染所有轨道环，利用完整的深度缓冲实现正确遮挡
@@ -233,10 +231,7 @@ public class SystemViewRenderer {
 
         float orbitAlpha = LodCalculator.calculateOrbitAlpha(camera.getOrbitDistance());
         if (orbitAlpha > 0f) {
-            // 所有天体（行星、小行星、卫星）的轨道环
-            for (PlanetBody p : system.planets) { renderOrbitRing(p, camera, orbitAlpha); }
-            for (PlanetBody a : system.asteroids) { renderOrbitRing(a, camera, orbitAlpha * 0.5f); }
-            for (PlanetBody m : system.moons) { renderOrbitRing(m, camera, orbitAlpha * 0.4f); }
+            for (EntitySnapshot snap : bodies) { renderOrbitRing(snap, camera, orbitAlpha); }
         }
         Gdx.gl.glDisable(GL20.GL_BLEND);
 
@@ -249,23 +244,24 @@ public class SystemViewRenderer {
         Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
 
         // 最上层：2D 屏幕圆标叠加层（深度测试已关闭）
-        overlay.renderPlanetDots(system, camera, bodyCenterIndex);
-        overlay.renderShipDots(camera, currentFrameShips);
+        overlay.renderPlanetDots(systemSnapshots, camera, bodyCenterIndex);
+        overlay.renderShipDots(camera, ships);
     }
 
-    /** D.10+D.11: 渲染所有恒星，每颗按 systemPos 偏移 */
-    private void renderAllStars(StarSystem system, WorldCamera camera) {
-        for (int i = 0; i < system.stars.size(); i++) {
-            StarBody star = system.stars.get(i);
-            float[] rgb = TemperatureColor.temperatureToRgb(star.temperatureK);
-            float scale = (float) star.radiusGU;
+    /** 渲染所有恒星，每颗按 StarDetails.systemPos 偏移 */
+    private void renderAllStars(java.util.List<EntitySnapshot> starSnapshots, WorldCamera camera) {
+        for (int i = 0; i < starSnapshots.size(); i++) {
+            EntitySnapshot snap = starSnapshots.get(i);
+            if (!(snap.details instanceof StarDetails sd)) continue;
+            float[] rgb = TemperatureColor.temperatureToRgb(sd.temperatureK);
+            float scale = (float) sd.radiusGU;
 
             ModelInstance instance = starInstances.get(i);
             instance.transform.idt();
             instance.transform.translate(
-                    (float) star.systemPos.x(),
-                    (float) star.systemPos.y(),
-                    (float) star.systemPos.z());
+                    (float) sd.systemPosX,
+                    (float) sd.systemPosY,
+                    (float) sd.systemPosZ);
             instance.transform.scl(scale);
             instance.materials.get(0).set(ColorAttribute.createDiffuse(rgb[0], rgb[1], rgb[2], 1f));
 
@@ -276,9 +272,10 @@ public class SystemViewRenderer {
     }
 
     /** 渲染单个天体（行星/小行星/卫星），位置从 bodyCenterIndex 取。 */
-    private void renderPlanetBody(int index, PlanetBody body, WorldCamera camera) {
+    private void renderPlanetBody(int index, EntitySnapshot snap, WorldCamera camera) {
+        if (!(snap.details instanceof PlanetDetails pd)) return;
         // 从位置索引取系统局部坐标
-        if (!getBodyPosition(body.entityId, tmpVec)) return;
+        if (!getBodyPosition(snap.entityId, tmpVec)) return;
         float px = tmpVec.x, py = tmpVec.y, pz = tmpVec.z;
 
         Vector3 cameraPos = camera.camera.position;
@@ -292,8 +289,8 @@ public class SystemViewRenderer {
             return;
         }
 
-        float scale = (float) body.radiusGU;
-        float[] rgb = SystemViewOverlay.planetColor(body.planetTypeId);
+        float scale = (float) pd.radiusGU;
+        float[] rgb = SystemViewOverlay.planetColor(pd.planetTypeId);
 
         ModelInstance instance = (lod == LodLevel.LOW)
                 ? planetLowInstances.get(index)
@@ -306,7 +303,7 @@ public class SystemViewRenderer {
                 .set(ColorAttribute.createEmissive(rgb[0] * 0.08f, rgb[1] * 0.08f, rgb[2] * 0.08f, 1f));
 
         // 方向光：从轨道中心指向天体
-        Vector3 centerPos = bodyCenterIndex.get(body.orbitCenterEntityId);
+        Vector3 centerPos = bodyCenterIndex.get(pd.orbitCenterEntityId);
         if (centerPos != null) {
             starLight.setDirection(px - centerPos.x, py - centerPos.y, pz - centerPos.z);
         }
@@ -317,9 +314,10 @@ public class SystemViewRenderer {
     }
 
     /** 轨道环带偏移 */
-    private void renderOrbitRing(PlanetBody planet, WorldCamera camera, float orbitAlpha) {
-        OrbitalElements orbit = toOrbitalElements(planet);
-        Vector3 center = bodyCenterIndex.get(planet.orbitCenterEntityId);
+    private void renderOrbitRing(EntitySnapshot snap, WorldCamera camera, float orbitAlpha) {
+        if (!(snap.details instanceof PlanetDetails pd)) return;
+        OrbitalElements orbit = toOrbitalElements(snap);
+        Vector3 center = bodyCenterIndex.get(pd.orbitCenterEntityId);
         float cx = 0, cy = 0, cz = 0;
         if (center != null) { cx = center.x; cy = center.y; cz = center.z; }
 
@@ -329,19 +327,19 @@ public class SystemViewRenderer {
     }
 
     /** 渲染舰船立方体 */
-    private void renderShipMesh(int index, ShipBody ship, WorldCamera camera) {
-        if (ship.posWorldGU == null) return;
+    private void renderShipMesh(int index, EntitySnapshot snap, WorldCamera camera) {
+        if (snap.posWorldGU == null) return;
 
-        float px = (float) ship.posWorldGU.x();
-        float py = (float) ship.posWorldGU.y();
-        float pz = (float) ship.posWorldGU.z();
+        float px = (float) snap.posWorldGU.x();
+        float py = (float) snap.posWorldGU.y();
+        float pz = (float) snap.posWorldGU.z();
 
         ModelInstance instance = shipInstances.get(index);
         instance.transform.idt();
         instance.transform.translate(px, py, pz);
         instance.transform.scl(5f); // 边长 10 GU（半径为5）
         // 舰船颜色：选中为亮黄色，否则淡蓝色
-        if (ship.entityId == highlightShipId) {
+        if (snap.entityId == highlightShipId) {
             instance.materials.get(0).set(ColorAttribute.createDiffuse(1.0f, 0.9f, 0.2f, 1f));
         } else {
             instance.materials.get(0).set(ColorAttribute.createDiffuse(0.4f, 0.6f, 1.0f, 1f));
@@ -396,16 +394,19 @@ public class SystemViewRenderer {
         }
     }
 
-    /** D.15: 写入实际的 longitudeOfAscendingNode 和 epoch */
-    private static OrbitalElements toOrbitalElements(PlanetBody p) {
-        double periodSeconds = p.orbitalPeriodDays * 86400.0;
+    /** 从 PlanetDetails 构建轨道根数。 */
+    private static OrbitalElements toOrbitalElements(EntitySnapshot snap) {
+        if (!(snap.details instanceof PlanetDetails pd)) {
+            return new OrbitalElements(0, 0, 0, 0, 0, 0, 0, 1);
+        }
+        double periodSeconds = pd.orbitalPeriodDays * 86400.0;
         return new OrbitalElements(
-                p.semiMajorAxisGU,
-                p.eccentricity,
-                Math.toRadians(p.inclinationDeg),
-                Math.toRadians(p.longitudeOfAscendingNodeDeg),
-                Math.toRadians(p.periapsisArgDeg),
-                Math.toRadians(p.meanAnomalyDegAtEpoch),
+                pd.semiMajorAxisGU,
+                pd.eccentricity,
+                Math.toRadians(pd.inclinationDeg),
+                Math.toRadians(pd.longitudeOfAscendingNodeDeg),
+                Math.toRadians(pd.periapsisArgDeg),
+                Math.toRadians(pd.meanAnomalyDegAtEpoch),
                 0.0,
                 periodSeconds);
     }
@@ -416,55 +417,39 @@ public class SystemViewRenderer {
      * @param camera  当前相机
      * @param screenX 屏幕 X 坐标
      * @param screenY 屏幕 Y 坐标
-     * @param system  当前渲染的恒星系
      * @return 最近天体的 entityId，未命中返回 -1
      */
-    public long pick(WorldCamera camera, int screenX, int screenY, StarSystem system) {
+    public long pick(WorldCamera camera, int screenX, int screenY) {
         Ray ray = camera.camera.getPickRay(screenX, screenY);
         long closestId = -1;
         float closestDist = Float.MAX_VALUE;
 
-        // 检测所有恒星
-        for (StarBody star : system.stars) {
-            tmpVec.set((float) star.systemPos.x(), (float) star.systemPos.y(), (float) star.systemPos.z());
-            float radius = (float) star.radiusGU;
-            if (Intersector.intersectRaySphere(ray, tmpVec, radius, tmpIntersect)) {
-                float dist = tmpIntersect.dst2(ray.origin);
-                if (dist < closestDist) {
-                    closestDist = dist;
-                    closestId = star.entityId;
-                }
-            }
-        }
-
-        // 检测所有行星 + 小行星 + 卫星（使用预计算的位置索引）
-        java.util.ArrayList<PlanetBody> allBodies = new java.util.ArrayList<>();
-        allBodies.addAll(system.planets);
-        allBodies.addAll(system.asteroids);
-        allBodies.addAll(system.moons);
-        for (PlanetBody body : allBodies) {
-            Vector3 bodyPos = bodyCenterIndex.get(body.entityId);
+        // 检测所有恒星（从 bodyCenterIndex 取位置）
+        for (java.util.Map.Entry<Long, Vector3> entry : bodyCenterIndex.entrySet()) {
+            // 恒星已在 bodyCenterIndex 中
+            Vector3 bodyPos = entry.getValue();
             if (bodyPos == null) continue;
-            float radius = (float) body.radiusGU;
+            // 粗略半径：恒星用 40f，行星从 bodyCenterIndex 没有半径信息，用 10f 保守
+            float radius = 10f;
             if (Intersector.intersectRaySphere(ray, bodyPos, radius, tmpIntersect)) {
                 float dist = tmpIntersect.dst2(ray.origin);
                 if (dist < closestDist) {
                     closestDist = dist;
-                    closestId = body.entityId;
+                    closestId = entry.getKey();
                 }
             }
         }
 
         // 检测所有舰船（使用当前位置）
-        for (ShipBody ship : currentFrameShips) {
-            if (ship.posWorldGU == null) continue;
-            tmpOffset.set((float) ship.posWorldGU.x(), (float) ship.posWorldGU.y(), (float) ship.posWorldGU.z());
+        for (EntitySnapshot snap : currentFrameShips) {
+            if (snap.posWorldGU == null) continue;
+            tmpOffset.set((float) snap.posWorldGU.x(), (float) snap.posWorldGU.y(), (float) snap.posWorldGU.z());
             float radius = 5f; // 10GU 边长半边长
             if (Intersector.intersectRaySphere(ray, tmpOffset, radius, tmpIntersect)) {
                 float dist = tmpIntersect.dst2(ray.origin);
                 if (dist < closestDist) {
                     closestDist = dist;
-                    closestId = ship.entityId;
+                    closestId = snap.entityId;
                 }
             }
         }
@@ -480,18 +465,10 @@ public class SystemViewRenderer {
      * 获取天体当前在系统局部空间中的位置（用于镜头聚焦）。
      *
      * @param entityId 目标实体 ID
-     * @param system   当前恒星系
      * @param out      输出位置（系统局部坐标）
      * @return 找到返回 true，未找到返回 false
      */
-    public boolean getBodyPosition(long entityId, StarSystem system, Vector3 out) {
-        // 检查恒星
-        for (StarBody star : system.stars) {
-            if (star.entityId == entityId) {
-                out.set((float) star.systemPos.x(), (float) star.systemPos.y(), (float) star.systemPos.z());
-                return true;
-            }
-        }
+    public boolean getBodyPosition(long entityId, Vector3 out) {
         // 从 bodyCenterIndex 查找（包含恒星、行星、小行星、卫星）
         Vector3 cached = bodyCenterIndex.get(entityId);
         if (cached != null) {
@@ -499,9 +476,9 @@ public class SystemViewRenderer {
             return true;
         }
         // 检查舰船
-        for (ShipBody ship : currentFrameShips) {
-            if (ship.entityId == entityId && ship.posWorldGU != null) {
-                out.set((float) ship.posWorldGU.x(), (float) ship.posWorldGU.y(), (float) ship.posWorldGU.z());
+        for (EntitySnapshot snap : currentFrameShips) {
+            if (snap.entityId == entityId && snap.posWorldGU != null) {
+                out.set((float) snap.posWorldGU.x(), (float) snap.posWorldGU.y(), (float) snap.posWorldGU.z());
                 return true;
             }
         }

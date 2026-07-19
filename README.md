@@ -29,25 +29,39 @@ ui                   原生 Scene2D UI 层（只读展示，不写权威世界�
 
 ### 常用 Gradle 任务
 
-- `build`: 构建原生客户端发行版
-- `clean`: 清理发行目录
-- `run`: 启动原生桌面版（推荐，创建 LWJGL3/OpenGL 游戏窗口）
-- `lwjgl3:run`: 启动原生桌面版（LibGDX/LWJGL3）
-- `lwjgl3:jar`: 构建原生桌面版可运行的 jar 文件，位于 `lwjgl3/build/libs`
-- `webnet:run`: 启动 webnet 调试网关（HTTP + WebSocket，不启动 LibGDX）
-- `runWeb`: 启动 webnet 调试网关（`webnet:run` 的别名）
-- `test`: 运行单元测试
-- `idea`: 生成 IntelliJ IDEA 项目文件
-- `eclipse`: 生成 Eclipse 项目文件
-- `cleanIdea`: 删除 IntelliJ IDEA 项目数据
-- `cleanEclipse`: 删除 Eclipse 项目数据
+按启动目标分类：
+
+**桌面客户端（LWJGL3 + OpenGL 窗口，含渲染、UI、本地 Host 模式）**
+- `lwjgl3:run` — 启动原生桌面客户端（LibGDX 窗口，主玩游戏入口）
+- `lwjgl3:jar` — 构建桌面客户端可运行 jar，产物位于 `lwjgl3/build/libs`
+
+**Headless 服务端（无图形界面，纯 TickLoop 模拟 + 控制台交互）**
+- `game:run` — 启动 Headless 服务器模式（类似 Minecraft Server，不创建窗口，适合性能测试/联机服务器）
+
+> `run` 在根项目定义为 `lwjgl3:run` 的别名，但在多模块 Gradle 工程中可能因任务解析顺序被 `game` 模块的 `application` 插件拦截，导致实际执行 `:game:run`。**如需运行桌面客户端，建议始终使用显式命令 `:lwjgl3:run`，避免歧义。**
+
+**Webnet 网关（HTTP + WebSocket，联机/账号/AI 入口）**
+- `runWeb` / `:webnet:run` — 启动 webnet 调试网关（无原生窗口，纯 HTTP + WebSocket 服务）
+
+**构建与打包**
+- `build` — 构建完整工程（含原生客户端 jar + 资源打包到发行目录）
+- `dist` — 打包原生客户端发行版到 `StarAxis Game/` 目录
+- `clean` — 清理发行目录
+- `buildWeb` — 构建 web 前端到发行目录（`webui/`）
+
+**其他**
+- `test` — 运行单元测试
+- `idea` — 生成 IntelliJ IDEA 项目文件
+- `eclipse` — 生成 Eclipse 项目文件
+- `cleanIdea` — 删除 IntelliJ IDEA 项目数据
+- `cleanEclipse` — 删除 Eclipse 项目数据
 
 #### Windows 示例
 
-- `./gradlew.bat run`: 启动原生桌面版（推荐）
-- `./gradlew.bat :lwjgl3:run`: 启动原生桌面版（等价命令）
-- `./gradlew.bat runWeb`: 启动 webnet 调试网关
-- `./gradlew.bat :webnet:run`: 启动 webnet 调试网关（等价命令）
+- `./gradlew.bat :lwjgl3:run` — 启动原生桌面客户端（主玩游戏入口，**推荐**）
+- `./gradlew.bat :game:run` — 启动 Headless 服务端（纯 TickLoop，无窗口）
+- `./gradlew.bat runWeb` — 启动 webnet 调试网关
+- `./gradlew.bat :webnet:run` — 启动 webnet 调试网关（等价命令）
 
 ### 常用 Gradle 参数
 

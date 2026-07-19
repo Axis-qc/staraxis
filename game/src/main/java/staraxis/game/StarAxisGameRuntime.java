@@ -478,7 +478,9 @@ public class StarAxisGameRuntime implements GameRuntime {
                         star.ownerPlayerId,
                         true,
                         new EntitySnapshot.StarDetails(star.starTypeId, star.radiusGU, star.massSolar,
-                                star.temperatureK, star.description, star.surfaceTexturePath)));
+                                star.temperatureK, star.description, star.surfaceTexturePath,
+                                star.systemPos.x(), star.systemPos.y(), star.systemPos.z(),
+                                star.orbitCenterEntityId)));
             }
 
             // 3.3 行星喵
@@ -510,6 +512,7 @@ public class StarAxisGameRuntime implements GameRuntime {
                                 planet.semiMajorAxisGU,
                                 planet.eccentricity,
                                 planet.inclinationDeg,
+                                planet.longitudeOfAscendingNodeDeg,
                                 planet.periapsisArgDeg,
                                 planet.orbitalPeriodDays,
                                 planet.meanAnomalyDegAtEpoch)));
@@ -529,7 +532,9 @@ public class StarAxisGameRuntime implements GameRuntime {
                                 false,
                                 asteroid.orbitCenterEntityId,
                                 asteroid.semiMajorAxisGU, asteroid.eccentricity,
-                                asteroid.inclinationDeg, asteroid.periapsisArgDeg,
+                                asteroid.inclinationDeg,
+                                asteroid.longitudeOfAscendingNodeDeg,
+                                asteroid.periapsisArgDeg,
                                 asteroid.orbitalPeriodDays, asteroid.meanAnomalyDegAtEpoch)));
             }
 
@@ -547,7 +552,9 @@ public class StarAxisGameRuntime implements GameRuntime {
                                 false,
                                 moon.orbitCenterEntityId,
                                 moon.semiMajorAxisGU, moon.eccentricity,
-                                moon.inclinationDeg, moon.periapsisArgDeg,
+                                moon.inclinationDeg,
+                                moon.longitudeOfAscendingNodeDeg,
+                                moon.periapsisArgDeg,
                                 moon.orbitalPeriodDays, moon.meanAnomalyDegAtEpoch)));
             }
         }

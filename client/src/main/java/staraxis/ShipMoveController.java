@@ -6,22 +6,25 @@ import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Vector3;
 
 import staraxis.game.StarAxisGameRuntime;
-import staraxis.game.astro.StarSystem;
-import staraxis.game.space.SpacePosition;
-import staraxis.game.ship.ShipBody;
+import staraxis.game.command.MoveShipCommand;
+import staraxis.game.state.RealTimeWorldState;
+import staraxis.game.state.snapshot.EntitySnapshot;
+import staraxis.game.state.snapshot.EntitySnapshot.ShipDetails;
 import staraxis.render.WorldCamera;
 import staraxis.render.system.SystemViewRenderer;
 
 /**
  * ShipMoveController（舰船移动交互控制器）。
  *
- * 从 ClientGame 抽取，负责：
+ * 负责：
  * - 舰船选中/取消（单击）
  * - 双击聚焦舰船并跟踪镜头
  * - 右键 Homeworld 式 3D 移动（拖拽设目标 + 调整 Y 轴）
  * - 移动目标可视化（大圆环 + 路径线 + 垂直指示线 + 目标点小圆环）
  * - 已发出的移动路径可视化
  * - 镜头跟踪实体
+ *
+ * 边界约束：本控制器只读访问快照数据，所有状态修改通过 runtime.submitCommand() 发送命令喵。
  */
 public class ShipMoveController {
 
@@ -39,6 +42,11 @@ public class ShipMoveController {
     private static final long DOUBLE_CLICK_INTERVAL_NS = 400_000_000L;
     private static final int DOUBLE_CLICK_PX_THRESHOLD = 15;
     private final Vector3 focusTmp = new Vector3();
+    private GameSnapshotProvider snapshotProvider;
+
+    public void setSnapshotProvider(GameSnapshotProvider provider) {
+        this.snapshotProvider = provider;
+    }
 
     public long getSelectedShipId() {
         return selectedShipId;
@@ -64,25 +72,36 @@ public class ShipMoveController {
     }
 
     /**
+     * 从实时快照中读取舰船快照。
+     * 仅用于只读操作（位置查询、类型判断），不修改任何状态喵。
+     */
+    private EntitySnapshot readShipSnapshotOrNull(RealTimeWorldState state, long shipId) {
+        if (state == null) return null;
+        for (var snapList : state.getEntitySnapshotsBySystemView().values()) {
+            for (EntitySnapshot snap : snapList) {
+                if (snap.entityId == shipId && snap.details instanceof ShipDetails) {
+                    return snap;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
      * 每帧更新移动模式（右键拖动目标点）。
      */
     public void updateMoveMode(StarAxisGameRuntime runtime, WorldCamera systemCamera) {
         if (selectedShipId < 0 || runtime == null)
             return;
 
-        var ws = runtime.getWorldStateForSimOnly();
-        if (ws == null)
+        EntitySnapshot shipSnap = readShipSnapshotOrNull(snapshotProvider.getRealtimeState(), selectedShipId);
+        if (shipSnap == null || shipSnap.posWorldGU == null)
             return;
 
-        var entity = ws.entitiesById.get(selectedShipId);
-        if (!(entity instanceof ShipBody ship))
-            return;
-
-        boolean rightDown = Gdx.input.isButtonPressed(com.badlogic.gdx.Input.Buttons.RIGHT);
         boolean rightJustPressed = Gdx.input.isButtonJustPressed(com.badlogic.gdx.Input.Buttons.RIGHT);
 
         if (rightJustPressed) {
-            moveBaseY = ship.posWorldGU != null ? ship.posWorldGU.y() : 0;
+            moveBaseY = shipSnap.posWorldGU.y();
             moveTargetY = moveBaseY;
             moveDragStartScreenY = Gdx.input.getY();
             moveModeActive = true;
@@ -95,7 +114,7 @@ public class ShipMoveController {
             moveTargetX = ray.origin.x + ray.direction.x * t;
             moveTargetZ = ray.origin.z + ray.direction.z * t;
 
-            if (rightDown) {
+            if (Gdx.input.isButtonPressed(com.badlogic.gdx.Input.Buttons.RIGHT)) {
                 int dy = Gdx.input.getY() - moveDragStartScreenY;
                 moveTargetY = moveBaseY - (double) dy * Y_SENSITIVITY;
             }
@@ -103,9 +122,9 @@ public class ShipMoveController {
     }
 
     /**
-     * 左键按下处理：双击聚焦 / 移动模式确认 / 单击选中。
+     * 左键按下处理：双击聚焦 / 移动模式确认（发送命令）/ 单击选中。
      */
-    public void handleLeftClick(long hoveredId, StarSystem currentSystem,
+    public void handleLeftClick(long hoveredId,
                                  StarAxisGameRuntime runtime, SystemViewRenderer systemViewRenderer,
                                  WorldCamera systemCamera) {
         long now = System.nanoTime();
@@ -120,47 +139,31 @@ public class ShipMoveController {
         lastClickX = screenX;
         lastClickY = screenY;
 
+        var state = snapshotProvider.getRealtimeState();
+
         if (isDoubleClick) {
-            if (hoveredId >= 0 && currentSystem != null) {
+            if (hoveredId >= 0) {
                 cameraFollowTargetId = hoveredId;
                 selectedShipId = hoveredId;
-                if (systemViewRenderer.getBodyPosition(hoveredId, currentSystem, focusTmp)) {
-                    systemCamera.target.set(focusTmp);
-                } else {
-                    var ws = runtime.getWorldStateForSimOnly();
-                    if (ws != null) {
-                        var entity = ws.entitiesById.get(hoveredId);
-                        if (entity != null && entity.posWorldGU != null) {
-                            systemCamera.target.set(
-                                (float) entity.posWorldGU.x(),
-                                (float) entity.posWorldGU.y(),
-                                (float) entity.posWorldGU.z());
-                        }
-                    }
-                }
+                systemViewRenderer.getBodyPosition(hoveredId, focusTmp);
+                systemCamera.target.set(focusTmp);
             }
         } else if (moveModeActive) {
-            var ws = runtime.getWorldStateForSimOnly();
-            if (ws != null) {
-                var entity = ws.entitiesById.get(selectedShipId);
-                if (entity instanceof ShipBody ship) {
-                    ship.movementTarget = new SpacePosition(moveTargetX, moveTargetY, moveTargetZ);
-                    ship.isMoving = true;
-                    ship.velWorldGU = SpacePosition.ORIGIN;
-                    ws.markRealtimeDirty();
-                }
+            // 右键移动模式确认 → 通过命令总线发送移动命令喵
+            EntitySnapshot shipSnap = readShipSnapshotOrNull(snapshotProvider.getRealtimeState(), selectedShipId);
+            if (shipSnap != null && shipSnap.ownerNationId != null) {
+                String clientCmdId = "client_" + System.currentTimeMillis() + "_" + selectedShipId;
+                runtime.submitCommand(new MoveShipCommand(
+                        shipSnap.ownerNationId,
+                        clientCmdId,
+                        selectedShipId,
+                        moveTargetX, moveTargetY, moveTargetZ));
             }
             moveModeActive = false;
         } else {
-            var ws = runtime.getWorldStateForSimOnly();
-            if (ws != null) {
-                var entity = ws.entitiesById.get(hoveredId);
-                if (entity instanceof ShipBody) {
-                    selectedShipId = hoveredId;
-                } else {
-                    selectedShipId = -1;
-                }
-            }
+            // 普通单击选中舰船喵
+            EntitySnapshot shipSnap = readShipSnapshotOrNull(snapshotProvider.getRealtimeState(), hoveredId);
+            selectedShipId = (shipSnap != null) ? hoveredId : -1;
         }
     }
 
@@ -173,14 +176,11 @@ public class ShipMoveController {
             return;
 
         double shipX = 0, shipY = 0, shipZ = 0;
-        var w = runtime.getWorldStateForSimOnly();
-        if (w != null) {
-            var e = w.entitiesById.get(selectedShipId);
-            if (e != null && e.posWorldGU != null) {
-                shipX = e.posWorldGU.x();
-                shipY = e.posWorldGU.y();
-                shipZ = e.posWorldGU.z();
-            }
+        EntitySnapshot shipSnap = readShipSnapshotOrNull(snapshotProvider.getRealtimeState(), selectedShipId);
+        if (shipSnap != null && shipSnap.posWorldGU != null) {
+            shipX = shipSnap.posWorldGU.x();
+            shipY = shipSnap.posWorldGU.y();
+            shipZ = shipSnap.posWorldGU.z();
         }
 
         Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
@@ -221,12 +221,8 @@ public class ShipMoveController {
         if (moveModeActive || selectedShipId < 0 || runtime == null || shapeRenderer == null)
             return;
 
-        var w = runtime.getWorldStateForSimOnly();
-        if (w == null)
-            return;
-
-        var e = w.entitiesById.get(selectedShipId);
-        if (!(e instanceof ShipBody ship) || !ship.isMoving || ship.movementTarget == null)
+        EntitySnapshot shipSnap = readShipSnapshotOrNull(snapshotProvider.getRealtimeState(), selectedShipId);
+        if (shipSnap == null || !(shipSnap.details instanceof ShipDetails sd) || !sd.isMoving || sd.movementTarget == null)
             return;
 
         Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
@@ -235,8 +231,8 @@ public class ShipMoveController {
         shapeRenderer.setProjectionMatrix(systemCamera.camera.combined);
         shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
 
-        float sx = (float) e.posWorldGU.x(), sy = (float) e.posWorldGU.y(), sz = (float) e.posWorldGU.z();
-        float tx = (float) ship.movementTarget.x(), ty = (float) ship.movementTarget.y(), tz = (float) ship.movementTarget.z();
+        float sx = (float) shipSnap.posWorldGU.x(), sy = (float) shipSnap.posWorldGU.y(), sz = (float) shipSnap.posWorldGU.z();
+        float tx = (float) sd.movementTarget.x(), ty = (float) sd.movementTarget.y(), tz = (float) sd.movementTarget.z();
 
         shapeRenderer.setColor(0.4f, 0.8f, 1.0f, 0.3f);
         shapeRenderer.line(sx, sy, sz, tx, ty, tz);
@@ -251,24 +247,13 @@ public class ShipMoveController {
     /**
      * 镜头跟踪实体（所有输入处理完后调用）。
      */
-    public void updateCameraFollow(SystemViewRenderer systemViewRenderer, StarSystem currentSystem,
+    public void updateCameraFollow(SystemViewRenderer systemViewRenderer,
                                     StarAxisGameRuntime runtime, WorldCamera systemCamera) {
         if (cameraFollowTargetId < 0)
             return;
 
-        if (systemViewRenderer.getBodyPosition(cameraFollowTargetId, currentSystem, focusTmp)) {
+        if (systemViewRenderer.getBodyPosition(cameraFollowTargetId, focusTmp)) {
             systemCamera.target.set(focusTmp);
-        } else {
-            var ws = runtime.getWorldStateForSimOnly();
-            if (ws != null) {
-                var entity = ws.entitiesById.get(cameraFollowTargetId);
-                if (entity != null && entity.posWorldGU != null) {
-                    systemCamera.target.set(
-                        (float) entity.posWorldGU.x(),
-                        (float) entity.posWorldGU.y(),
-                        (float) entity.posWorldGU.z());
-                }
-            }
         }
     }
 

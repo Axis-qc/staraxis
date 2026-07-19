@@ -85,19 +85,37 @@ public class EntitySnapshot {
         public final String description;
         public final String surfaceTexturePath;
 
+        // --- System View 坐标与轨道（供客户端渲染用，无需反查 WorldState） ---
+        /** 恒星在系统局部空间中的 X 坐标偏移（GU），单星为 0。 */
+        public final double systemPosX;
+        /** 恒星在系统局部空间中的 Y 坐标偏移（GU），单星为 0。 */
+        public final double systemPosY;
+        /** 恒星在系统局部空间中的 Z 坐标偏移（GU），单星为 0。 */
+        public final double systemPosZ;
+        /** 引力中心实体ID（0=系统重心）。 */
+        public final long orbitCenterEntityId;
+
         public StarDetails(
                 String starTypeId,
                 double radiusGU,
                 double massSolar,
                 int temperatureK,
                 String description,
-                String surfaceTexturePath) {
+                String surfaceTexturePath,
+                double systemPosX,
+                double systemPosY,
+                double systemPosZ,
+                long orbitCenterEntityId) {
             this.starTypeId = starTypeId;
             this.radiusGU = radiusGU;
             this.massSolar = massSolar;
             this.temperatureK = temperatureK;
             this.description = description;
             this.surfaceTexturePath = surfaceTexturePath;
+            this.systemPosX = systemPosX;
+            this.systemPosY = systemPosY;
+            this.systemPosZ = systemPosZ;
+            this.orbitCenterEntityId = orbitCenterEntityId;
         }
     }
 
@@ -112,6 +130,8 @@ public class EntitySnapshot {
         public final double semiMajorAxisGU;
         public final double eccentricity;
         public final double inclinationDeg;
+        /** 升交点经度（度），由行星字段直接提供，供客户端轨道渲染用。 */
+        public final double longitudeOfAscendingNodeDeg;
         public final double periapsisArgDeg;
         public final double orbitalPeriodDays;
         public final double meanAnomalyDegAtEpoch;
@@ -126,6 +146,7 @@ public class EntitySnapshot {
                 double semiMajorAxisGU,
                 double eccentricity,
                 double inclinationDeg,
+                double longitudeOfAscendingNodeDeg,
                 double periapsisArgDeg,
                 double orbitalPeriodDays,
                 double meanAnomalyDegAtEpoch) {
@@ -138,6 +159,7 @@ public class EntitySnapshot {
             this.semiMajorAxisGU = semiMajorAxisGU;
             this.eccentricity = eccentricity;
             this.inclinationDeg = inclinationDeg;
+            this.longitudeOfAscendingNodeDeg = longitudeOfAscendingNodeDeg;
             this.periapsisArgDeg = periapsisArgDeg;
             this.orbitalPeriodDays = orbitalPeriodDays;
             this.meanAnomalyDegAtEpoch = meanAnomalyDegAtEpoch;

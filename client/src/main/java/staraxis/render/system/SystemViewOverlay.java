@@ -6,10 +6,9 @@ import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
 
-import staraxis.game.astro.PlanetBody;
-import staraxis.game.astro.StarSystem;
 import staraxis.game.entity.EntityType;
-import staraxis.game.ship.ShipBody;
+import staraxis.game.state.snapshot.EntitySnapshot;
+import staraxis.game.state.snapshot.EntitySnapshot.PlanetDetails;
 import staraxis.render.WorldCamera;
 import staraxis.render.lod.LodCalculator;
 import staraxis.render.lod.LodLevel;
@@ -25,6 +24,8 @@ import java.util.Map;
  * - 天体/舰船的 2D 屏幕圆标渲染（距离远时替代 3D 模型）
  * - 2D 圆标屏幕空间拾取
  * - 天体颜色映射
+ *
+ * 纯快照驱动：所有天体数据由 EntitySnapshot 列表提供，不依赖 game 层类型。
  */
 public class SystemViewOverlay {
 
@@ -69,21 +70,21 @@ public class SystemViewOverlay {
      *   5000 < orbitDist < 20000 线性淡入
      *   orbitDist < 5000 完全透明
      */
-    public void renderPlanetDots(StarSystem system, WorldCamera camera,
+    public void renderPlanetDots(List<EntitySnapshot> allSystemSnapshots, WorldCamera camera,
                                   Map<Long, Vector3> bodyCenterIndex) {
         planetDotInfos.clear();
 
-        List<PlanetBody> allBodies = new ArrayList<>();
-        allBodies.addAll(system.planets);
-        allBodies.addAll(system.asteroids);
-        allBodies.addAll(system.moons);
-        int count = allBodies.size();
-        if (count == 0)
-            return;
+        // 过滤出行星/小行星/卫星快照
+        List<EntitySnapshot> bodies = new ArrayList<>();
+        for (EntitySnapshot snap : allSystemSnapshots) {
+            if (snap != null && snap.details instanceof PlanetDetails) {
+                bodies.add(snap);
+            }
+        }
+        if (bodies.isEmpty()) return;
 
         float dotAlpha = LodCalculator.calculateDotAlpha(camera.getOrbitDistance());
-        if (dotAlpha <= 0f)
-            return;
+        if (dotAlpha <= 0f) return;
 
         float gfxW = Gdx.graphics.getWidth();
         float gfxH = Gdx.graphics.getHeight();
@@ -94,10 +95,10 @@ public class SystemViewOverlay {
 
         Vector3 camPos = camera.camera.position;
 
-        for (PlanetBody body : allBodies) {
-            Vector3 bodyPos = bodyCenterIndex.get(body.entityId);
-            if (bodyPos == null)
-                continue;
+        for (EntitySnapshot snap : bodies) {
+            if (!(snap.details instanceof PlanetDetails pd)) continue;
+            Vector3 bodyPos = bodyCenterIndex.get(snap.entityId);
+            if (bodyPos == null) continue;
 
             float px = bodyPos.x, py = bodyPos.y, pz = bodyPos.z;
 
@@ -105,25 +106,23 @@ public class SystemViewOverlay {
                     (camPos.x - px) * (camPos.x - px) +
                             (camPos.y - py) * (camPos.y - py) +
                             (camPos.z - pz) * (camPos.z - pz));
-            if (LodCalculator.calculate(dist) == LodLevel.HIDDEN)
-                continue;
+            if (LodCalculator.calculate(dist) == LodLevel.HIDDEN) continue;
 
             tmpScreenPos.set(px, py, pz);
             camera.camera.project(tmpScreenPos);
-            if (tmpScreenPos.z < 0f || tmpScreenPos.z > 1f)
-                continue;
+            if (tmpScreenPos.z < 0f || tmpScreenPos.z > 1f) continue;
 
             float dotY = gfxH - tmpScreenPos.y;
 
-            float dotRadius = (body.entityType == EntityType.ASTEROID || body.entityType == EntityType.MOON)
+            float dotRadius = (snap.entityType == EntityType.ASTEROID || snap.entityType == EntityType.MOON)
                     ? DOT_RADIUS_PX * 0.5f
                     : DOT_RADIUS_PX;
 
-            float[] rgb = planetColor(body.planetTypeId);
+            float[] rgb = planetColor(pd.planetTypeId);
             shapeRenderer.setColor(rgb[0], rgb[1], rgb[2], dotAlpha);
             shapeRenderer.circle(tmpScreenPos.x, dotY, dotRadius);
 
-            planetDotInfos.add(new PlanetDotInfo(body.entityId, tmpScreenPos.x, dotY));
+            planetDotInfos.add(new PlanetDotInfo(snap.entityId, tmpScreenPos.x, dotY));
         }
 
         shapeRenderer.end();
@@ -133,9 +132,8 @@ public class SystemViewOverlay {
     /**
      * 渲染舰船 LOD 圆标（距离远时用圆圈替代立方体渲染）。
      */
-    public void renderShipDots(WorldCamera camera, List<ShipBody> currentFrameShips) {
-        if (currentFrameShips.isEmpty())
-            return;
+    public void renderShipDots(WorldCamera camera, List<EntitySnapshot> currentFrameShips) {
+        if (currentFrameShips.isEmpty()) return;
 
         shipDotInfos.clear();
 
@@ -148,13 +146,12 @@ public class SystemViewOverlay {
         shapeRenderer.setProjectionMatrix(new Matrix4().setToOrtho(0f, gfxW, gfxH, 0f, -1f, 1f));
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
 
-        for (ShipBody ship : currentFrameShips) {
-            if (ship.posWorldGU == null)
-                continue;
+        for (EntitySnapshot snap : currentFrameShips) {
+            if (snap.posWorldGU == null) continue;
 
-            float px = (float) ship.posWorldGU.x();
-            float py = (float) ship.posWorldGU.y();
-            float pz = (float) ship.posWorldGU.z();
+            float px = (float) snap.posWorldGU.x();
+            float py = (float) snap.posWorldGU.y();
+            float pz = (float) snap.posWorldGU.z();
 
             double dist = Math.sqrt(
                     (camPos.x - px) * (camPos.x - px) +
@@ -163,8 +160,7 @@ public class SystemViewOverlay {
 
             tmpScreenPos.set(px, py, pz);
             camera.camera.project(tmpScreenPos);
-            if (tmpScreenPos.z < 0f || tmpScreenPos.z > 1f)
-                continue;
+            if (tmpScreenPos.z < 0f || tmpScreenPos.z > 1f) continue;
 
             float dotY = gfxH - tmpScreenPos.y;
 
@@ -182,7 +178,7 @@ public class SystemViewOverlay {
                 shapeRenderer.circle(tmpScreenPos.x, dotY, DOT_RADIUS_PX * 0.6f);
             }
 
-            shipDotInfos.add(new ShipDotInfo(ship.entityId, tmpScreenPos.x, dotY));
+            shipDotInfos.add(new ShipDotInfo(snap.entityId, tmpScreenPos.x, dotY));
         }
 
         shapeRenderer.end();
@@ -194,7 +190,7 @@ public class SystemViewOverlay {
      * 调用方应将其与 3D 拾取结果比较距离后取最近者。
      */
     public long pickDots(int screenX, int screenY, long currentBestId, float currentBestDistSq,
-                          Map<Long, Vector3> bodyCenterIndex, List<ShipBody> currentFrameShips,
+                          Map<Long, Vector3> bodyCenterIndex, List<EntitySnapshot> currentFrameShips,
                           Vector3 cameraPos) {
         long bestId = currentBestId;
         float bestDistSq = currentBestDistSq;
@@ -218,12 +214,12 @@ public class SystemViewOverlay {
             float dx = screenX - dot.screenX;
             float dy = screenY - dot.screenY;
             if (dx * dx + dy * dy <= (DOT_RADIUS_PX * 0.6f) * (DOT_RADIUS_PX * 0.6f)) {
-                for (ShipBody ship : currentFrameShips) {
-                    if (ship.entityId == dot.entityId && ship.posWorldGU != null) {
+                for (EntitySnapshot snap : currentFrameShips) {
+                    if (snap.entityId == dot.entityId && snap.posWorldGU != null) {
                         float dist = cameraPos.dst2(
-                                (float) ship.posWorldGU.x(),
-                                (float) ship.posWorldGU.y(),
-                                (float) ship.posWorldGU.z());
+                                (float) snap.posWorldGU.x(),
+                                (float) snap.posWorldGU.y(),
+                                (float) snap.posWorldGU.z());
                         if (dist < bestDistSq) {
                             bestDistSq = dist;
                             bestId = dot.entityId;
