@@ -232,38 +232,38 @@ public class StarAxisGameRuntime implements GameRuntime {
         TickProfiler.tickStart();
 
         // 独立时间轴系统推进：唯一权威时间入口喵
-        TickProfiler.begin("timeline");
+        TickProfiler.begin(TickProfiler.Phase.TIMELINE);
         TimelineSystem.TickAdvance tickAdvance = TimelineSystem.advanceOneTick(worldState.time);
         double dtGameHours = tickAdvance.dtGameHours;
         TickProfiler.end();
 
         // STAGE 1: 处理到期跨系统事件（到达事件：将实体恢复到目标星系）
-        TickProfiler.begin("arrivals");
+        TickProfiler.begin(TickProfiler.Phase.ARRIVALS);
         worldState.tickDispatcher.stage1Arrivals(worldState, worldState.time.simulationTick);
         TickProfiler.end();
 
         // STAGE 1.5: 重建星系八叉树空间索引（每 tick，只读查询）
-        TickProfiler.begin("octree");
+        TickProfiler.begin(TickProfiler.Phase.OCTREE);
         worldState.tickDispatcher.stage1halfRebuildOctree(worldState);
         TickProfiler.end();
 
         // STAGE 2: LPT 负载分配
-        TickProfiler.begin("loadBalance");
+        TickProfiler.begin(TickProfiler.Phase.LOAD_BALANCE);
         worldState.tickDispatcher.stage2LoadBalance(worldState, worldState.time.simulationTick);
         TickProfiler.end();
 
         // STAGE 3: 处理 Command 队列并更新 WorldState喵。
-        TickProfiler.begin("command");
+        TickProfiler.begin(TickProfiler.Phase.COMMAND);
         commandBus.executeCommands(worldState, dtGameHours);
         TickProfiler.end();
 
         // 处理舰船移动喵（在途实体已被 entityIdsBySystem 排除，不会参与计算）
-        TickProfiler.begin("movement");
+        TickProfiler.begin(TickProfiler.Phase.MOVEMENT);
         shipMovementSystem.update(worldState, dtGameHours, activeSystemId);
         TickProfiler.end();
 
         // 检查是否需要推送低频基线快照（每 20 tick / 约现实 1 秒）
-        TickProfiler.begin("snapshot");
+        TickProfiler.begin(TickProfiler.Phase.SNAPSHOT);
         if (worldState.time.simulationTick % 20 == 0 || worldState.baselineDirty) {
             publishBaselineSnapshot();
             worldState.baselineDirty = false;

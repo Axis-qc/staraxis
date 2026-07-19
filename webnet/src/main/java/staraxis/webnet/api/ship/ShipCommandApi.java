@@ -29,6 +29,7 @@ public final class ShipCommandApi {
         Long shipEntityId = req.get("shipEntityId") instanceof Number n ? n.longValue() : null;
         Double targetX = req.get("targetX") instanceof Number n ? n.doubleValue() : null;
         Double targetY = req.get("targetY") instanceof Number n ? n.doubleValue() : null;
+        Double targetZ = req.get("targetZ") instanceof Number n ? n.doubleValue() : null;
 
         if (nationId == null || nationId.isBlank()) {
             return Map.of("ok", false, "error", "nationId_required");
@@ -39,7 +40,7 @@ public final class ShipCommandApi {
         if (shipEntityId == null) {
             return Map.of("ok", false, "error", "shipEntityId_required");
         }
-        if (targetX == null || targetY == null) {
+        if (targetX == null || targetY == null || targetZ == null) {
             return Map.of("ok", false, "error", "target_coordinates_required");
         }
 
@@ -57,7 +58,7 @@ public final class ShipCommandApi {
             return buildRejectedMoveResult(clientCommandId, shipEntityId, rt, "ship_not_owned_by_nation");
         }
 
-        runtime.submitCommand(new MoveShipCommand(nationId, clientCommandId, shipEntityId, targetX, targetY));
+        runtime.submitCommand(new MoveShipCommand(nationId, clientCommandId, shipEntityId, targetX, targetY, targetZ));
 
         return Map.of(
                 "ok", true,
@@ -67,7 +68,7 @@ public final class ShipCommandApi {
                 "shipEntityId", shipEntityId,
                 "authoritativeTick", rt.simulationTick,
                 "gameSeconds", rt.totalGameSecondsExact,
-                "target", Map.of("x", targetX, "y", targetY));
+                "target", Map.of("x", targetX, "y", targetY, "z", targetZ));
     }
 
     public static Map<String, Object> handleMoveShipCompletion(
@@ -78,7 +79,7 @@ public final class ShipCommandApi {
         String clientCommandId = req.get("clientCommandId") == null ? null : String.valueOf(req.get("clientCommandId"));
         Long shipEntityId = req.get("shipEntityId") instanceof Number n ? n.longValue() : null;
         Double reportedGameSeconds = req.get("reportedGameSeconds") instanceof Number n ? n.doubleValue() : null;
-        SpacePosition reportedPosition = parseVec2(req.get("reportedPosition"));
+        SpacePosition reportedPosition = parseVec3(req.get("reportedPosition"));
 
         if (nationId == null || nationId.isBlank()) {
             return Map.of("ok", false, "error", "nationId_required");
@@ -164,16 +165,17 @@ public final class ShipCommandApi {
         return response;
     }
 
-    private static SpacePosition parseVec2(Object value) {
+    private static SpacePosition parseVec3(Object value) {
         if (!(value instanceof Map<?, ?> map)) {
             return null;
         }
         Object xRaw = map.get("x");
         Object yRaw = map.get("y");
-        if (!(xRaw instanceof Number xNumber) || !(yRaw instanceof Number yNumber)) {
+        Object zRaw = map.get("z");
+        if (!(xRaw instanceof Number xNumber) || !(yRaw instanceof Number yNumber) || !(zRaw instanceof Number zNumber)) {
             return null;
         }
-        return new SpacePosition(xNumber.doubleValue(), 0, yNumber.doubleValue());
+        return new SpacePosition(xNumber.doubleValue(), yNumber.doubleValue(), zNumber.doubleValue());
     }
 
     private static double distance(SpacePosition a, SpacePosition b) {
@@ -198,7 +200,8 @@ public final class ShipCommandApi {
         }
         LinkedHashMap<String, Object> result = new LinkedHashMap<>();
         result.put("x", value.x());
-        result.put("y", value.z());
+        result.put("y", value.y());
+        result.put("z", value.z());
         return result;
     }
 

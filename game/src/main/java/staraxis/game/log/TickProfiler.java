@@ -7,7 +7,7 @@
  * - 用于定位性能瓶颈。
  *
  * 使用方式：
- * - TickProfiler.begin("phaseName") / end() 包裹要测量的代码段。
+ * - TickProfiler.begin(Phase.XXX) / end() 包裹要测量的代码段。
  * - TickProfiler.logTick() 在每 tick 结束时调用。
  *
  * 注意事项：
@@ -32,14 +32,34 @@ import java.time.format.DateTimeFormatter;
  */
 public class TickProfiler {
 
+    /** 测量阶段枚举。 */
+    public enum Phase {
+        TIMELINE("timeline"),
+        ARRIVALS("arrivals"),
+        OCTREE("octree"),
+        LOAD_BALANCE("loadBalance"),
+        COMMAND("command"),
+        MOVEMENT("movement"),
+        SNAPSHOT("snapshot");
+
+        private final String label;
+
+        Phase(String label) {
+            this.label = label;
+        }
+
+        public String label() {
+            return label;
+        }
+    }
+
     private static final Path LOG_PATH = Path.of("gamedata/logs/perf_tick.log");
     private static PrintWriter out;
     /** 每秒输出一次，避免刷屏。 */
     private static long lastLogTime;
     /** 当前 tick 的各阶段时间。 */
     private static long tickStartNs;
-    private static long lastPhaseEndNs;
-    private static String currentPhase;
+    private static Phase currentPhase;
     private static long currentPhaseStartNs;
     /** 10 秒统计。 */
     private static long totalTickTimeMs;
@@ -47,7 +67,7 @@ public class TickProfiler {
     private static long maxTickMs;
     /** 各阶段累计。 */
     private static long timelineMs, arrivalsMs, octreeMs, loadBalanceMs;
-    private static long commandMs, movementMs, snapshotMs, otherMs;
+    private static long commandMs, movementMs, snapshotMs;
     private static final int FLUSH_INTERVAL_MS = 10000;
 
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
@@ -66,7 +86,7 @@ public class TickProfiler {
         }
     }
 
-    public static void begin(String phase) {
+    public static void begin(Phase phase) {
         currentPhase = phase;
         currentPhaseStartNs = System.nanoTime();
     }
@@ -77,14 +97,13 @@ public class TickProfiler {
         long elapsedMs = elapsedNs / 1_000_000L;
 
         switch (currentPhase) {
-            case "timeline" -> timelineMs += elapsedMs;
-            case "arrivals" -> arrivalsMs += elapsedMs;
-            case "octree" -> octreeMs += elapsedMs;
-            case "loadBalance" -> loadBalanceMs += elapsedMs;
-            case "command" -> commandMs += elapsedMs;
-            case "movement" -> movementMs += elapsedMs;
-            case "snapshot" -> snapshotMs += elapsedMs;
-            default -> otherMs += elapsedMs;
+            case TIMELINE -> timelineMs += elapsedMs;
+            case ARRIVALS -> arrivalsMs += elapsedMs;
+            case OCTREE -> octreeMs += elapsedMs;
+            case LOAD_BALANCE -> loadBalanceMs += elapsedMs;
+            case COMMAND -> commandMs += elapsedMs;
+            case MOVEMENT -> movementMs += elapsedMs;
+            case SNAPSHOT -> snapshotMs += elapsedMs;
         }
 
         currentPhase = null;
@@ -136,7 +155,7 @@ public class TickProfiler {
                 tickCount = 0;
                 maxTickMs = 0;
                 timelineMs = arrivalsMs = octreeMs = loadBalanceMs = 0;
-                commandMs = movementMs = snapshotMs = otherMs = 0;
+                commandMs = movementMs = snapshotMs = 0;
             }
         }
     }

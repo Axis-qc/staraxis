@@ -22,7 +22,7 @@ import staraxis.game.state.WorldState;
  *
  * 纯直飞模式：直线加速到目标，到达收敛。
  */
-public class ShipFullMovementSystem extends AbstractShipMovementSystem {
+public class ShipFullMovementSystem {
 
     /**
      * 更新舰船自由移动。
@@ -42,8 +42,8 @@ public class ShipFullMovementSystem extends AbstractShipMovementSystem {
         double dz = ship.movementTarget.z() - ship.posWorldGU.z();
         double distanceToTarget = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-        if (distanceToTarget < TARGET_ARRIVAL_THRESHOLD_GU) {
-            completeMoveAtTarget(ship, ship.movementTarget, worldState);
+        if (distanceToTarget < AbstractShipMovementSystem.TARGET_ARRIVAL_THRESHOLD_GU) {
+            AbstractShipMovementSystem.completeMoveAtTarget(ship, ship.movementTarget, worldState);
             return;
         }
 
@@ -56,7 +56,7 @@ public class ShipFullMovementSystem extends AbstractShipMovementSystem {
         double targetSpeed = stats.maxSpeed();
         double accel = stats.baseAcceleration();
 
-        double currentSpeed = ship.velWorldGU != null ? speedOf(ship.velWorldGU) : 0.0;
+        double currentSpeed = ship.velWorldGU != null ? AbstractShipMovementSystem.speedOf(ship.velWorldGU) : 0.0;
         double stopDistance = (currentSpeed * currentSpeed) / (2 * accel);
         boolean needDecelerate = stopDistance >= distanceToTarget;
 
@@ -67,7 +67,7 @@ public class ShipFullMovementSystem extends AbstractShipMovementSystem {
         if (needDecelerate) {
             double decelAmount = accel * dtGameSeconds;
             double newSpeed = Math.max(0, currentSpeed - decelAmount);
-            if (currentSpeed > VELOCITY_THRESHOLD) {
+            if (currentSpeed > AbstractShipMovementSystem.VELOCITY_THRESHOLD) {
                 double scale = newSpeed / currentSpeed;
                 ship.velWorldGU = new SpacePosition(
                     ship.velWorldGU.x() * scale,
@@ -86,7 +86,7 @@ public class ShipFullMovementSystem extends AbstractShipMovementSystem {
             double velDiffZ = targetVelZ - currentVelZ;
             double velDiff = Math.sqrt(velDiffX * velDiffX + velDiffY * velDiffY + velDiffZ * velDiffZ);
 
-            if (velDiff < VELOCITY_THRESHOLD) {
+            if (velDiff < AbstractShipMovementSystem.VELOCITY_THRESHOLD) {
                 ship.velWorldGU = new SpacePosition(targetVelX, targetVelY, targetVelZ);
             } else {
                 double accelAmount = Math.min(velDiff, accel * dtGameSeconds);
@@ -99,24 +99,24 @@ public class ShipFullMovementSystem extends AbstractShipMovementSystem {
             }
         }
 
-        double projectedTravelDistance = ship.velWorldGU != null ? speedOf(ship.velWorldGU) * dtGameSeconds : 0.0;
+        double projectedTravelDistance = ship.velWorldGU != null ? AbstractShipMovementSystem.speedOf(ship.velWorldGU) * dtGameSeconds : 0.0;
         if (projectedTravelDistance >= distanceToTarget) {
-            completeMoveAtTarget(ship, ship.movementTarget, worldState);
+            AbstractShipMovementSystem.completeMoveAtTarget(ship, ship.movementTarget, worldState);
             return;
         }
 
-        applyVelocity(ship, dtGameSeconds, worldState);
+        AbstractShipMovementSystem.applyVelocity(ship, dtGameSeconds, worldState);
     }
 
     private void decelerateToStop(ShipBody ship, double dtGameSeconds, WorldState worldState) {
-        if (ship.velWorldGU == null || speedOf(ship.velWorldGU) < VELOCITY_THRESHOLD) {
+        if (ship.velWorldGU == null || AbstractShipMovementSystem.speedOf(ship.velWorldGU) < AbstractShipMovementSystem.VELOCITY_THRESHOLD) {
             ship.velWorldGU = SpacePosition.ORIGIN;
             return;
         }
 
         var stats = ShipStatsCalculator.computeMovementStats(ship, null, null);
         double accel = stats.baseAcceleration();
-        double currentSpeed = speedOf(ship.velWorldGU);
+        double currentSpeed = AbstractShipMovementSystem.speedOf(ship.velWorldGU);
         double decelAmount = accel * dtGameSeconds;
         double newSpeed = Math.max(0, currentSpeed - decelAmount);
         double scale = newSpeed / currentSpeed;
@@ -127,10 +127,10 @@ public class ShipFullMovementSystem extends AbstractShipMovementSystem {
             ship.velWorldGU.z() * scale
         );
 
-        if (newSpeed <= VELOCITY_THRESHOLD) {
+        if (newSpeed <= AbstractShipMovementSystem.VELOCITY_THRESHOLD) {
             ship.velWorldGU = SpacePosition.ORIGIN;
         }
 
-        applyVelocity(ship, dtGameSeconds, worldState);
+        AbstractShipMovementSystem.applyVelocity(ship, dtGameSeconds, worldState);
     }
 }

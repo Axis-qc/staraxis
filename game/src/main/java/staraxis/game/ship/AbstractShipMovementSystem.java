@@ -2,11 +2,11 @@
  * AbstractShipMovementSystem
  *
  * 文件作用：
- * - 舰船移动系统共享工具基类。
+ * - 舰船移动系统共享工具类。
  * - 提供 applyVelocity()、completeMoveAtTarget() 等直飞模式辅助方法。
  *
  * 使用方式：
- * - ShipFullMovementSystem 继承此类使用共享方法。
+ * - 通过静态方法调用：AbstractShipMovementSystem.applyVelocity(...) 等。
  * - 常量 TARGET_ARRIVAL_THRESHOLD_GU / VELOCITY_THRESHOLD 供各子系统引用。
  */
 
@@ -16,21 +16,28 @@ import staraxis.game.space.SpacePosition;
 import staraxis.game.state.WorldState;
 
 /**
- * AbstractShipMovementSystem（舰船移动共享工具基类）。
+ * AbstractShipMovementSystem（舰船移动共享工具类）。
+ *
+ * 提供 applyVelocity()、completeMoveAtTarget() 等直飞模式辅助方法。
+ * 该类为纯静态工具类，不可实例化。
  */
-abstract class AbstractShipMovementSystem {
+public final class AbstractShipMovementSystem {
+
+    private AbstractShipMovementSystem() {
+        throw new UnsupportedOperationException("utility class");
+    }
 
     /** 到达目标的判定阈值（GU）。 */
-    protected static final double TARGET_ARRIVAL_THRESHOLD_GU = 0.5;
+    public static final double TARGET_ARRIVAL_THRESHOLD_GU = 0.5;
 
     /** 速度归零阈值（GU/秒）。 */
-    protected static final double VELOCITY_THRESHOLD = 0.01;
+    public static final double VELOCITY_THRESHOLD = 0.01;
 
-    protected double speedOf(SpacePosition velocity) {
+    public static double speedOf(SpacePosition velocity) {
         return velocity.length();
     }
 
-    protected void applyVelocity(ShipBody ship, double dtGameSeconds, WorldState worldState) {
+    public static void applyVelocity(ShipBody ship, double dtGameSeconds, WorldState worldState) {
         if (ship.velWorldGU == null) {
             return;
         }
@@ -49,7 +56,7 @@ abstract class AbstractShipMovementSystem {
         }
     }
 
-    protected void completeMoveAtTarget(ShipBody ship, SpacePosition targetPosition, WorldState worldState) {
+    public static void completeMoveAtTarget(ShipBody ship, SpacePosition targetPosition, WorldState worldState) {
         if (targetPosition != null) {
             ship.posWorldGU = targetPosition;
         }

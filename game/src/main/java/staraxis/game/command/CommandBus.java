@@ -106,12 +106,8 @@ public class CommandBus {
         if (command == null) {
             throw new IllegalArgumentException("command_required");
         }
-        CommandHandler<T> handler = (CommandHandler<T>) handlers.get(command.getClass());
-        if (handler == null) {
-            throw new IllegalStateException("No handler registered for command: " + command.type());
-        }
         try {
-            handler.handle(command, worldState, dtGameHours);
+            executeCommand(command, worldState, dtGameHours);
             totalProcessed.incrementAndGet();
         } catch (Exception e) {
             throw new RuntimeException("Command execution failed: " + command.type(), e);

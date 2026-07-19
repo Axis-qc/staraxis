@@ -8,16 +8,13 @@ import com.badlogic.gdx.graphics.g3d.ModelBatch;
 import com.badlogic.gdx.graphics.g3d.ModelInstance;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
-import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Intersector;
-import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.math.collision.Ray;
 
 import staraxis.game.astro.PlanetBody;
 import staraxis.game.astro.StarBody;
 import staraxis.game.astro.StarSystem;
-import staraxis.game.entity.EntityType;
 import staraxis.game.ship.ShipBody;
 import staraxis.game.space.OrbitSolver;
 import staraxis.game.space.OrbitalElements;
@@ -79,46 +76,9 @@ public class SystemViewRenderer {
     private final Vector3 tmpVec = new Vector3();
     private final Vector3 tmpOffset = new Vector3();
     private final Vector3 tmpIntersect = new Vector3();
-    private final Vector3 tmpScreenPos = new Vector3();
 
-    /** 2D 行星圆标渲染器（叠加层，渲染太小的行星球体）。 */
-    private final ShapeRenderer shapeRenderer = new ShapeRenderer();
-
-    /** 当前帧的行星 UI 圆标信息（每帧重建，供拾取用）。 */
-    private final java.util.ArrayList<PlanetDotInfo> planetDotInfos = new java.util.ArrayList<>();
-
-    /** 当前帧的舰船 UI 圆标信息（每帧重建，供拾取用）。 */
-    private final java.util.ArrayList<ShipDotInfo> shipDotInfos = new java.util.ArrayList<>();
-
-    /** 行星球体在屏幕上的直径小于此值时改用固定圆标标示位置。 */
-    private static final float MIN_DIAMETER_PX = 20f;
-
-    /** 屏幕圆标固定绘制半径（像素）。 */
-    private static final float DOT_RADIUS_PX = MIN_DIAMETER_PX * 0.5f;
-
-    /** 行星屏幕圆标信息（每帧重建）。 */
-    private static class PlanetDotInfo {
-        final long entityId;
-        final float screenX;
-        final float screenY;
-        PlanetDotInfo(long id, float x, float y) {
-            entityId = id;
-            screenX = x;
-            screenY = y;
-        }
-    }
-
-    /** 舰船屏幕圆标信息（每帧重建）。 */
-    private static class ShipDotInfo {
-        final long entityId;
-        final float screenX;
-        final float screenY;
-        ShipDotInfo(long id, float x, float y) {
-            entityId = id;
-            screenX = x;
-            screenY = y;
-        }
-    }
+    /** 2D 屏幕圆标叠加层（天体/舰船位置标记 + 拾取）。 */
+    private final SystemViewOverlay overlay = new SystemViewOverlay();
 
     public SystemViewRenderer() {
         modelBatch = new ModelBatch();
@@ -288,11 +248,9 @@ public class SystemViewRenderer {
 
         Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
 
-        // 最上层：渲染行星 UI 圆标（深度测试已关闭）
-        renderPlanetDots(system, camera);
-
-        // 最上层：渲染舰船 UI 圆标
-        renderShipDots(camera);
+        // 最上层：2D 屏幕圆标叠加层（深度测试已关闭）
+        overlay.renderPlanetDots(system, camera, bodyCenterIndex);
+        overlay.renderShipDots(camera, currentFrameShips);
     }
 
     /** D.10+D.11: 渲染所有恒星，每颗按 systemPos 偏移 */
@@ -335,7 +293,7 @@ public class SystemViewRenderer {
         }
 
         float scale = (float) body.radiusGU;
-        float[] rgb = planetColor(body.planetTypeId);
+        float[] rgb = SystemViewOverlay.planetColor(body.planetTypeId);
 
         ModelInstance instance = (lod == LodLevel.LOW)
                 ? planetLowInstances.get(index)
@@ -356,134 +314,6 @@ public class SystemViewRenderer {
         modelBatch.begin(camera.camera);
         modelBatch.render(instance, environment);
         modelBatch.end();
-    }
-
-    /**
-     * 渲染行星 UI 圆标（淡入淡出 LOD）。
-     *
-     * 基于相机 orbitDist 做 alpha 渐变，逻辑与轨道环 LOD 一致：
-     *   orbitDist > 20000 → 完全不透明
-     *   5000 < orbitDist < 20000 → 线性淡入
-     *   orbitDist < 5000 → 完全透明（消失）
-     * 每帧重建 planetDotInfos 供 pick() 做 2D 屏幕空间拾取。
-     */
-    private void renderPlanetDots(StarSystem system, WorldCamera camera) {
-        planetDotInfos.clear();
-
-        // 合并所有天体：行星 + 小行星 + 卫星
-        java.util.ArrayList<PlanetBody> allBodies = new java.util.ArrayList<>();
-        allBodies.addAll(system.planets);
-        allBodies.addAll(system.asteroids);
-        allBodies.addAll(system.moons);
-        int count = allBodies.size();
-        if (count == 0) return;
-
-        // 计算圆标透明度
-        float dotAlpha = LodCalculator.calculateDotAlpha(camera.getOrbitDistance());
-        if (dotAlpha <= 0f) return;
-
-        float gfxW = Gdx.graphics.getWidth();
-        float gfxH = Gdx.graphics.getHeight();
-        Gdx.gl.glEnable(GL20.GL_BLEND);
-        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
-        shapeRenderer.setProjectionMatrix(new Matrix4().setToOrtho(0f, gfxW, gfxH, 0f, -1f, 1f));
-        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-
-        Vector3 camPos = camera.camera.position;
-
-        for (PlanetBody body : allBodies) {
-            // 从已预计算的位置索引取坐标
-            Vector3 bodyPos = bodyCenterIndex.get(body.entityId);
-            if (bodyPos == null) continue;
-
-            float px = bodyPos.x, py = bodyPos.y, pz = bodyPos.z;
-
-            // 跳过 HIDDEN
-            double dist = Math.sqrt(
-                    (camPos.x - px) * (camPos.x - px) +
-                            (camPos.y - py) * (camPos.y - py) +
-                            (camPos.z - pz) * (camPos.z - pz));
-            if (LodCalculator.calculate(dist) == LodLevel.HIDDEN) continue;
-
-            // 投影到屏幕坐标
-            tmpScreenPos.set(px, py, pz);
-            camera.camera.project(tmpScreenPos);
-            if (tmpScreenPos.z < 0f || tmpScreenPos.z > 1f) continue;
-
-            float dotY = gfxH - tmpScreenPos.y;
-
-            // 小行星/卫星用更小的圆标
-            float dotRadius = (body.entityType == EntityType.ASTEROID || body.entityType == EntityType.MOON)
-                ? DOT_RADIUS_PX * 0.5f : DOT_RADIUS_PX;
-
-            float[] rgb = planetColor(body.planetTypeId);
-            shapeRenderer.setColor(rgb[0], rgb[1], rgb[2], dotAlpha);
-            shapeRenderer.circle(tmpScreenPos.x, dotY, dotRadius);
-
-            planetDotInfos.add(new PlanetDotInfo(body.entityId, tmpScreenPos.x, dotY));
-        }
-
-        shapeRenderer.end();
-        Gdx.gl.glDisable(GL20.GL_BLEND);
-    }
-
-    /** 渲染舰船 LOD 圆标（距离远时用圆圈替代立方体渲染） */
-    private void renderShipDots(WorldCamera camera) {
-        if (currentFrameShips.isEmpty()) return;
-
-        shipDotInfos.clear();
-
-        float gfxW = Gdx.graphics.getWidth();
-        float gfxH = Gdx.graphics.getHeight();
-        Vector3 camPos = camera.camera.position;
-
-        Gdx.gl.glEnable(GL20.GL_BLEND);
-        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
-        shapeRenderer.setProjectionMatrix(new Matrix4().setToOrtho(0f, gfxW, gfxH, 0f, -1f, 1f));
-        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-
-        for (ShipBody ship : currentFrameShips) {
-            if (ship.posWorldGU == null) continue;
-
-            float px = (float) ship.posWorldGU.x();
-            float py = (float) ship.posWorldGU.y();
-            float pz = (float) ship.posWorldGU.z();
-
-            double dist = Math.sqrt(
-                    (camPos.x - px) * (camPos.x - px) +
-                    (camPos.y - py) * (camPos.y - py) +
-                    (camPos.z - pz) * (camPos.z - pz));
-
-            // 投影到屏幕坐标
-            tmpScreenPos.set(px, py, pz);
-            camera.camera.project(tmpScreenPos);
-            if (tmpScreenPos.z < 0f || tmpScreenPos.z > 1f) continue;
-
-            float dotY = gfxH - tmpScreenPos.y;
-
-            // 根据距离决定圆圈透明度
-            // < 500GU 全透明（立方体可见，不画圆圈遮挡）
-            // 500~2000GU 线性淡入
-            // > 2000GU 完全不透明
-            float circleAlpha;
-            if (dist < 500) {
-                circleAlpha = 0f;
-            } else if (dist > 2000) {
-                circleAlpha = 0.9f;
-            } else {
-                circleAlpha = 0.9f * (float)((dist - 500) / 1500.0);
-            }
-
-            if (circleAlpha > 0.01f) {
-                shapeRenderer.setColor(0.4f, 0.6f, 1.0f, circleAlpha);
-                shapeRenderer.circle(tmpScreenPos.x, dotY, DOT_RADIUS_PX * 0.6f);
-            }
-
-            shipDotInfos.add(new ShipDotInfo(ship.entityId, tmpScreenPos.x, dotY));
-        }
-
-        shapeRenderer.end();
-        Gdx.gl.glDisable(GL20.GL_BLEND);
     }
 
     /** 轨道环带偏移 */
@@ -559,7 +389,7 @@ public class SystemViewRenderer {
         starMesh.dispose();
         orbitRing.dispose();
         shipMesh.dispose();
-        shapeRenderer.dispose();
+        overlay.dispose();
         if (chunkDebug != null) {
             chunkDebug.dispose();
             chunkDebug = null;
@@ -625,23 +455,6 @@ public class SystemViewRenderer {
             }
         }
 
-        // 检测 2D 天体圆标（屏幕空间）
-        for (PlanetDotInfo dot : planetDotInfos) {
-            float dx = screenX - dot.screenX;
-            float dy = screenY - dot.screenY;
-            if (dx * dx + dy * dy <= DOT_RADIUS_PX * DOT_RADIUS_PX * 4) {
-                // 命中圆标，用预计算位置的 3D 距离排序
-                Vector3 bodyPos = bodyCenterIndex.get(dot.entityId);
-                if (bodyPos != null) {
-                    float dist = camera.camera.position.dst2(bodyPos);
-                    if (dist < closestDist) {
-                        closestDist = dist;
-                        closestId = dot.entityId;
-                    }
-                }
-            }
-        }
-
         // 检测所有舰船（使用当前位置）
         for (ShipBody ship : currentFrameShips) {
             if (ship.posWorldGU == null) continue;
@@ -656,26 +469,9 @@ public class SystemViewRenderer {
             }
         }
 
-        // 检测 2D 舰船圆标（屏幕空间）
-        for (ShipDotInfo dot : shipDotInfos) {
-            float dx = screenX - dot.screenX;
-            float dy = screenY - dot.screenY;
-            if (dx * dx + dy * dy <= (DOT_RADIUS_PX * 0.6f) * (DOT_RADIUS_PX * 0.6f)) {
-                for (ShipBody ship : currentFrameShips) {
-                    if (ship.entityId == dot.entityId && ship.posWorldGU != null) {
-                        float dist = camera.camera.position.dst2(
-                            (float) ship.posWorldGU.x(),
-                            (float) ship.posWorldGU.y(),
-                            (float) ship.posWorldGU.z());
-                        if (dist < closestDist) {
-                            closestDist = dist;
-                            closestId = dot.entityId;
-                        }
-                        break;
-                    }
-                }
-            }
-        }
+        // 2D 圆标拾取委托给 overlay
+        closestId = overlay.pickDots(screenX, screenY, closestId, closestDist,
+                bodyCenterIndex, currentFrameShips, camera.camera.position);
 
         return closestId;
     }
@@ -710,20 +506,5 @@ public class SystemViewRenderer {
             }
         }
         return false;
-    }
-
-    private static float[] planetColor(String planetTypeId) {
-        if (planetTypeId == null) {
-            return new float[] { 0.55f, 0.47f, 0.38f };
-        }
-        return switch (planetTypeId.toUpperCase()) {
-            case "GAS_GIANT" -> new float[] { 0.85f, 0.65f, 0.35f };
-            case "OCEAN", "WATER" -> new float[] { 0.20f, 0.45f, 0.80f };
-            case "ICE", "ICE_GIANT" -> new float[] { 0.75f, 0.82f, 0.90f };
-            case "LAVA", "VOLCANIC" -> new float[] { 0.70f, 0.25f, 0.15f };
-            case "DESERT" -> new float[] { 0.85f, 0.72f, 0.45f };
-            case "GARDEN", "TERRAN" -> new float[] { 0.25f, 0.65f, 0.35f };
-            default -> new float[] { 0.55f, 0.47f, 0.38f };
-        };
     }
 }

@@ -31,12 +31,14 @@ public final class ShipSpawnService {
      * - 硬编码初始属性：耐久 1.0、能源 100、燃料 100喵。
      * - 生成后自动注册到 WorldState 并分配国家归属喵。
      *
-     * @param worldState 权威世界状态（必须非空）
-     * @param nationId   所属国家ID（必须非空）
+     * @param worldState  权威世界状态（必须非空）
+     * @param nationId    所属国家ID（必须非空）
      * @param spawnSystem 出生星系（必须非空）
+     * @param designId    舰船蓝图 ID（为空时使用 DEFAULT_COLONY_SHIP）
      * @return 生成的舰船实体ID，失败时返回 -1
      */
-    public static long spawnInitialShip(WorldState worldState, String nationId, StarSystem spawnSystem) {
+    public static long spawnInitialShip(WorldState worldState, String nationId, StarSystem spawnSystem,
+                                         String designId) {
         if (worldState == null) {
             throw new IllegalArgumentException("worldState_required");
         }
@@ -66,7 +68,8 @@ public final class ShipSpawnService {
         ShipBody ship = new ShipBody();
         ship.entityId = entityId;
         ship.entityType = EntityType.SHIP;
-        ship.designId = null; // 暂不依赖设计文件喵
+        ship.designId = (designId != null && !designId.isBlank())
+                ? designId : "DEFAULT_COLONY_SHIP";
         ship.posWorldGU = shipPos;
         ship.velWorldGU = SpacePosition.ORIGIN;
         ship.systemId = spawnSystem.systemId; // 所属星系ID喵
@@ -97,15 +100,16 @@ public final class ShipSpawnService {
      * - 可指定自定义标记集合（customFlags），为空时仅包含基本标记喵。
      * - 硬编码基础属性：耐久 1.0、能源 100、燃料 100喵。
      *
-     * @param worldState 权威世界状态（必须非空）
-     * @param nationId   所属国家ID（必须非空）
-     * @param position   世界坐标（GU，必须非空）
-     * @param systemId   所属星系ID（0 表示无）
+     * @param worldState  权威世界状态（必须非空）
+     * @param nationId    所属国家ID（必须非空）
+     * @param position    世界坐标（GU，必须非空）
+     * @param systemId    所属星系ID（0 表示无）
      * @param customFlags 自定义标记集合（可为空）
+     * @param designId    舰船蓝图 ID（为空时使用 DEFAULT_COLONY_SHIP）
      * @return 生成的舰船实体ID，失败时返回 -1
      */
     public static long spawnShipAtPosition(WorldState worldState, String nationId, SpacePosition position,
-                                          long systemId, java.util.Set<String> customFlags) {
+                                          long systemId, java.util.Set<String> customFlags, String designId) {
         if (worldState == null) {
             throw new IllegalArgumentException("worldState_required");
         }
@@ -126,7 +130,8 @@ public final class ShipSpawnService {
         ShipBody ship = new ShipBody();
         ship.entityId = entityId;
         ship.entityType = EntityType.SHIP;
-        ship.designId = null; // 暂不依赖设计文件喵
+        ship.designId = (designId != null && !designId.isBlank())
+                ? designId : "DEFAULT_COLONY_SHIP";
         ship.posWorldGU = position;
         ship.velWorldGU = SpacePosition.ORIGIN;
         ship.systemId = systemId;
