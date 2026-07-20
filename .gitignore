@@ -284,3 +284,7 @@ StarAxis Game/
 
 ## OpenCode configuration (local only)
 opencode.json
+
+## 构建产物日志 (Gradle/构建输出)
+build_*.txt
+out.txt
