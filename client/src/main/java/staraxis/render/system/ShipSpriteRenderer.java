@@ -2,7 +2,6 @@ package staraxis.render.system;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.GL20;
-import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.Matrix4;
@@ -10,28 +9,22 @@ import com.badlogic.gdx.math.Vector3;
 
 import staraxis.game.state.snapshot.EntitySnapshot;
 import staraxis.render.WorldCamera;
+import staraxis.sprite.SpriteRegistry;
 
 import java.util.List;
 
 /**
  * ShipSpriteRenderer（舰船贴图精灵渲染器）。
  *
- * 使用 simpleSpace_tilesheet 中的舰船贴图在 System View 中渲染舰船。
+ * 从 SpriteRegistry 按 spriteKey 获取舰船纹理，
  * 将 3D 世界坐标投影到屏幕坐标，用 SpriteBatch 绘制 2D 贴图，
  * 替代原有的 3D 正方体模型渲染 + 2D 圆标叠加。
  *
- * 贴图来源：assets/ui/ship/simpleSpace_tilesheet@2.png
- * 当前使用：第3行第4列（重甲主力舰风格）
+ * 纹理来源：SpriteRegistry（数据驱动，由 assets/sprites/sprite_registry.json 配置）
+ * P0 阶段所有舰船统一使用默认贴图（registry.getDefault()）。
+ * 后续 Phase 5 造船系统上线后按舰船类型传入不同 spriteKey 切换贴图。
  */
 public class ShipSpriteRenderer {
-
-    private static final String TILESHEET_PATH = "ui/ship/simpleSpace_tilesheet@2.png";
-    private static final int TILE_SIZE = 128;
-    private static final int COLS = 8;
-
-    /** 第3行第4列（0-indexed: 行2列3） */
-    private static final int TILE_ROW = 2;
-    private static final int TILE_COL = 3;
 
     /** 屏幕基准大小（像素），相机距离为 600GU 时保持此大小 */
     private static final float BASE_SIZE_PX = 48f;
@@ -43,8 +36,12 @@ public class ShipSpriteRenderer {
     /** 基准距离（GU）：在此距离上贴图为 BASE_SIZE_PX */
     private static final float REF_DIST = 600f;
 
-    private final Texture tilesheet;
-    private final TextureRegion shipRegion;
+    /** 屏幕拾取范围：贴图大小的倍数（>1 = 更容易点到）。 */
+    private static final float PICK_RADIUS_MULT = 1.8f;
+
+    /** 纹理注册器，提供 spriteKey → TextureRegion 映射。 */
+    private final SpriteRegistry registry;
+
     private final SpriteBatch spriteBatch;
     private final Vector3 tmpScreenPos = new Vector3();
 
@@ -53,9 +50,6 @@ public class ShipSpriteRenderer {
 
     private List<EntitySnapshot> currentShips = List.of();
     private long highlightShipId = -1L;
-
-    /** 屏幕拾取范围：贴图大小的倍数（>1 = 更容易点到）。 */
-    private static final float PICK_RADIUS_MULT = 1.8f;
 
     private static class ShipScreenInfo {
         final long entityId;
@@ -71,13 +65,12 @@ public class ShipSpriteRenderer {
         }
     }
 
-    public ShipSpriteRenderer() {
-        tilesheet = new Texture(Gdx.files.internal(TILESHEET_PATH));
-        shipRegion = new TextureRegion(tilesheet,
-                TILE_COL * TILE_SIZE,
-                TILE_ROW * TILE_SIZE,
-                TILE_SIZE, TILE_SIZE);
-        spriteBatch = new SpriteBatch();
+    /**
+     * @param registry 纹理注册器（由外部创建并注入）
+     */
+    public ShipSpriteRenderer(SpriteRegistry registry) {
+        this.registry = registry;
+        this.spriteBatch = new SpriteBatch();
     }
 
     /** 设置当前帧要渲染的舰船列表。 */
@@ -143,7 +136,11 @@ public class ShipSpriteRenderer {
                 spriteBatch.setColor(0.6f, 0.8f, 1.0f, 1f);
             }
 
-            spriteBatch.draw(shipRegion,
+            // P0 阶段：所有舰船统一用默认贴图。后续按 shipSizeId 传入不同 spriteKey
+            TextureRegion region = registry.getDefault();
+            if (region == null) continue;
+
+            spriteBatch.draw(region,
                     screenX - size / 2f,
                     screenY - size / 2f,
                     size, size);
@@ -175,8 +172,12 @@ public class ShipSpriteRenderer {
         return bestId;
     }
 
+    /**
+     * 释放渲染器持有的资源。
+     * 注意：纹理生命周期归 SpriteRegistry 管理，
+     * 此处只释放 spriteBatch（纹理由 ClientGame.dispose() → registry.dispose() 统一释放）。
+     */
     public void dispose() {
-        tilesheet.dispose();
         spriteBatch.dispose();
     }
 }

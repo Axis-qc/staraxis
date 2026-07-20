@@ -27,6 +27,7 @@ import staraxis.render.mesh.OrbitRingMesh;
 import staraxis.render.mesh.PlanetMesh;
 import staraxis.render.mesh.StarMesh;
 import staraxis.render.util.TemperatureColor;
+import staraxis.sprite.SpriteRegistry;
 
 /**
  * SystemViewRenderer（恒星系视图渲染器）。
@@ -76,7 +77,7 @@ public class SystemViewRenderer {
     /** 2D 屏幕圆标叠加层（天体/舰船位置标记 + 拾取）。 */
     private final SystemViewOverlay overlay = new SystemViewOverlay();
 
-    public SystemViewRenderer() {
+    public SystemViewRenderer(SpriteRegistry spriteRegistry) {
         modelBatch = new ModelBatch();
         environment = new Environment();
         starLight = new DirectionalLight();
@@ -86,7 +87,7 @@ public class SystemViewRenderer {
         planetMesh = new PlanetMesh();
         starMesh = new StarMesh();
         orbitRing = new OrbitRingMesh();
-        shipSpriteRenderer = new ShipSpriteRenderer();
+        shipSpriteRenderer = new ShipSpriteRenderer(spriteRegistry);
     }
 
     /** 当前帧待渲染的舰船快照列表（由 ClientGame 每帧设置）。 */

@@ -1,0 +1,44 @@
+{
+  "tilesheets": {
+    "ship_tilesheet": {
+      "path": "ui/ship/simpleSpace_tilesheet@2.png",
+      "tileSize": 128,
+      "columns": 8
+    }
+  },
+
+  "defaultSprite": "ship_frigate",
+
+  "sprites": [
+    {
+      "spriteKey": "ship_frigate",
+      "tilesheet": "ship_tilesheet",
+      "tileRow": 0,
+      "tileCol": 1
+    },
+    {
+      "spriteKey": "ship_destroyer",
+      "tilesheet": "ship_tilesheet",
+      "tileRow": 1,
+      "tileCol": 3
+    },
+    {
+      "spriteKey": "ship_cruiser",
+      "tilesheet": "ship_tilesheet",
+      "tileRow": 2,
+      "tileCol": 0
+    },
+    {
+      "spriteKey": "ship_battleship",
+      "tilesheet": "ship_tilesheet",
+      "tileRow": 0,
+      "tileCol": 4
+    },
+    {
+      "spriteKey": "ship_titan",
+      "tilesheet": "ship_tilesheet",
+      "tileRow": 0,
+      "tileCol": 6
+    }
+  ]
+}

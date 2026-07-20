@@ -25,6 +25,7 @@ import staraxis.render.util.MenuGalaxyBackground;
 import staraxis.render.galaxy.GalaxyViewRenderer;
 import staraxis.render.picking.RayPicker;
 import staraxis.render.system.SystemViewRenderer;
+import staraxis.sprite.SpriteRegistry;
 import staraxis.ui.FontProvider;
 import staraxis.ui.Gui;
 import staraxis.ui.effects.EffectRegistry;
@@ -79,6 +80,9 @@ public class ClientGame implements ApplicationListener {
 
     // 舰船移动交互控制器（选中、移动、聚焦、路径可视化）
     private ShipMoveController shipMoveController;
+
+    // 纹理注册器（启动时加载所有纹理到 GPU 内存）
+    private SpriteRegistry spriteRegistry;
 
     private int frameCount;
 
@@ -173,6 +177,10 @@ public class ClientGame implements ApplicationListener {
 
         resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 
+        // 纹理注册器：启动时加载所有精灵纹理到 GPU 内存
+        spriteRegistry = new SpriteRegistry();
+        spriteRegistry.loadAll();
+
         initSpaceRendering();
 
         // 主菜单 3D 银河背景（纯数学生成 8000 星，毫秒级启动）
@@ -204,7 +212,7 @@ public class ClientGame implements ApplicationListener {
         viewManager = new ViewManager();
         rayPicker = new RayPicker();
         galaxyViewRenderer = new GalaxyViewRenderer();
-        systemViewRenderer = new SystemViewRenderer();
+        systemViewRenderer = new SystemViewRenderer(spriteRegistry);
         skyboxRenderer = new SkyboxRenderer();
     }
 
@@ -637,6 +645,10 @@ public class ClientGame implements ApplicationListener {
         if (runtime != null) {
             runtime.stop();
             runtime = null;
+        }
+        if (spriteRegistry != null) {
+            spriteRegistry.dispose();
+            spriteRegistry = null;
         }
         FontProvider.disposeAllIncremental();
     }
