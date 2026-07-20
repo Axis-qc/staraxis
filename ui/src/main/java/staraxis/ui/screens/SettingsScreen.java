@@ -10,8 +10,8 @@ import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.scenes.scene2d.utils.DragAndDrop;
 import com.badlogic.gdx.scenes.scene2d.ui.CheckBox;
-import com.badlogic.gdx.scenes.scene2d.ui.Slider;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
+import staraxis.ui.widgets.VectorSlider;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.utils.Disposable;
 import staraxis.ui.Gui;
@@ -167,7 +167,7 @@ public class SettingsScreen implements Disposable {
 
         refreshGpuButton();
 
-        Slider vol = g.findActor("master_volume_slider");
+        VectorSlider vol = g.findActor("master_volume_slider");
         if (vol != null)
             vol.setValue(currentSettings.masterVolume);
 
@@ -643,7 +643,7 @@ public class SettingsScreen implements Disposable {
 
     private void refreshMasterVolumeSlider() {
         if (root instanceof Group g) {
-            Slider s = g.findActor("master_volume_slider");
+            VectorSlider s = g.findActor("master_volume_slider");
             if (s != null)
                 s.setValue(currentSettings.masterVolume);
         }

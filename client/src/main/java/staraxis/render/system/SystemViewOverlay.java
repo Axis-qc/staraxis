@@ -32,7 +32,6 @@ public class SystemViewOverlay {
     private final ShapeRenderer shapeRenderer = new ShapeRenderer();
 
     private final List<PlanetDotInfo> planetDotInfos = new ArrayList<>();
-    private final List<ShipDotInfo> shipDotInfos = new ArrayList<>();
 
     private static final float DOT_RADIUS_PX = 10f;
 
@@ -44,18 +43,6 @@ public class SystemViewOverlay {
         final float screenY;
 
         PlanetDotInfo(long id, float x, float y) {
-            entityId = id;
-            screenX = x;
-            screenY = y;
-        }
-    }
-
-    private static class ShipDotInfo {
-        final long entityId;
-        final float screenX;
-        final float screenY;
-
-        ShipDotInfo(long id, float x, float y) {
             entityId = id;
             screenX = x;
             screenY = y;
@@ -130,68 +117,12 @@ public class SystemViewOverlay {
     }
 
     /**
-     * 渲染舰船 LOD 圆标（距离远时用圆圈替代立方体渲染）。
-     */
-    public void renderShipDots(WorldCamera camera, List<EntitySnapshot> currentFrameShips) {
-        if (currentFrameShips.isEmpty()) return;
-
-        shipDotInfos.clear();
-
-        float gfxW = Gdx.graphics.getWidth();
-        float gfxH = Gdx.graphics.getHeight();
-        Vector3 camPos = camera.camera.position;
-
-        Gdx.gl.glEnable(GL20.GL_BLEND);
-        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
-        shapeRenderer.setProjectionMatrix(new Matrix4().setToOrtho(0f, gfxW, gfxH, 0f, -1f, 1f));
-        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-
-        for (EntitySnapshot snap : currentFrameShips) {
-            if (snap.posWorldGU == null) continue;
-
-            float px = (float) snap.posWorldGU.x();
-            float py = (float) snap.posWorldGU.y();
-            float pz = (float) snap.posWorldGU.z();
-
-            double dist = Math.sqrt(
-                    (camPos.x - px) * (camPos.x - px) +
-                            (camPos.y - py) * (camPos.y - py) +
-                            (camPos.z - pz) * (camPos.z - pz));
-
-            tmpScreenPos.set(px, py, pz);
-            camera.camera.project(tmpScreenPos);
-            if (tmpScreenPos.z < 0f || tmpScreenPos.z > 1f) continue;
-
-            float dotY = gfxH - tmpScreenPos.y;
-
-            float circleAlpha;
-            if (dist < 500) {
-                circleAlpha = 0f;
-            } else if (dist > 2000) {
-                circleAlpha = 0.9f;
-            } else {
-                circleAlpha = 0.9f * (float) ((dist - 500) / 1500.0);
-            }
-
-            if (circleAlpha > 0.01f) {
-                shapeRenderer.setColor(0.4f, 0.6f, 1.0f, circleAlpha);
-                shapeRenderer.circle(tmpScreenPos.x, dotY, DOT_RADIUS_PX * 0.6f);
-            }
-
-            shipDotInfos.add(new ShipDotInfo(snap.entityId, tmpScreenPos.x, dotY));
-        }
-
-        shapeRenderer.end();
-        Gdx.gl.glDisable(GL20.GL_BLEND);
-    }
-
-    /**
      * 2D 圆标拾取。返回命中的最佳实体 ID，无命中返回 -1。
      * 调用方应将其与 3D 拾取结果比较距离后取最近者。
+     * 舰船由 ShipSpriteRenderer 处理，此处仅拾取天体圆标。
      */
     public long pickDots(int screenX, int screenY, long currentBestId, float currentBestDistSq,
-                          Map<Long, Vector3> bodyCenterIndex, List<EntitySnapshot> currentFrameShips,
-                          Vector3 cameraPos) {
+                          Map<Long, Vector3> bodyCenterIndex, Vector3 cameraPos) {
         long bestId = currentBestId;
         float bestDistSq = currentBestDistSq;
 
@@ -205,26 +136,6 @@ public class SystemViewOverlay {
                     if (dist < bestDistSq) {
                         bestDistSq = dist;
                         bestId = dot.entityId;
-                    }
-                }
-            }
-        }
-
-        for (ShipDotInfo dot : shipDotInfos) {
-            float dx = screenX - dot.screenX;
-            float dy = screenY - dot.screenY;
-            if (dx * dx + dy * dy <= (DOT_RADIUS_PX * 0.6f) * (DOT_RADIUS_PX * 0.6f)) {
-                for (EntitySnapshot snap : currentFrameShips) {
-                    if (snap.entityId == dot.entityId && snap.posWorldGU != null) {
-                        float dist = cameraPos.dst2(
-                                (float) snap.posWorldGU.x(),
-                                (float) snap.posWorldGU.y(),
-                                (float) snap.posWorldGU.z());
-                        if (dist < bestDistSq) {
-                            bestDistSq = dist;
-                            bestId = dot.entityId;
-                        }
-                        break;
                     }
                 }
             }

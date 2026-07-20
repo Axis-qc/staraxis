@@ -228,13 +228,13 @@ public class WorldCamera {
         target.y = MathUtils.clamp(target.y, -targetLimit, targetLimit);
         target.z = MathUtils.clamp(target.z, -targetLimit, targetLimit);
 
-        // 右键拖拽旋转喵
-        if (Gdx.input.isButtonJustPressed(Input.Buttons.RIGHT)) {
+        // 鼠标滚轮中键按压拖拽旋转喵
+        if (Gdx.input.isButtonJustPressed(Input.Buttons.MIDDLE)) {
             rotating = true;
             lx = Gdx.input.getX();
             ly = Gdx.input.getY();
         }
-        if (!Gdx.input.isButtonPressed(Input.Buttons.RIGHT))
+        if (!Gdx.input.isButtonPressed(Input.Buttons.MIDDLE))
             rotating = false;
         if (rotating) {
             int dx = Gdx.input.getX() - lx, dy = Gdx.input.getY() - ly;
@@ -253,7 +253,7 @@ public class WorldCamera {
     }
 
     /**
-     * 是否正在被 WASDQE 键移动镜头。
+     * 是否正在被用户操控（WASDQE 移动 / 中键拖拽旋转 / 滚轮缩放）。
      */
     public boolean isUserControlled() {
         return Gdx.input.isKeyPressed(Input.Keys.W)
@@ -261,6 +261,8 @@ public class WorldCamera {
             || Gdx.input.isKeyPressed(Input.Keys.A)
             || Gdx.input.isKeyPressed(Input.Keys.D)
             || Gdx.input.isKeyPressed(Input.Keys.Q)
-            || Gdx.input.isKeyPressed(Input.Keys.E);
+            || Gdx.input.isKeyPressed(Input.Keys.E)
+            || Gdx.input.isButtonPressed(Input.Buttons.MIDDLE)
+            || scrollAccum != 0f;
     }
 }
