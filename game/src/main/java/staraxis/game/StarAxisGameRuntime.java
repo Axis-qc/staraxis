@@ -34,7 +34,10 @@ import staraxis.game.log.PerformanceMonitor;
 import staraxis.game.log.TickProfiler;
 import staraxis.game.ship.ShipBody;
 import staraxis.game.ship.ShipMovementSystem;
+import staraxis.game.sim.SimulationClock;
 import staraxis.game.sim.SimulationTime;
+
+import java.util.concurrent.TimeUnit;
 import staraxis.game.sim.TimelineSystem;
 import staraxis.game.space.SpacePosition;
 import staraxis.game.space.galaxy.GalaxyConfig;
@@ -72,6 +75,41 @@ public class StarAxisGameRuntime implements GameRuntime {
     private final CommandBus commandBus = new CommandBus();
 
     private final ShipMovementSystem shipMovementSystem = new ShipMovementSystem();
+
+    // ── 世界生成阶段定义（加载进度条用） ──
+    /** 世界生成各阶段的进度比例与中文标签。 */
+    private enum GenPhase {
+        INIT_TIME(0.00f, "初始化时间系统"),
+        LOAD_ASTRO(0.03f, "加载天体资源"),
+        LOAD_CONFIG(0.05f, "加载配置"),
+        GEN_GALAXY(0.08f, "生成星系结构"),
+        // 恒星系生成循环占 0.08 ~ 0.92 区间
+        BUILD_ASTRO(0.93f, "构建天体数据"),
+        CREATE_WORLD(0.95f, "创建世界状态"),
+        INIT_INTEL(0.97f, "初始化情报系统"),
+        COMPLETE(1.0f, "完成");
+
+        final float progress;
+        final String label;
+        GenPhase(float p, String l) { this.progress = p; this.label = l; }
+    }
+
+    /** 恒星系生成循环占用的进度条区间宽度。 */
+    private static final float STAR_GEN_RANGE = 0.84f;
+
+    // ── 世界生成常量 ──
+    /** 玩家未指定种子时的兜底默认种子。 */
+    private static final long DEFAULT_WORLD_SEED = 42L;
+
+    // ── 测试舰船常量（TODO: Phase 5 造船系统上线后移除） ──
+    /** 测试舰船生成偏移系数：引力井半径的 4% 作为安全停泊距离。 */
+    private static final double TEST_SHIP_OFFSET_FACTOR = 0.04;
+    /** 测试舰船最小偏移距离（GU），防止极小恒星下舰船贴脸。 */
+    private static final double TEST_SHIP_MIN_OFFSET_GU = 3000.0;
+    /** 测试舰船初始船体结构值。 */
+    private static final double TEST_SHIP_HP_HULL = 1.0;
+    /** 测试舰船初始燃料量（满油），与 ShipStatsCalculator.DEFAULT_MAX_FUEL 保持一致。 */
+    private static final double TEST_SHIP_FUEL_MASS = 100.0;
 
     /** 玩家当前查看的恒星系ID（=0 表示不在任何星系内）。 */
     private long activeSystemId;
@@ -128,14 +166,14 @@ public class StarAxisGameRuntime implements GameRuntime {
 
     public static StarAxisGameRuntime newGame(WorldGenConfig cfg, ProgressCallback progress) {
         if (progress != null)
-            progress.onProgress(0.00f, "初始化时间系统");
+            progress.onProgress(GenPhase.INIT_TIME.progress, GenPhase.INIT_TIME.label);
         SimulationTime time = new SimulationTime();
         time.worldType = cfg == null || cfg.worldType == null ? staraxis.game.world.WorldType.SINGLE_PLAYER
                 : cfg.worldType;
 
         if (progress != null)
 
-            progress.onProgress(0.03f, "加载天体资源");
+            progress.onProgress(GenPhase.LOAD_ASTRO.progress, GenPhase.LOAD_ASTRO.label);
         AstroAssetRepository astroAssets = new AstroAssetRepository(new ObjectMapper());
         astroAssets.loadAll();
 
@@ -144,7 +182,7 @@ public class StarAxisGameRuntime implements GameRuntime {
         planetAssets.loadAll();
 
         if (progress != null)
-            progress.onProgress(0.05f, "加载配置");
+            progress.onProgress(GenPhase.LOAD_CONFIG.progress, GenPhase.LOAD_CONFIG.label);
         staraxis.game.config.GlobalConfigRegistry configRegistry = new staraxis.game.config.GlobalConfigRegistry(
                 new ObjectMapper());
         configRegistry.loadAll();
@@ -155,10 +193,10 @@ public class StarAxisGameRuntime implements GameRuntime {
         int starCount = cfg.systemCount;
         GalaxyConfig galaxyCfg = GalaxyConfig.defaultSpiral();
         galaxyCfg.starCount = starCount;
-        galaxyCfg.worldSeed = (cfg.worldSeed == null || cfg.worldSeed.isBlank()) ? 42L
+        galaxyCfg.worldSeed = (cfg.worldSeed == null || cfg.worldSeed.isBlank()) ? DEFAULT_WORLD_SEED
                 : (long) cfg.worldSeed.hashCode();
         if (progress != null)
-            progress.onProgress(0.08f, "生成星系结构");
+            progress.onProgress(GenPhase.GEN_GALAXY.progress, GenPhase.GEN_GALAXY.label);
         GalaxyGenerator galaxyGen = GalaxyGeneratorFactory.create(GalaxyType.SPIRAL);
         GalaxyData galaxyData = galaxyGen.generate(galaxyCfg);
 
@@ -167,7 +205,7 @@ public class StarAxisGameRuntime implements GameRuntime {
         int i = 0;
         for (StarPosition sp : galaxyData.stars) {
             if (progress != null) {
-                float p = 0.08f + 0.84f * i / totalStars;
+                float p = GenPhase.GEN_GALAXY.progress + STAR_GEN_RANGE * i / totalStars;
                 progress.onProgress(p, "生成恒星系 " + (i + 1) + "/" + totalStars);
             }
             SpacePosition pos = new SpacePosition(sp.galaxyX(), sp.galaxyY(), sp.galaxyZ());
@@ -177,15 +215,15 @@ public class StarAxisGameRuntime implements GameRuntime {
         }
 
         if (progress != null)
-            progress.onProgress(0.93f, "构建天体数据");
+            progress.onProgress(GenPhase.BUILD_ASTRO.progress, GenPhase.BUILD_ASTRO.label);
         AstroData astro = new AstroData(systems);
         if (progress != null)
-            progress.onProgress(0.95f, "创建世界状态");
+            progress.onProgress(GenPhase.CREATE_WORLD.progress, GenPhase.CREATE_WORLD.label);
         WorldState ws = new WorldState(time, cfg.systemCount, astro);
 
         // 初始化情报系统并挂载到 WorldState 喵
         if (progress != null)
-            progress.onProgress(0.97f, "初始化情报系统");
+            progress.onProgress(GenPhase.INIT_INTEL.progress, GenPhase.INIT_INTEL.label);
         ws.intelSystem = new staraxis.game.intel.IntelSystem(ws, configRegistry.intel());
 
         // 开局清空：不注册玩家、不注册国家、不分配任何归属喵
@@ -194,8 +232,8 @@ public class StarAxisGameRuntime implements GameRuntime {
         for (StarSystem sys : systems) {
             if (sys == null) continue;
 
-            double offset = sys.gravityWellRadiusGU * 0.04;
-            if (offset < 3000) offset = 3000;
+            double offset = sys.gravityWellRadiusGU * TEST_SHIP_OFFSET_FACTOR;
+            if (offset < TEST_SHIP_MIN_OFFSET_GU) offset = TEST_SHIP_MIN_OFFSET_GU;
 
             long id = ws.generateEntityId();
             ShipBody ship = new ShipBody();
@@ -207,13 +245,13 @@ public class StarAxisGameRuntime implements GameRuntime {
                 sys.galaxyPos.z() + offset);
             ship.velWorldGU = SpacePosition.ORIGIN;
             ship.systemId = sys.systemId;
-            ship.hpHull = 1.0;
-            ship.fuelMass = 100.0;
+            ship.hpHull = TEST_SHIP_HP_HULL;
+            ship.fuelMass = TEST_SHIP_FUEL_MASS;
             ws.registerEntity(ship);
         }
 
         if (progress != null)
-            progress.onProgress(1.0f, "完成");
+            progress.onProgress(GenPhase.COMPLETE.progress, GenPhase.COMPLETE.label);
         return new StarAxisGameRuntime(ws);
     }
 
@@ -264,7 +302,7 @@ public class StarAxisGameRuntime implements GameRuntime {
 
         // 检查是否需要推送低频基线快照（每 20 tick / 约现实 1 秒）
         TickProfiler.begin(TickProfiler.Phase.SNAPSHOT);
-        if (worldState.time.simulationTick % 20 == 0 || worldState.baselineDirty) {
+        if (worldState.time.simulationTick % SimulationClock.TICKS_PER_SECOND == 0 || worldState.baselineDirty) {
             publishBaselineSnapshot();
             worldState.baselineDirty = false;
             worldState.markRealtimeDirty();
@@ -282,7 +320,7 @@ public class StarAxisGameRuntime implements GameRuntime {
         // 记录性能数据喵
         TickProfiler.tickEnd(worldState.entitiesById.size());
         long tickEndTime = System.nanoTime();
-        long tickTimeMs = (tickEndTime - tickStartTime) / 1_000_000L;
+        long tickTimeMs = TimeUnit.NANOSECONDS.toMillis(tickEndTime - tickStartTime);
 
         // 获取实体数量和星区数量喵
         int entityCount = worldState.entitiesById.size();
