@@ -164,14 +164,27 @@ public class VectorScrollPane extends Group {
         float h = getHeight();
         if (w <= 0 || h <= 0) return;
 
-        // 如果内容实现了 Layout 接口，触发其布局（如 Table 需要知道宽度才能计算子元素位置）
+        // 计算内容真实尺寸：
+        // - Layout 控件（如 Table）取 validate 后的 prefWidth/prefHeight，反映子元素累加高度
+        // - 非 Layout 控件用当前 width/height
+        // 两者均不小于视图尺寸，避免内容小于视图时出现负偏移
+        float contentW;
+        float contentH;
         if (content instanceof Layout) {
-            content.setSize(Math.max(content.getWidth(), w), content.getHeight());
+            // 先给宽度提示，让 Table 能根据可用宽度计算换行后的 prefHeight
+            content.setWidth(Math.max(content.getWidth(), w));
             ((Layout) content).validate();
+            contentW = ((Layout) content).getPrefWidth();
+            contentH = ((Layout) content).getPrefHeight();
+        } else {
+            contentW = content.getWidth();
+            contentH = content.getHeight();
         }
+        contentW = Math.max(contentW, w);
+        contentH = Math.max(contentH, h);
 
-        content.setPosition(0, h - content.getHeight() + scrollYOffset);
-        content.setSize(Math.max(content.getWidth(), w), content.getHeight());
+        content.setSize(contentW, contentH);
+        content.setPosition(0, h - contentH + scrollYOffset);
 
         lastKnownWidth = w;
         lastKnownHeight = h;

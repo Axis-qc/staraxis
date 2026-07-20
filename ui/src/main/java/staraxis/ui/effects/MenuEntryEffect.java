@@ -21,6 +21,7 @@ public class MenuEntryEffect extends EffectDef {
 
     public static class HoverDef {
         public float shiftX = 10f;
+        /** 边框渐变完成时间，单位秒 */
         public float speed = 8f;
     }
 

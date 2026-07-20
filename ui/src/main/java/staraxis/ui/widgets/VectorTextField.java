@@ -65,6 +65,23 @@ public class VectorTextField extends Actor {
             public void touchUp(InputEvent event, float x, float y, int pointer, int button) {
                 getStage().setKeyboardFocus(VectorTextField.this);
             }
+
+            // Scene2D 键盘事件转发到自定义处理方法，否则键盘输入不会到达本控件
+            @Override
+            public boolean keyDown(InputEvent event, int keycode) {
+                return handleKeyDown(keycode);
+            }
+
+            @Override
+            public boolean keyUp(InputEvent event, int keycode) {
+                // 占用键盘焦点，避免事件冒泡到其他控件（如 ESC 返回主菜单）
+                return focused;
+            }
+
+            @Override
+            public boolean keyTyped(InputEvent event, char character) {
+                return handleKeyTyped(character);
+            }
         });
 
         addListener(new FocusListener() {

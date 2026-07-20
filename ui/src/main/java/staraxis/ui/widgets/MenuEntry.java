@@ -1,6 +1,8 @@
 package staraxis.ui.widgets;
 
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.GlyphLayout;
@@ -27,7 +29,7 @@ public class MenuEntry extends Actor {
     private boolean hovered;
     private boolean selected;
     private float hoverProgress;
-    private float pulse;
+    private float moveProgress;
 
     public MenuEntry(ShapeRenderer sr, BitmapFont font, String text, Runnable onClick) {
         this(sr, font, DEFAULT_EFFECT, text, null, onClick);
@@ -77,26 +79,40 @@ public class MenuEntry extends Actor {
     @Override
     public void act(float delta) {
         super.act(delta);
-        pulse += delta;
         float target = hovered || selected ? 1f : 0f;
-        float alpha = 1f - (float) Math.exp(-Math.max(1f, effect.hover.speed) * delta);
-        hoverProgress += (target - hoverProgress) * alpha;
-        if (Math.abs(hoverProgress - target) < 0.001f) {
-            hoverProgress = target;
+
+        // 边框：1 秒完成渐变
+        if (hoverProgress != target) {
+            float step = delta / effect.hover.speed;
+            if (target > hoverProgress) {
+                hoverProgress = Math.min(hoverProgress + step, 1f);
+            } else {
+                hoverProgress = Math.max(hoverProgress - step, 0f);
+            }
+        }
+
+        // 位移/变色：0.25 秒完成
+        float moveDuration = 0.25f;
+        if (moveProgress != target) {
+            float step = delta / moveDuration;
+            if (target > moveProgress) {
+                moveProgress = Math.min(moveProgress + step, 1f);
+            } else {
+                moveProgress = Math.max(moveProgress - step, 0f);
+            }
         }
     }
 
     @Override
     public void draw(Batch batch, float parentAlpha) {
-        float p = Interpolation.smooth.apply(hoverProgress);
-        float x = getX() + p * effect.hover.shiftX;
+        float pm = Interpolation.smooth.apply(moveProgress);   // 位移/变色用（快）
+        float pb = Interpolation.smooth.apply(hoverProgress);  // 边框用（慢）
+        float x = getX() + pm * effect.hover.shiftX;
         float y = getY();
         float h = getHeight();
         float baseBulletSize = effect.bullet.size;
-        // 减慢动效 (原 7f → 3f)
-        float pulseScale = hovered || selected ? (0.02f + 0.02f * (float) Math.sin(pulse * 3f)) * p : 0f;
-        // 缩小最大变大值 (原 0.42f → 0.25f)
-        float bulletSize = baseBulletSize * (1f + 0.25f * p + pulseScale);
+        // 固定大小，取消脉冲动画和悬停缩放
+        float bulletSize = baseBulletSize;
         float bulletCenterX = x + baseBulletSize * 0.5f;
         float bulletCenterY = y + h * 0.5f;
 
@@ -105,37 +121,22 @@ public class MenuEntry extends Actor {
         sr.setProjectionMatrix(batch.getProjectionMatrix());
         sr.setTransformMatrix(batch.getTransformMatrix());
 
-        // 发光效果（从中心到边缘渐变透明）
-        if (effect.bullet.glow && p > 0.001f) {
-            float glowPulse = 0.85f + 0.15f * (float) Math.sin(pulse * 2.5f);
-            float glowRadius = effect.bullet.glowRadius * p * glowPulse;
-            Color gc = effect.bullet.hoverColor;
-            float ga = p * effect.bullet.glowAlpha;
-            int glowLayers = 8;
-            sr.begin(ShapeType.Filled);
-            // 从外到内绘制：外层低透明度先画，内层高透明度叠加在中心
-            for (int i = glowLayers; i >= 1; i--) {
-                float t = (float) i / glowLayers;
-                float a = ga * (1f - t * 0.92f);
-                sr.setColor(gc.r, gc.g, gc.b, Math.max(0.01f, a));
-                sr.circle(bulletCenterX, bulletCenterY, glowRadius * t);
-            }
-            sr.end();
-        }
+        // 显式启用混合，使 ShapeRenderer.Line 的 alpha 生效
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
 
-        // 圆点径向渐变：从中心到边缘渐变透明
-        Color bulletColor = effect.bullet.color.cpy().lerp(effect.bullet.hoverColor, p);
-        float maxR = bulletSize / 2f;
-        int dotLayers = 8;
+        // 边框：p*p 平方缓入使初始帧极低 alpha，产生肉眼可见的渐入渐出过程
+        Color bc = effect.bullet.hoverColor;
+        sr.setColor(bc.r, bc.g, bc.b, pb * pb * parentAlpha);
+        sr.begin(ShapeType.Line);
+        sr.rect(getX() + 1.5f, getY() + 1.5f, getWidth() - 3f, getHeight() - 3f);
+        sr.end();
+
+        // 圆点固定大小，悬停只变色
+        Color bulletColor = effect.bullet.color.cpy().lerp(effect.bullet.hoverColor, pm);
+        sr.setColor(bulletColor);
         sr.begin(ShapeType.Filled);
-        // 从外到内绘制：大圆低 alpha 先画，小圆高 alpha 后画叠在中心，产生中心实色边缘透明的渐变
-        for (int i = dotLayers; i >= 1; i--) {
-            float t = (float) i / dotLayers;
-            float r = maxR * t;
-            float a = bulletColor.a * (1f - t * 0.92f);
-            sr.setColor(bulletColor.r, bulletColor.g, bulletColor.b, Math.max(0.01f, a));
-            sr.circle(bulletCenterX, bulletCenterY, r);
-        }
+        sr.circle(bulletCenterX, bulletCenterY, bulletSize / 2f);
         sr.end();
 
         batch.begin();
@@ -145,7 +146,7 @@ public class MenuEntry extends Actor {
         float scale = Math.max(0.1f, effect.text.size / FontProvider.VECTOR_FONT_GEN_SIZE);
         font.getData().setScale(scale);
 
-        Color textColor = effect.text.color.cpy().lerp(effect.text.hoverColor, p);
+        Color textColor = effect.text.color.cpy().lerp(effect.text.hoverColor, pm);
         font.setColor(textColor);
         float textX = x + baseBulletSize + 15f;
         float textY = y + (h + font.getCapHeight()) / 2f;

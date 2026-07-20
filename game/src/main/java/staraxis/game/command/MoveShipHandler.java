@@ -28,7 +28,9 @@ public class MoveShipHandler implements CommandHandler<MoveShipCommand> {
         if (!(entity instanceof ShipBody ship)) {
             return;
         }
-        if (!nationId.equals(ship.ownerNationId)) {
+        // 鉴权:舰船有 owner 时校验指令发起者是否匹配;无主舰船(ownerNationId==null)直接执行喵
+        // 设计原则:鉴权与指令执行分离 - 无主舰船任何指令都可执行,有主舰船才做匹配校验
+        if (ship.ownerNationId != null && !ship.ownerNationId.equals(nationId)) {
             return;
         }
 

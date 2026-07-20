@@ -32,9 +32,13 @@ public class ShipMoveController {
     private long cameraFollowTargetId = -1;
 
     private boolean moveModeActive;
+    private boolean yAdjustMode;
+    private boolean waitingRightRelease;
     private double moveTargetX, moveTargetY, moveTargetZ;
     private double moveBaseY;
+    private double yAdjustBaseY;
     private int moveDragStartScreenY;
+    private int lastMouseScreenX = -1, lastMouseScreenY = -1;
     private static final double Y_SENSITIVITY = 50.0;
 
     private long lastClickTimeNs;
@@ -89,6 +93,13 @@ public class ShipMoveController {
 
     /**
      * 每帧更新移动模式（右键拖动目标点）。
+     *
+     * 状态机：
+     * - 右键按下 -> 进入移动模式（等待右键松开后才开始 XZ 跟随，避免进入即锁定）
+     * - 右键松开后 -> XZ 跟随鼠标在舰船平面移动
+     * - 再次按住右键 -> 锁定当前 XZ，进入 Y 高度调整
+     * - 松开右键 -> 退出 Y 高度调整，XZ 恢复跟随
+     * - 左键确认（在 handleLeftClick 中处理）-> 发送命令退出移动模式
      */
     public void updateMoveMode(StarAxisGameRuntime runtime, WorldCamera systemCamera) {
         if (selectedShipId < 0 || runtime == null)
@@ -99,26 +110,76 @@ public class ShipMoveController {
             return;
 
         boolean rightJustPressed = Gdx.input.isButtonJustPressed(com.badlogic.gdx.Input.Buttons.RIGHT);
+        boolean rightPressed = Gdx.input.isButtonPressed(com.badlogic.gdx.Input.Buttons.RIGHT);
 
-        if (rightJustPressed) {
+        // 进入移动模式：右键首次按下，等待松开后才开始 XZ 跟随，避免进入即锁定喵
+        if (rightJustPressed && !moveModeActive) {
+            moveModeActive = true;
+            yAdjustMode = false;
+            waitingRightRelease = true;
             moveBaseY = shipSnap.posWorldGU.y();
             moveTargetY = moveBaseY;
             moveDragStartScreenY = Gdx.input.getY();
-            moveModeActive = true;
+            // 立即 ray cast 一次确定初始 XZ（舰船平面）
+            updateMoveTargetXZ(systemCamera);
+            lastMouseScreenX = Gdx.input.getX();
+            lastMouseScreenY = Gdx.input.getY();
+            return;
         }
 
-        if (moveModeActive) {
-            var ray = systemCamera.camera.getPickRay(Gdx.input.getX(), Gdx.input.getY());
-            double planeY = moveTargetY;
-            double t = (planeY - ray.origin.y) / ray.direction.y;
-            moveTargetX = ray.origin.x + ray.direction.x * t;
-            moveTargetZ = ray.origin.z + ray.direction.z * t;
+        if (!moveModeActive)
+            return;
 
-            if (Gdx.input.isButtonPressed(com.badlogic.gdx.Input.Buttons.RIGHT)) {
-                int dy = Gdx.input.getY() - moveDragStartScreenY;
-                moveTargetY = moveBaseY - (double) dy * Y_SENSITIVITY;
+        // 等待进入移动模式后的右键松开：松开后 XZ 才开始跟随鼠标喵
+        if (waitingRightRelease) {
+            if (!rightPressed) {
+                waitingRightRelease = false;
+                updateMoveTargetXZ(systemCamera);
+                lastMouseScreenX = Gdx.input.getX();
+                lastMouseScreenY = Gdx.input.getY();
+            }
+            return;
+        }
+
+        // Y 高度调整模式切换
+        if (rightJustPressed && !yAdjustMode) {
+            // 按住右键：锁定当前 XZ，进入 Y 高度调整，以当前 Y 为调整基准
+            yAdjustMode = true;
+            yAdjustBaseY = moveTargetY;
+            moveDragStartScreenY = Gdx.input.getY();
+        } else if (!rightPressed && yAdjustMode) {
+            // 松开右键：退出 Y 高度调整，XZ 保持锁定值不立即 ray cast（避免 Y 变化后同屏幕位置在新平面交点跳变）
+            // 仅同步 lastMouse 为当前鼠标位置，鼠标真正移动后才重新 ray cast 更新 XZ
+            yAdjustMode = false;
+            lastMouseScreenX = Gdx.input.getX();
+            lastMouseScreenY = Gdx.input.getY();
+        }
+
+        if (yAdjustMode) {
+            // Y 高度调整：XZ 锁定，只更新 Y
+            int dy = Gdx.input.getY() - moveDragStartScreenY;
+            moveTargetY = yAdjustBaseY - (double) dy * Y_SENSITIVITY;
+        } else {
+            // XZ 跟随鼠标：仅在鼠标屏幕位置真正变化时才 ray cast，静止时保持目标点不动喵
+            int curMouseX = Gdx.input.getX();
+            int curMouseY = Gdx.input.getY();
+            if (curMouseX != lastMouseScreenX || curMouseY != lastMouseScreenY) {
+                updateMoveTargetXZ(systemCamera);
+                lastMouseScreenX = curMouseX;
+                lastMouseScreenY = curMouseY;
             }
         }
+    }
+
+    /**
+     * 通过鼠标射线在当前 moveTargetY 平面上计算移动目标 XZ 坐标。
+     */
+    private void updateMoveTargetXZ(WorldCamera systemCamera) {
+        var ray = systemCamera.camera.getPickRay(Gdx.input.getX(), Gdx.input.getY());
+        double planeY = moveTargetY;
+        double t = (planeY - ray.origin.y) / ray.direction.y;
+        moveTargetX = ray.origin.x + ray.direction.x * t;
+        moveTargetZ = ray.origin.z + ray.direction.z * t;
     }
 
     /**
@@ -149,9 +210,10 @@ public class ShipMoveController {
                 systemCamera.target.set(focusTmp);
             }
         } else if (moveModeActive) {
-            // 右键移动模式确认 → 通过命令总线发送移动命令喵
+            // 右键移动模式确认 -> 通过命令总线发送移动命令喵
+            // ownerNationId 允许为 null 传入:无主舰船由 game 端 MoveShipHandler 直接执行
             EntitySnapshot shipSnap = readShipSnapshotOrNull(snapshotProvider.getRealtimeState(), selectedShipId);
-            if (shipSnap != null && shipSnap.ownerNationId != null) {
+            if (shipSnap != null) {
                 String clientCmdId = "client_" + System.currentTimeMillis() + "_" + selectedShipId;
                 runtime.submitCommand(new MoveShipCommand(
                         shipSnap.ownerNationId,
@@ -160,6 +222,8 @@ public class ShipMoveController {
                         moveTargetX, moveTargetY, moveTargetZ));
             }
             moveModeActive = false;
+            yAdjustMode = false;
+            waitingRightRelease = false;
         } else {
             // 普通单击选中舰船喵
             EntitySnapshot shipSnap = readShipSnapshotOrNull(snapshotProvider.getRealtimeState(), hoveredId);
