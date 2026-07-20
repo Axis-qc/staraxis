@@ -21,6 +21,7 @@ import staraxis.game.state.snapshot.EntitySnapshot.PlanetDetails;
 import staraxis.game.state.snapshot.EntitySnapshot.StarDetails;
 import staraxis.render.WorldCamera;
 import staraxis.render.debug.ChunkGridDebugRenderer;
+import staraxis.render.effect.WormholePlaneRenderer;
 import staraxis.render.lod.LodCalculator;
 import staraxis.render.lod.LodLevel;
 import staraxis.render.mesh.OrbitRingMesh;
@@ -76,6 +77,9 @@ public class SystemViewRenderer {
 
     /** 2D 屏幕圆标叠加层（天体/舰船位置标记 + 拾取）。 */
     private final SystemViewOverlay overlay = new SystemViewOverlay();
+
+    /** 虫洞平面渲染器（开局舰船刷出时显示，3 秒渐隐）。 */
+    private final WormholePlaneRenderer wormhole = new WormholePlaneRenderer();
 
     public SystemViewRenderer(SpriteRegistry spriteRegistry) {
         modelBatch = new ModelBatch();
@@ -250,11 +254,15 @@ public class SystemViewRenderer {
         // 最上层：2D 屏幕圆标叠加层（深度测试已关闭）
         overlay.renderPlanetDots(systemSnapshots, camera, bodyCenterIndex);
         shipSpriteRenderer.render(camera);
+
+        // 虫洞平面（最上层 billboard，additive 混合）
+        wormhole.render(camera);
     }
 
     /** 渲染所有恒星，全部批处理在一次 begin/end 内完成。 */
     private void renderAllStars(java.util.List<EntitySnapshot> starSnapshots, WorldCamera camera) {
-        if (starSnapshots.isEmpty()) return;
+        if (starSnapshots.isEmpty())
+            return;
         modelBatch.begin(camera.camera);
         for (int i = 0; i < starSnapshots.size(); i++) {
             EntitySnapshot snap = starSnapshots.get(i);
@@ -341,10 +349,32 @@ public class SystemViewRenderer {
 
     public void advanceTime(double dtSeconds) {
         simulationTime += dtSeconds;
+        // 更新虫洞渐隐
+        if (wormhole.isVisible()) {
+            wormhole.update((float) dtSeconds);
+        }
+    }
+
+    /**
+     * 在指定世界坐标激活虫洞平面（开局时 fleet 刷出位置）喵。
+     */
+    public void showWormhole(double x, double y, double z) {
+        wormhole.show(x, y, z);
     }
 
     public void resetTime() {
         simulationTime = 0.0;
+    }
+
+    /**
+     * 重置渲染器内部状态，用于新世界开始时清理旧世界的运行时状态喵。
+     *
+     * 使用场景：退出游戏返回主菜单后，重新开始新游戏时调用喵。
+     */
+    public void reset() {
+        resetTime();
+        currentFrameShips = java.util.List.of();
+        highlightShipId = -1L;
     }
 
     public void setSimulationTime(double time) {
@@ -377,6 +407,7 @@ public class SystemViewRenderer {
         orbitRing.dispose();
         shipSpriteRenderer.dispose();
         overlay.dispose();
+        wormhole.dispose();
         if (chunkDebug != null) {
             chunkDebug.dispose();
             chunkDebug = null;

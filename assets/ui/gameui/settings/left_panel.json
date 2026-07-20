@@ -118,7 +118,7 @@
           "effect": "primary_button",
           "properties": {
             "text": "settings.back",
-            "onClick": "BACK_TO_MAIN_MENU",
+            "onClick": "SETTINGS_BACK",
             "cell": {
               "width": 210,
               "height": 42,

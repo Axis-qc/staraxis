@@ -1,5 +1,8 @@
 package staraxis.ui.widgets;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
@@ -11,6 +14,7 @@ import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.InputListener;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.Touchable;
+
 import staraxis.ui.FontProvider;
 import staraxis.ui.effects.VectorWindowEffect;
 
@@ -22,17 +26,30 @@ import staraxis.ui.effects.VectorWindowEffect;
  */
 public class VectorDialog extends Group {
 
-    private static final VectorWindowEffect DEFAULT_EFFECT = VectorWindowEffect.fromMap("default", new java.util.HashMap<>());
+    private static final VectorWindowEffect DEFAULT_EFFECT = VectorWindowEffect.fromMap("default",
+            new java.util.HashMap<>());
 
     private final ShapeRenderer sr;
     private final BitmapFont font;
     private final VectorWindowEffect effect;
     private String titleText;
     private String bodyText;
-    private String buttonText;
     private Group contentGroup;
     private Group buttonGroup;
-    private Runnable onConfirm;
+
+    /** 按钮定义列表（支持多个按钮并排显示）。 */
+    private final List<ButtonEntry> buttons = new ArrayList<>();
+
+    /** 按钮条目。 */
+    private static class ButtonEntry {
+        final String text;
+        final Runnable onClick;
+
+        ButtonEntry(String text, Runnable onClick) {
+            this.text = text;
+            this.onClick = onClick;
+        }
+    }
 
     // 模态阻挡层
     private Actor blocker;
@@ -52,7 +69,6 @@ public class VectorDialog extends Group {
         this.effect = effect != null ? effect : DEFAULT_EFFECT;
         this.titleText = title != null ? title : "";
         this.bodyText = body != null ? body : "";
-        this.buttonText = "OK";
         setTouchable(Touchable.enabled);
         setSize(320, 180);
 
@@ -95,25 +111,40 @@ public class VectorDialog extends Group {
         float btnX = getWidth() - CLOSE_BTN_SIZE - CLOSE_BTN_PADDING;
         float btnY = getHeight() - titleH + (titleH - CLOSE_BTN_SIZE) / 2f;
         return localX >= btnX && localX <= btnX + CLOSE_BTN_SIZE
-            && localY >= btnY && localY <= btnY + CLOSE_BTN_SIZE;
+                && localY >= btnY && localY <= btnY + CLOSE_BTN_SIZE;
     }
 
     public void setBody(String body) {
         this.bodyText = body != null ? body : "";
     }
 
+    /**
+     * 设置单个确认按钮（覆盖之前添加的所有按钮）。
+     * 保留用于向后兼容。
+     */
     public void setButton(String buttonText, Runnable onClick) {
-        this.buttonText = buttonText != null ? buttonText : "OK";
-        this.onConfirm = onClick;
+        buttons.clear();
+        if (onClick != null) {
+            buttons.add(new ButtonEntry(buttonText != null ? buttonText : "OK", onClick));
+        }
     }
 
     /**
-     * 创建并添加确认按钮作为子 Actor。
-     * 在 show() 之后调用，以便按钮能正确渲染和交互。
+     * 添加一个按钮。可多次调用来添加多个按钮，它们会并排显示。
      */
-    private void createButtonActor() {
-        if (onConfirm == null || sr == null || font == null) {
-            // 兜底：没有按钮时点击阻挡层关闭
+    public void addButton(String text, Runnable onClick) {
+        if (text != null && onClick != null) {
+            buttons.add(new ButtonEntry(text, onClick));
+        }
+    }
+
+    /**
+     * 创建并添加按钮作为子 Actor。
+     * 支持多个按钮并排显示。
+     */
+    private void createButtonActors() {
+        if (buttons.isEmpty() || sr == null || font == null) {
+            // 兜底：没有按钮时点阻挡层关闭
             if (blocker != null) {
                 blocker.clearListeners();
                 blocker.addListener(new InputListener() {
@@ -126,21 +157,29 @@ public class VectorDialog extends Group {
             }
             return;
         }
-        VectorButton confirmBtn = new VectorButton(sr, font, buttonText, () -> {
-            if (onConfirm != null) onConfirm.run();
-        });
+
         float bw = 120f;
         float bh = 36f;
-        confirmBtn.setSize(bw, bh);
-        confirmBtn.setPosition((getWidth() - bw) / 2f, 16);
-        addActor(confirmBtn);
+        float gap = 12f;
+        int count = buttons.size();
+        float totalW = count * bw + (count - 1) * gap;
+        float startX = (getWidth() - totalW) / 2f;
+
+        for (int i = 0; i < count; i++) {
+            ButtonEntry entry = buttons.get(i);
+            VectorButton btn = new VectorButton(sr, font, entry.text, entry.onClick);
+            btn.setSize(bw, bh);
+            btn.setPosition(startX + i * (bw + gap), 16);
+            addActor(btn);
+        }
     }
 
     /**
      * 显示对话框（添加到 Stage，创建模态阻挡层）。
      */
     public void show(Stage stage) {
-        if (stage == null) return;
+        if (stage == null)
+            return;
 
         // 创建模态阻挡层
         blocker = new Actor();
@@ -158,7 +197,7 @@ public class VectorDialog extends Group {
         setPosition((stage.getWidth() - getWidth()) / 2f, (stage.getHeight() - getHeight()) / 2f);
 
         // 创建按钮 Actor
-        createButtonActor();
+        createButtonActors();
 
         // 添加到舞台（阻挡层先添加，对话框后添加显示在上层）
         stage.addActor(blocker);
@@ -257,5 +296,8 @@ public class VectorDialog extends Group {
         sr.line(btnX2 + btnSize - pad, btnY2 + pad, btnX2 + pad, btnY2 + btnSize - pad);
         sr.end();
         batch.begin();
+
+        // 绘制子 Actor（按钮等）
+        super.draw(batch, parentAlpha);
     }
 }

@@ -1,11 +1,11 @@
 package staraxis.game.command;
 
-import staraxis.game.state.WorldState;
-
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
+
+import staraxis.game.state.WorldState;
 
 /**
  * CommandBus

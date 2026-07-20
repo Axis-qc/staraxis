@@ -1,5 +1,9 @@
 package staraxis.ui;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Consumer;
+
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
@@ -8,7 +12,6 @@ import com.badlogic.gdx.scenes.scene2d.Group;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.utils.Disposable;
 
-import java.util.function.Consumer;
 import staraxis.game.StarAxisGameRuntime;
 import staraxis.ui.effects.EffectRegistry;
 import staraxis.ui.i18n.I18nService;
@@ -21,9 +24,6 @@ import staraxis.ui.screens.WorldSettingsScreen;
 import staraxis.ui.widgets.DevelopingDialog;
 import staraxis.ui.widgets.VectorLabel;
 import staraxis.ui.widgets.VectorProgressBar;
-
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * UI 根容器（UI 层服务定位器）。
@@ -56,10 +56,10 @@ public class Gui {
     }
 
     private static final String[] THEME_PATHS = {
-        "ui/effects/default.json",
-        "ui/effects/amethyst.json",
-        "ui/effects/ember.json",
-        "ui/effects/forest.json"
+            "ui/effects/default.json",
+            "ui/effects/amethyst.json",
+            "ui/effects/ember.json",
+            "ui/effects/forest.json"
     };
     private int currentThemeIndex = 0;
 
@@ -79,6 +79,59 @@ public class Gui {
     /** 当前正在显示的 Screen，用于切换时清理旧界面。 */
     private Disposable activeScreen;
 
+    // ── UI 界面状态机 ──────────────────────────────────────────
+
+    /** UI 界面状态枚举，记录当前客户端处于哪个界面喵。 */
+    public enum UiState {
+        MAIN_MENU,
+        SETTINGS,
+        WORLD_SETTINGS,
+        NATION_SELECT,
+        LOAD_GAME,
+        IN_GAME_HUD,
+        LOADING,
+        VECTOR_TEST
+    }
+
+    private UiState currentUiState = UiState.MAIN_MENU;
+    private UiState previousUiState = null;
+
+    /** 记录进入新界面，自动保存上一个界面用于返回喵。 */
+    private void enterState(UiState next) {
+        if (next != currentUiState) {
+            previousUiState = currentUiState;
+            currentUiState = next;
+        }
+    }
+
+    /** 获取当前 UI 界面状态（供 ClientGame 等外部调用方判断当前处于哪个界面）喵。 */
+    public UiState getCurrentUiState() {
+        return currentUiState;
+    }
+
+    /** 界面返回：根据上一个界面状态回退喵。 */
+    public void goBack() {
+        if (previousUiState != null && previousUiState != currentUiState) {
+            restoreState(previousUiState);
+        } else {
+            showMainMenu();
+        }
+    }
+
+    /** 恢复指定界面状态喵。 */
+    private void restoreState(UiState target) {
+        switch (target) {
+            case MAIN_MENU -> showMainMenu();
+            case SETTINGS -> showSettingsScreen();
+            case WORLD_SETTINGS -> showWorldSettings();
+            case NATION_SELECT -> showNationSelect();
+            case LOAD_GAME -> showLoadGame();
+            case IN_GAME_HUD -> showInGameHud();
+            case VECTOR_TEST -> showVectorComponentsTestScreen();
+            default -> {}
+        }
+    }
+
     // ── 加载界面 ──────────────────────────────────────────────
     private Group loadingRoot;
     private VectorProgressBar loadingBar;
@@ -87,14 +140,18 @@ public class Gui {
     /** 显示加载界面（替换当前 screen，显示进度条）喵 */
     public void showLoadingScreen() {
         if (activeScreen != null) {
-            try { activeScreen.dispose(); } catch (Exception ignored) {}
+            try {
+                activeScreen.dispose();
+            } catch (Exception ignored) {
+            }
             activeScreen = null;
         }
         stage.clear();
 
         ShapeRenderer sr = tryGet(ShapeRenderer.class);
         BitmapFont font = tryGet(BitmapFont.class);
-        if (sr == null || font == null) return;
+        if (sr == null || font == null)
+            return;
 
         Group root = new Group();
         root.setSize(stage.getWidth(), stage.getHeight());
@@ -232,11 +289,13 @@ public class Gui {
     }
 
     public void showMainMenu() {
+        enterState(UiState.MAIN_MENU);
         JsonScreen screen = new JsonScreen(this, "ui/gameui/main-menu/main_menu.json");
         switchScreen(screen, screen::show);
     }
 
     public void showSettingsScreen() {
+        enterState(UiState.SETTINGS);
         SettingsScreen screen = get(SettingsScreen.class);
         if (screen != null) {
             switchScreen(screen, screen::show);
@@ -244,6 +303,7 @@ public class Gui {
     }
 
     public void showWorldSettings() {
+        enterState(UiState.WORLD_SETTINGS);
         WorldSettingsScreen screen = get(WorldSettingsScreen.class);
         if (screen != null) {
             switchScreen(screen, screen::show);
@@ -251,16 +311,19 @@ public class Gui {
     }
 
     public void showNationSelect() {
+        enterState(UiState.NATION_SELECT);
         JsonScreen screen = new JsonScreen(this, "ui/gameui/nation-select/nation_select.json");
         switchScreen(screen, screen::show);
     }
 
     public void showLoadGame() {
+        enterState(UiState.LOAD_GAME);
         JsonScreen screen = new JsonScreen(this, "ui/gameui/load-game/load_game.json");
         switchScreen(screen, screen::show);
     }
 
     public void showInGameHud() {
+        enterState(UiState.IN_GAME_HUD);
         InGameHudScreen screen = get(InGameHudScreen.class);
         if (screen != null) {
             switchScreen(screen, screen::show);
@@ -268,6 +331,7 @@ public class Gui {
     }
 
     public void showVectorComponentsTestScreen() {
+        enterState(UiState.VECTOR_TEST);
         String jsonPath = "ui/gameui/vector-ui-test/test_screen.json";
         JsonScreen screen = new JsonScreen(this, jsonPath);
         switchScreen(screen, screen::show);
@@ -326,6 +390,9 @@ public class Gui {
                 return;
             case "BACK_TO_MAIN_MENU":
                 showMainMenu();
+                return;
+            case "SETTINGS_BACK":
+                goBack();
                 return;
             case "NEW_GAME":
                 showWorldSettings();
@@ -456,7 +523,8 @@ public class Gui {
                 ShapeRenderer sr = tryGet(ShapeRenderer.class);
                 BitmapFont font = tryGet(BitmapFont.class);
                 if (sr != null && font != null) {
-                    staraxis.ui.widgets.VectorDialog dlg = new staraxis.ui.widgets.VectorDialog(sr, font, "提示", "这是一个矢量对话框！");
+                    staraxis.ui.widgets.VectorDialog dlg = new staraxis.ui.widgets.VectorDialog(sr, font, "提示",
+                            "这是一个矢量对话框！");
                     dlg.setSize(300, 160);
                     dlg.setButton("确定", dlg::hide);
                     dlg.show(stage);
@@ -469,15 +537,18 @@ public class Gui {
                 if (sr != null && font != null) {
                     staraxis.ui.widgets.VectorWindow win = new staraxis.ui.widgets.VectorWindow(sr, font, "示例窗口");
                     win.setSize(280, 160);
-                    staraxis.ui.widgets.VectorLabel winLabel = new staraxis.ui.widgets.VectorLabel(font, "这是一个可拖拽的窗口（ESC 关闭）", com.badlogic.gdx.graphics.Color.WHITE);
+                    staraxis.ui.widgets.VectorLabel winLabel = new staraxis.ui.widgets.VectorLabel(font,
+                            "这是一个可拖拽的窗口（ESC 关闭）", com.badlogic.gdx.graphics.Color.WHITE);
                     winLabel.setPosition(10, 80);
                     winLabel.setSize(250, 22);
                     win.getContentGroup().addActor(winLabel);
-                    staraxis.ui.widgets.VectorButton closeBtn = new staraxis.ui.widgets.VectorButton(sr, font, "关闭", win::remove);
+                    staraxis.ui.widgets.VectorButton closeBtn = new staraxis.ui.widgets.VectorButton(sr, font, "关闭",
+                            win::remove);
                     closeBtn.setPosition(80, 20);
                     closeBtn.setSize(100, 36);
                     win.getContentGroup().addActor(closeBtn);
-                    win.setPosition((stage.getWidth() - win.getWidth()) / 2f, (stage.getHeight() - win.getHeight()) / 2f);
+                    win.setPosition((stage.getWidth() - win.getWidth()) / 2f,
+                            (stage.getHeight() - win.getHeight()) / 2f);
                     stage.addActor(win);
                 }
                 return;

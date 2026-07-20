@@ -11,6 +11,7 @@ import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 
 import staraxis.game.StarAxisGameRuntime;
+import staraxis.game.command.SetupPlayerHomeCommand;
 import staraxis.game.entity.EntityType;
 import staraxis.game.log.TickProfiler;
 import staraxis.game.state.snapshot.EntitySnapshot;
@@ -38,6 +39,7 @@ import staraxis.ui.screens.SettingsScreen;
 import staraxis.ui.screens.WorldSettingsScreen;
 import staraxis.ui.widgets.DevelopingDialog;
 import staraxis.ui.widgets.PauseMenu;
+import staraxis.ui.widgets.SelectHomeConfirmDialog;
 import staraxis.ui.widgets.StarfieldBackground;
 
 /**
@@ -87,13 +89,24 @@ public class ClientGame implements ApplicationListener {
     private int frameCount;
 
     // ── 加载状态 ──────────────────────────────────────────────
-    public enum GameState { MENU, LOADING, PLAYING }
+    public enum GameState {
+        MENU, LOADING, SELECTING_HOME, PLAYING
+    }
+
     private GameState gameState = GameState.MENU;
     private Thread genThread;
     private volatile float genProgress;
     private volatile String genPhase;
     private volatile StarAxisGameRuntime genResult;
     private volatile boolean genFailed;
+    /** 玩家在世界设置中选定的国家ID，开局流程中传递给 game 层。 */
+    private String pendingNationId;
+
+    /** 选择母星系确认弹窗。 */
+    private SelectHomeConfirmDialog homeConfirmDialog;
+
+    /** 待确认的星系ID（点击恒星后暂存，等待弹窗确认）。 */
+    private long pendingConfirmSystemId = -1;
 
     @Override
     public void create() {
@@ -158,9 +171,11 @@ public class ClientGame implements ApplicationListener {
             public boolean scrolled(float amountX, float amountY) {
                 // 根据当前视图转发滚轮到对应镜头
                 if (viewManager != null && viewManager.isInSystemView()) {
-                    if (systemCamera != null) systemCamera.onScroll(amountY);
+                    if (systemCamera != null)
+                        systemCamera.onScroll(amountY);
                 } else {
-                    if (galaxyCamera != null) galaxyCamera.onScroll(amountY);
+                    if (galaxyCamera != null)
+                        galaxyCamera.onScroll(amountY);
                 }
                 return false;
             }
@@ -234,12 +249,17 @@ public class ClientGame implements ApplicationListener {
             menuGalaxy.resize(width, height);
         }
     }
+
     public void startAsyncGen(WorldGenConfig cfg) {
         gameState = GameState.LOADING;
         genProgress = 0f;
         genPhase = "";
         genResult = null;
         genFailed = false;
+        // 记录玩家选定的国家ID，开局确认母星系时传递给 game 层
+        pendingNationId = (cfg != null && cfg.playerNationDef != null)
+                ? cfg.playerNationDef.id
+                : null;
         gui.showLoadingScreen();
 
         genThread = new Thread(() -> {
@@ -248,7 +268,8 @@ public class ClientGame implements ApplicationListener {
                     @Override
                     public void onProgress(float progress, String phase) {
                         genProgress = progress;
-                        if (phase != null) genPhase = phase;
+                        if (phase != null)
+                            genPhase = phase;
                     }
                 });
                 genResult = rt;
@@ -270,6 +291,9 @@ public class ClientGame implements ApplicationListener {
             case LOADING:
                 renderLoading(dt);
                 break;
+            case SELECTING_HOME:
+                renderSelectingHome(dt);
+                break;
             case PLAYING:
                 renderPlaying(dt);
                 break;
@@ -280,7 +304,7 @@ public class ClientGame implements ApplicationListener {
         }
 
         stage.act(dt);
-        //  UI 始终渲染在最上层，不受深度测试影响
+        // UI 始终渲染在最上层，不受深度测试影响
         Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
         stage.draw();
 
@@ -331,6 +355,10 @@ public class ClientGame implements ApplicationListener {
     }
 
     private void finishLoading() {
+        // 重置渲染器 GPU 缓冲区，确保新世界的恒星数据替换旧世界的 GPU 实例数据喵
+        galaxyViewRenderer.reset();
+        systemViewRenderer.reset();
+
         StarAxisGameRuntime rt = genResult;
         genResult = null;
         genThread = null;
@@ -339,7 +367,10 @@ public class ClientGame implements ApplicationListener {
         snapshotProvider = new LocalSnapshotProvider(rt);
         shipMoveController.setSnapshotProvider(snapshotProvider);
         gui.registerRuntime(rt);
-        gameState = GameState.PLAYING;
+
+        // 世界生成完成，进入选母星系模式（而非直接 PLAYING）
+        gameState = GameState.SELECTING_HOME;
+        galaxyCamera.resetView(); // 镜头重置到俯瞰全银河
         gui.hideLoadingScreen();
         gui.dispatchAction("START_GAME");
         // 将暂停菜单重新添加到舞台（switchScreen 的 stage.clear() 会清除它）
@@ -348,12 +379,197 @@ public class ClientGame implements ApplicationListener {
         }
     }
 
+    /**
+     * 选择母星系模式渲染。
+     * 允许玩家在 Galaxy View 中自由浏览并点击恒星选择母星系。
+     * ESC 触发暂停菜单（与 PLAYING 模式行为一致）。
+     */
+    private void renderSelectingHome(float dt) {
+        if (runtime == null || gui.getRuntime() == null) {
+            if (runtime != null) {
+                runtime.stop();
+                runtime = null;
+            }
+            snapshotProvider = null;
+            galaxyViewRenderer.reset();
+            systemViewRenderer.reset();
+            gameState = GameState.MENU;
+            return;
+        }
+
+        // ESC 切换暂停菜单
+        if (Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.ESCAPE)) {
+            pauseMenu.toggle();
+        }
+
+        boolean paused = pauseMenu.isMenuVisible();
+
+        // 延迟初始化确认弹窗（需要 ShapeRenderer 和字体）——只做一次
+        if (homeConfirmDialog == null) {
+            homeConfirmDialog = new SelectHomeConfirmDialog(
+                    gui.get(com.badlogic.gdx.graphics.glutils.ShapeRenderer.class),
+                    gui.get(com.badlogic.gdx.graphics.g2d.BitmapFont.class));
+        }
+
+        if (!paused) {
+            // 更新 galaxy 镜头（选择期间在 Galaxy View 中浏览）
+            galaxyCamera.update(dt);
+
+            Gdx.gl.glClearColor(0.005f, 0.005f, 0.02f, 1f);
+            Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
+
+            skyboxRenderer.render(galaxyCamera);
+
+            var state = snapshotProvider.getRealtimeState();
+            var lowFreq = snapshotProvider.getDailyState();
+
+            rayPicker.updateHovered(galaxyCamera, state,
+                    Gdx.input.getX(), Gdx.input.getY(), galaxyViewRenderer);
+
+            long hoveredStarId = rayPicker.getHoveredStarId();
+
+            InGameHudScreen hud = gui.get(InGameHudScreen.class);
+            if (hud != null) {
+                hud.updateViewInfo("选择母星系  x" + String.format("%.1f", galaxyCamera.zoomLevel));
+
+                // 悬停恒星时，在旁边显示系统信息面板
+                if (hoveredStarId >= 0) {
+                    float[] worldPos = galaxyViewRenderer.getStarPosition(hoveredStarId);
+                    if (worldPos != null) {
+                        com.badlogic.gdx.math.Vector3 proj = new com.badlogic.gdx.math.Vector3(
+                                worldPos[0], worldPos[1], worldPos[2]);
+                        galaxyCamera.camera.project(proj);
+                        hud.showSystemTooltip(hoveredStarId, lowFreq, proj.x, proj.y);
+                    }
+                } else {
+                    hud.hideStarTooltip();
+                }
+            }
+
+            // 左键点击恒星：弹出确认弹窗（弹窗未显示时才响应）
+            if (Gdx.input.isButtonJustPressed(com.badlogic.gdx.Input.Buttons.LEFT)
+                    && (homeConfirmDialog == null || !homeConfirmDialog.isVisible())) {
+                if (hoveredStarId >= 0) {
+                    long sysId = findSystemByStarId(hoveredStarId);
+                    if (sysId > 0) {
+                        pendingConfirmSystemId = sysId;
+
+                        // 构建星系描述文本
+                        String desc = buildStarHoverText(hoveredStarId);
+                        boolean recommended = isSystemRecommended(sysId);
+                        homeConfirmDialog.show(stage, desc, recommended,
+                                () -> { // 确认回调
+                                    long sid = pendingConfirmSystemId;
+                                    pendingConfirmSystemId = -1;
+                                    confirmHomeSystem(sid);
+                                },
+                                () -> { // 取消回调
+                                    pendingConfirmSystemId = -1;
+                                });
+                    }
+                }
+            }
+
+            // 渲染 Galaxy View
+            galaxyViewRenderer.render(state, lowFreq, galaxyCamera, rayPicker.getHoveredStarId());
+        }
+    }
+
+    /**
+     * 构建恒星的简短描述文本（用于确认弹窗）。
+     */
+    private String buildStarHoverText(long starEntityId) {
+        if (starEntityId < 0)
+            return "未知星系";
+        var ds = snapshotProvider.getDailyState();
+        if (ds == null || ds.publicEntityBaselinesBySectorKey == null)
+            return "未知星系";
+        for (var entry : ds.publicEntityBaselinesBySectorKey.entrySet()) {
+            for (var snap : entry.getValue()) {
+                if (snap != null && snap.entityId == starEntityId
+                        && snap.details instanceof EntitySnapshot.StarDetails sd) {
+                    String type = sd.starTypeId != null ? sd.starTypeId : "?";
+                    return String.format("恒星系 #%d  %s  %dK", snap.systemId, type, sd.temperatureK);
+                }
+            }
+        }
+        return "恒星系 #" + starEntityId;
+    }
+
+    public boolean isSystemRecommended(long systemId) {
+        if (systemId <= 0)
+            return false;
+        var ds = snapshotProvider.getDailyState();
+        if (ds == null || ds.publicEntityBaselinesBySectorKey == null)
+            return false;
+        var baselines = ds.publicEntityBaselinesBySectorKey.get(String.valueOf(systemId));
+        if (baselines == null)
+            return false;
+        for (var snap : baselines) {
+            if (snap != null && snap.details instanceof EntitySnapshot.PlanetDetails pd
+                    && pd.planetTypeId != null
+                    && staraxis.game.astro.PlanetBody.HABITABLE_PLANET_TYPE_IDS.contains(pd.planetTypeId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 确认母星系，执行开局设置并切换到 System View。
+     *
+     * 调用 game 端的 setupPlayerHome 同步执行：
+     * 注册国家 → 星系归属 → 在最远行星轨道外侧生成初始舰队。
+     * 完成后切换到 System View，镜头定位到舰队位置。
+     *
+     * @param systemId 玩家选定的星系ID
+     */
+    private void confirmHomeSystem(long systemId) {
+        if (runtime == null || systemId <= 0)
+            return;
+
+        String nationId = pendingNationId != null ? pendingNationId : "nation_player";
+
+        // 同步执行开局设置喵
+        SetupPlayerHomeCommand result = runtime.setupPlayerHome(nationId, systemId);
+        if (!result.isSuccess()) {
+            Gdx.app.error("ClientGame", "setupPlayerHome failed: " + result.getErrorMessage());
+            return;
+        }
+
+        // 切换到 System View
+        long starId = findStarIdBySystemId(systemId);
+        if (starId > 0) {
+            viewManager.switchToSystem(starId);
+        }
+        currentSystemId = systemId;
+        systemViewRenderer.resetTime();
+        uiDebug.switchActiveCamera(systemCamera);
+        runtime.setActiveSystemId(systemId);
+
+        // 镜头定位到舰队位置（T9）
+        var fleetPos = result.getFleetCenterPos();
+        if (fleetPos != null) {
+            systemCamera.setTargetPosition(
+                    (float) fleetPos.x(), (float) fleetPos.y(), (float) fleetPos.z());
+            systemCamera.setZoom(3.0); // 较近缩放级别，能看到舰队细节
+            // 激活虫洞平面
+            systemViewRenderer.showWormhole(fleetPos.x(), fleetPos.y(), fleetPos.z());
+        }
+
+        // 进入正常游戏状态
+        gameState = GameState.PLAYING;
+    }
+
     private void renderPlaying(float dt) {
         if (runtime == null || gui.getRuntime() == null) {
             if (runtime != null) {
                 runtime.stop();
                 runtime = null;
             }
+            snapshotProvider = null;
+            galaxyViewRenderer.reset();
+            systemViewRenderer.reset();
             gameState = GameState.MENU;
             return;
         }
@@ -470,7 +686,8 @@ public class ClientGame implements ApplicationListener {
         if (ds != null && ds.publicEntityBaselinesBySectorKey != null) {
             systemSnapshots = ds.publicEntityBaselinesBySectorKey.get(String.valueOf(currentSystemId));
         }
-        if (systemSnapshots == null) systemSnapshots = java.util.List.of();
+        if (systemSnapshots == null)
+            systemSnapshots = java.util.List.of();
 
         // 舰船从实时快照取（补充到基线快照中，或单独传）
         if (state != null) {
@@ -520,7 +737,8 @@ public class ClientGame implements ApplicationListener {
 
     /** 构建 System View 悬停天体描述文字（从快照读取）。 */
     private String buildSystemHoverText(long entityId) {
-        if (entityId < 0 || currentSystemId <= 0) return "";
+        if (entityId < 0 || currentSystemId <= 0)
+            return "";
 
         // 从快照中搜索该 entityId（优先实时快照，回退每日基线）
         var state = snapshotProvider.getRealtimeState();
@@ -534,10 +752,12 @@ public class ClientGame implements ApplicationListener {
                 snapshots = ds.publicEntityBaselinesBySectorKey.get(String.valueOf(currentSystemId));
             }
         }
-        if (snapshots == null) return "";
+        if (snapshots == null)
+            return "";
 
         for (EntitySnapshot snap : snapshots) {
-            if (snap.entityId != entityId) continue;
+            if (snap.entityId != entityId)
+                continue;
 
             if (snap.details instanceof EntitySnapshot.StarDetails sd) {
                 String type = sd.starTypeId != null ? sd.starTypeId : "?";
@@ -545,20 +765,26 @@ public class ClientGame implements ApplicationListener {
             }
             if (snap.details instanceof EntitySnapshot.PlanetDetails pd) {
                 String prefix;
-                if (snap.entityType == EntityType.PLANET) prefix = "行星";
-                else if (snap.entityType == EntityType.ASTEROID) prefix = "小行星";
-                else if (snap.entityType == EntityType.MOON) prefix = "卫星";
-                else prefix = "天体";
+                if (snap.entityType == EntityType.PLANET)
+                    prefix = "行星";
+                else if (snap.entityType == EntityType.ASTEROID)
+                    prefix = "小行星";
+                else if (snap.entityType == EntityType.MOON)
+                    prefix = "卫星";
+                else
+                    prefix = "天体";
                 String type = pd.planetTypeId != null ? pd.planetTypeId : "?";
                 return String.format("%s  %s  半径%.0fGU  轨道%.0fGU", prefix, type, pd.radiusGU, pd.semiMajorAxisGU);
             }
             if (snap.details instanceof EntitySnapshot.ShipDetails shipDet) {
                 String sel = entityId == shipMoveController.getSelectedShipId()
-                    ? (shipMoveController.isMoveModeActive()
-                        ? String.format(" [选中] 目标Y=%.0f 左键确认", shipMoveController.getMoveTargetY())
-                        : " [选中] 右键设目标+拖动调Y 左键确认") : "";
+                        ? (shipMoveController.isMoveModeActive()
+                                ? String.format(" [选中] 目标Y=%.0f 左键确认", shipMoveController.getMoveTargetY())
+                                : " [选中] 右键设目标+拖动调Y 左键确认")
+                        : "";
                 String flags = shipDet.customFlags != null && !shipDet.customFlags.isEmpty()
-                    ? " " + String.join(",", shipDet.customFlags) : "";
+                        ? " " + String.join(",", shipDet.customFlags)
+                        : "";
                 return String.format("舰船 实体%d%s%s", entityId, flags, sel);
             }
         }
@@ -588,6 +814,27 @@ public class ClientGame implements ApplicationListener {
                 for (var snap : entry.getValue()) {
                     if (snap != null && snap.entityId == starId) {
                         return snap.systemId;
+                    }
+                }
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * 通过星系ID反查恒星实体ID。
+     * 用于确认母星系后切换到 System View（System View 需要恒星ID作为入口）。
+     */
+    private long findStarIdBySystemId(long systemId) {
+        if (systemId <= 0)
+            return 0;
+        var ds = snapshotProvider.getDailyState();
+        if (ds != null && ds.publicEntityBaselinesBySectorKey != null) {
+            for (var entry : ds.publicEntityBaselinesBySectorKey.entrySet()) {
+                for (var snap : entry.getValue()) {
+                    if (snap != null && snap.systemId == systemId
+                            && snap.entityType == EntityType.STAR) {
+                        return snap.entityId;
                     }
                 }
             }

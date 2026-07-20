@@ -5,12 +5,26 @@ import staraxis.game.entity.EntityType;
 import staraxis.game.planet.PlanetSurface;
 import staraxis.game.space.OrbitalElements;
 
+import java.util.Set;
+
 /**
  * PlanetBody（行星实体）
  *
  * 继承自 Entity，代表一个行星天体。
  */
 public class PlanetBody extends Entity {
+
+    // ── 宜居行星类型判定常量（用于开局推荐星系高亮等场景） ──
+    /**
+     * 宜居行星类型ID集合。
+     * 包含所有在默认条件下具备液态水和可呼吸大气的行星类型。
+     * 判定规则：planetTypeId 属于此集合即为宜居行星。
+     * 当前为简单版判定（按类型ID），后续可升级为多因素计算。
+     */
+    public static final Set<String> HABITABLE_PLANET_TYPE_IDS = Set.of(
+        "TERRESTRIAL",   // 类地行星：液态水 + 可呼吸大气
+        "OCEAN_WORLD"    // 海洋世界：几乎完全被液态海洋覆盖
+    );
 
     /** 行星类型ID（planetTypeId），例如 "TERRESTRIAL"。 */
     public String planetTypeId;

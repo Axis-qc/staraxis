@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -28,16 +29,15 @@ import staraxis.game.command.SetPlayerTimeStepCommand;
 import staraxis.game.command.SetPlayerTimeStepHandler;
 import staraxis.game.command.SetSystemTimeScaleCommand;
 import staraxis.game.command.SetSystemTimeScaleHandler;
+import staraxis.game.command.SetupPlayerHomeCommand;
+import staraxis.game.command.SetupPlayerHomeHandler;
 import staraxis.game.entity.Entity;
 import staraxis.game.entity.EntityType;
 import staraxis.game.log.PerformanceMonitor;
 import staraxis.game.log.TickProfiler;
-import staraxis.game.ship.ShipBody;
 import staraxis.game.ship.ShipMovementSystem;
 import staraxis.game.sim.SimulationClock;
 import staraxis.game.sim.SimulationTime;
-
-import java.util.concurrent.TimeUnit;
 import staraxis.game.sim.TimelineSystem;
 import staraxis.game.space.SpacePosition;
 import staraxis.game.space.galaxy.GalaxyConfig;
@@ -91,7 +91,11 @@ public class StarAxisGameRuntime implements GameRuntime {
 
         final float progress;
         final String label;
-        GenPhase(float p, String l) { this.progress = p; this.label = l; }
+
+        GenPhase(float p, String l) {
+            this.progress = p;
+            this.label = l;
+        }
     }
 
     /** 恒星系生成循环占用的进度条区间宽度。 */
@@ -136,6 +140,7 @@ public class StarAxisGameRuntime implements GameRuntime {
         commandBus.register(MoveShipCommand.class, new MoveShipHandler());
         commandBus.register(LoadWorldCommand.class, new LoadWorldHandler());
         commandBus.register(JoinGameCommand.class, new JoinGameHandler());
+        commandBus.register(SetupPlayerHomeCommand.class, new SetupPlayerHomeHandler());
     }
 
     public CommandBus getCommandBusForSimOnly() {
@@ -158,6 +163,22 @@ public class StarAxisGameRuntime implements GameRuntime {
      */
     public void executeCommandImmediately(Command command) {
         commandBus.executeImmediately(command, worldState, 0);
+    }
+
+    /**
+     * 玩家选择母星系后，同步执行开局设置喵。
+     *
+     * 委托 SetupPlayerHomeCommand 执行：注册国家、星系归属、初始舰队生成。
+     * 在 game tick 开始前同步调用，确保结果立即可用。
+     *
+     * @param nationId 玩家所选国家ID（必须非空，如 "nation_terran"）
+     * @param systemId 玩家所选星系ID（必须 > 0 且在 AstroData 中存在）
+     * @return SetupPlayerHomeCommand 包含 shipIds 和 fleetCenterPos 的执行结果
+     */
+    public SetupPlayerHomeCommand setupPlayerHome(String nationId, long systemId) {
+        SetupPlayerHomeCommand cmd = new SetupPlayerHomeCommand(nationId, systemId);
+        commandBus.executeImmediately(cmd, worldState, 0);
+        return cmd;
     }
 
     public static StarAxisGameRuntime newGame(WorldGenConfig cfg) {
@@ -227,28 +248,7 @@ public class StarAxisGameRuntime implements GameRuntime {
         ws.intelSystem = new staraxis.game.intel.IntelSystem(ws, configRegistry.intel());
 
         // 开局清空：不注册玩家、不注册国家、不分配任何归属喵
-
-        // ── 测试舰船：每个星系生成一艘，静止在恒星外安全位置 ──
-        for (StarSystem sys : systems) {
-            if (sys == null) continue;
-
-            double offset = sys.gravityWellRadiusGU * TEST_SHIP_OFFSET_FACTOR;
-            if (offset < TEST_SHIP_MIN_OFFSET_GU) offset = TEST_SHIP_MIN_OFFSET_GU;
-
-            long id = ws.generateEntityId();
-            ShipBody ship = new ShipBody();
-            ship.entityId = id;
-            ship.entityType = staraxis.game.entity.EntityType.SHIP;
-            ship.posWorldGU = new SpacePosition(
-                sys.galaxyPos.x() + offset,
-                sys.galaxyPos.y(),
-                sys.galaxyPos.z() + offset);
-            ship.velWorldGU = SpacePosition.ORIGIN;
-            ship.systemId = sys.systemId;
-            ship.hpHull = TEST_SHIP_HP_HULL;
-            ship.fuelMass = TEST_SHIP_FUEL_MASS;
-            ws.registerEntity(ship);
-        }
+        // 玩家母星系和初始舰队在 client 选择星系后通过 setupPlayerHome() 设置
 
         if (progress != null)
             progress.onProgress(GenPhase.COMPLETE.progress, GenPhase.COMPLETE.label);
@@ -343,7 +343,7 @@ public class StarAxisGameRuntime implements GameRuntime {
      * 获取 WorldState 引用（仅限 game 模块内部使用）喵。
      *
      * @deprecated game 模块内部过渡用，外部模块（webnet / client）禁止调用，禁止依赖此方法存在。
-     *     外部模块应使用 Command 或快照访问游戏状态喵。
+     *             外部模块应使用 Command 或快照访问游戏状态喵。
      */
     @Deprecated
     public WorldState getWorldStateForSimOnly() {
@@ -770,6 +770,5 @@ public class StarAxisGameRuntime implements GameRuntime {
 
         realTimeBuffer.swapPublish();
     }
-
 
 }

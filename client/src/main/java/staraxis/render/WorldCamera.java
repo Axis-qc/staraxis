@@ -50,8 +50,8 @@ public class WorldCamera {
     /**
      * 带参构造。
      *
-     * @param near 近裁剪面（越大 far/near 比值越小，深度精度越高）
-     * @param far  远裁剪面（galaxy 1e6 保证拾取精度，system 3e6 容纳大轨道）
+     * @param near        近裁剪面（越大 far/near 比值越小，深度精度越高）
+     * @param far         远裁剪面（galaxy 1e6 保证拾取精度，system 3e6 容纳大轨道）
      * @param targetLimit target 坐标边界（galaxy ±480000, system ±1000000）
      */
     public WorldCamera(float near, float far, float targetLimit) {
@@ -98,16 +98,20 @@ public class WorldCamera {
         // 手动用 double 精度计算视图矩阵，避免 camera.lookAt + camera.update 中
         // float 灾难性抵消导致的视角旋转抖动（orbitDist 在 10 万量级时明显）
         //
-        // 参考 OpenGL 惯例：view = [right^T    -dot(right, eye)]
-        //                         [up^T       -dot(up, eye)]
-        //                         [-forward^T  dot(forward, eye)]
-        //                         [0 0 0      1]
+        // 参考 OpenGL 惯例：view = [right^T -dot(right, eye)]
+        // [up^T -dot(up, eye)]
+        // [-forward^T dot(forward, eye)]
+        // [0 0 0 1]
         // 其中 forward = normalize(target - eye)
         double fx = target.x - camera.position.x;
         double fy = target.y - camera.position.y;
         double fz = target.z - camera.position.z;
         double fLen = Math.sqrt(fx * fx + fy * fy + fz * fz);
-        if (fLen > 1e-12) { fx /= fLen; fy /= fLen; fz /= fLen; }
+        if (fLen > 1e-12) {
+            fx /= fLen;
+            fy /= fLen;
+            fz /= fLen;
+        }
 
         // right = normalize(forward × up_world)，up_world = (0,1,0)
         // cross(a,b) = (a.y*b.z - a.z*b.y, a.z*b.x - a.x*b.z, a.x*b.y - a.y*b.x)
@@ -115,7 +119,11 @@ public class WorldCamera {
         double ry = fz * 0.0 - fx * 0.0; // = 0
         double rz = fx * 1.0 - fy * 0.0; // = fx
         double rLen = Math.sqrt(rx * rx + ry * ry + rz * rz);
-        if (rLen > 1e-12) { rx /= rLen; ry /= rLen; rz /= rLen; }
+        if (rLen > 1e-12) {
+            rx /= rLen;
+            ry /= rLen;
+            rz /= rLen;
+        }
 
         // up_actual = right × forward（保证正交基）
         double ux = ry * fz - rz * fy;
@@ -131,13 +139,13 @@ public class WorldCamera {
         float tz = (float) (fx * ex + fy * ey + fz * ez); // +dot(forward, eye)，z 轴反向
 
         // LibGDX Matrix4.val[] 是列主序：val[col*4 + row]
-        // 列0=[right.x, up.x, -forward.x, 0]  列1=[right.y, up.y, -forward.y, 0]
-        // 列2=[right.z, up.z, -forward.z, 0]  列3=[tx, ty, tz, 1]
-        camera.view.set(new float[]{
+        // 列0=[right.x, up.x, -forward.x, 0] 列1=[right.y, up.y, -forward.y, 0]
+        // 列2=[right.z, up.z, -forward.z, 0] 列3=[tx, ty, tz, 1]
+        camera.view.set(new float[] {
                 (float) rx, (float) ux, (float) -fx, 0f,
                 (float) ry, (float) uy, (float) -fy, 0f,
                 (float) rz, (float) uz, (float) -fz, 0f,
-                tx,         ty,         tz,          1f});
+                tx, ty, tz, 1f });
 
         camera.combined.set(camera.projection);
         Matrix4.mul(camera.combined.val, camera.view.val);
@@ -172,6 +180,14 @@ public class WorldCamera {
     public void setZoom(double level) {
         zoomLevel = MathUtils.clamp(level, MIN_ZOOM, MAX_ZOOM);
         targetZoom = zoomLevel;
+    }
+
+    /**
+     * 设置镜头 target 到指定世界坐标喵。
+     * 用于确认母星系后直接定位到舰队位置。
+     */
+    public void setTargetPosition(float x, float y, float z) {
+        target.set(x, y, z);
     }
 
     /** 设置镜头最远距离（GUI 单位），Galaxy 5万 / System 2万 */
@@ -257,12 +273,12 @@ public class WorldCamera {
      */
     public boolean isUserControlled() {
         return Gdx.input.isKeyPressed(Input.Keys.W)
-            || Gdx.input.isKeyPressed(Input.Keys.S)
-            || Gdx.input.isKeyPressed(Input.Keys.A)
-            || Gdx.input.isKeyPressed(Input.Keys.D)
-            || Gdx.input.isKeyPressed(Input.Keys.Q)
-            || Gdx.input.isKeyPressed(Input.Keys.E)
-            || Gdx.input.isButtonPressed(Input.Buttons.MIDDLE)
-            || scrollAccum != 0f;
+                || Gdx.input.isKeyPressed(Input.Keys.S)
+                || Gdx.input.isKeyPressed(Input.Keys.A)
+                || Gdx.input.isKeyPressed(Input.Keys.D)
+                || Gdx.input.isKeyPressed(Input.Keys.Q)
+                || Gdx.input.isKeyPressed(Input.Keys.E)
+                || Gdx.input.isButtonPressed(Input.Buttons.MIDDLE)
+                || scrollAccum != 0f;
     }
 }
