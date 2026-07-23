@@ -13,6 +13,8 @@ public class VectorButtonEffect extends EffectDef {
     public static class TextDef {
         public Color color = new Color(0.75f, 0.75f, 0.75f, 1f);
         public Color hoverColor = new Color(1f, 1f, 1f, 1f);
+        /** 文字渲染尺寸（px），默认 22 保持既有界面行为不变喵 */
+        public float size = 22f;
     }
 
     public static class AccentDef {
@@ -45,6 +47,7 @@ public class VectorButtonEffect extends EffectDef {
         if (textMap != null) {
             e.text.color = parseColor((String) textMap.get("color"), e.text.color);
             e.text.hoverColor = parseColor((String) textMap.get("hoverColor"), e.text.hoverColor);
+            e.text.size = toFloat(textMap.get("size"), e.text.size);
         }
 
         java.util.Map<String, Object> accentMap = (java.util.Map<String, Object>) map.get("accent");

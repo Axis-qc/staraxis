@@ -38,6 +38,7 @@ import staraxis.ui.screens.InGameHudScreen;
 import staraxis.ui.screens.SettingsScreen;
 import staraxis.ui.screens.WorldSettingsScreen;
 import staraxis.ui.widgets.DevelopingDialog;
+import staraxis.ui.UiWindowManager;
 import staraxis.ui.widgets.PauseMenu;
 import staraxis.ui.widgets.SelectHomeConfirmDialog;
 import staraxis.ui.widgets.StarfieldBackground;
@@ -397,9 +398,12 @@ public class ClientGame implements ApplicationListener {
             return;
         }
 
-        // ESC 切换暂停菜单
+        // ESC 栈：先关闭最上层信息窗口，无窗口时才切换暂停菜单喵
         if (Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.ESCAPE)) {
-            pauseMenu.toggle();
+            UiWindowManager windowManager = gui.tryGet(UiWindowManager.class);
+            if (windowManager == null || !windowManager.closeTopMost()) {
+                pauseMenu.toggle();
+            }
         }
 
         boolean paused = pauseMenu.isMenuVisible();
@@ -432,17 +436,19 @@ public class ClientGame implements ApplicationListener {
             if (hud != null) {
                 hud.updateViewInfo("选择母星系  x" + String.format("%.1f", galaxyCamera.zoomLevel));
 
-                // 悬停恒星时，在旁边显示系统信息面板
+                // 悬停恒星时喂给 tooltip 绑定器：悬停 300ms 显示，鼠标移入 tooltip 3 秒钉住喵
                 if (hoveredStarId >= 0) {
                     float[] worldPos = galaxyViewRenderer.getStarPosition(hoveredStarId);
                     if (worldPos != null) {
                         com.badlogic.gdx.math.Vector3 proj = new com.badlogic.gdx.math.Vector3(
                                 worldPos[0], worldPos[1], worldPos[2]);
                         galaxyCamera.camera.project(proj);
-                        hud.showSystemTooltip(hoveredStarId, lowFreq, proj.x, proj.y);
+                        hud.updateStarTooltipHover(hoveredStarId, lowFreq, proj.x, proj.y);
+                    } else {
+                        hud.updateStarTooltipHover(-1, null, 0, 0);
                     }
                 } else {
-                    hud.hideStarTooltip();
+                    hud.updateStarTooltipHover(-1, null, 0, 0);
                 }
             }
 
@@ -574,12 +580,24 @@ public class ClientGame implements ApplicationListener {
             return;
         }
 
-        // ESC 切换暂停菜单
+        // ESC 栈：先关闭最上层信息窗口，无窗口时才切换暂停菜单喵
         if (Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.ESCAPE)) {
-            pauseMenu.toggle();
+            UiWindowManager windowManager = gui.tryGet(UiWindowManager.class);
+            if (windowManager == null || !windowManager.closeTopMost()) {
+                pauseMenu.toggle();
+            }
         }
 
         boolean paused = pauseMenu.isMenuVisible();
+
+        // TODO Phase 2 Step B：实体面板演示切换（F6 循环切换 4 种假实体），接真实数据后删除喵
+        if (Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.F6)) {
+            InGameHudScreen hud = gui.get(InGameHudScreen.class);
+            if (hud != null) {
+                hud.cycleDemoEntity();
+            }
+        }
+
         if (!paused) {
             long updateStart = System.nanoTime();
             runtime.update(dt);

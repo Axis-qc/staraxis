@@ -23,6 +23,13 @@ public class VectorWindow extends Group {
 
     private static final VectorWindowEffect DEFAULT_EFFECT = VectorWindowEffect.fromMap("default", new java.util.HashMap<>());
 
+    /** 关闭按钮边长（px）喵 */
+    private static final float CLOSE_BTN_SIZE = 14f;
+    /** 关闭按钮距标题栏右上角的边距（px）喵 */
+    private static final float CLOSE_BTN_MARGIN = 4f;
+    /** 关闭按钮 X 线条内缩（px），让 X 图形小于按钮命中区域喵 */
+    private static final float CLOSE_BTN_INSET = 3f;
+
     private final ShapeRenderer sr;
     private final BitmapFont font;
     private final VectorWindowEffect effect;
@@ -33,6 +40,10 @@ public class VectorWindow extends Group {
     private float winStartX, winStartY;
     private boolean movable;
     private boolean resizable; // TODO: 调整大小功能尚未实现
+    /** 是否显示标题栏关闭按钮（默认不显示，不破坏既有用法）喵 */
+    private boolean closeButtonVisible;
+    /** 关闭按钮回调，点击 X 时触发（通常由 UiWindowManager 挂接）喵 */
+    private Runnable onClose;
     public VectorWindow(ShapeRenderer sr, BitmapFont font, String title) {
         this(sr, font, DEFAULT_EFFECT, title);
     }
@@ -54,6 +65,11 @@ public class VectorWindow extends Group {
         addListener(new InputListener() {
             @Override
             public boolean touchDown(InputEvent event, float x, float y, int pointer, int button) {
+                // 关闭按钮命中检测必须在标题栏拖动检测之前（区域重叠）喵
+                if (closeButtonVisible && onClose != null && isOnCloseButton(x, y)) {
+                    onClose.run();
+                    return true;
+                }
                 if (movable && y >= getHeight() - effect.titleBar.height) {
                     dragging = true;
                     dragStartX = event.getStageX();
@@ -86,6 +102,23 @@ public class VectorWindow extends Group {
         this.movable = movable;
     }
 
+    /** 设置是否显示标题栏关闭按钮喵 */
+    public void setCloseButtonVisible(boolean visible) {
+        this.closeButtonVisible = visible;
+    }
+
+    /** 设置关闭按钮回调喵 */
+    public void setOnClose(Runnable onClose) {
+        this.onClose = onClose;
+    }
+
+    /** 判断窗口局部坐标是否命中关闭按钮区域（标题栏右上角）喵 */
+    private boolean isOnCloseButton(float x, float y) {
+        float bx = getWidth() - CLOSE_BTN_MARGIN - CLOSE_BTN_SIZE;
+        float by = getHeight() - CLOSE_BTN_MARGIN - CLOSE_BTN_SIZE;
+        return x >= bx && x <= bx + CLOSE_BTN_SIZE && y >= by && y <= by + CLOSE_BTN_SIZE;
+    }
+
     public void setResizable(boolean resizable) {
         this.resizable = resizable;
     }
@@ -111,6 +144,15 @@ public class VectorWindow extends Group {
             maxH = Math.max(maxH, child.getY() + child.getHeight() + 10);
         }
         setSize(maxW, maxH + effect.titleBar.height);
+    }
+
+    /**
+     * 按内容区尺寸调整窗口大小（自动加上标题栏高度与边距），并刷新布局喵。
+     * 调用方无需感知标题栏高度，适用于内容行数动态计算的场景（如 EntityInfoPanel）。
+     */
+    public void setContentSize(float contentWidth, float contentHeight) {
+        setSize(contentWidth + 8, contentHeight + effect.titleBar.height + 8);
+        updateLayout();
     }
 
     public void updateLayout() {
@@ -153,6 +195,20 @@ public class VectorWindow extends Group {
             sr.setColor(bc.r, bc.g, bc.b, bc.a * alpha);
             sr.begin(ShapeType.Line);
             sr.rect(x, y, w, h);
+            sr.end();
+        }
+
+        // 关闭按钮 X 图形（标题栏右上角，颜色跟随标题文字）喵
+        if (closeButtonVisible) {
+            float bx = x + w - CLOSE_BTN_MARGIN - CLOSE_BTN_SIZE;
+            float by = y + h - CLOSE_BTN_MARGIN - CLOSE_BTN_SIZE;
+            Color tc = effect.titleBar.textColor;
+            sr.begin(ShapeType.Line);
+            sr.setColor(tc.r, tc.g, tc.b, tc.a * alpha);
+            sr.line(bx + CLOSE_BTN_INSET, by + CLOSE_BTN_INSET,
+                    bx + CLOSE_BTN_SIZE - CLOSE_BTN_INSET, by + CLOSE_BTN_SIZE - CLOSE_BTN_INSET);
+            sr.line(bx + CLOSE_BTN_INSET, by + CLOSE_BTN_SIZE - CLOSE_BTN_INSET,
+                    bx + CLOSE_BTN_SIZE - CLOSE_BTN_INSET, by + CLOSE_BTN_INSET);
             sr.end();
         }
 

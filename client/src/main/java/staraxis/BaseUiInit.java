@@ -9,6 +9,7 @@ import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import staraxis.render.util.MenuBackgroundLoader;
 import staraxis.ui.FontProvider;
 import staraxis.ui.Gui;
+import staraxis.ui.UiWindowManager;
 import staraxis.ui.effects.EffectRegistry;
 import staraxis.ui.i18n.I18nService;
 import staraxis.ui.json.GameDataProvider;
@@ -74,6 +75,9 @@ public class BaseUiInit {
 
         ShapeRenderer sr = new ShapeRenderer();
         gui.register(ShapeRenderer.class, sr);
+
+        // 全局窗口管理器：管理非模态信息窗口（实体详情、舰队列表等），ESC 栈依赖喵
+        gui.register(UiWindowManager.class, new UiWindowManager(stage));
 
         StarfieldBackground starfield = new StarfieldBackground(sr, MenuBackgroundLoader.loadBackgroundImage());
         starfield.init(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());

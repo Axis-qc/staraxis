@@ -24,12 +24,15 @@ public class VectorLabel extends Actor {
 
     public VectorLabel(BitmapFont font, Color color) {
         this(font, VectorLabelEffect.fromMap("inline", new java.util.HashMap<>()), "");
-        this.effect.text.color = color;
+        // 防御性拷贝：调用方传入的可能是 UiTheme 等共享颜色对象，
+        // 直接引用会导致后续 setTextColor 的 .set() 就地修改污染共享对象喵
+        this.effect.text.color = new Color(color);
     }
 
     public VectorLabel(BitmapFont font, String text, Color color) {
         this(font, VectorLabelEffect.fromMap("inline", new java.util.HashMap<>()), text);
-        this.effect.text.color = color;
+        // 防御性拷贝，理由同上喵
+        this.effect.text.color = new Color(color);
     }
 
     public VectorLabel(BitmapFont font, VectorLabelEffect effect, String text) {

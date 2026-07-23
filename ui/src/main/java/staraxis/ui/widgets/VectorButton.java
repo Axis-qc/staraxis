@@ -112,7 +112,7 @@ public class VectorButton extends Actor {
 
         float oldScaleX = font.getData().scaleX;
         float oldScaleY = font.getData().scaleY;
-        font.getData().setScale(22f / FontProvider.VECTOR_FONT_GEN_SIZE);
+        font.getData().setScale(effect.text.size / FontProvider.VECTOR_FONT_GEN_SIZE);
         Color textColor = hovered ? effect.text.hoverColor : effect.text.color;
         font.setColor(textColor.r, textColor.g, textColor.b, textColor.a * alpha);
         font.draw(batch, text, x + 14, y + (h + font.getCapHeight()) / 2f);
