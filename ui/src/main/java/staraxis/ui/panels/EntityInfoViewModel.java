@@ -14,8 +14,12 @@ import java.util.List;
  */
 public class EntityInfoViewModel {
 
-    /** 字段行：key-value 展示喵 */
-    public record FieldEntry(String key, String value) {}
+    /** 字段行：key-value 展示，color 为可选的整行着色（null 用主题正文色）喵 */
+    public record FieldEntry(String key, String value, Color color) {
+        public FieldEntry(String key, String value) {
+            this(key, value, null);
+        }
+    }
 
     /** 指令按钮：点击时 id 上抛给外部处理；enabled=false 时置灰且点击不上抛喵 */
     public record ActionEntry(String id, String label, boolean enabled) {}
@@ -50,7 +54,11 @@ public class EntityInfoViewModel {
     }
 
     public EntityInfoViewModel detail(String key, String value) {
-        this.detailFields.add(new FieldEntry(key, value));
+        return detail(key, value, null);
+    }
+
+    public EntityInfoViewModel detail(String key, String value, Color color) {
+        this.detailFields.add(new FieldEntry(key, value, color));
         return this;
     }
 

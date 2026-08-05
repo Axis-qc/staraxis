@@ -42,6 +42,9 @@ public class WorldCamera {
     private boolean rotating;
     private float scrollAccum = 0f;
 
+    /** 中键拖拽旋转开关：鼠标在 UI 上时由 ClientGame 每帧按守卫关闭喵 */
+    private boolean middleButtonEnabled = true;
+
     /** 默认构造（galaxy 视图用）：near=10, far=1e6, targetLimit=480000 */
     public WorldCamera() {
         this(10f, 1e6f, 480000f);
@@ -245,13 +248,16 @@ public class WorldCamera {
         target.z = MathUtils.clamp(target.z, -targetLimit, targetLimit);
 
         // 鼠标滚轮中键按压拖拽旋转喵
-        if (Gdx.input.isButtonJustPressed(Input.Buttons.MIDDLE)) {
+        boolean middleActive = middleButtonEnabled && Gdx.input.isButtonPressed(Input.Buttons.MIDDLE);
+        if (middleButtonEnabled && Gdx.input.isButtonJustPressed(Input.Buttons.MIDDLE)) {
             rotating = true;
             lx = Gdx.input.getX();
             ly = Gdx.input.getY();
         }
-        if (!Gdx.input.isButtonPressed(Input.Buttons.MIDDLE))
+        if (!middleActive) {
+            // 中键松开或鼠标移入 UI 区域（开关关闭）时退出旋转喵
             rotating = false;
+        }
         if (rotating) {
             int dx = Gdx.input.getX() - lx, dy = Gdx.input.getY() - ly;
             yaw -= dx * ROT_SPEED;
@@ -266,6 +272,16 @@ public class WorldCamera {
         yaw = 45f;
         pitch = 45f;
         target.set(0, 0, 0);
+    }
+
+    /**
+     * 设置中键拖拽旋转启用状态喵。
+     *
+     * 鼠标落在 UI 上时由 ClientGame 每帧按 UiPointerService 守卫置 false：
+     * 中键旋转归 3D 场景所有，UI 上按下/拖拽均不旋转镜头。
+     */
+    public void setMiddleButtonEnabled(boolean enabled) {
+        this.middleButtonEnabled = enabled;
     }
 
     /**

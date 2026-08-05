@@ -122,6 +122,12 @@ public class EntitySnapshot {
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public static class PlanetDetails {
         public final String planetTypeId;
+        /** 可殖民性等级（INHOSPITABLE/HOSTILE/TOUGH/HABITABLE/PARADISE），UI 标识用喵 */
+        public final staraxis.game.astro.Habitability habitability;
+        /** 大陆数量（地表预披露，无地表组件时为 0）喵 */
+        public final int continentCount;
+        /** 已识别资源种类数（地表预披露，无地表组件时为 0，不含未发现资源）喵 */
+        public final int discoveredResourceTypeCount;
         public final double radiusGU;
         public final double rotationPeriodHours;
         public final String surfaceTexturePath;
@@ -150,7 +156,33 @@ public class EntitySnapshot {
                 double periapsisArgDeg,
                 double orbitalPeriodDays,
                 double meanAnomalyDegAtEpoch) {
+            this(planetTypeId, null, 0, 0, radiusGU, rotationPeriodHours, surfaceTexturePath, isCapital,
+                    orbitCenterEntityId, semiMajorAxisGU, eccentricity, inclinationDeg,
+                    longitudeOfAscendingNodeDeg, periapsisArgDeg, orbitalPeriodDays,
+                    meanAnomalyDegAtEpoch);
+        }
+
+        public PlanetDetails(
+                String planetTypeId,
+                staraxis.game.astro.Habitability habitability,
+                int continentCount,
+                int discoveredResourceTypeCount,
+                double radiusGU,
+                double rotationPeriodHours,
+                String surfaceTexturePath,
+                boolean isCapital,
+                long orbitCenterEntityId,
+                double semiMajorAxisGU,
+                double eccentricity,
+                double inclinationDeg,
+                double longitudeOfAscendingNodeDeg,
+                double periapsisArgDeg,
+                double orbitalPeriodDays,
+                double meanAnomalyDegAtEpoch) {
             this.planetTypeId = planetTypeId;
+            this.habitability = habitability;
+            this.continentCount = continentCount;
+            this.discoveredResourceTypeCount = discoveredResourceTypeCount;
             this.radiusGU = radiusGU;
             this.rotationPeriodHours = rotationPeriodHours;
             this.surfaceTexturePath = surfaceTexturePath;

@@ -35,6 +35,14 @@ public class SystemViewOverlay {
 
     private static final float DOT_RADIUS_PX = 10f;
 
+    /** 选中边框半边长（px）喵 */
+    private static final float SELECT_FRAME_HALF = 14f;
+    /** 选中边框角标线段长度（px）喵 */
+    private static final float SELECT_FRAME_TAB = 6f;
+    /** 选中边框颜色（与舰船选中高亮一致的亮黄）喵 */
+    private static final com.badlogic.gdx.graphics.Color SELECT_FRAME_COLOR =
+            new com.badlogic.gdx.graphics.Color(1.0f, 0.9f, 0.2f, 1f);
+
     private final Vector3 tmpScreenPos = new Vector3();
 
     private static class PlanetDotInfo {
@@ -113,6 +121,63 @@ public class SystemViewOverlay {
         }
 
         shapeRenderer.end();
+        Gdx.gl.glDisable(GL20.GL_BLEND);
+    }
+
+    /**
+     * 渲染选中星体边框（2D 屏幕空间战术框：四角 L 形角标）。
+     *
+     * 选中实体位置从 bodyCenterIndex 取（含恒星/行星/小行星/卫星）。
+     * 边框固定在屏幕尺寸（不随距离缩放），屏幕边缘自动钳制保证完整可见喵。
+     *
+     * @param selectedEntityId 选中实体 ID，&lt; 0 时不渲染
+     * @param camera           当前相机
+     * @param bodyCenterIndex  天体位置索引
+     */
+    public void renderSelectedFrame(long selectedEntityId, WorldCamera camera,
+                                    Map<Long, Vector3> bodyCenterIndex) {
+        if (selectedEntityId < 0) return;
+        Vector3 bodyPos = bodyCenterIndex.get(selectedEntityId);
+        if (bodyPos == null) return;
+
+        float gfxW = Gdx.graphics.getWidth();
+        float gfxH = Gdx.graphics.getHeight();
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        shapeRenderer.setProjectionMatrix(new Matrix4().setToOrtho(0f, gfxW, gfxH, 0f, -1f, 1f));
+
+        tmpScreenPos.set(bodyPos);
+        camera.camera.project(tmpScreenPos);
+        if (tmpScreenPos.z < 0f || tmpScreenPos.z > 1f) {
+            Gdx.gl.glDisable(GL20.GL_BLEND);
+            return;
+        }
+        float cx = tmpScreenPos.x;
+        float cy = gfxH - tmpScreenPos.y;
+
+        // 屏幕边缘钳制，保证边框完整可见喵
+        cx = Math.max(SELECT_FRAME_HALF, Math.min(cx, gfxW - SELECT_FRAME_HALF));
+        cy = Math.max(SELECT_FRAME_HALF, Math.min(cy, gfxH - SELECT_FRAME_HALF));
+
+        float h = SELECT_FRAME_HALF;
+        float t = SELECT_FRAME_TAB;
+
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
+        shapeRenderer.setColor(SELECT_FRAME_COLOR);
+        // 左下角标
+        shapeRenderer.line(cx - h, cy - h, cx - h + t, cy - h);
+        shapeRenderer.line(cx - h, cy - h, cx - h, cy - h + t);
+        // 右下角标
+        shapeRenderer.line(cx + h, cy - h, cx + h - t, cy - h);
+        shapeRenderer.line(cx + h, cy - h, cx + h, cy - h + t);
+        // 左上角标
+        shapeRenderer.line(cx - h, cy + h, cx - h + t, cy + h);
+        shapeRenderer.line(cx - h, cy + h, cx - h, cy + h - t);
+        // 右上角标
+        shapeRenderer.line(cx + h, cy + h, cx + h - t, cy + h);
+        shapeRenderer.line(cx + h, cy + h, cx + h, cy + h - t);
+        shapeRenderer.end();
+
         Gdx.gl.glDisable(GL20.GL_BLEND);
     }
 

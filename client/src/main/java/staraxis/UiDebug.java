@@ -14,6 +14,7 @@ import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 
 import staraxis.render.WorldCamera;
 import staraxis.ui.FontProvider;
+import staraxis.ui.UiPointerService;
 import staraxis.ui.json.UiFactory;
 import staraxis.ui.json.UiParser;
 import staraxis.ui.widgets.VectorButton;
@@ -36,6 +37,9 @@ public class UiDebug {
     private final UiFactory factory;
 
     private WorldCamera camera;
+
+    /** 统一 UI 命中守卫服务：面板打开期间注册 bounds，点击面板不触发 3D 交互喵 */
+    private UiPointerService pointerService;
 
     // ---- 面板 ----
     private Actor panelRoot;
@@ -78,6 +82,11 @@ public class UiDebug {
 
     public void setCamera(WorldCamera camera) {
         this.camera = camera;
+    }
+
+    /** 注入统一守卫服务（F3 面板打开/关闭时注册/注销 bounds）喵 */
+    public void setPointerService(UiPointerService pointerService) {
+        this.pointerService = pointerService;
     }
 
     /** 切换活动镜头（galaxy/system 视图切换时调用，让调试面板显示当前镜头信息）喵 */
@@ -181,12 +190,33 @@ public class UiDebug {
         if (panelOpen) {
             if (panelRoot == null)
                 loadPanelJson();
+            // 面板打开期间注册到统一守卫：点击面板不触发 3D 选中/移动喵
+            if (pointerService != null) {
+                pointerService.register(this::isPointerOverPanel);
+            }
             stage.addActor(panelRoot);
         } else {
+            if (pointerService != null) {
+                pointerService.unregister(this::isPointerOverPanel);
+            }
             if (panelRoot != null)
                 panelRoot.remove();
             hoveredActor = null;
         }
+    }
+
+    /**
+     * 调试面板的区域命中判定（注册到 UiPointerService 的守卫入口）喵。
+     * 面板已从舞台移除（关闭或 stage.clear() 切屏）时守卫自动失效。
+     */
+    private boolean isPointerOverPanel(float x, float y) {
+        if (panelRoot == null || panelRoot.getStage() == null) {
+            return false;
+        }
+        float px = panelRoot.getX();
+        float py = panelRoot.getY();
+        return x >= px && x <= px + panelRoot.getWidth()
+                && y >= py && y <= py + panelRoot.getHeight();
     }
 
     private void ensurePanelOnStage() {

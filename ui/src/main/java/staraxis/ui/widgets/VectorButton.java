@@ -36,12 +36,19 @@ public class VectorButton extends Actor {
         addListener(new InputListener() {
             @Override
             public boolean touchDown(InputEvent event, float x, float y, int pointer, int button) {
+                // 只响应左键，右键返回 false 让事件穿透（否则右键点按钮会误触发 onClick）喵
+                if (button != com.badlogic.gdx.Input.Buttons.LEFT) {
+                    return false;
+                }
                 pressed = true;
                 return true;
             }
 
             @Override
             public void touchUp(InputEvent event, float x, float y, int pointer, int button) {
+                if (button != com.badlogic.gdx.Input.Buttons.LEFT) {
+                    return;
+                }
                 pressed = false;
                 if (x >= 0 && x <= getWidth() && y >= 0 && y <= getHeight() && onClick != null) {
                     onClick.run();

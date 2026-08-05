@@ -7,11 +7,13 @@ import com.badlogic.gdx.math.Vector3;
 
 import staraxis.game.StarAxisGameRuntime;
 import staraxis.game.command.MoveShipCommand;
+import staraxis.game.entity.EntityType;
 import staraxis.game.state.RealTimeWorldState;
 import staraxis.game.state.snapshot.EntitySnapshot;
 import staraxis.game.state.snapshot.EntitySnapshot.ShipDetails;
 import staraxis.render.WorldCamera;
 import staraxis.render.system.SystemViewRenderer;
+import staraxis.ui.SelectionService;
 
 /**
  * ShipMoveController（舰船移动交互控制器）。
@@ -28,7 +30,8 @@ import staraxis.render.system.SystemViewRenderer;
  */
 public class ShipMoveController {
 
-    private long selectedShipId = -1;
+    /** 全局选中服务（选中态唯一来源），外部注入喵 */
+    private SelectionService selectionService;
     private long cameraFollowTargetId = -1;
 
     private boolean moveModeActive;
@@ -52,8 +55,12 @@ public class ShipMoveController {
         this.snapshotProvider = provider;
     }
 
+    public void setSelectionService(SelectionService selectionService) {
+        this.selectionService = selectionService;
+    }
+
     public long getSelectedShipId() {
-        return selectedShipId;
+        return selectionService != null ? selectionService.getSelectedEntityId() : -1;
     }
 
     public long getCameraFollowTargetId() {
@@ -102,10 +109,11 @@ public class ShipMoveController {
      * - 左键确认（在 handleLeftClick 中处理）-> 发送命令退出移动模式
      */
     public void updateMoveMode(StarAxisGameRuntime runtime, WorldCamera systemCamera) {
-        if (selectedShipId < 0 || runtime == null)
+        long selectedId = selectionService != null ? selectionService.getSelectedEntityId() : -1;
+        if (selectedId < 0 || runtime == null)
             return;
 
-        EntitySnapshot shipSnap = readShipSnapshotOrNull(snapshotProvider.getRealtimeState(), selectedShipId);
+        EntitySnapshot shipSnap = readShipSnapshotOrNull(snapshotProvider.getRealtimeState(), selectedId);
         if (shipSnap == null || shipSnap.posWorldGU == null)
             return;
 
@@ -205,42 +213,84 @@ public class ShipMoveController {
         if (isDoubleClick) {
             if (hoveredId >= 0) {
                 cameraFollowTargetId = hoveredId;
-                selectedShipId = hoveredId;
+                // 双击选中按实体实际类型（快照查不到则不选中，仅聚焦镜头）喵
+                EntityType type = resolveEntityType(hoveredId);
+                if (type != null && selectionService != null) {
+                    selectionService.select(hoveredId, type);
+                }
                 systemViewRenderer.getBodyPosition(hoveredId, focusTmp);
                 systemCamera.target.set(focusTmp);
             }
         } else if (moveModeActive) {
             // 右键移动模式确认 -> 通过命令总线发送移动命令喵
             // ownerNationId 允许为 null 传入:无主舰船由 game 端 MoveShipHandler 直接执行
-            EntitySnapshot shipSnap = readShipSnapshotOrNull(snapshotProvider.getRealtimeState(), selectedShipId);
+            long selId = selectionService != null ? selectionService.getSelectedEntityId() : -1;
+            EntitySnapshot shipSnap = readShipSnapshotOrNull(snapshotProvider.getRealtimeState(), selId);
             if (shipSnap != null) {
-                String clientCmdId = "client_" + System.currentTimeMillis() + "_" + selectedShipId;
+                String clientCmdId = "client_" + System.currentTimeMillis() + "_" + selId;
                 runtime.submitCommand(new MoveShipCommand(
                         shipSnap.ownerNationId,
                         clientCmdId,
-                        selectedShipId,
+                        selId,
                         moveTargetX, moveTargetY, moveTargetZ));
             }
             moveModeActive = false;
             yAdjustMode = false;
             waitingRightRelease = false;
         } else {
-            // 普通单击选中舰船喵
+            // 普通单击选中/取消选中舰船喵
             EntitySnapshot shipSnap = readShipSnapshotOrNull(snapshotProvider.getRealtimeState(), hoveredId);
-            selectedShipId = (shipSnap != null) ? hoveredId : -1;
+            if (selectionService != null) {
+                if (shipSnap != null) {
+                    selectionService.select(hoveredId, EntityType.SHIP);
+                } else {
+                    selectionService.deselect();
+                }
+            }
         }
+    }
+
+    /**
+     * 在双快照（实时 + 每日基线）中查找实体的实际类型喵。
+     * 实时快照含动态实体（舰船），每日基线含天体（恒星/行星/卫星/小行星）。
+     *
+     * @return 实体类型；双快照均未找到时返回 null
+     */
+    private EntityType resolveEntityType(long entityId) {
+        RealTimeWorldState state = snapshotProvider != null ? snapshotProvider.getRealtimeState() : null;
+        if (state != null) {
+            for (var snapList : state.getEntitySnapshotsBySystemView().values()) {
+                for (EntitySnapshot snap : snapList) {
+                    if (snap != null && snap.entityId == entityId) {
+                        return snap.entityType;
+                    }
+                }
+            }
+        }
+        var ds = snapshotProvider != null ? snapshotProvider.getDailyState() : null;
+        if (ds != null && ds.publicEntityBaselinesBySectorKey != null) {
+            for (var list : ds.publicEntityBaselinesBySectorKey.values()) {
+                for (EntitySnapshot snap : list) {
+                    if (snap != null && snap.entityId == entityId) {
+                        return snap.entityType;
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     /**
      * 渲染移动模式下的目标点标记（大圆环 + 路径线 + 垂直指示线 + 目标点小圆环）。
      */
-    public void renderMovePreview(ShapeRenderer shapeRenderer, StarAxisGameRuntime runtime,
-                                   WorldCamera systemCamera) {
+public void renderMovePreview(ShapeRenderer shapeRenderer, StarAxisGameRuntime runtime,
+                                    WorldCamera systemCamera) {
         if (!moveModeActive || shapeRenderer == null)
             return;
 
+        long selId = selectionService != null ? selectionService.getSelectedEntityId() : -1;
         double shipX = 0, shipY = 0, shipZ = 0;
-        EntitySnapshot shipSnap = readShipSnapshotOrNull(snapshotProvider.getRealtimeState(), selectedShipId);
+        EntitySnapshot shipSnap = readShipSnapshotOrNull(snapshotProvider.getRealtimeState(), selId);
         if (shipSnap != null && shipSnap.posWorldGU != null) {
             shipX = shipSnap.posWorldGU.x();
             shipY = shipSnap.posWorldGU.y();
@@ -282,10 +332,11 @@ public class ShipMoveController {
      */
     public void renderMovePath(ShapeRenderer shapeRenderer, StarAxisGameRuntime runtime,
                                 WorldCamera systemCamera) {
-        if (moveModeActive || selectedShipId < 0 || runtime == null || shapeRenderer == null)
+        long selId = selectionService != null ? selectionService.getSelectedEntityId() : -1;
+        if (moveModeActive || selId < 0 || runtime == null || shapeRenderer == null)
             return;
 
-        EntitySnapshot shipSnap = readShipSnapshotOrNull(snapshotProvider.getRealtimeState(), selectedShipId);
+        EntitySnapshot shipSnap = readShipSnapshotOrNull(snapshotProvider.getRealtimeState(), selId);
         if (shipSnap == null || !(shipSnap.details instanceof ShipDetails sd) || !sd.isMoving || sd.movementTarget == null)
             return;
 

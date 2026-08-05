@@ -1,5 +1,6 @@
 package staraxis.ui.panels;
 
+import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import staraxis.ui.theme.UiTheme;
@@ -46,8 +47,9 @@ public class EntityInfoPanel extends VectorWindow {
         float maxW = MIN_WIDTH;
 
         for (EntityInfoViewModel.FieldEntry f : vm.detailFields) {
+            Color lineColor = f.color() != null ? f.color() : theme.text;
             VectorLabel line = new VectorLabel(font,
-                    f.key() + ": " + f.value(), theme.text);
+                    f.key() + ": " + f.value(), lineColor);
             line.setPosition(CONTENT_PAD, y);
             getContentGroup().addActor(line);
             maxW = Math.max(maxW, CONTENT_PAD * 2f + line.getWidth());

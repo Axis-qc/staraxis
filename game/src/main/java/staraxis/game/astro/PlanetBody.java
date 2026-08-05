@@ -126,6 +126,22 @@ public class PlanetBody extends Entity {
     }
 
     /**
+     * 计算行星可殖民性等级（现取现算，不缓存）。
+     *
+     * 当前为简单版判定：planetTypeId 属于 {@link #HABITABLE_PLANET_TYPE_IDS} 即为
+     * HABITABLE，其余为 INHOSPITABLE。
+     * TODO 细化判定：引入温度带、大气成分、引力等多因素计算，区分 HOSTILE/TOUGH/PARADISE。
+     *
+     * @return 可殖民性等级
+     */
+    public Habitability computeHabitability() {
+        if (planetTypeId != null && HABITABLE_PLANET_TYPE_IDS.contains(planetTypeId)) {
+            return Habitability.HABITABLE;
+        }
+        return Habitability.INHOSPITABLE;
+    }
+
+    /**
      * 获取行星描述信息的本地化 Key 及其参数喵。
      * 遵循项目“模拟层权威”原则，仅提供数据口径喵。
      *

@@ -7,19 +7,22 @@ import com.badlogic.gdx.scenes.scene2d.Group;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.utils.Disposable;
 import staraxis.game.StarAxisGameRuntime;
+import staraxis.game.entity.EntityType;
 import staraxis.game.state.DailySettlementState;
 import staraxis.game.state.RealTimeWorldState;
 import staraxis.game.state.snapshot.EntitySnapshot;
 import staraxis.ui.FontProvider;
 import staraxis.ui.Gui;
+import staraxis.ui.SelectionService;
+import staraxis.ui.UiPointerService;
 import staraxis.ui.UiWindowManager;
 import staraxis.ui.effects.EffectRegistry;
 import staraxis.ui.json.ComponentNode;
 import staraxis.ui.json.UiFactory;
 import staraxis.ui.json.UiParser;
+import staraxis.ui.panels.EntityInfoAssembler;
 import staraxis.ui.panels.EntityInfoPanel;
 import staraxis.ui.panels.EntityInfoViewModel;
-import staraxis.ui.panels.EntityPanelDemoData;
 import staraxis.ui.panels.EntitySummaryPanel;
 import staraxis.ui.theme.UiTheme;
 import staraxis.ui.widgets.HoverTooltipBinder;
@@ -52,18 +55,20 @@ public class InGameHudScreen implements Disposable {
     /** 左下实体摘要面板喵 */
     private EntitySummaryPanel summaryPanel;
 
-    /** TODO Phase 2 Step B：以下为假数据演示字段，接真实数据（SelectionService + Assembler）后删除喵 */
-    private static final java.util.function.Supplier<EntityInfoViewModel>[] DEMO_SUPPLIERS =
-            new java.util.function.Supplier[] {
-                    EntityPanelDemoData::star,
-                    EntityPanelDemoData::planet,
-                    EntityPanelDemoData::moon,
-                    EntityPanelDemoData::ship
-            };
-    /** TODO Phase 2 Step B：演示实体索引，接真实数据后删除喵 */
-    private int demoIndex = 1;
-    /** TODO Phase 2 Step B：当前演示视图模型，接真实数据后删除喵 */
-    private EntityInfoViewModel demoCurrentVm;
+    /** 全局选中服务（选中变更时刷新摘要面板和详情窗口）喵 */
+    private SelectionService selectionService;
+
+    /** 统一 UI 命中守卫服务：摘要面板自注册为交互区域喵 */
+    private UiPointerService pointerService;
+
+    /** 摘要面板当前展示的实体 ID（「详细」按钮的数据源，不依赖实时选中值）喵 */
+    private long summaryEntityId = -1;
+
+    /** 详情窗口单例 id（选中跟随模式），钉住后变为多例窗口喵 */
+    private static final String DETAILS_SINGLETON_ID = "entity-details";
+
+    /** 详情窗口多例分组 id（钉住后归入此组，上限由 UiWindowManager 控制）喵 */
+    private static final String PIN_GROUP_ENTITY_DETAILS = "entity-details-pinned";
 
     public InGameHudScreen(Gui gui) {
         this.gui = gui;
@@ -100,8 +105,27 @@ public class InGameHudScreen implements Disposable {
         if (summaryPanel != null && summaryPanel.getStage() == null) {
             stage.addActor(summaryPanel);
         }
-        // TODO Phase 2 Step B：假数据演示初始展示，接真实数据后删除喵
-        demoShowCurrent();
+
+        // 摘要面板自注册到统一守卫：点击面板区域只触发 UI，不触发 3D 选中逻辑喵
+        if (pointerService == null) {
+            pointerService = gui.tryGet(UiPointerService.class);
+        }
+        if (pointerService != null) {
+            pointerService.register(this::isPointerOverSummary);
+        }
+
+        // 连接全局选中服务：选中变更时刷新摘要面板和详情窗口喵
+        if (selectionService == null) {
+            selectionService = gui.tryGet(SelectionService.class);
+        }
+        if (selectionService != null) {
+            selectionService.addListener(this::onSelectionChanged);
+            // 初次显示时，若已有选中实体则立即刷新喵
+            if (selectionService.hasSelection()) {
+                onSelectionChanged(selectionService.getSelectedEntityId(),
+                        selectionService.getSelectedEntityType());
+            }
+        }
 
         UiParser parser = gui.get(UiParser.class);
         UiFactory factory = gui.get(UiFactory.class);
@@ -112,6 +136,9 @@ public class InGameHudScreen implements Disposable {
 
         root = factory.create(node);
         if (root != null) {
+            // HUD 根容器只做布局，禁用触摸：全屏容器若 touchable enabled 会拦截
+            // 下层按钮点击（stage.hit 只取最上层命中 actor）喵
+            root.setTouchable(com.badlogic.gdx.scenes.scene2d.Touchable.disabled);
             stage.addActor(root);
         }
 
@@ -238,33 +265,106 @@ public class InGameHudScreen implements Disposable {
         // 下次 show() 时 forceHide() + 懒附加自动恢复喵
     }
 
-    // ===== TODO Phase 2 Step B：假数据演示（接真实数据后整块删除） =====
+    // ===== 选中变更处理 =====
 
-    /** 循环切换演示实体（ClientGame 的 F6 调试键调用），接真实数据后删除喵 */
-    public void cycleDemoEntity() {
-        demoIndex = (demoIndex + 1) % DEMO_SUPPLIERS.length;
-        demoShowCurrent();
-    }
-
-    /** 用当前演示实体刷新摘要面板喵 */
-    private void demoShowCurrent() {
-        if (summaryPanel == null) return;
-        demoCurrentVm = DEMO_SUPPLIERS[demoIndex].get();
-        summaryPanel.showEntity(demoCurrentVm);
-    }
-
-    /** 摘要区指令回调：「详细」开中央窗口，其余指令仅打日志演示喵 */
+    /** 摘要区指令回调：「详细」开中央窗口，其余指令仅打日志喵 */
     private void onSummaryAction(String actionId) {
         if (EntitySummaryPanel.ACTION_OPEN_DETAILS.equals(actionId)) {
             UiWindowManager wm = gui.tryGet(UiWindowManager.class);
-            if (wm != null && demoCurrentVm != null) {
-                EntityInfoViewModel vm = demoCurrentVm;
-                wm.openPinned("demo-entity", () -> new EntityInfoPanel(
-                        sr, FontProvider.createVectorFont(), vm, theme));
-            }
+            if (wm == null) return;
+            // 以摘要面板当前展示的实体为准（点击按钮帧 3D 轮询可能已改选中态，不能用实时选中值）喵
+            long entityId = summaryEntityId;
+            if (entityId < 0) return;
+
+            StarAxisGameRuntime rt = gui.getRuntime();
+            EntityInfoViewModel vm = buildViewModel(entityId, rt);
+            if (vm == null) return;
+
+            // 模态单例窗口：从点击位置弹出 + 点击面板外关闭，重复打开只置前喵
+            // 锚点转 stage 左下原点（Gdx.input 为左上原点，Y 需翻转）喵
+            wm.openSingletonModal(DETAILS_SINGLETON_ID,
+                    com.badlogic.gdx.Gdx.input.getX(),
+                    com.badlogic.gdx.Gdx.graphics.getHeight() - com.badlogic.gdx.Gdx.input.getY(),
+                    () -> {
+                        EntityInfoPanel panel = new EntityInfoPanel(
+                                sr, FontProvider.createVectorFont(), vm, theme);
+                        // 钉住按钮：单例转多例，脱离选中跟随喵
+                        panel.setPinButtonVisible(true);
+                        panel.setOnPin(() -> wm.pinSingleton(DETAILS_SINGLETON_ID, PIN_GROUP_ENTITY_DETAILS));
+                        return panel;
+                    });
         } else {
-            com.badlogic.gdx.Gdx.app.log("InGameHudScreen", "演示指令点击: " + actionId);
+            com.badlogic.gdx.Gdx.app.log("InGameHudScreen", "指令点击: " + actionId);
         }
+    }
+
+    /** 选中变更回调：刷新摘要面板，若详情窗口为单例模式则同步刷新喵 */
+    private void onSelectionChanged(long entityId, EntityType entityType) {
+        if (summaryPanel == null) return;
+
+        if (entityId < 0 || entityType == null) {
+            summaryPanel.clearEntity();
+            summaryEntityId = -1;
+            // 单例详情窗口跟随取消选中：清空内容（保持窗口打开，等待下次选中）喵
+            UiWindowManager wm = gui.tryGet(UiWindowManager.class);
+            if (wm != null) {
+                VectorWindow win = wm.getSingleton(DETAILS_SINGLETON_ID);
+                if (win instanceof EntityInfoPanel panel) {
+                    panel.rebuild(new EntityInfoViewModel().title("未选中实体"));
+                }
+            }
+            return;
+        }
+
+        StarAxisGameRuntime rt = gui.getRuntime();
+        EntityInfoViewModel vm = buildViewModel(entityId, rt);
+        if (vm != null) {
+            summaryPanel.showEntity(vm);
+            summaryEntityId = entityId;
+        } else {
+            summaryPanel.clearEntity();
+            summaryEntityId = -1;
+        }
+
+        // 若详情窗口正在以单例模式显示，同步刷新内容（钉住转多例后不再跟随）喵
+        if (vm != null) {
+            UiWindowManager wm = gui.tryGet(UiWindowManager.class);
+            if (wm != null) {
+                VectorWindow win = wm.getSingleton(DETAILS_SINGLETON_ID);
+                if (win instanceof EntityInfoPanel panel) {
+                    panel.rebuild(vm);
+                }
+            }
+        }
+    }
+
+    /** 从快照构建实体视图模型喵 */
+    private EntityInfoViewModel buildViewModel(long entityId, StarAxisGameRuntime rt) {
+        if (rt == null) return null;
+        RealTimeWorldState rtState = rt.getRealTimeWorldStateReadonly();
+        DailySettlementState ds = rt.getDailySettlementStateBufferForReadonly().getActive();
+        return EntityInfoAssembler.assemble(entityId, rtState, ds);
+    }
+
+    /**
+     * 摘要面板的区域命中判定（注册到 UiPointerService 的守卫入口）喵。
+     *
+     * 面板隐藏、已从舞台移除（stage.clear() 切屏）或坐标未命中时返回 false，
+     * 守卫自动失效，不会误拦截 3D 交互。
+     * 不用 stage.hit（不检查 visible，全屏 HUD 容器会误判）。
+     *
+     * @param screenX 屏幕 X（左下原点）
+     * @param screenY 屏幕 Y（左下原点）
+     * @return true 表示该坐标落在摘要面板交互区
+     */
+    private boolean isPointerOverSummary(float screenX, float screenY) {
+        if (summaryPanel == null || !summaryPanel.isVisible() || summaryPanel.getStage() == null) {
+            return false;
+        }
+        float x = summaryPanel.getX();
+        float y = summaryPanel.getY();
+        return screenX >= x && screenX <= x + summaryPanel.getWidth()
+                && screenY >= y && screenY <= y + summaryPanel.getHeight();
     }
 
     // ===== private helpers =====

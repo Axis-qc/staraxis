@@ -7,6 +7,7 @@ import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
+import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 
@@ -38,10 +39,12 @@ import staraxis.ui.screens.InGameHudScreen;
 import staraxis.ui.screens.SettingsScreen;
 import staraxis.ui.screens.WorldSettingsScreen;
 import staraxis.ui.widgets.DevelopingDialog;
+import staraxis.ui.UiPointerService;
 import staraxis.ui.UiWindowManager;
 import staraxis.ui.widgets.PauseMenu;
 import staraxis.ui.widgets.SelectHomeConfirmDialog;
 import staraxis.ui.widgets.StarfieldBackground;
+import staraxis.ui.SelectionService;
 
 /**
  * ClientGame.
@@ -84,6 +87,13 @@ public class ClientGame implements ApplicationListener {
     // 舰船移动交互控制器（选中、移动、聚焦、路径可视化）
     private ShipMoveController shipMoveController;
 
+    // 全局选中服务（选中态唯一来源，Galaxy/System 双视图共用）
+    private SelectionService selectionService;
+
+    // 统一 UI 命中守卫服务：全部鼠标输入（左键/右键/中键/滚轮）先查归属，
+    // 鼠标在 UI 上只触发 UI 交互，不在 UI 上才触发 3D 场景交互喵
+    private UiPointerService pointerService;
+
     // 纹理注册器（启动时加载所有纹理到 GPU 内存）
     private SpriteRegistry spriteRegistry;
 
@@ -125,6 +135,7 @@ public class ClientGame implements ApplicationListener {
         stage = base.stage;
         gui = base.gui;
         starfield = base.starfield;
+        pointerService = gui.tryGet(UiPointerService.class);
 
         // 滚轮事件处理器——将滚轮滚动转发给 WorldCamera
         InputProcessor scrollProcessor = new InputProcessor() {
@@ -170,6 +181,12 @@ public class ClientGame implements ApplicationListener {
 
             @Override
             public boolean scrolled(float amountX, float amountY) {
+                // 鼠标在 UI 上时滚轮归 UI（未来窗口列表滚动/ScrollPane），
+                // 不缩放镜头，返回 false 交给 stage 处理；scrolled 回调无坐标参数，
+                // 用 Gdx.input 实时位置经守卫判定喵
+                if (pointerService != null && pointerService.isMouseOverUi()) {
+                    return false;
+                }
                 // 根据当前视图转发滚轮到对应镜头
                 if (viewManager != null && viewManager.isInSystemView()) {
                     if (systemCamera != null)
@@ -207,6 +224,8 @@ public class ClientGame implements ApplicationListener {
                 gui.get(staraxis.ui.json.UiParser.class),
                 gui.get(staraxis.ui.json.UiFactory.class));
         uiDebug.setCamera(galaxyCamera); // 默认显示 galaxy 镜头信息
+        // 调试面板注册到统一守卫：F3 打开期间点击面板不触发 3D 选中/移动喵
+        uiDebug.setPointerService(pointerService);
 
         // 设置异步世界生成回调
         gui.setOnStartNewGame(cfg -> startAsyncGen(cfg));
@@ -214,6 +233,9 @@ public class ClientGame implements ApplicationListener {
         gui.showMainMenu();
 
         shipMoveController = new ShipMoveController();
+        selectionService = new SelectionService();
+        shipMoveController.setSelectionService(selectionService);
+        gui.register(SelectionService.class, selectionService);
     }
 
     private void initSpaceRendering() {
@@ -412,10 +434,14 @@ public class ClientGame implements ApplicationListener {
         if (homeConfirmDialog == null) {
             homeConfirmDialog = new SelectHomeConfirmDialog(
                     gui.get(com.badlogic.gdx.graphics.glutils.ShapeRenderer.class),
-                    gui.get(com.badlogic.gdx.graphics.g2d.BitmapFont.class));
+                    gui.get(com.badlogic.gdx.graphics.g2d.BitmapFont.class),
+                    pointerService);
         }
 
         if (!paused) {
+            // 中键旋转归属：鼠标在 UI 上时关闭（SELECTING_HOME 仅 galaxy 镜头）喵
+            galaxyCamera.setMiddleButtonEnabled(
+                    pointerService == null || !pointerService.isMouseOverUi());
             // 更新 galaxy 镜头（选择期间在 Galaxy View 中浏览）
             galaxyCamera.update(dt);
 
@@ -452,8 +478,10 @@ public class ClientGame implements ApplicationListener {
                 }
             }
 
-            // 左键点击恒星：弹出确认弹窗（弹窗未显示时才响应）
+            // 左键点击恒星：弹出确认弹窗（弹窗未显示时才响应；鼠标在 UI 上
+            // 只触发 UI 交互，不触发 3D；弹窗打开时守卫拦截 3D 为双保险）喵
             if (Gdx.input.isButtonJustPressed(com.badlogic.gdx.Input.Buttons.LEFT)
+                    && (pointerService == null || !pointerService.isMouseOverUi())
                     && (homeConfirmDialog == null || !homeConfirmDialog.isVisible())) {
                 if (hoveredStarId >= 0) {
                     long sysId = findSystemByStarId(hoveredStarId);
@@ -590,14 +618,6 @@ public class ClientGame implements ApplicationListener {
 
         boolean paused = pauseMenu.isMenuVisible();
 
-        // TODO Phase 2 Step B：实体面板演示切换（F6 循环切换 4 种假实体），接真实数据后删除喵
-        if (Gdx.input.isKeyJustPressed(com.badlogic.gdx.Input.Keys.F6)) {
-            InGameHudScreen hud = gui.get(InGameHudScreen.class);
-            if (hud != null) {
-                hud.cycleDemoEntity();
-            }
-        }
-
         if (!paused) {
             long updateStart = System.nanoTime();
             runtime.update(dt);
@@ -615,13 +635,16 @@ public class ClientGame implements ApplicationListener {
     }
 
     private void renderSpaceScene(float dt) {
+        // 中键旋转归属：鼠标在 UI 上时关闭，PLAYING 双镜头均按守卫设置喵
+        boolean mouseOverUi = pointerService != null && pointerService.isMouseOverUi();
         // 根据当前视图更新对应镜头
         if (viewManager.isInSystemView()) {
+            systemCamera.setMiddleButtonEnabled(!mouseOverUi);
             systemCamera.update(dt);
         } else {
+            galaxyCamera.setMiddleButtonEnabled(!mouseOverUi);
             galaxyCamera.update(dt);
         }
-
         Gdx.gl.glClearColor(0.005f, 0.005f, 0.02f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
 
@@ -659,6 +682,16 @@ public class ClientGame implements ApplicationListener {
         }
 
         if (Gdx.input.isButtonJustPressed(com.badlogic.gdx.Input.Buttons.LEFT)) {
+            // 模态窗口打开时，窗口外点击先关闭窗口，不触发进入星系喵
+            UiWindowManager wm = gui.tryGet(UiWindowManager.class);
+            if (wm != null && wm.closeModalIfClickedOutside(
+                    Gdx.input.getX(), Gdx.graphics.getHeight() - Gdx.input.getY())) {
+                return;
+            }
+            // 统一守卫：鼠标在 UI 上只触发 UI 交互，不触发 3D（进入星系）喵
+            if (pointerService != null && pointerService.isMouseOverUi()) {
+                return;
+            }
             long selectedStarId = rayPicker.getHoveredStarId();
             if (selectedStarId >= 0) {
                 long sysId = findSystemByStarId(selectedStarId);
@@ -721,7 +754,7 @@ public class ClientGame implements ApplicationListener {
             }
         }
         systemViewRenderer.setShips(shipSnapshots);
-        systemViewRenderer.setHighlightShip(shipMoveController.getSelectedShipId());
+        systemViewRenderer.setHighlightEntity(selectionService.getSelectedEntityId());
         systemViewRenderer.render(systemSnapshots, systemCamera);
 
         // System View 悬停拾取 + HUD 更新
@@ -733,14 +766,22 @@ public class ClientGame implements ApplicationListener {
             hud.setHoverInfoText(buildSystemHoverText(hoveredId));
         }
 
-        // ── 左键处理 ──
+        // ── 左键处理：先消费模态窗口的窗口外点击，再经统一守卫决定是否执行 3D 选中逻辑 ──
         if (Gdx.input.isButtonJustPressed(com.badlogic.gdx.Input.Buttons.LEFT)) {
-            shipMoveController.handleLeftClick(hoveredId, runtime,
-                    systemViewRenderer, systemCamera);
+            UiWindowManager wm = gui.tryGet(UiWindowManager.class);
+            boolean modalConsumed = wm != null
+                    && wm.closeModalIfClickedOutside(
+                            Gdx.input.getX(), Gdx.graphics.getHeight() - Gdx.input.getY());
+            if (!modalConsumed && (pointerService == null || !pointerService.isMouseOverUi())) {
+                shipMoveController.handleLeftClick(hoveredId, runtime,
+                        systemViewRenderer, systemCamera);
+            }
         }
 
-        // ── 右键 Homeworld 式移动（每帧更新） ──
-        shipMoveController.updateMoveMode(runtime, systemCamera);
+        // ── 右键 Homeworld 式移动（每帧更新，鼠标在 UI 上时不响应） ──
+        if (pointerService == null || !pointerService.isMouseOverUi()) {
+            shipMoveController.updateMoveMode(runtime, systemCamera);
+        }
 
         // ── 移动模式：渲染目标点标记 ──
         var shapeRenderer = gui != null ? gui.get(ShapeRenderer.class) : null;

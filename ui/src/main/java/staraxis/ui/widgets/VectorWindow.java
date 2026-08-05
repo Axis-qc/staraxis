@@ -29,6 +29,12 @@ public class VectorWindow extends Group {
     private static final float CLOSE_BTN_MARGIN = 4f;
     /** 关闭按钮 X 线条内缩（px），让 X 图形小于按钮命中区域喵 */
     private static final float CLOSE_BTN_INSET = 3f;
+    /** 钉住按钮边长（px），位于关闭按钮左侧喵 */
+    private static final float PIN_BTN_SIZE = 14f;
+    /** 钉住按钮与关闭按钮的间距（px）喵 */
+    private static final float PIN_BTN_GAP = 4f;
+    /** 钉住按钮命中区域距标题栏右上角的边距（px）喵 */
+    private static final float PIN_BTN_MARGIN = 4f;
 
     private final ShapeRenderer sr;
     private final BitmapFont font;
@@ -44,6 +50,10 @@ public class VectorWindow extends Group {
     private boolean closeButtonVisible;
     /** 关闭按钮回调，点击 X 时触发（通常由 UiWindowManager 挂接）喵 */
     private Runnable onClose;
+    /** 是否显示标题栏钉住按钮（默认不显示）喵 */
+    private boolean pinButtonVisible;
+    /** 钉住按钮回调，点击图钉时触发（将单例窗口转为多例钉住窗口）喵 */
+    private Runnable onPin;
     public VectorWindow(ShapeRenderer sr, BitmapFont font, String title) {
         this(sr, font, DEFAULT_EFFECT, title);
     }
@@ -60,11 +70,24 @@ public class VectorWindow extends Group {
 
         contentGroup = new Group();
         contentGroup.setTouchable(Touchable.enabled);
+        // 消费内容区点击：无子控件命中时返回 true，防止事件穿透到下层
+        // （模态遮罩在全屏下层，穿透会导致点击窗口内容时误关闭窗口）喵
+        contentGroup.addListener(new InputListener() {
+            @Override
+            public boolean touchDown(InputEvent event, float x, float y, int pointer, int button) {
+                return true;
+            }
+        });
         addActor(contentGroup);
 
         addListener(new InputListener() {
             @Override
             public boolean touchDown(InputEvent event, float x, float y, int pointer, int button) {
+                // 钉住按钮命中检测（与关闭按钮同层级，优先于标题栏拖动）喵
+                if (pinButtonVisible && onPin != null && isOnPinButton(x, y)) {
+                    onPin.run();
+                    return true;
+                }
                 // 关闭按钮命中检测必须在标题栏拖动检测之前（区域重叠）喵
                 if (closeButtonVisible && onClose != null && isOnCloseButton(x, y)) {
                     onClose.run();
@@ -79,7 +102,8 @@ public class VectorWindow extends Group {
                     toFront();
                     return true;
                 }
-                return false;
+                // 窗口其余区域（边框等）也消费点击，防止穿透到下层遮罩误关闭喵
+                return true;
             }
 
             @Override
@@ -110,6 +134,23 @@ public class VectorWindow extends Group {
     /** 设置关闭按钮回调喵 */
     public void setOnClose(Runnable onClose) {
         this.onClose = onClose;
+    }
+
+    /** 设置是否显示标题栏钉住按钮喵 */
+    public void setPinButtonVisible(boolean visible) {
+        this.pinButtonVisible = visible;
+    }
+
+    /** 设置钉住按钮回调（点击图钉将单例窗口转为钉住多例窗口）喵 */
+    public void setOnPin(Runnable onPin) {
+        this.onPin = onPin;
+    }
+
+    /** 判断窗口局部坐标是否命中钉住按钮区域（关闭按钮左侧）喵 */
+    private boolean isOnPinButton(float x, float y) {
+        float bx = getWidth() - CLOSE_BTN_MARGIN - CLOSE_BTN_SIZE - PIN_BTN_GAP - PIN_BTN_SIZE;
+        float by = getHeight() - PIN_BTN_MARGIN - PIN_BTN_SIZE;
+        return x >= bx && x <= bx + PIN_BTN_SIZE && y >= by && y <= by + PIN_BTN_SIZE;
     }
 
     /** 判断窗口局部坐标是否命中关闭按钮区域（标题栏右上角）喵 */
@@ -195,6 +236,26 @@ public class VectorWindow extends Group {
             sr.setColor(bc.r, bc.g, bc.b, bc.a * alpha);
             sr.begin(ShapeType.Line);
             sr.rect(x, y, w, h);
+            sr.end();
+        }
+
+        // 钉住按钮图形（标题栏右上角 X 左侧：圆头 + 针尖，颜色跟随标题文字）喵
+        if (pinButtonVisible) {
+            float bx = x + w - CLOSE_BTN_MARGIN - CLOSE_BTN_SIZE - PIN_BTN_GAP - PIN_BTN_SIZE;
+            float by = y + h - PIN_BTN_MARGIN - PIN_BTN_SIZE;
+            float cx = bx + PIN_BTN_SIZE / 2f;
+            float cy = by + PIN_BTN_SIZE / 2f;
+            Color tc = effect.titleBar.textColor;
+            sr.begin(ShapeType.Line);
+            sr.setColor(tc.r, tc.g, tc.b, tc.a * alpha);
+            // 图钉：上方圆头 + 下方收窄针尖
+            sr.circle(cx, cy + PIN_BTN_SIZE * 0.15f, PIN_BTN_SIZE * 0.2f);
+            sr.line(cx - PIN_BTN_SIZE * 0.15f, cy - PIN_BTN_SIZE * 0.05f,
+                    cx + PIN_BTN_SIZE * 0.15f, cy - PIN_BTN_SIZE * 0.05f);
+            sr.line(cx - PIN_BTN_SIZE * 0.15f, cy - PIN_BTN_SIZE * 0.05f,
+                    cx, cy - PIN_BTN_SIZE * 0.35f);
+            sr.line(cx + PIN_BTN_SIZE * 0.15f, cy - PIN_BTN_SIZE * 0.05f,
+                    cx, cy - PIN_BTN_SIZE * 0.35f);
             sr.end();
         }
 

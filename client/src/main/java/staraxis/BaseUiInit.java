@@ -9,6 +9,7 @@ import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import staraxis.render.util.MenuBackgroundLoader;
 import staraxis.ui.FontProvider;
 import staraxis.ui.Gui;
+import staraxis.ui.UiPointerService;
 import staraxis.ui.UiWindowManager;
 import staraxis.ui.effects.EffectRegistry;
 import staraxis.ui.i18n.I18nService;
@@ -76,8 +77,13 @@ public class BaseUiInit {
         ShapeRenderer sr = new ShapeRenderer();
         gui.register(ShapeRenderer.class, sr);
 
-        // 全局窗口管理器：管理非模态信息窗口（实体详情、舰队列表等），ESC 栈依赖喵
-        gui.register(UiWindowManager.class, new UiWindowManager(stage));
+        // 统一 UI 命中守卫：全部 UI 交互区域集中注册，3D 层零 UI 知识（Phase 2.6）喵
+        UiPointerService pointerService = new UiPointerService();
+        gui.register(UiPointerService.class, pointerService);
+
+        // 全局窗口管理器：管理非模态信息窗口（实体详情、舰队列表等），ESC 栈依赖；
+        // 构造时自注册窗口 bounds 到 UiPointerService 喵
+        gui.register(UiWindowManager.class, new UiWindowManager(stage, pointerService));
 
         StarfieldBackground starfield = new StarfieldBackground(sr, MenuBackgroundLoader.loadBackgroundImage());
         starfield.init(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());

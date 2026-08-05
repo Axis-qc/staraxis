@@ -212,6 +212,39 @@ public class PlanetSurface {
     }
 
     /**
+     * 获取大陆数量喵。
+     *
+     * 地表区域中 regionType 为 CONTINENT（大陆）的区域数，供 UI 预披露喵。
+     *
+     * @return 大陆数量
+     */
+    public int getContinentCount() {
+        if (surfaceRegions == null) return 0;
+        return (int) surfaceRegions.stream()
+                .filter(r -> r != null && "CONTINENT".equals(r.regionType))
+                .count();
+    }
+
+    /**
+     * 获取已识别资源种类数喵。
+     *
+     * 统计状态非 UNDISCOVERED（已发现/已开发/枯竭）的资源点中，去重后的资源类型种数。
+     * 不披露具体储量（需探索），仅供 UI 预披露喵。
+     *
+     * @return 已识别资源种类数
+     */
+    public int getDiscoveredResourceTypeCount() {
+        if (resourceSites == null) return 0;
+        return (int) resourceSites.stream()
+                .filter(r -> r != null && r.status != null
+                        && !"UNDISCOVERED".equals(r.status))
+                .map(r -> r.resourceType)
+                .filter(t -> t != null)
+                .distinct()
+                .count();
+    }
+
+    /**
      * 获取指定区域未发现的资源点喵。
      *
      * @param regionId 区域ID喵。

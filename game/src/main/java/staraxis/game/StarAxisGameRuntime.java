@@ -542,6 +542,9 @@ public class StarAxisGameRuntime implements GameRuntime {
                         true,
                         new EntitySnapshot.PlanetDetails(
                                 planet.planetTypeId,
+                                planet.computeHabitability(),
+                                planet.hasSurfaceComponent() ? planet.surface.getContinentCount() : 0,
+                                planet.hasSurfaceComponent() ? planet.surface.getDiscoveredResourceTypeCount() : 0,
                                 planet.radiusGU,
                                 planet.rotationPeriodHours,
                                 planet.surfaceTexturePath,
@@ -565,7 +568,10 @@ public class StarAxisGameRuntime implements GameRuntime {
                         asteroid.ownerNationId, asteroid.ownerPlayerId,
                         true,
                         new EntitySnapshot.PlanetDetails(
-                                asteroid.planetTypeId, asteroid.radiusGU,
+                                asteroid.planetTypeId, asteroid.computeHabitability(),
+                                asteroid.hasSurfaceComponent() ? asteroid.surface.getContinentCount() : 0,
+                                asteroid.hasSurfaceComponent() ? asteroid.surface.getDiscoveredResourceTypeCount() : 0,
+                                asteroid.radiusGU,
                                 asteroid.rotationPeriodHours, asteroid.surfaceTexturePath,
                                 false,
                                 asteroid.orbitCenterEntityId,
@@ -585,7 +591,10 @@ public class StarAxisGameRuntime implements GameRuntime {
                         moon.ownerNationId, moon.ownerPlayerId,
                         true,
                         new EntitySnapshot.PlanetDetails(
-                                moon.planetTypeId, moon.radiusGU,
+                                moon.planetTypeId, moon.computeHabitability(),
+                                moon.hasSurfaceComponent() ? moon.surface.getContinentCount() : 0,
+                                moon.hasSurfaceComponent() ? moon.surface.getDiscoveredResourceTypeCount() : 0,
+                                moon.radiusGU,
                                 moon.rotationPeriodHours, moon.surfaceTexturePath,
                                 false,
                                 moon.orbitCenterEntityId,

@@ -6,6 +6,9 @@
 
 ### 2026年
 
+#### 8月
+- [08-05（P2 Phase 2 完成：SelectionService 全局选中服务 + EntityInfoAssembler 真实数据流 + 详情面板钉住转多例 + Habitability 枚举 + 地表预披露 + 模态窗口动画；P2 Phase 2.6 完成：UiPointerService 输入归属统一 UI 守卫层）](./2026-08/2026-08-05.md)
+
 #### 7月
 - [07-23（HUD 与交互系统方案定稿 + 当前任务.md P2 全部重写 + Phase 1 实现：UiWindowManager/HoverTooltipBinder/ESC栈/钉住开窗）](./2026-07/2026-07-23.md)
 - [07-20（P0 SpriteRegistry 收尾 + P3 硬编码扫描启动 + StarAxisGameRuntime 硬编码清理 + 舰船移动指令鉴权 BUG 修复 + 矢量UI测试场景BUG修复）](./2026-07/2026-07-20.md)
@@ -71,4 +74,4 @@
 
 ---
 *索引创建时间：2026-04-09*
-*最后更新：2026-07-23*
+*最后更新：2026-08-05*

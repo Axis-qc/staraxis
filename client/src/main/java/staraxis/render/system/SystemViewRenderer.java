@@ -125,12 +125,25 @@ public class SystemViewRenderer {
         shipSpriteRenderer.setShips(currentFrameShips);
     }
 
+    /** 当前选中的实体ID（高亮用：星体边框 + 舰船贴图变色共用）喵 */
+    private long selectedEntityId = -1L;
+
     /**
      * 设置选中高亮舰船ID。-1 = 无选中。
+     * 兼容旧入口：委托到 {@link #setHighlightEntity}（舰船贴图高亮共用同一选中态）喵。
      */
     public void setHighlightShip(long shipId) {
-        this.highlightShipId = shipId;
-        shipSpriteRenderer.setHighlightShip(shipId);
+        setHighlightEntity(shipId);
+    }
+
+    /**
+     * 设置选中实体 ID（恒星/行星/卫星/小行星/舰船统一入口）。-1 = 无选中喵。
+     * 星体画 2D 屏幕边框，舰船由 ShipSpriteRenderer 贴图变色。
+     */
+    public void setHighlightEntity(long entityId) {
+        this.selectedEntityId = entityId;
+        this.highlightShipId = entityId;
+        shipSpriteRenderer.setHighlightShip(entityId);
     }
 
     /** 构建所有天体的系统局部空间位置索引（从快照构建）。 */
@@ -253,6 +266,8 @@ public class SystemViewRenderer {
 
         // 最上层：2D 屏幕圆标叠加层（深度测试已关闭）
         overlay.renderPlanetDots(systemSnapshots, camera, bodyCenterIndex);
+        // 选中星体边框（屏幕空间战术框，圆标之上）喵
+        overlay.renderSelectedFrame(selectedEntityId, camera, bodyCenterIndex);
         shipSpriteRenderer.render(camera);
 
         // 虫洞平面（最上层 billboard，additive 混合）
@@ -374,6 +389,7 @@ public class SystemViewRenderer {
     public void reset() {
         resetTime();
         currentFrameShips = java.util.List.of();
+        selectedEntityId = -1L;
         highlightShipId = -1L;
     }
 
