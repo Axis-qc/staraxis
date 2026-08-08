@@ -1,0 +1,8 @@
+{
+  "models": {
+    "star_eater": {
+      "path": "ship/star_eater/satr_eater.gltf",
+      "scale": 1.0
+    }
+  }
+}

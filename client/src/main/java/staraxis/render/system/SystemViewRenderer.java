@@ -75,6 +75,8 @@ public class SystemViewRenderer {
 
     /** 临时向量，避免每帧分配。 */
     private final Vector3 tmpVec = new Vector3();
+    /** 临时光照方向向量，避免每艘舰船计算时分配。 */
+    private final Vector3 tmpLightDirection = new Vector3();
     private final Vector3 tmpIntersect = new Vector3();
 
     /** 2D 屏幕圆标叠加层（天体/舰船位置标记 + 拾取）。 */
@@ -350,6 +352,8 @@ public class SystemViewRenderer {
 
     /**
      * 更新方向光：光源方向为"最近的恒星 → 目标位置"。
+     * DirectionalLight 保存的是光线传播方向，shader 中取反后得到目标指向光源的方向。
+     * 传入单位向量，避免光照强度随恒星距离变化。
      * 无恒星时保持当前方向不变。
      */
     private void updateLightDirection(float px, float py, float pz) {
@@ -366,7 +370,11 @@ public class SystemViewRenderer {
         if (nearestStar == null) {
             return;
         }
-        starLight.setDirection(px - nearestStar.x, py - nearestStar.y, pz - nearestStar.z);
+        tmpLightDirection.set(px - nearestStar.x, py - nearestStar.y, pz - nearestStar.z);
+        if (tmpLightDirection.len2() <= 0.000001f) {
+            return;
+        }
+        starLight.setDirection(tmpLightDirection.nor());
     }
 
     /** 轨道环带偏移 */

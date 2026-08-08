@@ -5,7 +5,6 @@ import com.badlogic.gdx.graphics.g3d.Environment;
 import com.badlogic.gdx.graphics.g3d.Model;
 import com.badlogic.gdx.graphics.g3d.ModelBatch;
 import com.badlogic.gdx.graphics.g3d.ModelInstance;
-import com.badlogic.gdx.graphics.g3d.loader.ObjLoader;
 import com.badlogic.gdx.math.Quaternion;
 import com.badlogic.gdx.math.Vector3;
 
@@ -14,6 +13,8 @@ import staraxis.game_asset.loader.GltfLoader;
 import staraxis.game_asset.loader.LoadedModel;
 import staraxis.render.adapter.MeshDataToModel;
 import staraxis.render.WorldCamera;
+import staraxis.render.model.ShipModelDef;
+import staraxis.render.model.ShipModelRegistry;
 import staraxis.render.shader.PlayerColorAttribute;
 import staraxis.game.state.snapshot.EntitySnapshot;
 import staraxis.game.state.snapshot.EntitySnapshot.ShipDetails;
@@ -27,7 +28,7 @@ import java.util.List;
  * 以 3D ModelInstance 形式替换原 2D 贴图舰船渲染，验证外部模型加载链路。
  *
  * 拾取仍沿用 2D 屏幕空间方案：渲染时同步投影缓存屏幕包围区。
- * 模型缩放：按模型包围盒最长边统一缩放到 TARGET_SIZE_GU。
+ * 模型缩放：由 model_registry.json 中对应模型定义的 scale 驱动。
  *
  * 材质扩展（Stellaris 同款玩家颜色自发光）：
  * - normal 贴图蓝色通道作为发光掩码（glTF 原生解析，无需手动挂载）
@@ -35,17 +36,8 @@ import java.util.List;
  */
 public class StarEaterShipRenderer {
 
-    /** 模型资产路径（相对 assets 根目录）。 */
-    private static final String MODEL_PATH = "ship/star_eater/satr_eater.gltf";
-
-    /** glTF 文件所在目录（用于拼接贴图相对路径，末尾带斜杠）。 */
-    private static final String MODEL_BASE_PATH = "ship/star_eater/";
-
-    /**
-     * 模型渲染缩放系数（1.0 = 使用模型原始大小，不缩放）。
-     * 若某模型需要缩放，改用渲染层模型配置表（modelPath -> scale）驱动，勿写死在此。
-     */
-    private static final float MODEL_SCALE = 1f;
+    /** 模型配置表 key（对应 assets/ship/model/model_registry.json 的 models 键）。 */
+    private static final String MODEL_KEY = "star_eater";
 
     /** 屏幕拾取范围：模型投影大小的倍数（>1 = 更容易点到）。 */
     private static final float PICK_RADIUS_MULT = 1.8f;
@@ -129,20 +121,41 @@ public class StarEaterShipRenderer {
 
     /**
      * 加载 glTF 模型。
+     * 模型路径与缩放系数从模型渲染配置表（model_registry.json）获取，
+     * 避免资源路径与缩放散落在渲染代码中。
      * 加载失败时抛出异常（模型资产为测试硬依赖，缺失即中断）。
-     * 默认按模型原始大小渲染（MODEL_SCALE = 1），不做归一化缩放。
      */
     public StarEaterShipRenderer() {
+        ShipModelDef def = new ShipModelRegistry().get(MODEL_KEY);
+        if (def == null || def.path == null || def.path.isBlank()) {
+            throw new RuntimeException("模型渲染配置表缺少 modelKey=" + MODEL_KEY);
+        }
+        String modelPath = def.path;
+        // glTF 所在目录（含末尾斜杠），供拼接 .bin 与贴图相对路径
+        String basePath = modelPath.substring(0, modelPath.lastIndexOf('/') + 1);
+
         LoadedModel loaded = GltfLoader.load(
-                Gdx.files.internal(MODEL_PATH).read(),
-                Gdx.files.internal(MODEL_BASE_PATH + "satr_eater.bin").readBytes(),
-                MODEL_BASE_PATH);
+                Gdx.files.internal(modelPath).read(),
+                Gdx.files.internal(basePath + binFileName(modelPath)).readBytes(),
+                basePath);
 
         MaterialData materialData = loaded.material;
         model = MeshDataToModel.convert(loaded.mesh, MeshDataToModel.convertMaterial(materialData));
-        modelScale = MODEL_SCALE;
+        modelScale = def.scale;
 
-        Gdx.app.log("StarEaterShipRenderer", "loaded " + MODEL_PATH + " scale=" + modelScale);
+        Gdx.app.log("StarEaterShipRenderer", "loaded " + modelPath + " scale=" + modelScale);
+    }
+
+    /**
+     * 从 glTF 文件名推导 .bin 二进制文件名（glTF 缓冲名通常与模型同名）。
+     *
+     * @param gltfPath glTF 文件路径（相对 assets 根目录）
+     * @return .bin 文件名（不含目录前缀）
+     */
+    private static String binFileName(String gltfPath) {
+        String name = gltfPath.substring(gltfPath.lastIndexOf('/') + 1);
+        int dot = name.lastIndexOf('.');
+        return (dot >= 0 ? name.substring(0, dot) : name) + ".bin";
     }
 
     /** 设置当前帧要渲染的舰船列表。 */
@@ -279,6 +292,12 @@ public class StarEaterShipRenderer {
             }
 
             modelBatch.render(instance, environment);
+
+            // ModelBatch 是延迟提交的；下一艘舰船会更新同一个 Environment 的方向光。
+            // 在更新共享光照环境前立即刷新，避免整批舰船最终使用最后一艘的光照方向。
+            if (lightUpdater != null) {
+                modelBatch.flush();
+            }
 
             // 3D 坐标投影到屏幕，缓存拾取信息（渲染前就存，拾取不依赖颜色）
             tmpScreenPos.set(px, py, pz);

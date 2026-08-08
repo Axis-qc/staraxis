@@ -184,7 +184,7 @@ public class SystemViewOverlay {
     /**
      * 2D 圆标拾取。返回命中的最佳实体 ID，无命中返回 -1。
      * 调用方应将其与 3D 拾取结果比较距离后取最近者。
-     * 舰船由 ShipSpriteRenderer 处理，此处仅拾取天体圆标。
+     * 舰船由 StarEaterShipRenderer（3D 模型拾取）处理，此处仅拾取天体圆标。
      */
     public long pickDots(int screenX, int screenY, long currentBestId, float currentBestDistSq,
                           Map<Long, Vector3> bodyCenterIndex, Vector3 cameraPos) {
