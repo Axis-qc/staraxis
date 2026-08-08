@@ -250,7 +250,7 @@ public class ClientGame implements ApplicationListener {
         viewManager = new ViewManager();
         rayPicker = new RayPicker();
         galaxyViewRenderer = new GalaxyViewRenderer();
-        systemViewRenderer = new SystemViewRenderer(spriteRegistry);
+        systemViewRenderer = new SystemViewRenderer();
         skyboxRenderer = new SkyboxRenderer();
     }
 

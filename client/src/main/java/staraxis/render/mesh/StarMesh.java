@@ -1,9 +1,11 @@
 package staraxis.render.mesh;
 
-import com.badlogic.gdx.graphics.VertexAttributes;
 import com.badlogic.gdx.graphics.g3d.Material;
 import com.badlogic.gdx.graphics.g3d.Model;
-import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
+
+import staraxis.game_asset.data.MeshData;
+import staraxis.game_asset.generator.SphereGenerator;
+import staraxis.render.adapter.MeshDataToModel;
 
 /**
  * StarMesh（恒星网格）。
@@ -17,12 +19,9 @@ public class StarMesh {
     private final Model model;
 
     public StarMesh() {
-        ModelBuilder builder = new ModelBuilder();
-
         // 恒星球体：24x18 段，直径 2（半径 1），scl(radiusGU) 后半径 = radiusGU
-        model = builder.createSphere(2f, 2f, 2f, 24, 18,
-            new Material(),
-            VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal);
+        MeshData meshData = SphereGenerator.generate(2f, 24, 18);
+        model = MeshDataToModel.convert(meshData, new Material());
     }
 
     /**

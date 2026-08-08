@@ -3,7 +3,7 @@
  *
  * 文件作用：
  * - 舰船可视化的立方体网格，10GU 边长。
- * - 使用 libGDX ModelBuilder 创建立方体。
+ * - 使用 BoxGenerator 程序化生成立方体（不依赖 libGDX ModelBuilder）。
  *
  * 使用方式：
  * - 由 SystemViewRenderer 创建 ModelInstance 进行渲染。
@@ -16,11 +16,13 @@
 package staraxis.render.mesh;
 
 import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.graphics.VertexAttributes;
 import com.badlogic.gdx.graphics.g3d.Material;
 import com.badlogic.gdx.graphics.g3d.Model;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
-import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
+
+import staraxis.game_asset.data.MeshData;
+import staraxis.game_asset.generator.BoxGenerator;
+import staraxis.render.adapter.MeshDataToModel;
 
 /**
  * ShipMesh（舰船立方体网格）。
@@ -35,10 +37,9 @@ public class ShipMesh {
     private final Model model;
 
     public ShipMesh() {
-        ModelBuilder builder = new ModelBuilder();
-        model = builder.createBox(2f, 2f, 2f,
-            new Material(ColorAttribute.createDiffuse(Color.WHITE)),
-            VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal);
+        MeshData meshData = BoxGenerator.generate(2f);
+        model = MeshDataToModel.convert(meshData,
+            new Material(ColorAttribute.createDiffuse(Color.WHITE)));
     }
 
     /**

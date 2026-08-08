@@ -15,6 +15,7 @@ dependencies {
   // 客户端应用层：由 lwjgl3 启动，负责组织窗口主循环、渲染层与调用 UI 层
   implementation project(':ui')
   implementation project(':game')
+  implementation project(':game_asset')
 
   // LibGDX 基础（ApplicationListener 等）
   implementation "com.badlogicgames.gdx:gdx:$gdxVersion"

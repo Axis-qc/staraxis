@@ -1,11 +1,13 @@
 package staraxis.render.mesh;
 
 import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.graphics.VertexAttributes;
 import com.badlogic.gdx.graphics.g3d.Material;
 import com.badlogic.gdx.graphics.g3d.Model;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
-import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
+
+import staraxis.game_asset.data.MeshData;
+import staraxis.game_asset.generator.SphereGenerator;
+import staraxis.render.adapter.MeshDataToModel;
 
 /**
  * PlanetMesh（行星球体网格）。
@@ -22,17 +24,15 @@ public class PlanetMesh {
     private final Model lowDetail;
 
     public PlanetMesh() {
-        ModelBuilder builder = new ModelBuilder();
-
         // 高精度：32x24 段，直径 2（半径 1），scl(radiusGU) 后半径 = radiusGU
-        highDetail = builder.createSphere(2f, 2f, 2f, 32, 24,
-            new Material(ColorAttribute.createDiffuse(Color.WHITE)),
-            VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal);
+        MeshData highData = SphereGenerator.generate(2f, 32, 24);
+        Material highMat = new Material(ColorAttribute.createDiffuse(Color.WHITE));
+        highDetail = MeshDataToModel.convert(highData, highMat);
 
         // 低精度：12x8 段
-        lowDetail = builder.createSphere(2f, 2f, 2f, 12, 8,
-            new Material(ColorAttribute.createDiffuse(Color.WHITE)),
-            VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal);
+        MeshData lowData = SphereGenerator.generate(2f, 12, 8);
+        Material lowMat = new Material(ColorAttribute.createDiffuse(Color.WHITE));
+        lowDetail = MeshDataToModel.convert(lowData, lowMat);
     }
 
     /**

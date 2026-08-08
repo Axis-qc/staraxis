@@ -1,0 +1,18 @@
+plugins {
+  id 'java-library'
+}
+
+group = 'staraxis'
+
+repositories {
+  mavenCentral()
+  mavenLocal()
+  maven { url = 'https://central.sonatype.com/repository/maven-snapshots/' }
+  maven { url = 'https://jitpack.io' }
+}
+
+dependencies {
+  // game_asset 层：纯数据解析/生成层，零渲染依赖
+  // jackson-databind 用于解析 .gltf JSON（与 game 模块统一版本）
+  api 'com.fasterxml.jackson.core:jackson-databind:2.14.2'
+}
