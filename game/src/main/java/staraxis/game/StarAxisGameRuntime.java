@@ -750,11 +750,21 @@ public class StarAxisGameRuntime implements GameRuntime {
             boolean isMoving = false;
             SpacePosition movementTarget = null;
             SpacePosition velocity = null;
+            SpacePosition facing = null;
+            int nationColorRgb = -1;
             if (entity instanceof staraxis.game.ship.ShipBody shipBody) {
                 isMoving = shipBody.isMoving;
                 movementTarget = shipBody.movementTarget;
                 velocity = shipBody.velWorldGU;
                 headingDeg = shipBody.currentHeadingDeg;
+                facing = shipBody.facing;
+                // 国家颜色：用于客户端渲染玩家颜色自发光（无归属时 -1）
+                if (shipBody.ownerNationId != null) {
+                    var nationState = worldState.nationManager.getNationState(shipBody.ownerNationId);
+                    if (nationState != null) {
+                        nationColorRgb = nationState.colorRgb;
+                    }
+                }
             }
 
             int intelRequiredLevel = worldState.intelSystem != null
@@ -770,7 +780,8 @@ public class StarAxisGameRuntime implements GameRuntime {
                     entity.ownerNationId,
                     entity.ownerPlayerId,
                     false,
-                    new EntitySnapshot.ShipDetails(customFlags, headingDeg, isMoving, movementTarget, velocity),
+                    new EntitySnapshot.ShipDetails(customFlags, headingDeg, facing, isMoving, movementTarget, velocity,
+                            nationColorRgb),
                     intelRequiredLevel));
         }
 

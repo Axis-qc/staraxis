@@ -1,0 +1,12 @@
+# Blender 4.2.23 LTS MTL File: 'None'
+# www.blender.org
+
+newmtl PDXmat_star_eater_01_core_g_body_g_bodyShape
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd mammalian_01_star_eater_diffuse.png
+map_Ns mammalian_01_star_eater_specular.png

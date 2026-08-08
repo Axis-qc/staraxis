@@ -3,13 +3,14 @@
  *
  * 文件作用：
  * - 自由移动（直飞）子系统，纯直飞：加速→巡航→减速→到达。
+ * - 维护舰船 3D 朝向（facing / currentHeadingDeg）：移动时按速度方向更新。
  *
  * 使用方式：
  * - 由 ShipMovementSystem 在 isMoving=true 且 movementTarget!=null 时调用。
  *
  * 注意事项：
- * - 不处理轨道物理，不处理朝向/转向。
- * - Y 轴在此系统中被忽略（保持现有行为），后续 3D 化时统一处理。
+ * - 不处理轨道物理，不处理转向动画（朝向直接跟随速度方向）。
+ * - 3D 直飞：X/Y/Z 三轴全参与；停船时朝向保持最后速度方向。
  */
 
 package staraxis.game.ship;
@@ -50,6 +51,9 @@ public class ShipFullMovementSystem {
         double dirX = dx / distanceToTarget;
         double dirY = dy / distanceToTarget;
         double dirZ = dz / distanceToTarget;
+
+        // 维护舰首朝向：方向向量 + 水平角（0度朝+X）
+        updateFacing(ship, dirX, dirY, dirZ);
 
         // 从 calculator 获取速度/加速度
         var stats = ShipStatsCalculator.computeMovementStats(ship, null, null);
@@ -106,6 +110,20 @@ public class ShipFullMovementSystem {
         }
 
         AbstractShipMovementSystem.applyVelocity(ship, dtGameSeconds, worldState);
+    }
+
+    /**
+     * 维护舰船朝向：按移动方向更新 3D 朝向向量与水平角。
+     * 减速/停止阶段不更新（保持最后朝向）。
+     */
+    private static void updateFacing(ShipBody ship, double dirX, double dirY, double dirZ) {
+        double len = Math.sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
+        if (len < AbstractShipMovementSystem.VELOCITY_THRESHOLD) {
+            return;
+        }
+        ship.facing = new SpacePosition(dirX / len, dirY / len, dirZ / len);
+        // 水平角：0度朝+X，逆时针为正（atan2(dz, dx) 在 XZ 平面）
+        ship.currentHeadingDeg = Math.toDegrees(Math.atan2(dirZ, dirX));
     }
 
     private void decelerateToStop(ShipBody ship, double dtGameSeconds, WorldState worldState) {

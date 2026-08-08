@@ -80,6 +80,7 @@ public class ShipBody extends Entity {
     /**
      * 当前舰首朝向（角度制，0度朝+X方向）喵。
      * 这是舰船当前的实际朝向，用于物理计算。
+     * 由移动系统按速度方向维护（3D 空间中为水平角投影）。
      */
     public double currentHeadingDeg = 0.0;
 
@@ -88,6 +89,13 @@ public class ShipBody extends Entity {
      * 这是舰船想要转向的目标朝向。
      */
     public double targetHeadingDeg = 0.0;
+
+    /**
+     * 当前舰首朝向的 3D 单位方向向量（世界坐标系）喵。
+     * null = 尚未初始化（静止且从未移动）。
+     * 由移动系统按速度方向维护，停船时保持最后朝向。
+     */
+    public SpacePosition facing = null;
 
     /**
      * 当前移动指令喵。

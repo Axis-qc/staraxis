@@ -47,9 +47,17 @@ public class ShipMovementSystem {
                 if (ship.isMoving && ship.movementTarget != null) {
                     freeMoveSystem.updateFreeMove(ship, dtGameSeconds, worldState);
                 } else if (ship.velWorldGU != null && ship.velWorldGU.length() > 0) {
-                    double nx = ship.posWorldGU.x() + ship.velWorldGU.x() * dtGameSeconds;
-                    double ny = ship.posWorldGU.y() + ship.velWorldGU.y() * dtGameSeconds;
-                    double nz = ship.posWorldGU.z() + ship.velWorldGU.z() * dtGameSeconds;
+                    // 惯性滑行：按当前速度方向推进，并同步维护舰首朝向
+                    double vx = ship.velWorldGU.x();
+                    double vy = ship.velWorldGU.y();
+                    double vz = ship.velWorldGU.z();
+                    double speed = ship.velWorldGU.length();
+                    ship.facing = new staraxis.game.space.SpacePosition(vx / speed, vy / speed, vz / speed);
+                    ship.currentHeadingDeg = Math.toDegrees(Math.atan2(vz, vx));
+
+                    double nx = ship.posWorldGU.x() + vx * dtGameSeconds;
+                    double ny = ship.posWorldGU.y() + vy * dtGameSeconds;
+                    double nz = ship.posWorldGU.z() + vz * dtGameSeconds;
                     ship.posWorldGU = new staraxis.game.space.SpacePosition(nx, ny, nz);
                     worldState.markRealtimeDirty();
                 }

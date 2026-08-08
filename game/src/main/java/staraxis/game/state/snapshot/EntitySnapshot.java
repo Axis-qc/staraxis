@@ -216,9 +216,16 @@ public class EntitySnapshot {
     public static class ShipDetails {
         public final java.util.Set<String> customFlags;
         public final double headingDeg;
+        /** 舰首 3D 朝向单位向量（世界坐标），null = 未初始化。 */
+        public final SpacePosition facing;
         public final boolean isMoving;
         public final SpacePosition movementTarget;
         public final SpacePosition velocity;
+        /**
+         * 所属国家颜色（0xRRGGBB），用于客户端渲染舰船玩家颜色自发光。
+         * 无归属时为 -1（客户端回退默认颜色）。
+         */
+        public final int nationColorRgb;
 
         // 以下字段已不再由 game 引擎维护（Phase 5），保留用于旧客户端兼容。
         // 新客户端应忽略这些值。
@@ -248,11 +255,50 @@ public class EntitySnapshot {
                 double turnRate,
                 double lateralSpeedPenalty,
                 double reverseSpeedPenalty) {
+            this(customFlags, headingDeg, null, isMoving, movementTarget, velocity,
+                    -1, maxSpeed, baseAcceleration, bowAccelerationBonus, turnRate, lateralSpeedPenalty, reverseSpeedPenalty);
+        }
+
+        /** 完整构造函数（含 3D 朝向与旧字段，保持 JSON 兼容）。 */
+        public ShipDetails(
+                java.util.Set<String> customFlags,
+                double headingDeg,
+                SpacePosition facing,
+                boolean isMoving,
+                SpacePosition movementTarget,
+                SpacePosition velocity,
+                double maxSpeed,
+                double baseAcceleration,
+                double bowAccelerationBonus,
+                double turnRate,
+                double lateralSpeedPenalty,
+                double reverseSpeedPenalty) {
+            this(customFlags, headingDeg, facing, isMoving, movementTarget, velocity,
+                    -1, maxSpeed, baseAcceleration, bowAccelerationBonus, turnRate, lateralSpeedPenalty, reverseSpeedPenalty);
+        }
+
+        /** 完整构造函数（含国家颜色与旧字段，保持 JSON 兼容）。 */
+        public ShipDetails(
+                java.util.Set<String> customFlags,
+                double headingDeg,
+                SpacePosition facing,
+                boolean isMoving,
+                SpacePosition movementTarget,
+                SpacePosition velocity,
+                int nationColorRgb,
+                double maxSpeed,
+                double baseAcceleration,
+                double bowAccelerationBonus,
+                double turnRate,
+                double lateralSpeedPenalty,
+                double reverseSpeedPenalty) {
             this.customFlags = customFlags == null ? java.util.Set.of() : java.util.Set.copyOf(customFlags);
             this.headingDeg = headingDeg;
+            this.facing = facing;
             this.isMoving = isMoving;
             this.movementTarget = movementTarget;
             this.velocity = velocity;
+            this.nationColorRgb = nationColorRgb;
             this.maxSpeed = maxSpeed;
             this.baseAcceleration = baseAcceleration;
             this.bowAccelerationBonus = bowAccelerationBonus;
@@ -268,8 +314,33 @@ public class EntitySnapshot {
                 boolean isMoving,
                 SpacePosition movementTarget,
                 SpacePosition velocity) {
-            this(customFlags, headingDeg, isMoving, movementTarget, velocity,
-                    20.0, 5.0, 5.0, 45.0, 0.6, 0.3);
+            this(customFlags, headingDeg, null, isMoving, movementTarget, velocity,
+                    -1, 20.0, 5.0, 5.0, 45.0, 0.6, 0.3);
+        }
+
+        /** 简化构造函数（含 3D 朝向，旧字段使用默认值）。 */
+        public ShipDetails(
+                java.util.Set<String> customFlags,
+                double headingDeg,
+                SpacePosition facing,
+                boolean isMoving,
+                SpacePosition movementTarget,
+                SpacePosition velocity) {
+            this(customFlags, headingDeg, facing, isMoving, movementTarget, velocity,
+                    -1, 20.0, 5.0, 5.0, 45.0, 0.6, 0.3);
+        }
+
+        /** 简化构造函数（含国家颜色，旧字段使用默认值）。 */
+        public ShipDetails(
+                java.util.Set<String> customFlags,
+                double headingDeg,
+                SpacePosition facing,
+                boolean isMoving,
+                SpacePosition movementTarget,
+                SpacePosition velocity,
+                int nationColorRgb) {
+            this(customFlags, headingDeg, facing, isMoving, movementTarget, velocity,
+                    nationColorRgb, 20.0, 5.0, 5.0, 45.0, 0.6, 0.3);
         }
     }
 
