@@ -1,0 +1,28 @@
+[
+  {
+    "recipeId": "RECIPE_WATER_ELECTROLYSIS",
+    "displayName": "水电解",
+    "facilityType": "ELECTROLYZER",
+    "inputs": [
+      {
+        "substanceId": "WATER",
+        "amount": 2.0
+      }
+    ],
+    "outputs": [
+      {
+        "substanceId": "HYDROGEN",
+        "amount": 2.0
+      }
+    ],
+    "byproducts": [
+      {
+        "substanceId": "OXYGEN",
+        "amount": 1.0
+      }
+    ],
+    "energyCost": 1.0,
+    "processTime": 1.0,
+    "technologyId": null
+  }
+]

@@ -23,4 +23,13 @@ repositories {
 dependencies {
   // game 层：纯模拟/数据层，不依赖任何渲染或 UI 库
   api 'com.fasterxml.jackson.core:jackson-databind:2.14.2'
+
+  // 单元测试：纯 JUnit5，覆盖确定性逻辑（CommandHandler/CommandBus 等）喵
+  testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+  testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+  useJUnitPlatform()
+  workingDir = rootProject.rootDir
 }
