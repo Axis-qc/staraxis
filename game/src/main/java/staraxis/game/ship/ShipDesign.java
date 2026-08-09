@@ -28,6 +28,12 @@ import java.util.List;
  */
 public class ShipDesign {
 
+    /** 殖民舰蓝图 ID（designId 口径，与开局舰队生成对齐）喵。 */
+    public static final String DESIGN_ID_COLONY = "default_colony_ship";
+
+    /** 殖民舰自定义标记（customFlags 口径，用于快速识别舰船职能）喵。 */
+    public static final String FLAG_COLONY = "COLONY";
+
     /** 蓝图唯一 ID（主键）。 */
     public String designId;
 

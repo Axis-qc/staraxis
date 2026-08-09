@@ -20,6 +20,12 @@ public class City {
     /** 所属地表区域ID喵。 */
     public long regionId;
 
+    /**
+     * 建立本城市的殖民舰实体ID喵。
+     * 殖民舰转化为城市实体后保留溯源，0 表示非殖民转化（如开局首都）喵。
+     */
+    public long sourceShipEntityId;
+
     /** 城市名称喵。 */
     public String name;
 

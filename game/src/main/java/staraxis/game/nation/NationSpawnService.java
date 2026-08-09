@@ -23,8 +23,8 @@ public class NationSpawnService {
     // ── 初始舰队配置 ──
     /** 探索船蓝图ID。 */
     private static final String DESIGN_EXPLORER = "default_explorer_ship";
-    /** 殖民船蓝图ID。 */
-    private static final String DESIGN_COLONY = "default_colony_ship";
+    /** 殖民船蓝图ID（与 ShipDesign.DESIGN_ID_COLONY 保持单一口径）喵。 */
+    private static final String DESIGN_COLONY = staraxis.game.ship.ShipDesign.DESIGN_ID_COLONY;
     /** 护卫舰蓝图ID。 */
     private static final String DESIGN_FRIGATE = "default_frigate";
 
@@ -164,7 +164,7 @@ public class NationSpawnService {
         String[] designs = { DESIGN_EXPLORER, DESIGN_COLONY, DESIGN_FRIGATE, DESIGN_FRIGATE };
         String[][] flagSets = {
                 { "INITIAL_FLEET", "EXPLORER" },
-                { "INITIAL_FLEET", "COLONY" },
+                { "INITIAL_FLEET", staraxis.game.ship.ShipDesign.FLAG_COLONY },
                 { "INITIAL_FLEET", "FRIGATE" },
                 { "INITIAL_FLEET", "FRIGATE" },
         };

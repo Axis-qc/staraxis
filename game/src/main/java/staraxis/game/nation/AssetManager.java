@@ -4,6 +4,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Set;
 
+import staraxis.game.astro.StarBody;
+import staraxis.game.astro.StarSystem;
 import staraxis.game.entity.Entity;
 import staraxis.game.entity.EntityType;
 import staraxis.game.player.PlayerState;
@@ -137,6 +139,41 @@ public class AssetManager {
     public void releaseAllOwnership(long entityId) {
         releasePlayerOwnership(entityId);
         releaseNationOwnership(entityId);
+    }
+
+    /**
+     * 声明恒星系归属给国家（星区级统一归属 API）喵。
+     *
+     * 作用：
+     * - 同步设置 StarSystem.ownerNationId（星区归属）喵。
+     * - 将系统内恒星实体登记进 NationState 资产表，保持归属与资产一致性喵。
+     * - 不自动分配系统内行星（行星归属由殖民等具体操作决定，保持可殖民态）喵。
+     *
+     * 使用场景：
+     * - 开局母星系声明（NationSpawnService）喵。
+     * - 殖民成功后行星所在星区声明归属（ColonizePlanetHandler）喵。
+     *
+     * @param system   目标恒星系
+     * @param nationId 目标国家ID
+     */
+    public void assignStarSystemClaimToNation(StarSystem system, String nationId) {
+        if (system == null || nationId == null || nationId.isBlank()) {
+            return;
+        }
+        // 已被其他国家占据时不越权覆盖喵
+        if (system.ownerNationId != null && !system.ownerNationId.isBlank()
+                && !system.ownerNationId.equals(nationId)) {
+            return;
+        }
+        system.ownerNationId = nationId;
+        // 同步系统内恒星归属（统一走 assignToNation，保证资产表一致）喵
+        if (system.stars != null) {
+            for (StarBody star : system.stars) {
+                if (star != null) {
+                    assignToNation(star.entityId, nationId);
+                }
+            }
+        }
     }
 
     // ============================
