@@ -3,6 +3,12 @@ package staraxis.webnet.websocket;
 import staraxis.game.StarAxisGameRuntime;
 import staraxis.game.state.RealTimeWorldState;
 import staraxis.game.state.DailySettlementState;
+import staraxis.game.state.DailySettlementState.ExtractionFacilityDailySnapshot;
+import staraxis.game.state.DailySettlementState.InventoryDailySnapshot;
+import staraxis.game.state.DailySettlementState.PlanetSurfaceDailySnapshot;
+import staraxis.game.state.DailySettlementState.ProcessingFacilityDailySnapshot;
+import staraxis.game.state.DailySettlementState.SettlementReportDailySnapshot;
+import staraxis.game.state.DailySettlementState.TransferDailySnapshot;
 import staraxis.webnet.dto.CommandResultMessageDto;
 import staraxis.webnet.dto.DailySettlementStateDto;
 import staraxis.webnet.dto.RealTimeStateDto;
@@ -14,6 +20,7 @@ import staraxis.game.state.snapshot.EntitySnapshot;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -24,6 +31,8 @@ import java.util.stream.Collectors;
  *
  * 负责将 game 模块的权威状态快照转换为 webnet 模块的 DTO 并打包为消息喵。
  * 公开实体从 DailySettlementState 读取，动态实体从 RealTimeWorldState 读取，情报等级用预计算字段。
+ * 行星工业/物流/结算快照（G2.7）由 {@link #toDailySettlementStateDto(DailySettlementState)} 纯转换，
+ * 只消费传入的 DailySettlementState，不读取 WorldState 喵。
  */
 public final class SnapshotMessageFactory {
 
@@ -39,6 +48,8 @@ public final class SnapshotMessageFactory {
      * - 公开实体基线（STAR/PLANET/SYSTEM_BARYCENTER）从 DailySettlementState 读取
      * - 私有动态实体（SHIP）从 RealTimeWorldState 读取
      * - 情报等级从 DailySettlementState 预计算字段获取，不再读 WorldState
+     * - 行星工业/物流/结算快照由 {@link #toDailySettlementStateDto(DailySettlementState)} 转换，
+     *   只使用传入的活动 DailySettlementState，不读取 WorldState 喵
      */
     public static SnapshotMessageDto buildSnapshotMessageWithNation(StarAxisGameRuntime runtime, long tickCostMs,
             Set<Long> visibleSystemIds, String nationId) {
@@ -114,41 +125,8 @@ public final class SnapshotMessageFactory {
                 rt.year, rt.month, rt.day, rt.hour, rt.minute, rt.second,
                 filteredPublicSnapshots, privateEntitiesByIntelLevel);
 
-        DailySettlementStateDto daily = null;
-        if (dailyActive != null) {
-            Map<Long, DailySettlementStateDto.PlanetSurfaceSnapshotDto> planetSurfaces = null;
-            if (dailyActive.planetSurfacesByPlanetId != null) {
-                planetSurfaces = new HashMap<>();
-                for (var entry : dailyActive.planetSurfacesByPlanetId.entrySet()) {
-                    var src = entry.getValue();
-                    List<DailySettlementStateDto.SurfaceRegionSnapshotDto> regions = src.surfaceRegions.stream()
-                            .map(r -> new DailySettlementStateDto.SurfaceRegionSnapshotDto(
-                                    r.regionId, r.regionType, r.name, r.surfacePercentage, r.developableSpaceRatio))
-                            .collect(Collectors.toList());
-                    planetSurfaces.put(entry.getKey(),
-                            new DailySettlementStateDto.PlanetSurfaceSnapshotDto(entry.getKey(), regions));
-                }
-            }
-            // 转换 nationAssetsByNationId：EntityType enum -> String
-            Map<String, Map<String, List<Long>>> nationAssetsStr = new HashMap<>();
-            if (dailyActive.nationAssetsByNationId != null) {
-                for (var nationEntry : dailyActive.nationAssetsByNationId.entrySet()) {
-                    Map<String, List<Long>> typeStrMap = new HashMap<>();
-                    for (var typeEntry : nationEntry.getValue().entrySet()) {
-                        typeStrMap.put(typeEntry.getKey().name(), new ArrayList<>(typeEntry.getValue()));
-                    }
-                    nationAssetsStr.put(nationEntry.getKey(), typeStrMap);
-                }
-            }
-
-            daily = new DailySettlementStateDto(
-                    dailyActive.settledDay,
-                    dailyActive.settledAtGameSeconds,
-                    dailyActive.sectorCount,
-                    planetSurfaces,
-                    nationAssetsStr,
-                    dailyActive.publicEntityBaselinesBySectorKey);
-        }
+        // 日结算快照转换：只消费传入的 dailyActive（不读 WorldState）
+        DailySettlementStateDto daily = toDailySettlementStateDto(dailyActive);
 
         return new SnapshotMessageDto(true, null, tickCostMs, realTime, daily, nationId);
     }
@@ -159,6 +137,168 @@ public final class SnapshotMessageFactory {
     public static SnapshotMessageDto buildSnapshotMessage(StarAxisGameRuntime runtime, long tickCostMs,
             Set<Long> visibleSystemIds) {
         return buildSnapshotMessageWithNation(runtime, tickCostMs, visibleSystemIds, null);
+    }
+
+    /**
+     * 将传入的 DailySettlementState 纯转换为 DTO（不读取 WorldState）喵。
+     *
+     * 覆盖行星地表（地表区域/城市）与 G2.7 工业/物流/结算快照：
+     * inventories / extractionFacilities / processingFacilities / inTransitTransfers /
+     * lastSettlementReport 及其嵌套 Map/List 全部转换，保持与桌面本地一致的字段口径。
+     * 空值约定与 game 侧一致：无库存/设施/运输时为稳定空集合，lastSettlementReport 为 null 表示未结算喵。
+     *
+     * @param daily 传入的权威低频基线快照（可为 null）
+     * @return 转换后的 DTO；daily 为 null 时返回 null
+     */
+    public static DailySettlementStateDto toDailySettlementStateDto(DailySettlementState daily) {
+        if (daily == null) {
+            return null;
+        }
+
+        Map<Long, DailySettlementStateDto.PlanetSurfaceSnapshotDto> planetSurfaces = null;
+        if (daily.planetSurfacesByPlanetId != null) {
+            planetSurfaces = new HashMap<>();
+            for (var entry : daily.planetSurfacesByPlanetId.entrySet()) {
+                planetSurfaces.put(entry.getKey(), toPlanetSurfaceDto(entry.getKey(), entry.getValue()));
+            }
+        }
+
+        // 转换 nationAssetsByNationId：EntityType enum -> String
+        Map<String, Map<String, List<Long>>> nationAssetsStr = new HashMap<>();
+        if (daily.nationAssetsByNationId != null) {
+            for (var nationEntry : daily.nationAssetsByNationId.entrySet()) {
+                Map<String, List<Long>> typeStrMap = new HashMap<>();
+                for (var typeEntry : nationEntry.getValue().entrySet()) {
+                    typeStrMap.put(typeEntry.getKey().name(), new ArrayList<>(typeEntry.getValue()));
+                }
+                nationAssetsStr.put(nationEntry.getKey(), typeStrMap);
+            }
+        }
+
+        return new DailySettlementStateDto(
+                daily.settledDay,
+                daily.settledAtGameSeconds,
+                daily.sectorCount,
+                planetSurfaces,
+                nationAssetsStr,
+                daily.publicEntityBaselinesBySectorKey);
+    }
+
+    /**
+     * 转换单个行星地表快照（含城市与工业只读快照）喵。
+     */
+    private static DailySettlementStateDto.PlanetSurfaceSnapshotDto toPlanetSurfaceDto(
+            long planetEntityId, PlanetSurfaceDailySnapshot src) {
+        List<DailySettlementStateDto.SurfaceRegionSnapshotDto> regions = src.surfaceRegions.stream()
+                .map(r -> new DailySettlementStateDto.SurfaceRegionSnapshotDto(
+                        r.regionId, r.regionType, r.name, r.surfacePercentage, r.developableSpaceRatio))
+                .collect(Collectors.toList());
+
+        List<DailySettlementStateDto.CitySnapshotDto> cities = src.cities.stream()
+                .map(c -> new DailySettlementStateDto.CitySnapshotDto(
+                        c.cityId, c.name, c.cityStage, c.cityScale, c.population, c.isPlanetaryCapital))
+                .collect(Collectors.toList());
+
+        List<DailySettlementStateDto.InventorySnapshotDto> inventories = src.inventories.stream()
+                .map(SnapshotMessageFactory::toInventoryDto)
+                .collect(Collectors.toList());
+
+        List<DailySettlementStateDto.ExtractionFacilitySnapshotDto> extractionFacilities =
+                src.extractionFacilities.stream()
+                        .map(SnapshotMessageFactory::toExtractionFacilityDto)
+                        .collect(Collectors.toList());
+
+        List<DailySettlementStateDto.ProcessingFacilitySnapshotDto> processingFacilities =
+                src.processingFacilities.stream()
+                        .map(SnapshotMessageFactory::toProcessingFacilityDto)
+                        .collect(Collectors.toList());
+
+        List<DailySettlementStateDto.TransferSnapshotDto> inTransitTransfers = src.inTransitTransfers.stream()
+                .map(SnapshotMessageFactory::toTransferDto)
+                .collect(Collectors.toList());
+
+        DailySettlementStateDto.SettlementReportSnapshotDto lastSettlementReport =
+                src.lastSettlementReport != null ? toSettlementReportDto(src.lastSettlementReport) : null;
+
+        return new DailySettlementStateDto.PlanetSurfaceSnapshotDto(
+                planetEntityId, regions, cities, inventories, extractionFacilities,
+                processingFacilities, inTransitTransfers, lastSettlementReport);
+    }
+
+    /**
+     * 转换本地库存只读快照，substances / reservedAmounts 保持 game 迭代顺序喵。
+     */
+    private static DailySettlementStateDto.InventorySnapshotDto toInventoryDto(InventoryDailySnapshot src) {
+        return new DailySettlementStateDto.InventorySnapshotDto(
+                src.inventoryId, src.ownerEntityId, src.capacity, src.usedCapacity,
+                copyAmounts(src.substances), copyAmounts(src.reservedAmounts));
+    }
+
+    /**
+     * 转换采集设施只读快照喵。
+     */
+    private static DailySettlementStateDto.ExtractionFacilitySnapshotDto toExtractionFacilityDto(
+            ExtractionFacilityDailySnapshot src) {
+        return new DailySettlementStateDto.ExtractionFacilitySnapshotDto(
+                src.facilityId, src.facilityType, src.inventoryId, src.locationEntityId,
+                src.resourceId, src.amountPerDay, src.status, src.lastFailureReason);
+    }
+
+    /**
+     * 转换加工设施只读快照喵。
+     */
+    private static DailySettlementStateDto.ProcessingFacilitySnapshotDto toProcessingFacilityDto(
+            ProcessingFacilityDailySnapshot src) {
+        return new DailySettlementStateDto.ProcessingFacilitySnapshotDto(
+                src.facilityId, src.facilityType, src.inventoryId, src.locationEntityId,
+                src.activeRecipeId, src.progressDays, src.progressRecipeId, src.status, src.lastFailureReason);
+    }
+
+    /**
+     * 转换在途运输只读快照，goods 保持 game 迭代顺序喵。
+     */
+    private static DailySettlementStateDto.TransferSnapshotDto toTransferDto(TransferDailySnapshot src) {
+        return new DailySettlementStateDto.TransferSnapshotDto(
+                src.transferId, src.sourceInventoryId, src.targetInventoryId,
+                copyAmounts(src.goods), src.status, src.departedAtTick, src.arrivedAtTick);
+    }
+
+    /**
+     * 转换日结算报告只读快照（含嵌套采集/加工/运输结果）喵。
+     */
+    private static DailySettlementStateDto.SettlementReportSnapshotDto toSettlementReportDto(
+            SettlementReportDailySnapshot src) {
+        List<DailySettlementStateDto.ExtractionResultSnapshotDto> extractions = src.extractions.stream()
+                .map(e -> new DailySettlementStateDto.ExtractionResultSnapshotDto(
+                        e.facilityId, e.facilityType, e.resourceId, e.success, e.failureReason,
+                        copyAmounts(e.extracted)))
+                .collect(Collectors.toList());
+
+        List<DailySettlementStateDto.FacilityResultSnapshotDto> facilities = src.facilities.stream()
+                .map(f -> new DailySettlementStateDto.FacilityResultSnapshotDto(
+                        f.facilityId, f.facilityType, f.recipeId, f.success, f.failureReason,
+                        f.batchCount, copyAmounts(f.produced), copyAmounts(f.consumed)))
+                .collect(Collectors.toList());
+
+        List<DailySettlementStateDto.TransferResultSnapshotDto> transfers = src.transfers.stream()
+                .map(t -> new DailySettlementStateDto.TransferResultSnapshotDto(
+                        t.transferId, t.resultType, copyAmounts(t.goods)))
+                .collect(Collectors.toList());
+
+        return new DailySettlementStateDto.SettlementReportSnapshotDto(src.tick, extractions, facilities, transfers);
+    }
+
+    /**
+     * 深拷贝物质数量表（substanceId -> 数量）。
+     *
+     * 保留源表迭代顺序（与 game LinkedHashMap 顺序一致，保证输出确定性），
+     * null 或空时返回稳定空集合喵。
+     */
+    private static Map<String, Double> copyAmounts(Map<String, Double> source) {
+        if (source == null || source.isEmpty()) {
+            return Map.of();
+        }
+        return new LinkedHashMap<>(source);
     }
 
     public static SnapshotMessageDto buildWorldNotCreatedMessage() {
