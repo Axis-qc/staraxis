@@ -15,7 +15,7 @@ import java.util.List;
  * 用 GL 上下文编译 assets/shaders/ 下的着色器，验证多种材质 flag 组合均能编译通过。
  * Java 编译检查不了 GLSL，改 shader 后必须跑本测试。
  *
- * 运行方式：`test\shader_test.bat`（一键脚本）。
+ * 运行方式：`lwjgl3\test\shader_test.bat`（一键脚本）。
  *
  * 覆盖组合：
  * - 完整舰船：diffuse + normal + specular 贴图 + playerColor（星噬者模型实际组合）
@@ -23,6 +23,7 @@ import java.util.List;
  * - 纯贴图：仅 diffuse
  * - 纯颜色：无任何贴图
  * - 无光照：无 environment 时的降级路径
+ * - 行星世界空间光照着色器
  *
  * 任一组合编译失败即退出码非 0，并输出 GLSL 编译日志。
  */
@@ -34,6 +35,12 @@ public class ShaderCompileTest {
     /** 待验证的 fragment shader 文件（相对 assets 根目录）。 */
     private static final String FRAGMENT_PATH = "shaders/ship.fragment.glsl";
 
+    /** 行星世界空间光照 vertex shader 文件。 */
+    private static final String PLANET_VERTEX_PATH = "shaders/planet.vertex.glsl";
+
+    /** 行星世界空间光照 fragment shader 文件。 */
+    private static final String PLANET_FRAGMENT_PATH = "shaders/planet.fragment.glsl";
+
     public static void main(String[] args) {
         Lwjgl3ApplicationConfiguration config = new Lwjgl3ApplicationConfiguration();
         config.setTitle("ShaderCompileTest");
@@ -44,6 +51,8 @@ public class ShaderCompileTest {
             public void create() {
                 String vertex = Gdx.files.internal(VERTEX_PATH).readString();
                 String fragment = Gdx.files.internal(FRAGMENT_PATH).readString();
+                String planetVertex = Gdx.files.internal(PLANET_VERTEX_PATH).readString();
+                String planetFragment = Gdx.files.internal(PLANET_FRAGMENT_PATH).readString();
 
                 List<String> combos = buildCombos();
                 boolean allOk = true;
@@ -63,6 +72,25 @@ public class ShaderCompileTest {
                     }
                     program.dispose();
                 }
+
+                String planetPrefix = ""
+                        + "#define positionFlag\n"
+                        + "#define normalFlag\n"
+                        + "#define lightingFlag\n"
+                        + "#define diffuseColorFlag\n"
+                        + "#define emissiveColorFlag\n";
+                ShaderProgram planetProgram = new ShaderProgram(
+                        planetPrefix + planetVertex, planetPrefix + planetFragment);
+                if (planetProgram.isCompiled()) {
+                    System.out.println("[OK] planet world-space lighting shader");
+                } else {
+                    allOk = false;
+                    System.out.println("[FAIL] planet world-space lighting shader");
+                    System.out.println("----------------------------------------");
+                    System.out.println(planetProgram.getLog());
+                    System.out.println("----------------------------------------");
+                }
+                planetProgram.dispose();
 
                 System.out.println("=== RESULT: " + (allOk ? "ALL PASS" : "SOME FAILED") + " ===");
                 if (allOk) {

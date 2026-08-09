@@ -21,12 +21,14 @@ import staraxis.game.state.snapshot.EntitySnapshot.PlanetDetails;
 import staraxis.game.state.snapshot.EntitySnapshot.StarDetails;
 import staraxis.render.WorldCamera;
 import staraxis.render.debug.ChunkGridDebugRenderer;
+import staraxis.render.debug.NormalDebugRenderer;
 import staraxis.render.effect.WormholePlaneRenderer;
 import staraxis.render.lod.LodCalculator;
 import staraxis.render.lod.LodLevel;
 import staraxis.render.mesh.OrbitRingMesh;
 import staraxis.render.mesh.PlanetMesh;
 import staraxis.render.mesh.StarMesh;
+import staraxis.render.shader.PlanetLightAttribute;
 import staraxis.render.util.TemperatureColor;
 
 /**
@@ -73,11 +75,17 @@ public class SystemViewRenderer {
     /** 区块网格调试渲染器（null = 关闭）。 */
     private ChunkGridDebugRenderer chunkDebug;
 
+    /** 模型法向调试渲染器（null = 关闭）。 */
+    private NormalDebugRenderer normalsDebug;
+
     /** 临时向量，避免每帧分配。 */
     private final Vector3 tmpVec = new Vector3();
     /** 临时光照方向向量，避免每艘舰船计算时分配。 */
     private final Vector3 tmpLightDirection = new Vector3();
     private final Vector3 tmpIntersect = new Vector3();
+
+    /** 行星光照诊断状态，避免每帧重复输出完全相同的日志。 */
+    private final java.util.HashMap<Long, String> planetLightLogStates = new java.util.HashMap<>();
 
     /** 2D 屏幕圆标叠加层（天体/舰船位置标记 + 拾取）。 */
     private final SystemViewOverlay overlay = new SystemViewOverlay();
@@ -86,7 +94,7 @@ public class SystemViewRenderer {
     private final WormholePlaneRenderer wormhole = new WormholePlaneRenderer();
 
     public SystemViewRenderer() {
-        // 自定义 shader provider：舰船材质走 ShipShader（玩家颜色自发光），其余走默认 shader
+        // 自定义 shader provider：行星走 PlanetShader，舰船走 ShipShader，其余走默认 shader
         modelBatch = new ModelBatch(new staraxis.render.shader.ShipShaderProvider());
         environment = new Environment();
         starLight = new DirectionalLight();
@@ -250,6 +258,11 @@ public class SystemViewRenderer {
 
         // 舰船 3D 模型（在行星之后渲染，利用深度缓冲实现正确遮挡；光照方向来自最近恒星）
         shipRenderer.render(modelBatch, environment, camera, this::updateLightDirection);
+        if (normalsDebug != null) {
+            for (ModelInstance ship : shipRenderer.getInstances()) {
+                normalsDebug.render(ship, camera.camera.combined);
+            }
+        }
 
         // 第二遍：渲染所有轨道环，利用完整的深度缓冲实现正确遮挡
         Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
@@ -305,6 +318,9 @@ public class SystemViewRenderer {
             instance.materials.get(0).set(ColorAttribute.createDiffuse(rgb[0], rgb[1], rgb[2], 1f));
 
             modelBatch.render(instance);
+            if (normalsDebug != null) {
+                normalsDebug.render(instance, camera.camera.combined);
+            }
         }
         modelBatch.end();
     }
@@ -342,12 +358,56 @@ public class SystemViewRenderer {
         instance.materials.get(0)
                 .set(ColorAttribute.createEmissive(rgb[0] * 0.08f, rgb[1] * 0.08f, rgb[2] * 0.08f, 1f));
 
-        // 方向光：从最近的恒星指向天体
-        updateLightDirection(px, py, pz);
+        // 行星使用独立世界空间光照属性，直接记录属性是否存在以及实际写入值。
+        PlanetLightAttribute planetLight = (PlanetLightAttribute)
+                instance.materials.get(0).get(PlanetLightAttribute.Type);
+        if (planetLight == null) {
+            logPlanetLightMissing(snap.entityId);
+        } else if (computeLightDirection(px, py, pz, tmpLightDirection)) {
+            planetLight.direction.set(tmpLightDirection);
+            planetLight.color.set(starLight.color);
+            logPlanetLightAttribute(snap.entityId, planetLight);
+        } else {
+            logPlanetLightNoStar(snap.entityId);
+        }
 
         modelBatch.begin(camera.camera);
-        modelBatch.render(instance, environment);
+        // PlanetShader 只读取行星材质上的世界空间光照属性，不使用共享 Environment 兜底。
+        modelBatch.render(instance);
         modelBatch.end();
+        if (normalsDebug != null) {
+            normalsDebug.render(instance, camera.camera.combined);
+        }
+    }
+
+    /** 记录行星材质是否存在光照属性。 */
+    private void logPlanetLightMissing(long entityId) {
+        String previous = planetLightLogStates.put(entityId, "missing");
+        if (!"missing".equals(previous) && Gdx.app != null) {
+            Gdx.app.error("SystemViewRenderer",
+                    "PlanetLightAttribute missing: entityId=" + entityId);
+        }
+    }
+
+    /** 记录世界空间光照属性的实际值。 */
+    private void logPlanetLightAttribute(long entityId, PlanetLightAttribute light) {
+        String state = "direction=(" + light.direction.x + "," + light.direction.y + ","
+                + light.direction.z + "), color=(" + light.color.r + "," + light.color.g + ","
+                + light.color.b + "," + light.color.a + ")";
+        String previous = planetLightLogStates.put(entityId, state);
+        if (!state.equals(previous) && Gdx.app != null) {
+            Gdx.app.log("SystemViewRenderer",
+                    "PlanetLightAttribute updated: entityId=" + entityId + " " + state);
+        }
+    }
+
+    /** 记录没有有效恒星方向的异常状态。 */
+    private void logPlanetLightNoStar(long entityId) {
+        String previous = planetLightLogStates.put(entityId, "no-star");
+        if (!"no-star".equals(previous) && Gdx.app != null) {
+            Gdx.app.error("SystemViewRenderer",
+                    "No valid star direction: entityId=" + entityId);
+        }
     }
 
     /**
@@ -357,6 +417,21 @@ public class SystemViewRenderer {
      * 无恒星时保持当前方向不变。
      */
     private void updateLightDirection(float px, float py, float pz) {
+        if (computeLightDirection(px, py, pz, tmpLightDirection)) {
+            starLight.setDirection(tmpLightDirection);
+        }
+    }
+
+    /**
+     * 计算最近恒星到目标的世界空间传播方向。
+     *
+     * @param px     目标世界坐标 X
+     * @param py     目标世界坐标 Y
+     * @param pz     目标世界坐标 Z
+     * @param output 输出单位方向向量
+     * @return 是否找到有效恒星方向
+     */
+    private boolean computeLightDirection(float px, float py, float pz, Vector3 output) {
         Vector3 nearestStar = null;
         float nearestDist = Float.MAX_VALUE;
         for (Vector3 star : starPositions) {
@@ -368,13 +443,14 @@ public class SystemViewRenderer {
             }
         }
         if (nearestStar == null) {
-            return;
+            return false;
         }
-        tmpLightDirection.set(px - nearestStar.x, py - nearestStar.y, pz - nearestStar.z);
-        if (tmpLightDirection.len2() <= 0.000001f) {
-            return;
+        output.set(px - nearestStar.x, py - nearestStar.y, pz - nearestStar.z);
+        if (output.len2() <= 0.000001f) {
+            return false;
         }
-        starLight.setDirection(tmpLightDirection.nor());
+        output.nor();
+        return true;
     }
 
     /** 轨道环带偏移 */
@@ -424,6 +500,7 @@ public class SystemViewRenderer {
         currentFrameShips = java.util.List.of();
         selectedEntityId = -1L;
         highlightShipId = -1L;
+        planetLightLogStates.clear();
     }
 
     public void setSimulationTime(double time) {
@@ -449,6 +526,25 @@ public class SystemViewRenderer {
         return chunkDebug != null;
     }
 
+    /**
+     * 开启或关闭模型法向调试渲染。
+     * 开启后行星/恒星/舰船的顶点法线以亮青色线段显示（F3 调试面板「模型法向」按钮）。
+     */
+    public void setDebugNormalsEnabled(boolean enabled) {
+        if (enabled && normalsDebug == null) {
+            normalsDebug = new NormalDebugRenderer();
+        } else if (!enabled) {
+            if (normalsDebug != null) {
+                normalsDebug.dispose();
+                normalsDebug = null;
+            }
+        }
+    }
+
+    public boolean isDebugNormalsEnabled() {
+        return normalsDebug != null;
+    }
+
     public void dispose() {
         modelBatch.dispose();
         planetMesh.dispose();
@@ -460,6 +556,10 @@ public class SystemViewRenderer {
         if (chunkDebug != null) {
             chunkDebug.dispose();
             chunkDebug = null;
+        }
+        if (normalsDebug != null) {
+            normalsDebug.dispose();
+            normalsDebug = null;
         }
     }
 

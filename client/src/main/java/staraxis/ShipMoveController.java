@@ -14,6 +14,10 @@ import staraxis.game.state.snapshot.EntitySnapshot.ShipDetails;
 import staraxis.render.WorldCamera;
 import staraxis.render.system.SystemViewRenderer;
 import staraxis.ui.SelectionService;
+import staraxis.ui.selection.EntityClickResolver;
+import staraxis.ui.selection.EntityClickResolver.ClickIntent;
+
+import java.util.function.Consumer;
 
 /**
  * ShipMoveController（舰船移动交互控制器）。
@@ -33,6 +37,17 @@ public class ShipMoveController {
     /** 全局选中服务（选中态唯一来源），外部注入喵 */
     private SelectionService selectionService;
     private long cameraFollowTargetId = -1;
+
+    /** 行星左键点击回调：外部（InGameHudScreen）据此打开/聚焦行星详情窗口喵 */
+    private Consumer<Long> onPlanetClick;
+
+    /**
+     * 注册行星左键点击回调。命中行星时（单击/双击）以行星 entityId 调用喵。
+     * 仅通知意图，不替外部做窗口管理。
+     */
+    public void setOnPlanetClick(Consumer<Long> onPlanetClick) {
+        this.onPlanetClick = onPlanetClick;
+    }
 
     private boolean moveModeActive;
     private boolean yAdjustMode;
@@ -69,6 +84,30 @@ public class ShipMoveController {
 
     public boolean isMoveModeActive() {
         return moveModeActive;
+    }
+
+    /**
+     * 通过命令按钮（摘要面板「移动」指令）进入移动模式。
+     *
+     * 与右键进入移动模式等价但不依赖右键：直接置 moveModeActive，
+     * 目标点初始化为舰船当前位置（随后 XZ 跟随鼠标更新），避免立即确认时误发送向原点的移动命令。
+     * 未选中舰船、快照缺失或舰船无位置时不做任何事。
+     */
+    public void enterMoveMode() {
+        long selId = selectionService != null ? selectionService.getSelectedEntityId() : -1;
+        if (selId < 0 || snapshotProvider == null) return;
+        EntitySnapshot shipSnap = readShipSnapshotOrNull(snapshotProvider.getRealtimeState(), selId);
+        if (shipSnap == null || shipSnap.posWorldGU == null) return;
+
+        moveModeActive = true;
+        yAdjustMode = false;
+        waitingRightRelease = false;
+        moveBaseY = shipSnap.posWorldGU.y();
+        moveTargetX = shipSnap.posWorldGU.x();
+        moveTargetY = moveBaseY;
+        moveTargetZ = shipSnap.posWorldGU.z();
+        lastMouseScreenX = Gdx.input.getX();
+        lastMouseScreenY = Gdx.input.getY();
     }
 
     public double getMoveTargetY() {
@@ -192,6 +231,9 @@ public class ShipMoveController {
 
     /**
      * 左键按下处理：双击聚焦 / 移动模式确认（发送命令）/ 单击选中。
+     *
+     * 单击与双击统一复用 {@link EntityClickResolver#resolveLeftClick} 解析点击意图，
+     * 行星是否打开详情只在解析器集中判定，不在本控制器双击/单击各自重复判断喵。
      */
     public void handleLeftClick(long hoveredId,
                                  StarAxisGameRuntime runtime, SystemViewRenderer systemViewRenderer,
@@ -208,45 +250,83 @@ public class ShipMoveController {
         lastClickX = screenX;
         lastClickY = screenY;
 
-        var state = snapshotProvider.getRealtimeState();
-
         if (isDoubleClick) {
-            if (hoveredId >= 0) {
-                cameraFollowTargetId = hoveredId;
-                // 双击选中按实体实际类型（快照查不到则不选中，仅聚焦镜头）喵
-                EntityType type = resolveEntityType(hoveredId);
-                if (type != null && selectionService != null) {
-                    selectionService.select(hoveredId, type);
-                }
-                systemViewRenderer.getBodyPosition(hoveredId, focusTmp);
-                systemCamera.target.set(focusTmp);
-            }
+            handleDoubleClick(hoveredId, systemViewRenderer, systemCamera);
         } else if (moveModeActive) {
-            // 右键移动模式确认 -> 通过命令总线发送移动命令喵
-            // ownerNationId 允许为 null 传入:无主舰船由 game 端 MoveShipHandler 直接执行
-            long selId = selectionService != null ? selectionService.getSelectedEntityId() : -1;
-            EntitySnapshot shipSnap = readShipSnapshotOrNull(snapshotProvider.getRealtimeState(), selId);
-            if (shipSnap != null) {
-                String clientCmdId = "client_" + System.currentTimeMillis() + "_" + selId;
-                runtime.submitCommand(new MoveShipCommand(
-                        shipSnap.ownerNationId,
-                        clientCmdId,
-                        selId,
-                        moveTargetX, moveTargetY, moveTargetZ));
-            }
-            moveModeActive = false;
-            yAdjustMode = false;
-            waitingRightRelease = false;
+            handleMoveModeConfirm(hoveredId, runtime);
         } else {
-            // 普通单击选中/取消选中舰船喵
-            EntitySnapshot shipSnap = readShipSnapshotOrNull(snapshotProvider.getRealtimeState(), hoveredId);
-            if (selectionService != null) {
-                if (shipSnap != null) {
-                    selectionService.select(hoveredId, EntityType.SHIP);
-                } else {
-                    selectionService.deselect();
-                }
+            handleSingleClick(hoveredId);
+        }
+    }
+
+    /**
+     * 双击处理：聚焦镜头并复用点击意图选中实体/打开行星详情窗口喵。
+     * 与单击共用 {@link EntityClickResolver#resolveLeftClick}，不单独判断行星；
+     * 快照查不到类型时意图为 {@link ClickIntent#NONE}，仅聚焦镜头不选中喵。
+     */
+    private void handleDoubleClick(long hoveredId, SystemViewRenderer systemViewRenderer,
+                                   WorldCamera systemCamera) {
+        if (hoveredId < 0) {
+            return;
+        }
+        cameraFollowTargetId = hoveredId;
+        // 双击与单击解析同一意图：行星 → 选中并打开详情，普通实体 → 仅选中喵
+        EntityType type = resolveEntityType(hoveredId);
+        ClickIntent intent = EntityClickResolver.resolveLeftClick(hoveredId, type, moveModeActive);
+        if (intent != ClickIntent.NONE && selectionService != null) {
+            selectionService.select(hoveredId, type);
+        }
+        if (intent == ClickIntent.SELECT_AND_OPEN_DETAIL && onPlanetClick != null) {
+            onPlanetClick.accept(hoveredId);
+        }
+        systemViewRenderer.getBodyPosition(hoveredId, focusTmp);
+        systemCamera.target.set(focusTmp);
+    }
+
+    /**
+     * 移动模式左键确认：通过命令总线发送移动命令并退出移动模式喵。
+     * 移动模式点击意图由 {@link EntityClickResolver#resolveLeftClick} 集中判定，
+     * 恒为 {@link ClickIntent#NONE}（确认移动不弹行星窗口、不改选中）。
+     */
+    private void handleMoveModeConfirm(long hoveredId, StarAxisGameRuntime runtime) {
+        // 移动模式恒 NONE：防御性守卫，确保确认移动不打开行星窗口、不改动选中喵
+        ClickIntent intent = EntityClickResolver.resolveLeftClick(hoveredId, resolveEntityType(hoveredId), true);
+        if (intent != ClickIntent.NONE) {
+            return;
+        }
+        // 右键移动模式确认 -> 通过命令总线发送移动命令喵
+        // ownerNationId 允许为 null 传入:无主舰船由 game 端 MoveShipHandler 直接执行
+        long selId = selectionService != null ? selectionService.getSelectedEntityId() : -1;
+        EntitySnapshot shipSnap = readShipSnapshotOrNull(snapshotProvider.getRealtimeState(), selId);
+        if (shipSnap != null) {
+            String clientCmdId = "client_" + System.currentTimeMillis() + "_" + selId;
+            runtime.submitCommand(new MoveShipCommand(
+                    shipSnap.ownerNationId,
+                    clientCmdId,
+                    selId,
+                    moveTargetX, moveTargetY, moveTargetZ));
+        }
+        moveModeActive = false;
+        yAdjustMode = false;
+        waitingRightRelease = false;
+    }
+
+    /**
+     * 普通单击：按点击意图统一处理（行星 → 选中并打开详情，其余 → 仅选中，未命中 → 取消选中）喵。
+     */
+    private void handleSingleClick(long hoveredId) {
+        if (selectionService == null) {
+            return;
+        }
+        EntityType type = resolveEntityType(hoveredId);
+        ClickIntent intent = EntityClickResolver.resolveLeftClick(hoveredId, type, moveModeActive);
+        if (intent != ClickIntent.NONE) {
+            selectionService.select(hoveredId, type);
+            if (intent == ClickIntent.SELECT_AND_OPEN_DETAIL && onPlanetClick != null) {
+                onPlanetClick.accept(hoveredId);
             }
+        } else {
+            selectionService.deselect();
         }
     }
 

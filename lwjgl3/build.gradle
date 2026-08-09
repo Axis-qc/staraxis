@@ -188,7 +188,7 @@ distributions {
 startScripts.dependsOn(':lwjgl3:jar')
 startScripts.classpath = project.tasks.jar.outputs.files
 
-// GLSL 着色器编译验证（运行：test\shader_test.bat）
+// GLSL 着色器编译验证（运行：lwjgl3\test\shader_test.bat）
 tasks.register('shaderTest', JavaExec) {
   group = 'verification'
   description = 'Compile-check GLSL shaders in assets/shaders (multi flag combos).'
@@ -197,7 +197,7 @@ tasks.register('shaderTest', JavaExec) {
   workingDir = rootProject.rootDir
 }
 
-// 模型测试场景（运行：test\model_test.bat）
+// 模型测试场景（运行：lwjgl3\test\model_test.bat）
 tasks.register('modelTest', JavaExec) {
   group = 'verification'
   description = 'Run standalone model test scene (normal mapping / textures / lighting).'

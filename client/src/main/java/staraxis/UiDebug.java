@@ -13,6 +13,7 @@ import com.badlogic.gdx.scenes.scene2d.*;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 
 import staraxis.render.WorldCamera;
+import staraxis.render.system.SystemViewRenderer;
 import staraxis.ui.FontProvider;
 import staraxis.ui.UiPointerService;
 import staraxis.ui.json.UiFactory;
@@ -41,6 +42,9 @@ public class UiDebug {
     /** 统一 UI 命中守卫服务：面板打开期间注册 bounds，点击面板不触发 3D 交互喵 */
     private UiPointerService pointerService;
 
+    /** 场景渲染器：模型法向调试开关的目标 */
+    private SystemViewRenderer systemViewRenderer;
+
     // ---- 面板 ----
     private Actor panelRoot;
     private boolean panelOpen;
@@ -50,9 +54,10 @@ public class UiDebug {
     private boolean showBounds = true;
     private boolean showMouse = true;
     private boolean showCameraOverlay = true;
+    private boolean showNormals = false;
 
     // 按钮/标签引用（从 JSON Actor 树查找）
-    private VectorButton btnOrigin, btnBounds, btnMouse, btnCamera;
+    private VectorButton btnOrigin, btnBounds, btnMouse, btnCamera, btnNormals;
     private VectorLabel labelTarget, labelOrbit, labelZoom, labelYawPitch, labelFps;
 
     // ---- 叠加层 ----
@@ -87,6 +92,11 @@ public class UiDebug {
     /** 注入统一守卫服务（F3 面板打开/关闭时注册/注销 bounds）喵 */
     public void setPointerService(UiPointerService pointerService) {
         this.pointerService = pointerService;
+    }
+
+    /** 注入场景渲染器，用于控制模型法向调试可视化开关。 */
+    public void setSystemViewRenderer(SystemViewRenderer systemViewRenderer) {
+        this.systemViewRenderer = systemViewRenderer;
     }
 
     /** 切换活动镜头（galaxy/system 视图切换时调用，让调试面板显示当前镜头信息）喵 */
@@ -238,6 +248,7 @@ public class UiDebug {
 
         btnOrigin = findBtn("btn_origin"); btnBounds = findBtn("btn_bounds");
         btnMouse  = findBtn("btn_mouse");  btnCamera = findBtn("btn_camera");
+        btnNormals = findBtn("btn_normals");
         labelTarget   = findLbl("label_target");   labelOrbit    = findLbl("label_orbit");
         labelZoom     = findLbl("label_zoom");     labelYawPitch = findLbl("label_yawpitch");
         labelFps      = findLbl("label_fps");
@@ -246,6 +257,12 @@ public class UiDebug {
         bindToggle(btnBounds, "Actor 边框", v -> showBounds        = v);
         bindToggle(btnMouse,  "鼠标信息",  v -> showMouse         = v);
         bindToggle(btnCamera, "镜头数据",  v -> showCameraOverlay  = v);
+        bindToggle(btnNormals, "模型法向", v -> {
+            showNormals = v;
+            if (systemViewRenderer != null) {
+                systemViewRenderer.setDebugNormalsEnabled(v);
+            }
+        });
 
         panelRoot.addListener(new InputListener() {
             public boolean touchDown(InputEvent e, float x, float y, int p, int b) {
@@ -291,6 +308,7 @@ public class UiDebug {
             case "显示原点": return showOrigin;
             case "Actor 边框": return showBounds;
             case "鼠标信息": return showMouse;
+            case "模型法向": return showNormals;
             default: return showCameraOverlay;
         }
     }

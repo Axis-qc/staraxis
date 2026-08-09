@@ -105,6 +105,14 @@ public class StarEaterShipRenderer {
     /** 临时向量，避免每帧分配。 */
     private final Vector3 tmpScreenPos = new Vector3();
 
+    /**
+     * 当前帧已更新 transform 的舰船模型实例列表。
+     * 供模型法向调试可视化使用（法向渲染发生在舰船渲染之后）。
+     */
+    public java.util.List<ModelInstance> getInstances() {
+        return shipInstances;
+    }
+
     private static class ShipScreenInfo {
         final long entityId;
         final float centerX;

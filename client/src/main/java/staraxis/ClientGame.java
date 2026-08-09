@@ -226,6 +226,8 @@ public class ClientGame implements ApplicationListener {
         uiDebug.setCamera(galaxyCamera); // 默认显示 galaxy 镜头信息
         // 调试面板注册到统一守卫：F3 打开期间点击面板不触发 3D 选中/移动喵
         uiDebug.setPointerService(pointerService);
+        // 模型法向调试开关目标（initSpaceRendering 已创建 System View 渲染器）喵
+        uiDebug.setSystemViewRenderer(systemViewRenderer);
 
         // 设置异步世界生成回调
         gui.setOnStartNewGame(cfg -> startAsyncGen(cfg));
@@ -236,6 +238,14 @@ public class ClientGame implements ApplicationListener {
         selectionService = new SelectionService();
         shipMoveController.setSelectionService(selectionService);
         gui.register(SelectionService.class, selectionService);
+
+        // 行星左键点击 → 打开/聚焦行星信息窗口（InGameHudScreen 管理窗口，UI 只读展示快照）喵
+        InGameHudScreen hud = gui.get(InGameHudScreen.class);
+        if (hud != null) {
+            shipMoveController.setOnPlanetClick(hud::openPlanetInfo);
+            // 摘要面板「移动」指令 → 进入舰船移动模式（回调解耦，ui 不依赖 client 模块）喵
+            hud.setMoveModeRequester(shipMoveController::enterMoveMode);
+        }
     }
 
     private void initSpaceRendering() {
