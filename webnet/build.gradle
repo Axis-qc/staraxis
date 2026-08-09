@@ -15,6 +15,15 @@ dependencies {
   implementation 'com.fasterxml.jackson.core:jackson-core:2.17.2'
   implementation 'com.fasterxml.jackson.core:jackson-annotations:2.17.2'
   implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.17.2'
+
+  // 单元测试：DTO 转换与序列化兼容验证喵
+  testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+  testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+  useJUnitPlatform()
+  workingDir = rootProject.rootDir
 }
 
 application {
