@@ -1,0 +1,218 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <defs>
+    <radialGradient id="spaceBg" cx="50%" cy="45%" r="85%">
+      <stop offset="0%" stop-color="#0d1526"/>
+      <stop offset="100%" stop-color="#050810"/>
+    </radialGradient>
+    <radialGradient id="starGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFD27D" stop-opacity="0.85"/>
+      <stop offset="35%" stop-color="#FFB347" stop-opacity="0.30"/>
+      <stop offset="100%" stop-color="#FF9A3C" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="planetGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#4AC9FF" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#4AC9FF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- ============ 深空背景 ============ -->
+  <rect width="1280" height="720" fill="url(#spaceBg)"/>
+  <g fill="#FFFFFF">
+    <circle cx="48" cy="96" r="1.1" opacity="0.7"/>
+    <circle cx="130" cy="210" r="0.8" opacity="0.4"/>
+    <circle cx="88" cy="420" r="1.3" opacity="0.8"/>
+    <circle cx="190" cy="330" r="0.7" opacity="0.35"/>
+    <circle cx="260" cy="120" r="1" opacity="0.55"/>
+    <circle cx="330" cy="520" r="0.9" opacity="0.45"/>
+    <circle cx="420" cy="70" r="1.2" opacity="0.7"/>
+    <circle cx="480" cy="250" r="0.7" opacity="0.3"/>
+    <circle cx="540" cy="600" r="1" opacity="0.5"/>
+    <circle cx="610" cy="140" r="0.8" opacity="0.4"/>
+    <circle cx="700" cy="640" r="1.1" opacity="0.6"/>
+    <circle cx="760" cy="90" r="0.9" opacity="0.45"/>
+    <circle cx="830" cy="300" r="1.2" opacity="0.65"/>
+    <circle cx="900" cy="180" r="0.7" opacity="0.35"/>
+    <circle cx="960" cy="520" r="1" opacity="0.55"/>
+    <circle cx="1030" cy="80" r="1.3" opacity="0.75"/>
+    <circle cx="1090" cy="380" r="0.8" opacity="0.4"/>
+    <circle cx="1150" cy="220" r="1" opacity="0.55"/>
+    <circle cx="1210" cy="470" r="0.9" opacity="0.45"/>
+    <circle cx="1240" cy="120" r="1.1" opacity="0.6"/>
+    <circle cx="170" cy="600" r="0.8" opacity="0.4"/>
+    <circle cx="380" cy="640" r="1" opacity="0.5"/>
+    <circle cx="660" cy="40" r="0.9" opacity="0.45"/>
+    <circle cx="1060" cy="640" r="1.2" opacity="0.6"/>
+    <circle cx="60" cy="660" r="0.7" opacity="0.35"/>
+    <circle cx="230" cy="40" r="1" opacity="0.5"/>
+    <circle cx="870" cy="660" r="0.8" opacity="0.4"/>
+    <circle cx="1180" cy="600" r="1" opacity="0.5"/>
+    <circle cx="990" cy="290" r="0.7" opacity="0.3"/>
+    <circle cx="450" cy="420" r="0.9" opacity="0.4"/>
+  </g>
+
+  <!-- ============ 3D 场景：恒星系视图 ============ -->
+  <!-- 轨道环 -->
+  <g fill="none" stroke="#4AC9FF" stroke-opacity="0.14" stroke-width="1">
+    <circle cx="640" cy="340" r="90"/>
+    <circle cx="640" cy="340" r="150"/>
+    <circle cx="640" cy="340" r="210"/>
+  </g>
+
+  <!-- 恒星光晕 + 恒星 -->
+  <circle cx="640" cy="340" r="70" fill="url(#starGlow)"/>
+  <circle cx="640" cy="340" r="22" fill="#FFD27D"/>
+  <circle cx="640" cy="340" r="22" fill="none" stroke="#FFE9B8" stroke-width="1.5" stroke-opacity="0.8"/>
+  <text x="640" y="382" font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="13" fill="#FFD27D" text-anchor="middle" opacity="0.9">晨曦星系</text>
+
+  <!-- 行星 A（新伊甸，宜居） -->
+  <circle cx="718" cy="385" r="14" fill="url(#planetGlow)"/>
+  <circle cx="718" cy="385" r="6" fill="#5FB878"/>
+  <text x="718" y="408" font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="12" fill="#D1D5DB" text-anchor="middle">新伊甸</text>
+  <text x="718" y="422" font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="10" fill="#10B981" text-anchor="middle">[宜居]</text>
+
+  <!-- 行星 B（铁壤星） -->
+  <circle cx="565" cy="470" r="5" fill="#B08850"/>
+  <text x="565" y="491" font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="12" fill="#8B93A3" text-anchor="middle">铁壤星</text>
+
+  <!-- 行星 C（风蚀星） -->
+  <circle cx="676" cy="547" r="7" fill="#9A7B6E"/>
+  <text x="676" y="568" font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="12" fill="#8B93A3" text-anchor="middle">风蚀星</text>
+
+  <!-- 舰船（选中态：虚线选中环） -->
+  <circle cx="499" cy="289" r="12" fill="none" stroke="#4AC9FF" stroke-width="1.2" stroke-dasharray="4 3" stroke-opacity="0.8"/>
+  <path d="M 499 281 L 506 296 L 499 292 L 492 296 Z" fill="#4AC9FF"/>
+  <text x="499" y="270" font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="11" fill="#7ADFFF" text-anchor="middle">探索船 · 致远号</text>
+
+  <!-- ============ 钉住窗口（级联：后层 + 前层） ============ -->
+  <!-- 后层窗口（级联偏移 30px，被前层遮挡） -->
+  <g opacity="0.85">
+    <rect x="575" y="125" width="330" height="210" fill="#0A1120" fill-opacity="0.92" stroke="#4AC9FF" stroke-opacity="0.25"/>
+    <rect x="575" y="125" width="330" height="26" fill="#101A30" fill-opacity="0.95"/>
+    <text x="585" y="143" font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="13" fill="#8B93A3">行星 · 铁壤星</text>
+  </g>
+
+  <!-- 前层窗口（屏幕中央偏上） -->
+  <g>
+    <rect x="545" y="95" width="330" height="210" fill="#0A1120" fill-opacity="0.92" stroke="#4AC9FF" stroke-opacity="0.4" stroke-width="1.2"/>
+    <!-- 标题栏 -->
+    <rect x="545" y="95" width="330" height="26" fill="#16233F" fill-opacity="0.95"/>
+    <text x="557" y="113" font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="13" fill="#FFFFFF">恒星系 #42 · 晨曦</text>
+    <!-- 关闭按钮 X -->
+    <line x1="857" y1="102" x2="867" y2="112" stroke="#D1D5DB" stroke-width="1.5"/>
+    <line x1="867" y1="102" x2="857" y2="112" stroke="#D1D5DB" stroke-width="1.5"/>
+    <!-- 内容字段 -->
+    <g font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="12" fill="#D1D5DB">
+      <text x="559" y="143">光谱类型: G2V</text>
+      <text x="559" y="163">表面温度: 5778 K</text>
+      <text x="559" y="183">半径: 1.00 sol</text>
+      <text x="559" y="203">行星数量: 6</text>
+      <text x="559" y="223">宜居行星: 1</text>
+    </g>
+  </g>
+
+  <!-- ============ 悬停 tooltip（锚定行星 A，带钉住进度环） ============ -->
+  <g>
+    <rect x="745" y="350" width="158" height="70" fill="#0A1120" fill-opacity="0.85" stroke="#4AC9FF" stroke-opacity="0.4"/>
+    <g font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="12" fill="#D1D5DB">
+      <text x="754" y="369">行星 · 新伊甸</text>
+      <text x="754" y="387">TERRESTRIAL</text>
+      <text x="754" y="405">半径 6,371 GU</text>
+    </g>
+    <!-- 钉住进度环：右下角圆圈（底环 + 60% 弧） -->
+    <circle cx="889" cy="408" r="6" fill="none" stroke="#4AC9FF" stroke-opacity="0.25" stroke-width="2"/>
+    <circle cx="889" cy="408" r="6" fill="none" stroke="#4AC9FF" stroke-width="2"
+            stroke-dasharray="22.6 37.7" transform="rotate(-90 889 408)"/>
+  </g>
+
+  <!-- ============ toast 通知（顶部中央滑入） ============ -->
+  <g>
+    <rect x="520" y="46" width="240" height="30" rx="3" fill="#0A1120" fill-opacity="0.9" stroke="#10B981" stroke-opacity="0.6"/>
+    <text x="536" y="66" font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="13" fill="#10B981">✓ 建造完成：护卫舰 x1</text>
+  </g>
+
+  <!-- ============ 顶栏（Phase 4） ============ -->
+  <rect x="0" y="0" width="1280" height="36" fill="#0A1120" fill-opacity="0.8"/>
+  <line x1="0" y1="36" x2="1280" y2="36" stroke="#4AC9FF" stroke-opacity="0.25"/>
+
+  <!-- 左区：国家 + 国库 -->
+  <g font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="13">
+    <path d="M 18 10 L 26 18 L 18 26 L 10 18 Z" fill="none" stroke="#4AC9FF" stroke-width="1.5"/>
+    <text x="34" y="23" fill="#FFFFFF">晨曦联合</text>
+    <text x="118" y="23" fill="#FFD27D">◆ 12,450</text>
+    <text x="220" y="23" fill="#D1D5DB">矿物 <tspan fill="#10B981">+45/日</tspan></text>
+    <text x="320" y="23" fill="#D1D5DB">食物 <tspan fill="#10B981">+30/日</tspan></text>
+  </g>
+
+  <!-- 中区：时间 + 时间控制 -->
+  <g font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="13">
+    <text x="640" y="23" fill="#D1D5DB" text-anchor="middle">Y1 M3 D15  14:30</text>
+    <g>
+      <rect x="730" y="7" width="30" height="22" fill="#0A0F1E" fill-opacity="0.85" stroke="#4AC9FF" stroke-opacity="0.35"/>
+      <text x="745" y="23" fill="#D1D5DB" text-anchor="middle" font-size="11">II</text>
+      <rect x="764" y="7" width="30" height="22" fill="#0A0F1E" fill-opacity="0.85" stroke="#4AC9FF" stroke-opacity="0.35"/>
+      <text x="779" y="23" fill="#D1D5DB" text-anchor="middle" font-size="11">1x</text>
+      <rect x="798" y="7" width="30" height="22" fill="#4AC9FF" fill-opacity="0.25" stroke="#4AC9FF" stroke-opacity="0.8"/>
+      <text x="813" y="23" fill="#FFFFFF" text-anchor="middle" font-size="11">2x</text>
+      <rect x="832" y="7" width="30" height="22" fill="#0A0F1E" fill-opacity="0.85" stroke="#4AC9FF" stroke-opacity="0.35"/>
+      <text x="847" y="23" fill="#D1D5DB" text-anchor="middle" font-size="11">5x</text>
+    </g>
+  </g>
+
+  <!-- 右区：通知/舰队/帮助 -->
+  <g font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="12">
+    <rect x="1080" y="7" width="56" height="22" fill="#0A0F1E" fill-opacity="0.85" stroke="#4AC9FF" stroke-opacity="0.35"/>
+    <text x="1108" y="23" fill="#D1D5DB" text-anchor="middle">通知</text>
+    <circle cx="1130" cy="10" r="6" fill="#EF4444"/>
+    <text x="1130" y="14" fill="#FFFFFF" text-anchor="middle" font-size="9">2</text>
+    <rect x="1144" y="7" width="56" height="22" fill="#0A0F1E" fill-opacity="0.85" stroke="#4AC9FF" stroke-opacity="0.35"/>
+    <text x="1172" y="23" fill="#D1D5DB" text-anchor="middle">舰队</text>
+    <rect x="1208" y="7" width="30" height="22" fill="#0A0F1E" fill-opacity="0.85" stroke="#4AC9FF" stroke-opacity="0.35"/>
+    <text x="1223" y="23" fill="#D1D5DB" text-anchor="middle">?</text>
+  </g>
+
+  <!-- ============ 左上：视图标签 ============ -->
+  <text x="12" y="56" font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="12" fill="#8B93A3">恒星系视图  x3.2</text>
+
+  <!-- ============ 左下：实体摘要面板（SC 指令卡式固定结构） ============ -->
+  <g>
+    <rect x="10" y="511" width="400" height="199" fill="#0A1120" fill-opacity="0.65" stroke="#4AC9FF" stroke-opacity="0.35" stroke-width="1.2"/>
+
+    <!-- 标题槽 -->
+    <text x="22" y="536" font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="17" fill="#FFFFFF">行星 · 新伊甸</text>
+    <text x="252" y="536" font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="13" fill="#10B981">[宜居]</text>
+    <rect x="322" y="521" width="76" height="24" fill="#0A0F1E" fill-opacity="0.85" stroke="#4AC9FF" stroke-opacity="0.5"/>
+    <text x="360" y="538" font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="12" fill="#D1D5DB" text-anchor="middle">详细 &gt;&gt;</text>
+
+    <!-- 信息槽 4 行 -->
+    <g font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="12" fill="#D1D5DB">
+      <text x="22" y="562">类型: TERRESTRIAL</text>
+      <text x="22" y="581">半径: 6,371 GU</text>
+      <text x="22" y="600">轨道周期: 365 日</text>
+      <text x="22" y="619">地表区域: 5 块 (大陆 x2)</text>
+    </g>
+
+    <!-- 指令网格 2 行 x 5 列 -->
+    <!-- 行 1 -->
+    <g font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="12">
+      <rect x="20" y="630" width="72" height="32" fill="#0A0F1E" fill-opacity="0.5" stroke="#4AC9FF" stroke-opacity="0.2"/>
+      <text x="56" y="650" fill="#6B7280" text-anchor="middle">殖民</text>
+      <rect x="97" y="630" width="72" height="32" fill="#0A0F1E" fill-opacity="0.85" stroke="#4AC9FF" stroke-opacity="0.5"/>
+      <text x="133" y="650" fill="#D1D5DB" text-anchor="middle">调查</text>
+      <rect x="174" y="630" width="72" height="32" fill="#0A0F1E" fill-opacity="0.85" stroke="#4AC9FF" stroke-opacity="0.5"/>
+      <text x="210" y="650" fill="#D1D5DB" text-anchor="middle">设航标</text>
+      <rect x="251" y="630" width="72" height="32" fill="none" stroke="#4AC9FF" stroke-opacity="0.12"/>
+      <rect x="328" y="630" width="72" height="32" fill="none" stroke="#4AC9FF" stroke-opacity="0.12"/>
+    </g>
+    <!-- 行 2（全空槽） -->
+    <g fill="none" stroke="#4AC9FF" stroke-opacity="0.12">
+      <rect x="20" y="667" width="72" height="32"/>
+      <rect x="97" y="667" width="72" height="32"/>
+      <rect x="174" y="667" width="72" height="32"/>
+      <rect x="251" y="667" width="72" height="32"/>
+      <rect x="328" y="667" width="72" height="32"/>
+    </g>
+  </g>
+
+  <!-- ============ 角落标注 ============ -->
+  <text x="1268" y="712" font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="10" fill="#4A5568" text-anchor="end">StarAxis HUD Mockup v1 · 2026-07-23</text>
+</svg>

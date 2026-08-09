@@ -165,13 +165,14 @@ Thumbs.db
 
 ## Documentation (not tracked):
 /0-docs/
-/docs/
 /memories/
 /ai_system/
 *.md
 !/README.md
 !web/README.md
 !ui/**/[rR][eE][aA][dD][mM][eE].md
+!/docs/
+!/docs/**
 
 **/libcef.dll
 **/lwjgl3/natives/**
