@@ -34,6 +34,27 @@ public class LoadWorldHandler implements CommandHandler<LoadWorldCommand> {
 
         // 4. 恢复实体 ID 生成器状态
         worldState.setNextEntityId(command.getNextEntityId());
+
+        // 5. 恢复工业注册表状态（本地库存 / 加工设施 / 采集设施 / 运输记录 / ID 生成器）喵
+        applyIndustryState(worldState, command.getWorldData());
+    }
+
+    /**
+     * 恢复工业注册表状态喵。
+     *
+     * 存档中 industry 段挂载在 world 下（见 WorldSaveService / IndustryStateCodec），
+     * 随 LoadWorldCommand.worldData 一起传入；旧存档无 industry 字段时保持空注册表（单向兼容）。
+     */
+    private static void applyIndustryState(WorldState ws, Map<String, Object> worldMap) {
+        if (worldMap == null) {
+            return;
+        }
+        Object industryObj = worldMap.get("industry");
+        if (industryObj instanceof Map<?, ?> raw) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> industryMap = (Map<String, Object>) raw;
+            staraxis.game.save.IndustryStateCodec.apply(industryMap, ws.industryRegistry);
+        }
     }
 
     /**

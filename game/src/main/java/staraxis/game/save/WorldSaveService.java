@@ -146,6 +146,11 @@ public final class WorldSaveService {
 
         Map<String, Object> world = new LinkedHashMap<>();
         world.put("worldRadius", ws.worldRadius);
+        // 工业系统注册表快照（G2 元素化生产）。
+        // 挂载在 world 下而非根节点：现有加载链路仅由 LoadWorldCommand 携带
+        // world/nations/entities/nextEntityId 四段数据，且 webnet 侧不改动，
+        // world.industry 是唯一无需改动 webnet 即可流入 game 加载链路的载体喵。
+        world.put("industry", IndustryStateCodec.encode(ws.industryRegistry));
         world.put("simulationTick", rt.simulationTick);
         world.put("totalGameSeconds", rt.totalGameSeconds);
         world.put("deltaGameSeconds", rt.deltaGameSeconds);

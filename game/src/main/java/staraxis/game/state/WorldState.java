@@ -109,6 +109,15 @@ public class WorldState {
     /** 星系八叉树空间索引（只读，每 tick 重建，用于恒星拾取/传感器范围查询）。 */
     public final GalaxyOctree galaxyOctree = new GalaxyOctree();
 
+    /**
+     * 工业系统注册表（工业系统注册表，权威维护本地库存/加工设施/货物运输）。
+     *
+     * 说明：
+     * - 由 G2 元素化生产第一阶段引入，遵循实体-ID 索引模型。
+     * - 仅允许模拟层读写，外部模块通过快照或命令访问喵。
+     */
+    public final staraxis.game.industry.IndustryRegistry industryRegistry = new staraxis.game.industry.IndustryRegistry();
+
     /** Tick 分派器（管理 5 阶段流水线调度 + LPT 分配）。 */
     public final TickDispatcher tickDispatcher = new TickDispatcher();
     /**
@@ -134,6 +143,31 @@ public class WorldState {
         entitiesById.put(entity.entityId, entity);
         if (entity.systemId > 0) {
             entityIdsBySystem.computeIfAbsent(entity.systemId, k -> new ArrayList<>()).add(entity.entityId);
+        }
+    }
+
+    /**
+     * 从世界中移除实体（removeEntity）喵。
+     *
+     * 作用：
+     * - 从实体总表 entitiesById 中删除，同时清理恒星系实体索引 entityIdsBySystem 喵。
+     * - 用于殖民舰消耗、舰船销毁等场景喵。
+     *
+     * @param entityId 要移除的实体ID
+     */
+    public void removeEntity(long entityId) {
+        Entity entity = entitiesById.remove(entityId);
+        if (entity == null) {
+            return;
+        }
+        if (entity.systemId > 0) {
+            List<Long> ids = entityIdsBySystem.get(entity.systemId);
+            if (ids != null) {
+                ids.remove(entityId);
+                if (ids.isEmpty()) {
+                    entityIdsBySystem.remove(entity.systemId);
+                }
+            }
         }
     }
 

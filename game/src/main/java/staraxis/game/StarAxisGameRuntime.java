@@ -76,6 +76,26 @@ public class StarAxisGameRuntime implements GameRuntime {
 
     private final ShipMovementSystem shipMovementSystem = new ShipMovementSystem();
 
+    /**
+     * 配方仓库（工业系统数据源，G2 元素化生产）。
+     */
+    private final staraxis.game.industry.RecipeRepository recipeRepository;
+
+    /**
+     * 工业日结算服务（权威推进库存/设施产能/配方产出/运输抵达）。
+     */
+    private final staraxis.game.industry.ProductionSettlementService productionSettlementService;
+
+    /**
+     * 最近一次工业日结算报告（SettlementReport）。
+     *
+     * 说明（G2.7）：
+     * - dayChanged 时由 settleDay 返回并保存在此，供同一 tick 的 publishBaselineSnapshot 读取，
+     *   保证结算报告不会在 settleDay 返回后丢失。
+     * - 每次结算覆盖前值；从未结算过为 null。
+     */
+    private staraxis.game.industry.SettlementReport lastSettlementReport;
+
     // ── 世界生成阶段定义（加载进度条用） ──
     /** 世界生成各阶段的进度比例与中文标签。 */
     private enum GenPhase {
@@ -132,7 +152,24 @@ public class StarAxisGameRuntime implements GameRuntime {
     }
 
     public StarAxisGameRuntime(WorldState worldState) {
+        this(worldState, null);
+    }
+
+    /**
+     * 构造运行时（可注入配方仓库，供工业系统数据源使用）。
+     *
+     * @param worldState       权威世界状态
+     * @param recipeRepository 配方仓库（为空时创建并按默认路径加载）
+     */
+    public StarAxisGameRuntime(WorldState worldState, staraxis.game.industry.RecipeRepository recipeRepository) {
         this.worldState = worldState;
+
+        if (recipeRepository == null) {
+            recipeRepository = new staraxis.game.industry.RecipeRepository(new ObjectMapper());
+            recipeRepository.loadAll();
+        }
+        this.recipeRepository = recipeRepository;
+        this.productionSettlementService = new staraxis.game.industry.ProductionSettlementService(recipeRepository);
 
         commandBus.register(SetPlayerTimeStepCommand.class, new SetPlayerTimeStepHandler());
         commandBus.register(SetSystemTimeScaleCommand.class, new SetSystemTimeScaleHandler());
@@ -145,6 +182,15 @@ public class StarAxisGameRuntime implements GameRuntime {
 
     public CommandBus getCommandBusForSimOnly() {
         return commandBus;
+    }
+
+    /**
+     * 轮询命令执行结果（供 UI 只读消费，不暴露内部 CommandBus）喵。
+     *
+     * @return 自上次调用以来新增的命令结果列表（消费式，读后清空）
+     */
+    public java.util.List<staraxis.game.command.CommandResult> pollCommandResults() {
+        return commandBus.pollResults();
     }
 
     /**
@@ -300,16 +346,25 @@ public class StarAxisGameRuntime implements GameRuntime {
         shipMovementSystem.update(worldState, dtGameHours, activeSystemId);
         TickProfiler.end();
 
+        // 跨日逻辑：G2 元素化生产日结算，权威推进库存/设施产能/配方产出/运输抵达喵
+        // 必须在本 tick 的 publishBaselineSnapshot 之前执行（G2.7 修复）：
+        // 使同一 tick 的 baseline 同时看到结算后库存与 SettlementReport，避免额外下一 tick 发布喵
+        if (tickAdvance.dayChanged) {
+            // 结算报告保存在 lastSettlementReport，供本 tick 的 baseline 发布读取（G2.7）喵
+            lastSettlementReport = productionSettlementService.settleDay(
+                    worldState.industryRegistry, worldState.time.simulationTick);
+            // 工业系统有数据时才标记低频快照脏，避免无谓发布喵
+            if (!worldState.industryRegistry.isEmpty()) {
+                worldState.baselineDirty = true;
+            }
+        }
+
         // 检查是否需要推送低频基线快照（每 20 tick / 约现实 1 秒）
         TickProfiler.begin(TickProfiler.Phase.SNAPSHOT);
         if (worldState.time.simulationTick % SimulationClock.TICKS_PER_SECOND == 0 || worldState.baselineDirty) {
             publishBaselineSnapshot();
             worldState.baselineDirty = false;
             worldState.markRealtimeDirty();
-        }
-
-        if (tickAdvance.dayChanged) {
-            // 跨日逻辑可在此保留，用于未来的统计等，当前由定时/脏标记统一驱动低频快照发布喵
         }
 
         // STAGE 4/5: TickDispatcher 合并 + 发布钩子
@@ -409,24 +464,87 @@ public class StarAxisGameRuntime implements GameRuntime {
         HashMap<Long, DailySettlementState.PlanetSurfaceDailySnapshot> planetMap = new HashMap<>();
         for (StarSystem system : worldState.astro.getSystemsView()) {
             for (PlanetBody planet : system.planets) {
-                if (planet.surface == null || planet.surface.surfaceRegions == null
-                        || planet.surface.surfaceRegions.isEmpty()) {
+                if (planet.surface == null) {
                     continue;
                 }
 
-                ArrayList<DailySettlementState.SurfaceRegionDailySnapshot> regions = new ArrayList<>(
-                        planet.surface.surfaceRegions.size());
-                for (staraxis.game.planet.surface.SurfaceRegion r : planet.surface.surfaceRegions) {
-                    regions.add(new DailySettlementState.SurfaceRegionDailySnapshot(
-                            r.regionId,
-                            r.regionType,
-                            r.name,
-                            r.surfacePercentage,
-                            r.developableSpaceRatio));
+                ArrayList<DailySettlementState.SurfaceRegionDailySnapshot> regions = new ArrayList<>();
+                if (planet.surface.surfaceRegions != null) {
+                    for (staraxis.game.planet.surface.SurfaceRegion r : planet.surface.surfaceRegions) {
+                        regions.add(new DailySettlementState.SurfaceRegionDailySnapshot(
+                                r.regionId,
+                                r.regionType,
+                                r.name,
+                                r.surfacePercentage,
+                                r.developableSpaceRatio));
+                    }
                 }
 
+                // 1b. 填充城市/殖民地快照（G0.3：殖民结果对外可读）喵
+                ArrayList<DailySettlementState.CityDailySnapshot> cities = new ArrayList<>();
+                if (planet.surface.cities != null) {
+                    for (staraxis.game.planet.city.City c : planet.surface.cities) {
+                        cities.add(new DailySettlementState.CityDailySnapshot(
+                                c.cityId,
+                                c.name,
+                                c.cityStage,
+                                c.cityScale,
+                                c.population,
+                                c.isPlanetaryCapital));
+                    }
+                }
+
+                // 1c. 填充行星工业只读快照（G2.7）：本地库存 + 采集/加工设施 + 在途运输 + 最近结算结果喵
+                // 归属口径：以行星本地库存（ownerEntityId == planet.entityId）为准；
+                // 设施通过 inventoryId 归属，在途运输通过 source/targetInventoryId 归属喵
+                ArrayList<DailySettlementState.InventoryDailySnapshot> inventories = new ArrayList<>();
+                long planetInventoryId = -1L;
+                staraxis.game.industry.LocalInventory planetInventory =
+                        worldState.industryRegistry.getInventoryByOwner(planet.entityId);
+                if (planetInventory != null) {
+                    planetInventoryId = planetInventory.inventoryId;
+                    inventories.add(toInventorySnapshot(planetInventory));
+                }
+
+                ArrayList<DailySettlementState.ExtractionFacilityDailySnapshot> extractionFacilities = new ArrayList<>();
+                ArrayList<DailySettlementState.ProcessingFacilityDailySnapshot> processingFacilities =
+                        new ArrayList<>();
+                ArrayList<DailySettlementState.TransferDailySnapshot> inTransitTransfers = new ArrayList<>();
+                if (planetInventoryId > 0) {
+                    // 采集/加工设施：筛选所属库存为本行星库存，保持注册（ID 分配）顺序喵
+                    for (staraxis.game.industry.ResourceExtractionFacility f
+                            : worldState.industryRegistry.extractionFacilitiesById.values()) {
+                        if (f.inventoryId == planetInventoryId) {
+                            extractionFacilities.add(toExtractionFacilitySnapshot(f));
+                        }
+                    }
+                    for (staraxis.game.industry.ProcessingFacility f
+                            : worldState.industryRegistry.facilitiesById.values()) {
+                        if (f.inventoryId == planetInventoryId) {
+                            processingFacilities.add(toProcessingFacilitySnapshot(f));
+                        }
+                    }
+                    // 在途运输：筛选源或目标库存为本行星库存，保持运输记录 ID 顺序喵
+                    for (staraxis.game.industry.CargoTransfer t
+                            : worldState.industryRegistry.getInTransitTransfers()) {
+                        if (t.sourceInventoryId == planetInventoryId || t.targetInventoryId == planetInventoryId) {
+                            inTransitTransfers.add(toTransferSnapshot(t));
+                        }
+                    }
+                }
+
+                // 最近结算结果：仅当本行星有库存且最近一次结算已产生时携带；
+                // toSettlementReportSnapshot 在本行星无相关条目（新殖民/空结算）时返回 null（明确约定）喵
+                DailySettlementState.SettlementReportDailySnapshot settlementReportSnapshot =
+                        lastSettlementReport != null && planetInventoryId > 0
+                                ? toSettlementReportSnapshot(planetInventoryId)
+                                : null;
+
                 planetMap.put(planet.entityId,
-                        new DailySettlementState.PlanetSurfaceDailySnapshot(planet.entityId, List.copyOf(regions)));
+                        new DailySettlementState.PlanetSurfaceDailySnapshot(
+                                planet.entityId, List.copyOf(regions), List.copyOf(cities),
+                                inventories, extractionFacilities, processingFacilities,
+                                inTransitTransfers, settlementReportSnapshot));
             }
         }
         next.planetSurfacesByPlanetId = planetMap;
@@ -608,6 +726,129 @@ public class StarAxisGameRuntime implements GameRuntime {
         next.publicEntityBaselinesBySectorKey = baselineMap;
 
         dailySettlementBuffer.swapPublish();
+    }
+
+    /**
+     * 构造本地库存只读快照（G2.7）。
+     * substances / reservedAmounts 在快照构造器内部深拷贝，外部不可见 game 可变对象喵。
+     */
+    private DailySettlementState.InventoryDailySnapshot toInventorySnapshot(
+            staraxis.game.industry.LocalInventory inventory) {
+        return new DailySettlementState.InventoryDailySnapshot(
+                inventory.inventoryId,
+                inventory.ownerEntityId,
+                inventory.capacity,
+                inventory.getUsedCapacity(),
+                inventory.substances,
+                inventory.reservedAmounts);
+    }
+
+    /**
+     * 构造采集设施只读快照（G2.7）。
+     */
+    private DailySettlementState.ExtractionFacilityDailySnapshot toExtractionFacilitySnapshot(
+            staraxis.game.industry.ResourceExtractionFacility facility) {
+        return new DailySettlementState.ExtractionFacilityDailySnapshot(
+                facility.facilityId,
+                facility.facilityType,
+                facility.inventoryId,
+                facility.locationEntityId,
+                facility.resourceId,
+                facility.amountPerDay,
+                facility.status,
+                facility.lastFailureReason);
+    }
+
+    /**
+     * 构造加工设施只读快照（G2.7）。
+     */
+    private DailySettlementState.ProcessingFacilityDailySnapshot toProcessingFacilitySnapshot(
+            staraxis.game.industry.ProcessingFacility facility) {
+        return new DailySettlementState.ProcessingFacilityDailySnapshot(
+                facility.facilityId,
+                facility.facilityType,
+                facility.inventoryId,
+                facility.locationEntityId,
+                facility.activeRecipeId,
+                facility.progressDays,
+                facility.progressRecipeId,
+                facility.status,
+                facility.lastFailureReason);
+    }
+
+    /**
+     * 构造在途运输只读快照（G2.7）。
+     * goods 在快照构造器内部深拷贝喵。
+     */
+    private DailySettlementState.TransferDailySnapshot toTransferSnapshot(
+            staraxis.game.industry.CargoTransfer transfer) {
+        return new DailySettlementState.TransferDailySnapshot(
+                transfer.transferId,
+                transfer.sourceInventoryId,
+                transfer.targetInventoryId,
+                transfer.goods,
+                transfer.status,
+                transfer.departedAtTick,
+                transfer.arrivedAtTick);
+    }
+
+    /**
+     * 从最近一次日结算报告（lastSettlementReport）筛选出属于指定行星库存的结算结果，
+     * 构造为行星级只读快照（G2.7）。
+     *
+     * 归属口径与工业快照一致（以 inventoryId 匹配）：
+     * - 采集/加工结果：结算结果中的 facilityId 对应的设施所属库存为本行星库存。
+     * - 运输结果：结算结果中的 transferId 对应的运输记录源或目标库存为本行星库存。
+     * 报告条目顺序保持 SettlementReport 生成顺序（设施/运输创建顺序，即 ID 递增）喵。
+     *
+     * @param planetInventoryId 行星本地库存 ID（必须 > 0，由调用方保证）
+     * @return 该行星的结算结果只读快照；筛选后三类报告均为空时返回 null
+     *         （避免新殖民行星/空结算继承旧的全局空报告，明确表示该行星无结算结果）喵
+     */
+    private DailySettlementState.SettlementReportDailySnapshot toSettlementReportSnapshot(long planetInventoryId) {
+        ArrayList<DailySettlementState.ExtractionResultDailySnapshot> extractions = new ArrayList<>();
+        ArrayList<DailySettlementState.FacilityResultDailySnapshot> facilities = new ArrayList<>();
+        ArrayList<DailySettlementState.TransferResultDailySnapshot> transfers = new ArrayList<>();
+
+        for (staraxis.game.industry.SettlementReport.ExtractionResult result : lastSettlementReport.extractions) {
+            staraxis.game.industry.ResourceExtractionFacility facility =
+                    worldState.industryRegistry.getExtractionFacility(result.facilityId);
+            if (facility != null && facility.inventoryId == planetInventoryId) {
+                extractions.add(new DailySettlementState.ExtractionResultDailySnapshot(
+                        result.facilityId, result.facilityType, result.resourceId,
+                        result.success, result.failureReason, result.extracted));
+            }
+        }
+
+        for (staraxis.game.industry.SettlementReport.FacilityResult result : lastSettlementReport.facilities) {
+            staraxis.game.industry.ProcessingFacility facility =
+                    worldState.industryRegistry.getFacility(result.facilityId);
+            if (facility != null && facility.inventoryId == planetInventoryId) {
+                facilities.add(new DailySettlementState.FacilityResultDailySnapshot(
+                        result.facilityId, result.facilityType, result.recipeId,
+                        result.success, result.failureReason, result.batchCount,
+                        result.produced, result.consumed));
+            }
+        }
+
+        for (staraxis.game.industry.SettlementReport.TransferResult result : lastSettlementReport.transfers) {
+            staraxis.game.industry.CargoTransfer transfer = worldState.industryRegistry.getTransfer(result.transferId);
+            if (transfer != null
+                    && (transfer.sourceInventoryId == planetInventoryId
+                            || transfer.targetInventoryId == planetInventoryId)) {
+                transfers.add(new DailySettlementState.TransferResultDailySnapshot(
+                        result.transferId, result.resultType, result.goods));
+            }
+        }
+
+        // 该行星无任何相关结算条目（如结算后才新殖民/空结算）时返回 null，
+        // 不得构造携带空列表的旧报告快照，避免污染行星展示态喵
+        if (extractions.isEmpty() && facilities.isEmpty() && transfers.isEmpty()) {
+            return null;
+        }
+
+        return new DailySettlementState.SettlementReportDailySnapshot(
+                lastSettlementReport.tick, extractions, facilities, transfers);
     }
 
     private void publishRealTimeSnapshot() {
