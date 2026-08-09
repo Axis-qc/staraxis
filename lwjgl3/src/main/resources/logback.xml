@@ -1,5 +1,7 @@
 <configuration>
-    <property name="LOG_DIR" value="${user.dir}/../gamedata/logs"/>
+    <!-- 与 GameLog/WebNetLog 等一致：日志写到当前工作目录下的 gamedata/logs，
+         禁止使用 ../ 跳转，避免开发运行时把日志写到项目目录外。 -->
+    <property name="LOG_DIR" value="${user.dir}/gamedata/logs"/>
 
     <!-- NOTE: 启动时覆盖旧日志，避免历史错误堆积影响排查；按需可改回 Rolling 策略。 -->
 

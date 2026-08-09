@@ -1,7 +1,7 @@
 @echo off
 REM ============================================
 REM  Shader Compile Test (GLSL)
-REM  Usage: test\shader_test.bat
+REM  Usage: lwjgl3\test\shader_test.bat
 REM  Compile-checks shaders in assets/shaders
 REM  with multiple material flag combos.
 REM
@@ -9,7 +9,7 @@ REM  Build output is NOT silenced: errors show directly.
 REM ============================================
 
 setlocal
-cd /d "%~dp0\.."
+cd /d "%~dp0\..\.."
 
 echo ============================================
 echo  Shader Compile Test (GLSL)

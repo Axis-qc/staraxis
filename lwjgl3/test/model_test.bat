@@ -1,7 +1,7 @@
 @echo off
 REM ============================================
 REM  Model Test Scene (glTF model debug tool)
-REM  Usage: test\model_test.bat
+REM  Usage: lwjgl3\test\model_test.bat
 REM
 REM  Controls (in the model window):
 REM    LMB drag   orbit camera
@@ -17,7 +17,7 @@ REM  Build output is NOT silenced: errors show directly.
 REM ============================================
 
 setlocal
-cd /d "%~dp0\.."
+cd /d "%~dp0\..\.."
 
 echo ============================================
 echo  Model Test Scene
