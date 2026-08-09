@@ -4,7 +4,7 @@
   "name": "debug_panel",
   "properties": {
     "width": 500,
-    "height": 280,
+    "height": 320,
     "background": "#080A10EB",
     "borderColor": "#406090B2",
     "borderWidth": 1,
@@ -43,10 +43,41 @@
         }
       ]
     },
-    { "type": "vector_label", "name": "label_target", "properties": { "text": "", "color": "#73899FCC" } },
-    { "type": "vector_label", "name": "label_orbit", "properties": { "text": "" } },
-    { "type": "vector_label", "name": "label_zoom", "properties": { "text": "" } },
-    { "type": "vector_label", "name": "label_yawpitch", "properties": { "text": "" } },
-    { "type": "vector_label", "name": "label_fps", "properties": { "text": "" } }
+    {
+      "type": "container",
+      "properties": { "horizontal": true },
+      "children": [
+        {
+          "type": "vector_button",
+          "name": "btn_normals",
+          "properties": { "text": "[ ] 模型法向", "width": 200, "height": 30 }
+        }
+      ]
+    },
+    {
+      "type": "vector_label",
+      "name": "label_target",
+      "properties": { "text": "", "color": "#73899FCC" }
+    },
+    {
+      "type": "vector_label",
+      "name": "label_orbit",
+      "properties": { "text": "" }
+    },
+    {
+      "type": "vector_label",
+      "name": "label_zoom",
+      "properties": { "text": "" }
+    },
+    {
+      "type": "vector_label",
+      "name": "label_yawpitch",
+      "properties": { "text": "" }
+    },
+    {
+      "type": "vector_label",
+      "name": "label_fps",
+      "properties": { "text": "" }
+    }
   ]
 }
