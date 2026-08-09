@@ -1,13 +1,20 @@
 package staraxis.ui.screens;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
+
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Group;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.Touchable;
 import com.badlogic.gdx.utils.Disposable;
 import staraxis.game.StarAxisGameRuntime;
+import staraxis.game.command.ColonizePlanetCommand;
+import staraxis.game.command.CommandResult;
 import staraxis.game.entity.EntityType;
+import staraxis.game.ship.ShipDesign;
 import staraxis.game.state.DailySettlementState;
 import staraxis.game.state.RealTimeWorldState;
 import staraxis.game.state.snapshot.EntitySnapshot;
@@ -20,12 +27,17 @@ import staraxis.ui.effects.EffectRegistry;
 import staraxis.ui.json.ComponentNode;
 import staraxis.ui.json.UiFactory;
 import staraxis.ui.json.UiParser;
+import staraxis.ui.notifications.CommandErrorMessages;
 import staraxis.ui.panels.EntityInfoAssembler;
 import staraxis.ui.panels.EntityInfoPanel;
 import staraxis.ui.panels.EntityInfoViewModel;
 import staraxis.ui.panels.EntitySummaryPanel;
+import staraxis.ui.panels.PlanetInfoAssembler;
+import staraxis.ui.panels.PlanetInfoPanel;
+import staraxis.ui.panels.PlanetInfoViewModel;
 import staraxis.ui.theme.UiTheme;
 import staraxis.ui.widgets.HoverTooltipBinder;
+import staraxis.ui.widgets.ToastWidget;
 import staraxis.ui.widgets.VectorLabel;
 import staraxis.ui.widgets.VectorWindow;
 
@@ -64,15 +76,52 @@ public class InGameHudScreen implements Disposable {
     /** 摘要面板当前展示的实体 ID（「详细」按钮的数据源，不依赖实时选中值）喵 */
     private long summaryEntityId = -1;
 
+    /** 最近选中的舰船实体 ID（选中行星时不清除，殖民按钮依赖此值判断可用性）喵 */
+    private long lastSelectedShipId = -1;
+
+    /** 移动模式请求回调：由 ClientGame 接到 ShipMoveController，ui 不依赖 client 模块喵 */
+    private Runnable moveModeRequester;
+
+    /** 命令结果轮询 actor（随 stage.act 每帧驱动，轮询 CommandBus 结果队列并展示通知）喵 */
+    private CommandFeedbackPoller feedbackPoller;
+
+    /** 当前正在显示的通知（null 表示空槽，可展示下一条）喵 */
+    private ToastWidget activeToast;
+
     /** 详情窗口单例 id（选中跟随模式），钉住后变为多例窗口喵 */
     private static final String DETAILS_SINGLETON_ID = "entity-details";
+
+    /** 行星信息窗口单例 id（左键点击行星打开的非模态独立窗口）喵 */
+    private static final String PLANET_INFO_WINDOW_ID = "planet-info";
 
     /** 详情窗口多例分组 id（钉住后归入此组，上限由 UiWindowManager 控制）喵 */
     private static final String PIN_GROUP_ENTITY_DETAILS = "entity-details-pinned";
 
+    /** 命令结果通知显示时长（秒），3 秒后自动消失喵 */
+    private static final float NOTIFICATION_DURATION_SECONDS = 3f;
+
+    /** 通知距屏幕边缘的边距（px）喵 */
+    private static final float TOAST_MARGIN = 12f;
+
+    /** 命令成功通知文案喵 */
+    private static final String NOTIFICATION_SUCCESS_TEXT = "命令已执行";
+
+    /** 命令失败通知前缀喵 */
+    private static final String NOTIFICATION_FAILURE_PREFIX = "命令失败：";
+
     public InGameHudScreen(Gui gui) {
         this.gui = gui;
         this.stage = gui.getStage();
+    }
+
+    /**
+     * 注册移动模式请求回调（摘要面板「移动」指令点击时调用）。
+     * 由 ClientGame 接线到 ShipMoveController，ui 模块不依赖 client 模块喵。
+     *
+     * @param requester 进入移动模式的回调，可为 null（移动按钮点击仅记日志）
+     */
+    public void setMoveModeRequester(Runnable requester) {
+        this.moveModeRequester = requester;
     }
 
     public void show() {
@@ -112,6 +161,15 @@ public class InGameHudScreen implements Disposable {
         }
         if (pointerService != null) {
             pointerService.register(this::isPointerOverSummary);
+        }
+
+        // 懒创建命令结果轮询器：随 stage.act 每帧轮询 CommandBus 结果队列，
+        // 有新结果时展示通知（成功/失败），成功后刷新选中实体详情喵
+        if (feedbackPoller == null && sr != null && theme != null) {
+            feedbackPoller = new CommandFeedbackPoller();
+        }
+        if (feedbackPoller != null && feedbackPoller.getStage() == null) {
+            stage.addActor(feedbackPoller);
         }
 
         // 连接全局选中服务：选中变更时刷新摘要面板和详情窗口喵
@@ -261,13 +319,19 @@ public class InGameHudScreen implements Disposable {
             root.remove();
             root = null;
         }
+        // 轮询 actor 由 stage.clear() 切屏清理；清空引用避免跨屏残留旧状态喵
+        if (feedbackPoller != null) {
+            feedbackPoller.remove();
+            feedbackPoller = null;
+        }
+        activeToast = null;
         // tooltipBinder 保留实例（本 Screen 为注册单例），其 tooltip 由 stage.clear() 清理，
         // 下次 show() 时 forceHide() + 懒附加自动恢复喵
     }
 
     // ===== 选中变更处理 =====
 
-    /** 摘要区指令回调：「详细」开中央窗口，其余指令仅打日志喵 */
+    /** 摘要区指令回调：「详细」开中央窗口，「移动/殖民」提交命令，其余指令仅打日志喵 */
     private void onSummaryAction(String actionId) {
         if (EntitySummaryPanel.ACTION_OPEN_DETAILS.equals(actionId)) {
             UiWindowManager wm = gui.tryGet(UiWindowManager.class);
@@ -293,8 +357,94 @@ public class InGameHudScreen implements Disposable {
                         panel.setOnPin(() -> wm.pinSingleton(DETAILS_SINGLETON_ID, PIN_GROUP_ENTITY_DETAILS));
                         return panel;
                     });
-        } else {
-            com.badlogic.gdx.Gdx.app.log("InGameHudScreen", "指令点击: " + actionId);
+            return;
+        }
+        if (EntityInfoAssembler.ACTION_MOVE.equals(actionId)) {
+            // 移动指令：经回调进入移动模式（ShipMoveController 在 client 模块，通过回调解耦）喵
+            if (moveModeRequester != null) {
+                moveModeRequester.run();
+            } else {
+                com.badlogic.gdx.Gdx.app.log("InGameHudScreen", "移动指令: 未接线 moveModeRequester");
+            }
+            return;
+        }
+        if (EntityInfoAssembler.ACTION_COLONIZE.equals(actionId)) {
+            submitColonizeCommand();
+            return;
+        }
+        com.badlogic.gdx.Gdx.app.log("InGameHudScreen", "指令点击: " + actionId);
+    }
+
+    /**
+     * 殖民指令提交：使用最近选中的舰船（选中行星时不清除舰船记忆），
+     * 从摘要面板取行星，校验殖民舰后经命令总线提交 {@link ColonizePlanetCommand} 喵。
+     * 未选中舰船、选中非殖民舰或舰船无归属时不提交。
+     */
+    private void submitColonizeCommand() {
+        long shipId = lastSelectedShipId;
+        if (shipId < 0) return;
+        long planetId = summaryEntityId;
+        if (planetId < 0) return;
+
+        StarAxisGameRuntime rt = gui.getRuntime();
+        if (rt == null) return;
+        RealTimeWorldState rtState = rt.getRealTimeWorldStateReadonly();
+        EntitySnapshot shipSnap = findShipSnapshot(rtState, shipId);
+        if (shipSnap == null || !isColonyShip(shipSnap)) return;
+        String ownerNationId = shipSnap.ownerNationId;
+        if (ownerNationId == null) return;
+
+        rt.submitCommand(new ColonizePlanetCommand(shipId, planetId, ownerNationId));
+    }
+
+    /** 在实时快照中按 ID 查找舰船快照（找不到返回 null）喵 */
+    private static EntitySnapshot findShipSnapshot(RealTimeWorldState rtState, long shipId) {
+        if (rtState == null) return null;
+        for (var list : rtState.getEntitySnapshotsBySystemView().values()) {
+            for (EntitySnapshot snap : list) {
+                if (snap != null && snap.entityId == shipId
+                        && snap.details instanceof EntitySnapshot.ShipDetails) {
+                    return snap;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** 舰船是否为殖民舰（customFlags 含 {@link ShipDesign#FLAG_COLONY} 标记）喵 */
+    private static boolean isColonyShip(EntitySnapshot snap) {
+        if (snap == null || !(snap.details instanceof EntitySnapshot.ShipDetails sd)) return false;
+        return sd.customFlags != null && sd.customFlags.contains(ShipDesign.FLAG_COLONY);
+    }
+
+    /**
+     * 打开/聚焦行星信息窗口（非模态独立窗口）喵。
+     *
+     * 由 System View 左键点击行星时调用：
+     * - 未打开：以 {@link UiWindowManager#openSingleton} 在屏幕中央创建行星窗口
+     * - 已打开：置前并切换到另一颗行星
+     * - 无论首次创建还是已打开切换，都用最新 view model 重建内容（快照每 tick 变化，
+     *   切换行星时完整替换标题/概览/城市/状态/列表，不残留上一颗行星数据）
+     * - 快照缺失/行星不存在时 {@link PlanetInfoAssembler} 返回带 missing 标记的空态 VM，
+     *   窗口稳定显示空态，不会误开空窗口
+     *
+     * @param planetId 行星实体 ID
+     */
+    public void openPlanetInfo(long planetId) {
+        if (sr == null || theme == null || planetId < 0) return;
+        StarAxisGameRuntime rt = gui.getRuntime();
+        PlanetInfoViewModel vm = buildPlanetViewModel(planetId, rt);
+        if (vm == null) return;
+
+        UiWindowManager wm = gui.tryGet(UiWindowManager.class);
+        if (wm == null) return;
+
+        // 非模态单例：首次创建构造函数完成一次 rebuild 保证初始尺寸与内容，
+        // 随后统一调用 rebuild 刷新为最新 view model（禁止只在 wasOpen 时刷新）喵
+        VectorWindow win = wm.openSingleton(PLANET_INFO_WINDOW_ID, () ->
+                new PlanetInfoPanel(sr, FontProvider.createVectorFont(), vm, theme));
+        if (win instanceof PlanetInfoPanel panel) {
+            panel.rebuild(vm);
         }
     }
 
@@ -326,6 +476,11 @@ public class InGameHudScreen implements Disposable {
             summaryEntityId = -1;
         }
 
+        // 选中舰船时记住舰船 ID（选中行星时不清除，殖民按钮依赖此值）喵
+        if (entityType == EntityType.SHIP && entityId > 0) {
+            lastSelectedShipId = entityId;
+        }
+
         // 若详情窗口正在以单例模式显示，同步刷新内容（钉住转多例后不再跟随）喵
         if (vm != null) {
             UiWindowManager wm = gui.tryGet(UiWindowManager.class);
@@ -338,12 +493,126 @@ public class InGameHudScreen implements Disposable {
         }
     }
 
-    /** 从快照构建实体视图模型喵 */
+    // ===== 命令结果反馈（G1.2） =====
+
+    /**
+     * 命令结果轮询 actor（内部类，随 stage.act 每帧驱动）喵。
+     *
+     * 每帧轮询 CommandBus 结果队列：
+     * - 有新结果时逐条展示通知（成功绿色 / 失败红色，3 秒自动消失），避免批量刷屏喵
+     * - 成功后触发选中实体详情刷新（复用 buildViewModel + summaryPanel.showEntity）喵
+     */
+    private final class CommandFeedbackPoller extends Actor {
+
+        /** 待展示的命令结果队列（一次只展示一条，空槽后再取下一条）喵 */
+        private final Deque<CommandResult> pendingResults = new ArrayDeque<>();
+
+        {
+            // 轮询 actor 无视觉、零尺寸，禁止参与触摸命中喵
+            setTouchable(Touchable.disabled);
+        }
+
+        @Override
+        public void act(float delta) {
+            super.act(delta);
+            // 当前通知已消失（ToastWidget 倒计时结束自动移除），释放空槽喵
+            if (activeToast != null && activeToast.getStage() == null) {
+                activeToast = null;
+            }
+
+            StarAxisGameRuntime rt = gui.getRuntime();
+            if (rt == null) {
+                return;
+            }
+
+            for (CommandResult result : rt.pollCommandResults()) {
+                pendingResults.addLast(result);
+            }
+
+            if (activeToast == null && !pendingResults.isEmpty()) {
+                showCommandResult(pendingResults.removeFirst());
+            }
+        }
+    }
+
+    /**
+     * 展示命令执行结果通知（成功绿色 / 失败红色，3 秒自动消失），
+     * 成功后触发选中实体详情刷新喵。
+     *
+     * @param result 命令执行结果
+     */
+    private void showCommandResult(CommandResult result) {
+        if (sr == null || theme == null) {
+            return;
+        }
+
+        boolean success = result.success();
+        String message = success
+                ? NOTIFICATION_SUCCESS_TEXT
+                : NOTIFICATION_FAILURE_PREFIX + CommandErrorMessages.zh(result.failureCode());
+        ToastWidget.Type type = success ? ToastWidget.Type.SUCCESS : ToastWidget.Type.FAILURE;
+
+        ToastWidget toast = new ToastWidget(sr, FontProvider.createVectorFont(), theme,
+                type, message, NOTIFICATION_DURATION_SECONDS);
+        // 屏幕右上角展示，距边缘留边距喵
+        toast.setPosition(stage.getWidth() - toast.getWidth() - TOAST_MARGIN,
+                stage.getHeight() - toast.getHeight() - TOAST_MARGIN);
+        activeToast = toast;
+        stage.addActor(toast);
+
+        if (success) {
+            refreshSelectedEntityDetails();
+        }
+    }
+
+    /**
+     * 命令成功执行后刷新选中实体详情（摘要面板 + 单例详情窗口）喵。
+     * 复用 buildViewModel + summaryPanel.showEntity，与选中变更刷新口径一致喵。
+     */
+    private void refreshSelectedEntityDetails() {
+        if (summaryPanel == null || summaryEntityId < 0) {
+            return;
+        }
+        StarAxisGameRuntime rt = gui.getRuntime();
+        EntityInfoViewModel vm = buildViewModel(summaryEntityId, rt);
+        if (vm == null) {
+            return;
+        }
+        summaryPanel.showEntity(vm);
+
+        // 若详情窗口正在以单例模式显示，同步刷新内容喵
+        UiWindowManager wm = gui.tryGet(UiWindowManager.class);
+        if (wm != null) {
+            VectorWindow win = wm.getSingleton(DETAILS_SINGLETON_ID);
+            if (win instanceof EntityInfoPanel panel) {
+                panel.rebuild(vm);
+            }
+        }
+    }
+
+    /** 从快照构建实体视图模型（传入当前选中舰船 ID 用于殖民按钮可用性判断）喵 */
     private EntityInfoViewModel buildViewModel(long entityId, StarAxisGameRuntime rt) {
         if (rt == null) return null;
         RealTimeWorldState rtState = rt.getRealTimeWorldStateReadonly();
         DailySettlementState ds = rt.getDailySettlementStateBufferForReadonly().getActive();
-        return EntityInfoAssembler.assemble(entityId, rtState, ds);
+        return EntityInfoAssembler.assemble(entityId, rtState, ds, getSelectedShipId());
+    }
+
+    /** 当前选中的舰船实体 ID：优先实时选中舰船，回退到最近选中的舰船（选中行星时不清除）喵 */
+    private long getSelectedShipId() {
+        if (selectionService != null
+                && selectionService.getSelectedEntityType() == EntityType.SHIP) {
+            return selectionService.getSelectedEntityId();
+        }
+        return lastSelectedShipId;
+    }
+
+    /** 从快照构建行星视图模型（行星信息窗口专用，组合行星基线 + 地表区域/城市）喵 */
+    private PlanetInfoViewModel buildPlanetViewModel(long planetId, StarAxisGameRuntime rt) {
+        if (rt == null) return null;
+        RealTimeWorldState rtState = rt.getRealTimeWorldStateReadonly();
+        DailySettlementState ds = rt.getDailySettlementStateBufferForReadonly().getActive();
+        return PlanetInfoAssembler.assemble(planetId, rtState, ds);
     }
 
     /**

@@ -23,4 +23,13 @@ dependencies {
   // logging api only (binding provided by lwjgl3 via logback)
   implementation 'org.slf4j:slf4j-api:2.0.12'
   implementation "space.earlygrey:shapedrawer:$shapeDrawerVersion"
+
+  // 纯逻辑单元测试（EntityClickResolver 等不依赖渲染层的决策逻辑）
+  testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+  // Gradle 9 起需显式声明 JUnit Platform launcher 到测试运行时 classpath
+  testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+  useJUnitPlatform()
 }

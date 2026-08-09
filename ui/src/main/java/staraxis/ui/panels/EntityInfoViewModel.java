@@ -14,10 +14,19 @@ import java.util.List;
  */
 public class EntityInfoViewModel {
 
-    /** 字段行：key-value 展示，color 为可选的整行着色（null 用主题正文色）喵 */
-    public record FieldEntry(String key, String value, Color color) {
+    /** 字段行：key-value 展示，color 为可选的值着色，section 用于分组标题。 */
+    public record FieldEntry(String key, String value, Color color, boolean section) {
         public FieldEntry(String key, String value) {
-            this(key, value, null);
+            this(key, value, null, false);
+        }
+
+        public FieldEntry(String key, String value, Color color) {
+            this(key, value, color, false);
+        }
+
+        /** 创建分组标题行，分组标题不作为普通 key-value 字段渲染。 */
+        public static FieldEntry section(String title) {
+            return new FieldEntry(title, "", null, true);
         }
     }
 

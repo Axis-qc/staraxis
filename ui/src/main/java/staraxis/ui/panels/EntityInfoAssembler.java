@@ -2,7 +2,9 @@ package staraxis.ui.panels;
 
 import com.badlogic.gdx.graphics.Color;
 import staraxis.game.astro.Habitability;
+import staraxis.game.astro.PlanetBody;
 import staraxis.game.entity.EntityType;
+import staraxis.game.ship.ShipDesign;
 import staraxis.game.state.DailySettlementState;
 import staraxis.game.state.RealTimeWorldState;
 import staraxis.game.state.snapshot.EntitySnapshot;
@@ -20,11 +22,23 @@ import staraxis.game.state.snapshot.EntitySnapshot.StarDetails;
  */
 public final class EntityInfoAssembler {
 
+    /** 「移动」指令 id（摘要面板指令网格上抛）喵 */
+    public static final String ACTION_MOVE = "move";
+
+    /** 「殖民」指令 id（摘要面板指令网格上抛）喵 */
+    public static final String ACTION_COLONIZE = "colonize";
+
+    /** 「移动」指令显示文案喵 */
+    private static final String LABEL_MOVE = "移动";
+
+    /** 「殖民」指令显示文案喵 */
+    private static final String LABEL_COLONIZE = "殖民";
+
     private EntityInfoAssembler() {
     }
 
     /**
-     * 从快照中组装实体信息视图模型。
+     * 从快照中组装实体信息视图模型（无选中舰船，殖民按钮按不可用处理）。
      *
      * @param entityId 实体 ID
      * @param rtState  实时快照（含舰船动态数据）
@@ -34,6 +48,23 @@ public final class EntityInfoAssembler {
     public static EntityInfoViewModel assemble(long entityId,
                                                 RealTimeWorldState rtState,
                                                 DailySettlementState ds) {
+        return assemble(entityId, rtState, ds, -1);
+    }
+
+    /**
+     * 从快照中组装实体信息视图模型。
+     *
+     * @param entityId      实体 ID
+     * @param rtState       实时快照（含舰船动态数据）
+     * @param ds            低频基线快照（含恒星/行星基线数据）
+     * @param selectedShipId 当前选中的舰船实体 ID（无选中舰船时为 -1），
+     *                       用于判断行星「殖民」按钮是否因殖民舰选中而可用
+     * @return 组装好的视图模型，实体未找到时返回 null
+     */
+    public static EntityInfoViewModel assemble(long entityId,
+                                                RealTimeWorldState rtState,
+                                                DailySettlementState ds,
+                                                long selectedShipId) {
         if (entityId < 0) return null;
 
         EntitySnapshot snap = findSnapshot(entityId, rtState, ds);
@@ -43,7 +74,7 @@ public final class EntityInfoAssembler {
             return assembleStar(snap, sd);
         }
         if (snap.details instanceof PlanetDetails pd) {
-            return assemblePlanet(snap, pd);
+            return assemblePlanet(snap, pd, rtState, ds, selectedShipId);
         }
         if (snap.details instanceof ShipDetails shipDet) {
             return assembleShip(snap, shipDet);
@@ -67,7 +98,10 @@ public final class EntityInfoAssembler {
                 .detail("半径", String.format("%.0f GU", sd.radiusGU));
     }
 
-    private static EntityInfoViewModel assemblePlanet(EntitySnapshot snap, PlanetDetails pd) {
+    private static EntityInfoViewModel assemblePlanet(EntitySnapshot snap, PlanetDetails pd,
+                                                       RealTimeWorldState rtState,
+                                                       DailySettlementState ds,
+                                                       long selectedShipId) {
         String typeName = pd.planetTypeId != null ? pd.planetTypeId : "?";
         String entityKind;
         if (snap.entityType == EntityType.PLANET) {
@@ -130,6 +164,12 @@ public final class EntityInfoAssembler {
             vm.detail("首都", "是");
         }
 
+        // 殖民指令：宜居 + 无主 + 无城市的行星显示；选中殖民舰时才可用，否则置灰喵
+        if (isColonizablePlanet(snap, pd, ds)) {
+            vm.action(ACTION_COLONIZE, LABEL_COLONIZE,
+                    isColonyShipSelected(rtState, ds, selectedShipId));
+        }
+
         return vm;
     }
 
@@ -138,6 +178,8 @@ public final class EntityInfoAssembler {
                 ? " " + String.join(",", sd.customFlags)
                 : "";
         String status = sd.isMoving ? "移动中" : "停泊";
+        // 移动指令：仅舰船显示；有归属国家（ownerNationId）时可用喵
+        boolean canMove = snap.entityType == EntityType.SHIP && snap.ownerNationId != null;
         return new EntityInfoViewModel()
                 .title("舰船 #" + snap.entityId)
                 .typeLabel(status, sd.isMoving ? new Color(0.4f, 0.8f, 1f, 1f) : new Color(0.6f, 0.6f, 0.6f, 1f))
@@ -148,7 +190,41 @@ public final class EntityInfoAssembler {
                 .detail("归属", snap.ownerNationId != null ? snap.ownerNationId : "无")
                 .detail("状态", status)
                 .detail("位置", String.format("(%.0f, %.0f, %.0f)",
-                        snap.posWorldGU.x(), snap.posWorldGU.y(), snap.posWorldGU.z()));
+                        snap.posWorldGU.x(), snap.posWorldGU.y(), snap.posWorldGU.z()))
+                .action(ACTION_MOVE, LABEL_MOVE, canMove);
+    }
+
+    /**
+     * 行星是否满足殖民的展示条件（宜居类型 + 无主 + 无城市）喵。
+     * 仅控制按钮是否显示，是否可点击由殖民舰选中决定。
+     */
+    private static boolean isColonizablePlanet(EntitySnapshot snap, PlanetDetails pd,
+                                                DailySettlementState ds) {
+        if (pd.planetTypeId == null) return false;
+        if (!PlanetBody.HABITABLE_PLANET_TYPE_IDS.contains(pd.planetTypeId)) return false;
+        if (snap.ownerNationId != null) return false;
+        // 行星已有城市（地表快照 cities 非空）时不可殖民喵
+        if (ds != null && ds.planetSurfacesByPlanetId != null) {
+            var surface = ds.planetSurfacesByPlanetId.get(snap.entityId);
+            if (surface != null && surface.cities != null && !surface.cities.isEmpty()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 当前选中的舰船是否为殖民舰（customFlags 含 {@link ShipDesign#FLAG_COLONY}）喵。
+     * 未传选中舰船 ID、选中的不是舰船或非殖民舰时返回 false（殖民按钮置灰）。
+     */
+    private static boolean isColonyShipSelected(RealTimeWorldState rtState,
+                                                DailySettlementState ds,
+                                                long selectedShipId) {
+        if (selectedShipId < 0) return false;
+        EntitySnapshot shipSnap = findSnapshot(selectedShipId, rtState, ds);
+        if (shipSnap == null || shipSnap.entityType != EntityType.SHIP) return false;
+        if (!(shipSnap.details instanceof ShipDetails sd)) return false;
+        return sd.customFlags != null && sd.customFlags.contains(ShipDesign.FLAG_COLONY);
     }
 
     /**

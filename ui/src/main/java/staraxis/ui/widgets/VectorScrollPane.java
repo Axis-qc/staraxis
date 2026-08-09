@@ -5,7 +5,6 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
-import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Group;
@@ -21,6 +20,11 @@ import staraxis.ui.effects.VectorScrollPaneEffect;
  * 使用 ShapeRenderer 绘制滚动条，
  * 裁剪子 Actor 到可视区域，支持垂直/水平滚动。
  * 替代 Scene2D 中依赖 Skin 的 ScrollPane 控件。
+ *
+ * 滚动几何（偏移/钳制/滑块位置）全部委托 {@link ScrollPaneGeometry} 纯计算，
+ * 保证无 GL 环境下可测的边界行为与实际渲染一致。
+ * 偏移约定：scrollOffset = 0 表示内容停在顶部（首次打开/重建即内容顶部，不残留底部视图），
+ * 滚轮下滚或拖滑块到底部可浏览到内容结尾，并在尺寸变化后自动钳制不出界。
  */
 public class VectorScrollPane extends Group {
 
@@ -75,12 +79,12 @@ public class VectorScrollPane extends Group {
                 if (draggingScrollBar && scrollY) {
                     float viewH = getHeight();
                     float contentH = getContentHeight();
-                    float barHeight = computeScrollBarHeight();
+                    float barHeight = ScrollPaneGeometry.scrollBarThumbHeight(contentH, viewH, effect.scrollBar.minHeight);
                     float availableTrack = viewH - barHeight;
                     if (availableTrack > 0) {
                         float ratio = (y - barHeight / 2f) / availableTrack;
-                        ratio = MathUtils.clamp(ratio, 0f, 1f);
-                        scrollYOffset = ratio * (contentH - viewH);
+                        // ratio 越界由纯计算内部钳制，拖出轨道不会产生越界偏移喵
+                        scrollYOffset = ScrollPaneGeometry.scrollOffsetFromTrackRatio(ratio, contentH, viewH);
                         clampScrollOffset();
                     }
                 }
@@ -99,8 +103,8 @@ public class VectorScrollPane extends Group {
             @Override
             public boolean scrolled(InputEvent event, float x, float y, float amountX, float amountY) {
                 if (scrollY) {
-                    scrollYOffset += amountY * 30f;
-                    clampScrollOffset();
+                    scrollYOffset = ScrollPaneGeometry.scrollOffsetForWheel(
+                            scrollYOffset, amountY, 30f, getContentHeight(), getHeight());
                     return true;
                 }
                 return false;
@@ -119,26 +123,19 @@ public class VectorScrollPane extends Group {
 
     private boolean isOverScrollBar(float mx, float my) {
         if (!scrollY) return false;
-        float barW = computeScrollBarWidth();
-        float barH = computeScrollBarHeight();
-        float barX = getWidth() - barW - 2;
-        float viewH = getHeight();
         float contentH = getContentHeight();
-        float availableTrack = viewH - barH;
-        float barY = availableTrack > 0 ? (scrollYOffset / (contentH - viewH)) * availableTrack : 0;
+        float viewH = getHeight();
+        // 内容不超视图（空态/短内容）时无滚动条可命中，避免除零越界喵
+        if (!ScrollPaneGeometry.isScrollable(contentH, viewH)) return false;
+        float barW = computeScrollBarWidth();
+        float barH = ScrollPaneGeometry.scrollBarThumbHeight(contentH, viewH, effect.scrollBar.minHeight);
+        float barX = getWidth() - barW - 2;
+        float barY = ScrollPaneGeometry.scrollBarThumbY(scrollYOffset, contentH, viewH, barH);
         return mx >= barX && mx <= barX + barW && my >= barY && my <= barY + barH;
     }
 
     private float computeScrollBarWidth() {
         return effect.scrollBar.width;
-    }
-
-    private float computeScrollBarHeight() {
-        float viewH = getHeight();
-        float contentH = getContentHeight();
-        if (contentH <= viewH) return viewH;
-        float ratio = viewH / contentH;
-        return Math.max(viewH * ratio, effect.scrollBar.minHeight);
     }
 
     private float getContentWidth() {
@@ -150,13 +147,7 @@ public class VectorScrollPane extends Group {
     }
 
     private void clampScrollOffset() {
-        float viewH = getHeight();
-        float contentH = getContentHeight();
-        if (contentH > viewH) {
-            scrollYOffset = MathUtils.clamp(scrollYOffset, 0f, contentH - viewH);
-        } else {
-            scrollYOffset = 0;
-        }
+        scrollYOffset = ScrollPaneGeometry.clampScrollY(scrollYOffset, getContentHeight(), getHeight());
     }
 
     public void updateLayout() {
@@ -181,10 +172,13 @@ public class VectorScrollPane extends Group {
             contentH = content.getHeight();
         }
         contentW = Math.max(contentW, w);
-        contentH = Math.max(contentH, h);
+        contentH = ScrollPaneGeometry.contentHeight(contentH, h);
+
+        // 视图/内容尺寸变化后钳制滚动量，防止内容越界（窗口缩放时偏移不残留到界外）喵
+        scrollYOffset = ScrollPaneGeometry.clampScrollY(scrollYOffset, contentH, h);
 
         content.setSize(contentW, contentH);
-        content.setPosition(0, h - contentH + scrollYOffset);
+        content.setPosition(0, ScrollPaneGeometry.contentY(scrollYOffset));
 
         lastKnownWidth = w;
         lastKnownHeight = h;
@@ -227,19 +221,16 @@ public class VectorScrollPane extends Group {
         }
 
         // 绘制滚动条
-        if (scrollY && getContentHeight() > h) {
+        if (scrollY && ScrollPaneGeometry.isScrollable(getContentHeight(), h)) {
             batch.end();
 
             sr.setProjectionMatrix(batch.getProjectionMatrix());
             sr.setTransformMatrix(batch.getTransformMatrix());
 
             float barW = computeScrollBarWidth();
-            float barH = computeScrollBarHeight();
+            float barH = ScrollPaneGeometry.scrollBarThumbHeight(getContentHeight(), h, effect.scrollBar.minHeight);
             float barX = getX() + w - barW - 2;
-            float viewH = h;
-            float contentH = getContentHeight();
-            float availableTrack = viewH - barH;
-            float barY = getY() + (availableTrack > 0 ? (scrollYOffset / (contentH - viewH)) * availableTrack : 0);
+            float barY = getY() + ScrollPaneGeometry.scrollBarThumbY(scrollYOffset, getContentHeight(), h, barH);
 
             Color sc = hoverScrollBar || draggingScrollBar ? effect.scrollBar.hoverColor : effect.scrollBar.color;
             sr.setColor(sc.r, sc.g, sc.b, sc.a * parentAlpha);
